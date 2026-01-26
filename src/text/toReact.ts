@@ -1,4 +1,5 @@
 import { getPropsFromObject } from '../utils/toReact';
+import css from "./runtime.less"
 
 export default function ({ data,style }) {
   // const style = { ...data.style };
@@ -14,6 +15,7 @@ export default function ({ data,style }) {
   const jsx = `<div
 >
 <Typography.Text
+      className=${css.text}
   ${propsStr}
 >
   ${data.content || ''}
