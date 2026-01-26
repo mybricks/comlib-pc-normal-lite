@@ -11,17 +11,17 @@ export default function ({ data, inputs, outputs, env }: RuntimeParams<Data>) {
   const [value, setValue] = useState(data.value || '');
 
   useEffect(() => {
-    inputs['setValue'] && inputs['setValue']((val: string) => {
+    inputs['setValue']?.((val: string) => {
       const newValue = val !== undefined && val !== null ? String(val) : '';
       data.value = newValue;
       setValue(newValue);
     });
 
-    inputs['setPlaceholder'] && inputs['setPlaceholder']((val: string) => {
+    inputs['setPlaceholder']?.((val: string) => {
       data.placeholder = val;
     });
 
-    inputs['setDisabled'] && inputs['setDisabled']((val: boolean) => {
+    inputs['setDisabled']?.((val: boolean) => {
       data.disabled = val;
     });
   }, []);

@@ -9,11 +9,11 @@ interface Data {
 
 export default function ({ data, inputs, outputs, env }: RuntimeParams<Data>) {
   useEffect(() => {
-    inputs['setText'] && inputs['setText']((value: string) => {
+    inputs['setText']?.((value: string) => {
       data.text = value;
     });
 
-    inputs['setDisabled'] && inputs['setDisabled']((value: boolean) => {
+    inputs['setDisabled']?.((value: boolean) => {
       data.disabled = value;
     });
   }, []);

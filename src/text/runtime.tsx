@@ -9,7 +9,7 @@ export default function ({ data, inputs, outputs, env }: RuntimeParams<Data>) {
   useEffect(() => {
     inputs['content']((value: string, relOutputs) => {
       let res = value;
-      if (res != undefined && typeof res !== 'string') {
+      if (res !== undefined && typeof res !== 'string') {
         res = JSON.stringify(res);
       }
       data.content = res;
