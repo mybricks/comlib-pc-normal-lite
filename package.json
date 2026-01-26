@@ -1,0 +1,37 @@
+{
+  "name": "@mybricks/comlib-pc-normal-lite",
+  "version": "1.0.0",
+  "description": "PC端通用组件库(Lite版本)",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "mybricks dev",
+    "build": "mybricks build",
+    "publish": "mybricks publish"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mybricks/comlib-pc-normal-lite.git"
+  },
+  "keywords": [
+    "mybricks",
+    "component-library",
+    "pc",
+    "lite",
+    "low-code"
+  ],
+  "author": "MyBricks",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mybricks/comlib-pc-normal-lite/issues"
+  },
+  "homepage": "https://github.com/mybricks/comlib-pc-normal-lite#readme",
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
