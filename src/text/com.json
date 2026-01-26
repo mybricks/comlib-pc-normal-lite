@@ -1,0 +1,26 @@
+{
+  "title": "文本",
+  "namespace": "mybricks.normal-pc-lite.text",
+  "version": "1.0.0",
+  "description": "文本",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "icon": "./icon.svg",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.tsx",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "outputs": [
+    {
+      "id": "click",
+      "title": "点击",
+      "desc": "文本内容点击，输出文本内容",
+      "schema": {
+        "type": "string"
+      }
+    }
+  ]
+}

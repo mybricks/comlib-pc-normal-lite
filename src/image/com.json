@@ -1,0 +1,26 @@
+{
+  "title": "图片",
+  "namespace": "mybricks.normal-pc-lite.image",
+  "version": "1.0.0",
+  "description": "图片",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "icon": "./icon.svg",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.tsx",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "outputs": [
+    {
+      "id": "click",
+      "title": "单击图片",
+      "desc": "点击图片事件输出",
+      "scheme": {
+        "type": "any"
+      }
+    }
+  ]
+}

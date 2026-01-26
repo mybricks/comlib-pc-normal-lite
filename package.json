@@ -1,0 +1,15 @@
+{
+  "name": "@mybricks/comlib-pc-normal-lite",
+  "version": "1.0.0",
+  "description": "MyBricks PC组件库 lite版",
+  "main": "index.js",
+  "scripts": {},
+  "license": "ISC",
+  "dependencies": {
+    "antd": "^6.2.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.21",
+    "@types/react-dom": "^18.0.6"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "comAry": [
+    "./src/button/com.json",
+    "./src/text/com.json",
+    "./src/icon/com.json",
+    "./src/image/com.json"
+  ],
+  "domain": "",
+  "sceneType": "PC",
+  "title": "normal-pc-lite-comlib",
+  "namespace": "mybricks.normal-pc-lite"
+}
