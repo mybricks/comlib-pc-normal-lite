@@ -1,0 +1,14 @@
+{
+  "title": "PC常规组件库(Lite)",
+  "description": "PC端通用组件库的轻量级版本，包含最基础和常用的组件",
+  "comAry": [
+    {
+      "title": "基础组件",
+      "comAry": [
+        "./src/text/com.json",
+        "./src/button/com.json",
+        "./src/input/com.json"
+      ]
+    }
+  ]
+}

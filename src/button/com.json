@@ -1,0 +1,38 @@
+{
+  "title": "按钮",
+  "namespace": "mybricks.normal-pc-lite.button",
+  "version": "1.0.0",
+  "description": "可点击的按钮组件",
+  "author": "MyBricks",
+  "icon": "./icon.svg",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "inputs": [
+    {
+      "id": "setText",
+      "title": "设置文本",
+      "desc": "设置按钮文本",
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "id": "setDisabled",
+      "title": "设置禁用",
+      "desc": "设置按钮是否禁用",
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "id": "click",
+      "title": "点击",
+      "desc": "按钮点击时触发",
+      "schema": {
+        "type": "any"
+      }
+    }
+  ]
+}
