@@ -30,15 +30,6 @@ export default {
             }
           }
         },
-        {
-          title: '点击',
-          type: '_Event',
-          options: () => {
-            return {
-              outputId: OutputIds.Click
-            };
-          }
-        }
       ];
     },
     style: [

@@ -62,14 +62,6 @@ export default {
             }
           }
         },
-        {
-          title: '点击事件',
-          type: '_Event',
-          description: '点击文本时触发，触发【点击】输出项事件',
-          options: {
-            outputId: OutputIds.Click
-          }
-        },
       ];
     }
   }

@@ -38,20 +38,6 @@ export default {
           }
         }
       ]
-    },
-    {
-      title: '单击',
-      type: '_Event',
-      options: {
-        outputId: 'click'
-      }
-    },
-    {
-      title: '双击',
-      type: '_Event',
-      options: {
-        outputId: 'dblClick'
-      }
     }
   ]
 };

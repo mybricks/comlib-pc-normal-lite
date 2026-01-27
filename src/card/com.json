@@ -1,0 +1,23 @@
+{
+  "title": "卡片",
+  "namespace": "mybricks.normal-pc-lite.card",
+  "version": "1.0.0",
+  "description": "卡片",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "icon": "./icon.svg",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.tsx",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "slots": [
+    {
+      "id": "body",
+      "title": "卡片内容容器",
+      "layout": "smart"
+    }
+  ]
+}

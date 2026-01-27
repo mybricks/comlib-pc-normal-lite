@@ -89,17 +89,7 @@ export default {
               data.objectFit = value;
             }
           }
-        },
-        {
-          title: '单击图片',
-          type: '_Event',
-          description: '单击图片时触发【单击图片】输出项事件',
-          options() {
-            return {
-              outputId: OutputIds.Click
-            };
-          }
-        },
+        }
       ];
     }
   }
