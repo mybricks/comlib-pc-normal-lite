@@ -10,6 +10,9 @@
   "runtime": "./runtime.tsx",
   "editors": "./editors.tsx",
   "ai": "./ai.ts",
+    "target": {
+    "toReact": "./toReact.ts"
+  },
   "outputs": [
     {
       "id": "click",
