@@ -1,4 +1,3 @@
-import css from "./runtime.less"
 export default function ({ data }) {
   // const str = `<div ${!data.asMapArea ? `style={${getObjectStr({ ...btnClass, ...data.style })}}` : ''}>${data.text}</div>`
 
@@ -10,7 +9,7 @@ export default function ({ data }) {
   if (Object.hasOwn(style, 'styleEditorUnfold')) {
     delete style.styleEditorUnfold;
   }
-  const jsx = `<Button className={${css.button}} style={${getObjectStr(style)}}>${data.text}</Button>`;
+  const jsx = `<Button style={${getObjectStr(style)}}>${data.text}</Button>`;
 
   return {
     imports: [

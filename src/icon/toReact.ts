@@ -1,4 +1,3 @@
-import css from "./runtime.less"
 export default function ({ data }) {
     // 处理样式
     const style = {
@@ -24,7 +23,6 @@ export default function ({ data }) {
         // 自定义 HTML/SVG 图标
         jsx = `<div 
   style={${getObjectStr(style)}} 
-  className={${css.icon}}
   dangerouslySetInnerHTML={{ __html: ${JSON.stringify(data.icon)} }}
 />`;
     }

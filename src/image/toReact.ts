@@ -1,7 +1,6 @@
 import { ImageProps } from "antd";
 import { getPropsFromObject } from "../utils/toReact";
 import { Data } from "./constants";
-import css from "./runtime.less"
 
 export default function ({ data }: RuntimeParams<Data>) {
 
@@ -29,20 +28,17 @@ export default function ({ data }: RuntimeParams<Data>) {
  * @param env 
  */
 const getSingleImageStr = ({ data }: { data: Data }) => {
-    const { alt, src, customStyle, useFallback, fallbackImgSrc, usePreview, previewImgSrc } = data;
+    const { src, customStyle } = data;
     const { styleEditorUnfold, ...style } = customStyle || {};
 
     const imageProps: ImageProps = {
-        alt,
         src,
         width: '100%',
         height: '100%',
         style,
-        // onClick
     };
 
     return `<Image
-            className=${css.container}
                 ${getPropsFromObject(imageProps)}
             />`
 }
