@@ -11,6 +11,7 @@ export default function ({ data }) {
   const jsx = `<div
 >
 <Typography.Text
+data-item-type="root"
   ${propsStr}
 >
   ${data.content || ''}

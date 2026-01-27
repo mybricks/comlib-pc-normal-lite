@@ -11,6 +11,7 @@ export default function ({ data, slots, style }) {
       style={${JSON.stringify({  
         height: '100%'
       })}}
+      className="card"
     >
       <Card
       title="${data.title}"

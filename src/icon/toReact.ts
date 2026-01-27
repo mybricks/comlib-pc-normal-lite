@@ -3,7 +3,8 @@ export default function ({ data, style }) {
     const _style = {
         cursor: 'pointer',
         width,
-        height
+        height,
+        fontSize:width
     };
 
     let jsx = `<${data.icon} style={${getObjectStr(_style)}} />`;
