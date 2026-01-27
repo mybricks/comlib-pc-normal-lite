@@ -7,7 +7,7 @@ export default function ({ data, style }) {
         fontSize:width
     };
 
-    let jsx = `<${data.icon} style={${getObjectStr(_style)}} />`;
+    let jsx = `<${data.icon} className="icon" style={${getObjectStr(_style)}} />`;
 
     return {
         imports: [
