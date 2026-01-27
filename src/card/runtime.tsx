@@ -15,7 +15,7 @@ export default (props: RuntimeParams<Data>) => {
   return (
     <div className={`${css.card} card`}>
       <Card
-        title={data.showTitle ? env.i18n(title) : ''}
+        title={title}
         bodyStyle={{
           padding: data.padding,
           height: isHeight ? height : '100%'

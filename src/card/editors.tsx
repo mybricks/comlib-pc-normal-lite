@@ -79,12 +79,6 @@ export default {
           title: '标题内容',
           type: 'Text',
           description: '卡片的标题内容',
-          options: {
-            locale: true
-          },
-          ifVisible({ data }: EditorResult<Data>) {
-            return data.showTitle;
-          },
           value: {
             get({ data }: EditorResult<Data>) {
               return data.title;

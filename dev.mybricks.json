@@ -3,6 +3,8 @@
     "./src/button/com.json",
     "./src/text/com.json",
     "./src/icon/com.json",
-    "./src/image/com.json"
+    "./src/image/com.json",
+    "./src/card/com.json",
+    "./src/tabs/com.json"
   ]
 }
