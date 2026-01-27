@@ -23,16 +23,16 @@ export default {
         },
         {
           title: '样式',
-          type: 'style',
+          type: 'styleNew',
           options: {
             defaultOpen: true,
             plugins: ['border', 'font', 'bgcolor', 'bgimage']
           },
           value: {
-            get: ({ data }) => {
+            get({ data }) {
               return data.style;
             },
-            set: ({ data }, value) => {
+            set({ data }, value) {
               data.style = value;
             }
           }

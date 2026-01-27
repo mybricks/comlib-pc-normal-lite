@@ -28,14 +28,12 @@ export default function ({ data }: RuntimeParams<Data>) {
  * @param env 
  */
 const getSingleImageStr = ({ data }: { data: Data }) => {
-    const { src, customStyle } = data;
-    const { styleEditorUnfold, ...style } = customStyle || {};
+    const { src } = data;
 
     const imageProps: ImageProps = {
         src,
         width: '100%',
         height: '100%',
-        style,
     };
 
     return `<Image

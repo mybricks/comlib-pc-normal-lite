@@ -1,12 +1,9 @@
 import { getPropsFromObject } from '../utils/toReact';
 
 export default function ({ data }) {
-  const style = { ...data.style };
-  delete style.styleEditorUnfold;
 
     const propsStr = getPropsFromObject({
     style: {
-      ...style,
       wordBreak: 'break-all'
     },
   });

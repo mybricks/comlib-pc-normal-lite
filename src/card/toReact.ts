@@ -17,7 +17,6 @@ export default function ({ data, slots, style }) {
       size="${data.size}"
       bordered={${data.bordered}}
       style={${JSON.stringify({
-        ...style,
         height: '100%',
         cursor: data.cursor ? 'pointer' : 'unset'
       })}}

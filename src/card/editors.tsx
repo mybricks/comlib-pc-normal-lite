@@ -42,10 +42,6 @@ export default {
         options: ['background'],
         target: ({ id }: EditorResult<Data>) => `.card > .ant-card${getFilterSelector(id)}`
       },
-      Editor<Data>('鼠标移过时可浮起', EditorType.Switch, 'hoverable'),
-      Editor<Data>('尺寸', EditorType.Select, 'size', {
-        options: SizeOptions
-      }),
     ],
     items: ({}: EditorResult<Data>, cate1, cate2) => {
       cate1.title = '常规';
