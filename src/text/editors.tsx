@@ -31,7 +31,7 @@ export default {
               'padding',
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
-            target: '[data-item-type="root"]'
+            target: '.text'
           },
         ]
       }

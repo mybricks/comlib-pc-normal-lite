@@ -1,57 +1,20 @@
-export default function ({ data, slots, style }) {
-  const renderCard = (
-    data,
-    slots,
-    style
-  ) => {
-    const slotBody = slots['body']?.render({});
-
-    return `
-    <div
-      style={${JSON.stringify({  
-        height: '100%'
-      })}}
-      className="card"
-    >
-      <Card
-      title="${data.title}"
-      size="${data.size}"
-      bordered={${data.bordered}}
-      style={${JSON.stringify({
-        height: '100%',
-        cursor: data.cursor ? 'pointer' : 'unset'
-      })}}
-      hoverable={${data.hoverable}}
-      >
-        ${slotBody.length!==0 ? `<div
-        style={${JSON.stringify({
-          overflowY: style.height !== 'auto' ? 'auto' : void 0,
-          overflowX: style.width !== 'auto' ? 'auto' : void 0,
-          height:  data.title === '' ? "calc(~'100% - 57.14px')" : '100%',
-          padding: '1px 0'
-        })}}
-        >`: ''}
-          ${slotBody}
-        ${slotBody.length!==0 ? `</div>` : ''}
-      </Card>
-    </div>`;
-  };
-
-  let str = renderCard(data,slots,style);
+export default function ({ data, slots }) {
+  const jsx = `<Card
+    title="${data.title}"
+    bordered={${data.bordered}}
+  >
+    ${slots['body']?.render()}
+  </Card>`;
 
   return {
     imports: [
       {
         from: 'antd',
         coms: ['Card']
-      },
-      {
-        from: 'antd/dist/antd.css',
-        coms: []
       }
     ],
-  	jsx: str,
+    jsx,
     style: '',
     js: ''
-  }
+  };
 }

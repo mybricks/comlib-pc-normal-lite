@@ -60,7 +60,7 @@ export default {
               'padding',
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
-            target: `[data-item-type="icon"]`
+            target: `.icon`
           },
           {
             catelog: 'Hover',
@@ -87,7 +87,7 @@ export default {
               'padding',
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
-            target: '[data-item-type="icon"]:hover'
+            target: '.icon:hover'
           },
         ]
       }

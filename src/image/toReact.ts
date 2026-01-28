@@ -1,42 +1,21 @@
-import { ImageProps } from "antd";
-import { getPropsFromObject } from "../utils/toReact";
-import { Data } from "./constants";
+export default function ({ data }) {
+  const jsx = `<Image
+    src="${data.src}"
+    width="100%"
+    height="100%"
+    preview={false}
+    style={{ objectFit: "${data.objectFit}" || 'fill' }}
+  />`;
 
-export default function ({ data }: RuntimeParams<Data>) {
-
-    const str = getSingleImageStr({ data });
-
-    return {
-        imports: [
-            {
-                from: 'antd',
-                coms: ['Image']
-            },
-            {
-                from: 'antd/dist/antd.css',
-                coms: []
-            },
-        ],
-        jsx: str,
-        style: '',
-        js: ''
-    }
-}
-
-/**
- * 获取图片codeStr
- * @param env 
- */
-const getSingleImageStr = ({ data }: { data: Data }) => {
-    const { src } = data;
-
-    const imageProps: ImageProps = {
-        src,
-        width: '100%',
-        height: '100%',
-    };
-
-    return `<Image
-                ${getPropsFromObject(imageProps)}
-            />`
+  return {
+    imports: [
+      {
+        from: 'antd',
+        coms: ['Image']
+      }
+    ],
+    jsx,
+    style: ``,
+    js: ''
+  };
 }

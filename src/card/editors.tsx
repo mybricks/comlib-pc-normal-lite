@@ -30,17 +30,17 @@ export default {
       {
         title: '标题',
         options: ['font'],
-        target: ({ id }: EditorResult<Data>) => `.card .ant-card-head-title${getFilterSelector(id)}`
+        target: ({ id }: EditorResult<Data>) => `.ant-card-head-title${getFilterSelector(id)}`
       },
       {
         title: '边框',
         options: ['border'],
-        target: ({ id }: EditorResult<Data>) => `.card > .ant-card${getFilterSelector(id)}`
+        target: ({ id }: EditorResult<Data>) => `.ant-card${getFilterSelector(id)}`
       },
       {
         title: '背景',
         options: ['background'],
-        target: ({ id }: EditorResult<Data>) => `.card > .ant-card${getFilterSelector(id)}`
+        target: ({ id }: EditorResult<Data>) => `.ant-card${getFilterSelector(id)}`
       },
     ],
     items: ({}: EditorResult<Data>, cate1, cate2) => {

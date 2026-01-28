@@ -1,27 +1,28 @@
 export default function ({ data, style }) {
-    const {height,width} = style
-    const _style = {
-        cursor: 'pointer',
-        width,
-        height,
-        fontSize:width
-    };
+  const fontSize = style.width === 'fit-content'
+    ? 32
+    : style.width !== '100%'
+      ? style.width
+      : undefined;
 
-    let jsx = `<${data.icon} className="icon" style={${getObjectStr(_style)}} />`;
+  const IconComponent = data.icon;
 
-    return {
-        imports: [
-            {
-                from: '@ant-design/icons',
-                coms: [data.icon],
-            }
-        ],
-        jsx,
-        style: '',
-        js: ''
-    };
-}
+  const jsx = `<div
+    className="icon"
+    style={{ fontSize: ${fontSize} }}
+  >
+    <${IconComponent} />
+  </div>`;
 
-function getObjectStr(obj) {
-    return JSON.stringify(obj, null, 2);
+  return {
+    imports: [
+      {
+        from: '@ant-design/icons',
+        coms: [data.icon]
+      }
+    ],
+    jsx,
+    style: ``,
+    js: ''
+  };
 }

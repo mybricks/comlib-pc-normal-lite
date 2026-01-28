@@ -1,62 +1,23 @@
-import React, { ReactNode, useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import * as Icons from '@ant-design/icons';
-import { Data, OutputIds } from './constants';
+import { Data } from './constants';
 import css from './runtime.less';
 
-/**
- * @param icon 图标
- */
-export default function ({ env, data, inputs, outputs, style }: RuntimeParams<Data>) {
-  
-  const onClick = useCallback((e) => {
-    if (!env.runtime) {
-      return;
-    }
+export default function ({ data, style }: RuntimeParams<Data>) {
+  const fontSize = style.width === 'fit-content'
+    ? 32
+    : style.width !== '100%'
+      ? style.width
+      : undefined;
 
-    if (outputs[OutputIds.Click].getConnections().length) {
-      e.stopPropagation();
-      e.nativeEvent.stopImmediatePropagation();
-    }
-
-    outputs[OutputIds.Click]();
-  }, []);
-
-  const [fontSize, setFontSize] = useState(style.width);
-
-  const btnItemR = useCallback(
-    ({ icon }: { icon: any }) => {
-      const Icon = Icons && Icons[icon as string]?.render();
-      if (typeof Icon === 'undefined') {
-        return <div dangerouslySetInnerHTML={{ __html: icon }} />;
-      } else {
-        return <>{Icon}</>;
-      }
-    },
-    [data.icon]
-  );
-
-  useEffect(() => {
-    if (style.width === 'fit-content') {
-      setFontSize(32);
-    } else if (style.width !== '100%') {
-      setFontSize(style.width);
-    }
-  }, [data.styleWidth, style.width]);
+  const Icon = Icons?.[data.icon as string]?.render();
 
   return (
     <div
       className={`${css.icon} icon`}
-      style={{
-        cursor:
-          outputs[OutputIds.Click] && outputs[OutputIds.Click]?.getConnections()?.length > 0
-            ? 'pointer'
-            : undefined,
-        fontSize: fontSize
-      }}
-      onClick={onClick}
-      data-item-type="icon"
+      style={{ fontSize }}
     >
-      {btnItemR({ icon: data.icon })}
+      {Icon}
     </div>
   );
 }
