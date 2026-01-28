@@ -5,7 +5,8 @@
     "./src/icon/com.json",
     "./src/image/com.json",
     "./src/card/com.json",
-    "./src/tabs/com.json"
+    "./src/tabs/com.json",
+    "./src/custom-container/com.json"
   ],
   "domain": "",
   "sceneType": "PC",

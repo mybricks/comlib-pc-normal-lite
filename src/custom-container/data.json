@@ -1,0 +1,12 @@
+{
+  "style": {},
+  "slotStyle": {
+   "position": "smart"
+  },
+  "legacyConfigStyle": {},
+  "legacyStyle": {},
+  "isAutoScroll": false,
+  "direction": "vertical",
+  "scrollTime": 2000,
+  "eventBubble": false
+}
