@@ -1,0 +1,24 @@
+.suggestion {
+  font-style: italic;
+  padding: 5px;
+  color: #aaa;
+}
+
+.overflow {
+  :global {
+    .ant-menu-overflow-item-rest {
+      display: none;
+    }
+  }
+}
+
+:global(.ant-menu-horizontal) {
+  display: flex;
+}
+:global(.ant-menu-title-content) {
+  margin-left: 10px;
+}
+:global(.ant-menu-item){
+  display: flex !important;
+  align-items: center !important;
+}

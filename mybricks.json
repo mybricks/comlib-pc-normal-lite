@@ -6,7 +6,10 @@
     "./src/image/com.json",
     "./src/card/com.json",
     "./src/tabs/com.json",
-    "./src/custom-container/com.json"
+    "./src/custom-container/com.json",
+    "./src/carousel/com.json",
+    "./src/menu/com.json",
+    "./src/line-chart/com.json"
   ],
   "domain": "",
   "sceneType": "PC",

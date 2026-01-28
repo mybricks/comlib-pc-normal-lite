@@ -1,0 +1,28 @@
+{
+  "title": "轮播图",
+  "namespace": "mybricks.normal-pc-lite.carousel",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "version": "1.0.0",
+  "description": "轮播图",
+  "icon": "./icon.png",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.tsx",
+  "inputs": [],
+  "outputs": [],
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "slots": [
+    {
+      "title": "轮播图1",
+      "id": "slot1"
+    },
+    {
+      "title": "轮播图2",
+      "id": "slot2"
+    }
+  ]
+}
