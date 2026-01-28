@@ -1,27 +1,14 @@
-import React, { useCallback } from 'react';
+import React from 'react';
+import { Button } from 'antd';
 
-import css from './runtime.less';
-
-export default function ({ env, data, outputs }) {
-  const onClick = useCallback(() => {
-    if (env.runtime) {
-      outputs['click']();
-    }
-  }, []);
-
-  const onDoubleClick = useCallback(() => {
-    if (env.runtime) {
-      outputs['dblClick']();
-    }
-  }, []);
+export default function ({ data }) {
 
   return (
-    <div
-      className={css.button}
-      style={data.style}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}>
+    <Button
+      type={data.type}
+      style={{ width: "100%", height: "100%" }}
+    >
       {data.text}
-    </div>
+    </Button>
   );
 }

@@ -1,43 +1,61 @@
 export default {
   '@init'({ style }) {
-    style.width = 80;
-    style.height = 50;
+    style.width = "auto";
+    style.height = "auto";
   },
   '@resize': {
     options: ['width', 'height']
   },
-  ':root': [
-    {
-      items: [
-        {
-          title: '文字标题',
-          type: 'text',
-          value: {
-            get({ data }) {
-              return data.text;
-            },
-            set({ data }, value: string) {
-              data.text = value;
-            }
-          }
-        },
-        {
-          title: '样式',
-          type: 'styleNew',
-          options: {
-            defaultOpen: true,
-            plugins: ['border', 'font', 'bgcolor', 'bgimage']
+  ':root': {
+    items: [
+      {
+        title: '按钮文案',
+        type: 'text',
+        value: {
+          get({ data }) {
+            return data.text;
           },
-          value: {
-            get({ data }) {
-              return data.style;
-            },
-            set({ data }, value) {
-              data.style = value;
-            }
+          set({ data }, value: string) {
+            data.text = value;
           }
         }
-      ]
-    }
-  ]
+      },
+    ],
+    style: [
+      {
+        title: '风格',
+        type: 'select',
+        options: [
+          {
+            label: '主按钮',
+            value: 'primary'
+          },
+          {
+            label: '次按钮',
+            value: 'default'
+          },
+          {
+            label: '虚线按钮',
+            value: 'dashed'
+          },
+          {
+            label: '链接按钮',
+            value: 'link'
+          },
+          {
+            label: '文字按钮',
+            value: 'text'
+          }
+        ],
+        value: {
+          get({ data }) {
+            return data.type;
+          },
+          set({ data }, type) {
+            data.type = type;
+          }
+        }
+      }
+    ]
+  }
 };
