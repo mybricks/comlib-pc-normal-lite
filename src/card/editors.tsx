@@ -4,6 +4,7 @@ import { getFilterSelector } from '../utils/cssSelector';
 
 export const setSlotLayout = (slot, val) => {
   if (!slot) return;
+  slot.setStyle(val);
   if (val.position === 'smart') {
     slot.setLayout('smart');
   } else if (val.position === 'absolute') {
@@ -52,20 +53,11 @@ export default {
           options: [],
           description: '配置卡片的内部的布局类型',
           value: {
-            get({ data, slots }: EditorResult<Data>) {
-              const { slotStyle = {} } = data;
-              const slotInstance = slots.get(SlotIds.Body);
-              setSlotLayout(slotInstance, slotStyle);
-              return slotStyle;
+            get({ data }: EditorResult<Data>) {
+              return data.slotStyle || {};
             },
             set({ data, slots }: EditorResult<Data>, val: any) {
-              if (!data.slotStyle) {
-                data.slotStyle = {};
-              }
-              data.slotStyle = {
-                ...data.slotStyle,
-                ...val
-              };
+              data.slotStyle = val;
               const slotInstance = slots.get(SlotIds.Body);
               setSlotLayout(slotInstance, val);
             }

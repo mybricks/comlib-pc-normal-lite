@@ -11,7 +11,9 @@
       "showZero": false
     }
   ],
-  "slotStyle": {},
+  "slotStyle": {
+    "position": "smart"
+  },
   "defaultActiveKey": "tab0",
   "type": "line",
   "size": "middle",

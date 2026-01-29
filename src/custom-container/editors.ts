@@ -2,6 +2,7 @@ import {Data} from './constants';
 
 const setSlotLayout = (slot, val) => {
   if (!slot) return;
+  slot.setStyle(val);
   if (val.position === 'smart') {
     slot.setLayout('smart');
   } else if (val.position === 'absolute') {
@@ -17,26 +18,13 @@ const setSlotLayout = (slot, val) => {
 
 export default {
   ':slot': {},
-  '@init'({style, data, slot}: EditorResult<Data>) {
+  '@init'({style}: EditorResult<Data>) {
     style.height = 'auto';
-
-    if (window._disableSmartLayout) {
-      data.slotStyle = {
-        alignItems: 'flex-start',
-        columnGap: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        flexWrap: 'nowrap',
-        justifyContent: 'flex-start',
-        position: 'inherit',
-        rowGap: 0
-      };
-    }
   },
   '@resize': {
     options: ['width', 'height']
   },
-  '@setLayout'({data,slots,style},val) {
+  '@setLayout'({slots,style},val) {
     if (val.position === 'smart') {
       if (style.height === 'auto') {
         style.height = style.heightFact;
@@ -47,7 +35,8 @@ export default {
         style.widthAuto = undefined;
       }
     }
-    setLayout({data,slots},val);
+    const slotInstance = slots.get('content');
+    setSlotLayout(slotInstance, val);
   },
   ':root': {
     items({slot}: EditorResult<Data>, cate1, cate2, cate3) {
@@ -59,14 +48,13 @@ export default {
           description: '设置布局方式，包括智能布局、纵向排版、横向排版、自由布局',
           options: [],
           value: {
-            get({data, slots}: EditorResult<Data>) {
-              const {slotStyle = {}} = data;
-              // const slotInstance = slots.get('content');
-              // setSlotLayout(slotInstance, slotStyle);
-              return slotStyle;
+            get({data}: EditorResult<Data>) {
+              return data.slotStyle || {};
             },
             set({data, slots}: EditorResult<Data>, val: any) {
-              setLayout({data,slots},val);
+              data.slotStyle = val;
+              const slotInstance = slots.get('content');
+              setSlotLayout(slotInstance, val);
             }
           }
         },
@@ -98,8 +86,3 @@ export default {
   }
 };
 
-function setLayout({data,slots},val) {
-  data.slotStyle = val;
-  const slotInstance = slots.get('content');
-  setSlotLayout(slotInstance, val);
-}

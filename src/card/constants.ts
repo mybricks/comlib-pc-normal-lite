@@ -27,7 +27,7 @@ export interface Data {
   isHeight: boolean;
   height: string;
   showTitle: boolean;
-  slotStyle?: Object; 
+  slotStyle?: Object;
 }
 
 export interface Item {

@@ -32,15 +32,10 @@ export default {
           },
           value: {
             get({ data }: EditorResult<Data>) {
-              return data.slotStyle;
+              return data.slotStyle || {};
             },
-            set({ slots, data }: EditorResult<Data>, val: any) {
-              if (!data.slotStyle) {
-                data.slotStyle = {};
-              }
-
-              data.slotStyle = val
-
+            set({ data, slots }: EditorResult<Data>, val: any) {
+              data.slotStyle = val;
               data.tabList.forEach((item) => {
                 const slotInstance = slots.get(item.id);
                 setSlotLayout(slotInstance, val);

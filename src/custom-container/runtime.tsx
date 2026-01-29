@@ -7,7 +7,7 @@ export default function (props: RuntimeParams<Data>) {
 
   return (
     <div className={css.container}>
-      {slots[SlotIds.Content]?.render({ style: data.slotStyle })}
+      {slots[SlotIds.Content]?.render()}
     </div>
   );
 }

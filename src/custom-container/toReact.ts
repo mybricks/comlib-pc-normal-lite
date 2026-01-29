@@ -1,6 +1,6 @@
 export default function ({ data, slots }) {
-  const jsx = `<div className="container">
-    ${slots['content']?.render({ style: data.slotStyle })}
+  const jsx = `<div>
+    ${slots['content']?.render()}
   </div>`;
 
   return {

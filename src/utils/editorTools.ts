@@ -4,7 +4,7 @@
  */
 const setSlotLayout = (slot, val) => {
   if (!slot) return;
-
+  slot.setStyle(val);
   if (val.position === 'smart') {
     slot.setLayout('smart');
   } else if (val.position === 'absolute') {

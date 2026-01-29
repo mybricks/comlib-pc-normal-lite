@@ -65,7 +65,7 @@ export interface Data {
   /** @description 1.0.15 尺寸 */
   size?: TabsProps['size'];
   /** @description v1.0.19 插槽样式 */
-  slotStyle: {
+  slotStyle?: {
     position?: string,
     display?: string
     flexDirection?: string,
@@ -74,7 +74,7 @@ export interface Data {
     flexWrap?: string,
     rowGap?: number,
     columnGap?: number
-  },
+  };
   closable?: boolean
   dynamicTabs?: boolean
 }
