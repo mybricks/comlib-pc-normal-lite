@@ -1,6 +1,3 @@
-import { setSlotLayout } from "./editors";
-import { SlotIds } from "./constants";
-
 export default {
   ignore: true,
   ':root' ({ data }) {

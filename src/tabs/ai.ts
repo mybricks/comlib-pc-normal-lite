@@ -1,9 +1,3 @@
-import { getFilterSelector } from '../utils/cssSelector';
-import merge from "lodash/merge";
-import mergeWith from "lodash/mergeWith";
-
-// const version = ANTD_VERSION === 4 ? "" : "antd5."
-
 export default {
   ':root'({ data }) {
     return {}

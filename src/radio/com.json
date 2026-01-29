@@ -1,0 +1,18 @@
+{
+  "title": "单选框",
+  "namespace": "mybricks.normal-pc-lite.radio",
+  "version": "1.0.0",
+  "description": "单选框",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "icon": "./icon.svg",
+  "preview": "https://f2.eckwai.com/kos/nlav11092/u_9en9i2.6e0f524f237f3fa5.png",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.ts",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "schema": ["mybricks.normal-pc.form-container/form-item", "*"]
+}

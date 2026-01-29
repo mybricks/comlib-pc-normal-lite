@@ -9,7 +9,8 @@
     "./src/custom-container/com.json",
     "./src/carousel/com.json",
     "./src/menu/com.json",
-    "./src/line-chart/com.json"
+    "./src/line-chart/com.json",
+    "./src/radio/com.json"
   ],
   "domain": "",
   "sceneType": "PC",

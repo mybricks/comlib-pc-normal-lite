@@ -1,4 +1,4 @@
-import { Data, InputIds, ObjectFit, OutputIds } from './constants';
+import { Data, ObjectFit} from './constants';
 
 export default {
   '@init': ({ style }: EditorResult<Data>) => {

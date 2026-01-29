@@ -1,5 +1,5 @@
 import { Data } from './runtime';
-import { uuid, unitConversion, isBase64Image } from '../utils';
+import { uuid,isBase64Image } from '../utils';
 
 const regex = /^data:image\/(png|jpeg|jpg|gif|bmp|webp|svg)/;
 
@@ -55,17 +55,6 @@ export default {
               },
               value: 'bgColor'
             }
-            // {
-            //   title: '跳转链接',
-            //   type: 'textarea',
-            //   options: {
-            //     placeholder: "目前支持http、https、kwai链接"
-            //   },
-            //   ifVisible: (item) => {
-            //     return item.evtType === EVT_TYPE.JUMP
-            //   },
-            //   value: 'jumpUrl'
-            // },
           ]
         },
         value: {

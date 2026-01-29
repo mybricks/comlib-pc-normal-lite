@@ -1,4 +1,4 @@
-import { Data, OutputIds } from './constants';
+import { Data } from './constants';
 
 export default {
   '@init': ({ style }) => {
