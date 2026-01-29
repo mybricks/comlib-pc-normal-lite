@@ -4,7 +4,7 @@ export default function ({ data }) {
     width="100%"
     height="100%"
     preview={false}
-    style={{ objectFit: "${data.objectFit}" || 'fill' }}
+    style={{ objectFit: "${data.objectFit}"}}
   />`;
 
   return {
