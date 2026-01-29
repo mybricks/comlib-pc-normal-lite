@@ -1,4 +1,3 @@
-import merge from "lodash/merge";
 import { setSlotLayout } from "./editors";
 import { SlotIds } from "./constants";
 
@@ -113,13 +112,5 @@ export default interface Data {
 `
   },
   execute(dsl, context) {
-    const { data, slots } = context;
-
-    merge(data, dsl);
-
-    const { slotStyle } = data;
-    const slotInstance = slots.get(SlotIds.Body);
-
-    setSlotLayout(slotInstance, slotStyle);
   }
 }

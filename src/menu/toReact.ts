@@ -1,22 +1,17 @@
 export default function ({ data }) {
-  const collectIcons = (items) => {
-    const icons = [];
-    (items || []).forEach(item => {
-      if (item.useIcon && item.icon) {
-        icons.push(item.icon);
-      }
-      if (item.children) {
-        icons.push(...collectIcons(item.children));
-      }
-    });
-    return [...new Set(icons)];
-  };
-
-  const iconsList = collectIcons(data.dataSource);
+  // 在渲染过程中同时收集图标，确保收集和使用同步
+  const collectedIcons: string[] = [];
 
   const renderMenuItems = (ds) => {
     return (ds || []).map((item) => {
-      const { key, children, menuType, useIcon, icon, title } = item || {};
+      const { key, children, menuType, icon, title } = item || {};
+
+      // 只要有 icon 就收集和使用
+      let iconAttr = '';
+      if (icon && typeof icon === 'string') {
+        iconAttr = `icon={<${icon} />}`;
+        collectedIcons.push(icon);
+      }
 
       if (menuType === 'group') {
         return `<Menu.ItemGroup title="${title}" key="${key}">
@@ -28,7 +23,7 @@ export default function ({ data }) {
         return `<Menu.SubMenu
           title="${title}"
           key="${key}"
-          ${useIcon && icon ? `icon={<${icon} />}` : ''}
+          ${iconAttr}
         >
           ${renderMenuItems(children)}
         </Menu.SubMenu>`;
@@ -36,7 +31,7 @@ export default function ({ data }) {
 
       return `<Menu.Item
         key="${key}"
-        ${useIcon && icon ? `icon={<${icon} />}` : ''}
+        ${iconAttr}
       >
         ${title}
       </Menu.Item>`;
@@ -44,6 +39,9 @@ export default function ({ data }) {
   };
 
   const menuItemsJsx = renderMenuItems(data.dataSource);
+
+  // 去重图标列表
+  const iconsList = Array.from(new Set(collectedIcons));
 
   const jsx = `<Menu mode="${data.mode}">
     ${menuItemsJsx}

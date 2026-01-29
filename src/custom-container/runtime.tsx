@@ -6,7 +6,7 @@ export default function (props: RuntimeParams<Data>) {
   const { data, slots } = props;
 
   return (
-    <div className={`${css.container} root`}>
+    <div className={css.container}>
       {slots[SlotIds.Content]?.render({ style: data.slotStyle })}
     </div>
   );

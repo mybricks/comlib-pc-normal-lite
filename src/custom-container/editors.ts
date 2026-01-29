@@ -83,14 +83,14 @@ export default {
             title: '默认',
             catelog: '默认',
             options: ['padding', 'border', 'background', 'overflow', 'BoxShadow'],
-            target: ({id}: EditorResult<Data>) => `> .root`
+            target: ({id}: EditorResult<Data>) => `> div:first-child`
           },
           {
             title: 'Hover',
             catelog: 'Hover',
             options: ['padding', 'border', 'background', 'BoxShadow'],
-            target: ({id}: EditorResult<Data>) => `> .root:hover`,
-            domTarget: '.root'
+            target: ({id}: EditorResult<Data>) => `> div:first-child:hover`,
+            domTarget: 'div:first-child'
           }
         ]
       }
