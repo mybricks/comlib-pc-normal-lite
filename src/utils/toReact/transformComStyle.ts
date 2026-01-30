@@ -21,30 +21,32 @@ export function transformComStyle(style: ComStyle) {
   if (zIndex !== undefined) {
     styleStr += `zIndex: ${zIndex},`;
   }
-  const hasMargin =
-    marginTop !== undefined ||
-    marginRight !== undefined ||
-    marginBottom !== undefined ||
-    marginLeft !== undefined;
-  if (hasMargin) {
-    const top = marginTop ?? 0;
-    const right = marginRight ?? 0;
-    const bottom = marginBottom ?? 0;
-    const left = marginLeft ?? 0;
-    if (top || right || bottom || left) {
-      // CSS margin 简写：1 值全同；2 值 上下/左右；3 值 上/左右/下；4 值 上/右/下/左
-      let marginValue: string;
-      if (top === right && right === bottom && bottom === left) {
-        marginValue = `${top}px`;
-      } else if (top === bottom && right === left) {
-        marginValue = `${top}px ${right}px`;
-      } else if (right === left) {
-        marginValue = `${top}px ${right}px ${bottom}px`;
-      } else {
-        marginValue = `${top}px ${right}px ${bottom}px ${left}px`;
-      }
-      styleStr += `margin: '${marginValue}',`;
+  const top = marginTop ?? 0;
+  const right = marginRight ?? 0;
+  const bottom = marginBottom ?? 0;
+  const left = marginLeft ?? 0;
+  const nonZeroMargins = [
+    top && "marginTop",
+    right && "marginRight",
+    bottom && "marginBottom",
+    left && "marginLeft",
+  ].filter(Boolean) as string[];
+  if (nonZeroMargins.length === 1) {
+    const key = nonZeroMargins[0];
+    const val = key === "marginTop" ? top : key === "marginRight" ? right : key === "marginBottom" ? bottom : left;
+    styleStr += `${key}: '${val}px',`;
+  } else if (nonZeroMargins.length > 1) {
+    let marginValue: string;
+    if (top === right && right === bottom && bottom === left) {
+      marginValue = `${top}px`;
+    } else if (top === bottom && right === left) {
+      marginValue = `${top}px ${right}px`;
+    } else if (right === left) {
+      marginValue = `${top}px ${right}px ${bottom}px`;
+    } else {
+      marginValue = `${top}px ${right}px ${bottom}px ${left}px`;
     }
+    styleStr += `margin: '${marginValue}',`;
   }
   
   Object.entries(other).forEach(([key, value]) => {
