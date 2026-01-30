@@ -15,7 +15,7 @@ export default {
             title: '选项标签',
             catelog: '默认',
             options: ['font'],
-            target: '.ant-radio-wrapper, .ant-radio-button-wrapper'
+            target: 'label.ant-radio-wrapper, .ant-radio-group .ant-radio-button-wrapper'
           },
           {
             title: '选项',
@@ -24,7 +24,7 @@ export default {
               { type: 'background', config: { disableBackgroundImage: true } },
               'border'
             ],
-            target: '.ant-radio-wrapper, .ant-radio-button-wrapper'
+            target: '.ant-radio-group .ant-radio-wrapper, .ant-radio-group .ant-radio-button-wrapper'
           }
         ]
       }
