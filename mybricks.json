@@ -1,23 +1,54 @@
 {
   "comAry": [
-    "./src/button/com.json",
-    "./src/text/com.json",
-    "./src/icon/com.json",
-    "./src/image/com.json",
-    "./src/card/com.json",
-    "./src/tabs/com.json",
-    "./src/custom-container/com.json",
-    "./src/carousel/com.json",
-    "./src/menu/com.json",
-    "./src/line-chart/com.json",
-    "./src/radio/com.json",
-    "./src/list-new/com.json"
+    {
+      "title": "基础",
+      "comAry": [
+        "./src/button/com.json",
+        "./src/text/com.json",
+        "./src/icon/com.json",
+        "./src/image/com.json"
+      ]
+    },
+    {
+      "title": "排版布局",
+      "comAry": [
+        "./src/custom-container/com.json",
+        "./src/card/com.json",
+        "./src/tabs/com.json"
+      ]
+    },
+    {
+      "title": "导航",
+      "comAry": [
+        "./src/menu/com.json"
+      ]
+    },
+    {
+      "title": "表单",
+      "comAry": [
+        "./src/radio/com.json",
+        "./src/list-new/com.json"
+
+      ]
+    },
+    {
+      "title": "数据展示",
+      "comAry": [
+        "./src/line-chart/com.json"
+      ]
+    },
+    {
+      "title": "其他",
+      "comAry": [
+        "./src/carousel/com.json"
+      ]
+    }
   ],
   "domain": "",
   "sceneType": "PC",
   "title": "normal-pc-lite-comlib",
   "namespace": "mybricks.normal-pc-lite",
-   "externals": [
+  "externals": [
     {
       "name": "@ant-design/cssinjs",
       "library": "antdCssinjs",

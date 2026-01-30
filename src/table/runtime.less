@@ -1,0 +1,124 @@
+@blue: #0075ff;
+@fontColor: #8c8c8c;
+@fontColor2: #434343;
+@bgColor: #f5f7f9;
+@fontSize: 14px;
+@fontSize2: 18px;
+
+.tableWarrper {
+  position: relative;
+}
+
+.noHeaderTable {
+  :global {
+    .ant-table-thead {
+      opacity: 0.2;
+    }
+  }
+}
+
+.table {
+  :global {
+    .ant-btn {
+      box-sizing: border-box;
+    }
+
+    .ant-table-body::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    .ant-table-body::-webkit-scrollbar-thumb {
+      background: #bbb;
+      border-radius: 5px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .ant-table-body::-webkit-scrollbar-thumb:hover {
+      background: #777;
+      border-radius: 7px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    // 表格的最后一个表头，resize拖拽条隐藏
+    .ant-table-thead>tr:first-child>th:last-child>div[class*='resizer-r'] {
+      display: none !important;
+    }
+
+    // 临时同步antd@1.10.4调整的样式内容，升级到antd>=1.10.4后可移除
+    .ant-table-column-title {
+      flex: unset;
+      margin-right: 4px;
+    }
+
+    .ant-table-column-sorters {
+      justify-content: unset;
+    }
+
+    // 开启排序后表头对齐方式
+    .ant-table-column-sorter-center .ant-table-column-sorters {
+      justify-content: center;
+    }
+
+    .ant-table-column-sorter-right .ant-table-column-sorters {
+      justify-content: right;
+    }
+
+    .ant-table-column-sorter-left .ant-table-column-sorters {
+      justify-content: left;
+    }
+
+    tr.mybricks-table-row-double {
+      background: #fafafa;
+    }
+
+    // 消除第一行空白行
+    tr.ant-table-measure-row {
+      visibility: collapse;
+    }
+  }
+}
+
+.scrollTable {
+  :global {
+    colgroup col {
+      min-width: 10px;
+    }
+  }
+}
+
+.emptyWrap {
+  border: 1px solid #ccc;
+  margin: 0 !important;
+}
+
+// .emptyNormal {
+//   margin: 32px 0;
+//   display: flex;
+//   flex-direction: column;
+//   align-items: center;
+//   justify-content: center;
+// }
+
+// .emptyImage {
+//   height: 40px;
+//   margin-bottom: 8px;
+// }
+
+// .emptyDescription {
+//   color: rgba(0, 0, 0, 0.25);
+//   font-size: 14px;
+//   line-height: 1.5717;
+//   text-align: center;
+// }
+
+.infoLabel {
+  position: absolute;
+  background: #438c06;
+  color: white;
+  font-weight: bold;
+  font-size: 10px;
+  padding: 2px 10px;
+}

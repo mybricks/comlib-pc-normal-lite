@@ -115,7 +115,6 @@ export default ({ data, inputs, slots, env, style }: RuntimeParams<Data>) => {
         displayDataSource,
         false,
         gutter,
-        () => {},
         columns
       )}
     </div>

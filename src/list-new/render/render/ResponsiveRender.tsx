@@ -2,8 +2,7 @@ import React from 'react';
 import { Data } from '../../constants';
 import css from '../../style.less';
 import classnames from 'classnames';
-import { Spin, List } from 'antd';
-import { SortableList, SortableItem } from './sort';
+import { List } from 'antd';
 
 const ResponsiveRender  = (loading:boolean, data:Data, dataSource:any, gutter, slots, env, columns) => {
   let { grid } = data;
