@@ -13,10 +13,10 @@ export default function Runtime({ env, data }: RuntimeParams<Data>) {
         disabled={data.config.disabled}
         value={data.value}
       >
-        <Space direction={data.layout === 'vertical' ? 'vertical' : undefined} wrap={data.autoBreakLine}>
+        <Space {...(data.layout === 'vertical' && { direction: 'vertical' })} wrap={data.autoBreakLine}>
           {options?.map((item) => (
             <Radio
-              key={item.key}
+              // key={item.key}
               value={item.value}
               disabled={item.disabled}
             >

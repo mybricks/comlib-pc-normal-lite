@@ -9,7 +9,14 @@ export default function ({ data, style }) {
 
   const jsx = `<div
     className="icon"
-    style={{ fontSize: ${fontSize} }}
+    style={{ 
+    fontSize: ${fontSize},
+    width: ${fontSize},
+    height: ${fontSize},
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    }}
   >
     <${IconComponent} />
   </div>`;

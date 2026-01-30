@@ -13,7 +13,8 @@
     "classnames": "^2.5.1",
     "lodash-es": "^4.17.23",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "react-sortable-hoc": "^2.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.27",
