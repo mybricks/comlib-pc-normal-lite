@@ -1,11 +1,9 @@
-export default function ({ data, slots }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, slots, style }) {
   const jsx = `<div 
-    className="carouselWrapper" 
-    style={{ 
-      width: "100%", 
-      height: "100%",
-      overflow: "hidden"
-    }}
+    className="${id} carouselWrapper" 
+    ${transformComStyle({...style, overflow: "hidden"})}
   >
     <Carousel style={{ width: "100%", height: "100%" }}>
       ${data.items.map((item, index) => `<div 

@@ -1,4 +1,6 @@
-export default function ({ data }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, style }) {
   // 在渲染过程中同时收集图标，确保收集和使用同步
   const collectedIcons: string[] = [];
 
@@ -43,7 +45,7 @@ export default function ({ data }) {
   // 去重图标列表
   const iconsList = Array.from(new Set(collectedIcons));
 
-  const jsx = `<Menu mode="${data.mode}">
+  const jsx = `<Menu className="${id}" ${transformComStyle(style)} mode="${data.mode}">
     ${menuItemsJsx}
   </Menu>`;
 

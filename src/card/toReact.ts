@@ -1,5 +1,9 @@
-export default function ({ data, slots }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, slots, style }) {
   const jsx = `<Card
+    className="${id}"
+    ${transformComStyle(style)}
     title="${data.title}"
     bordered={${data.bordered}}
   >

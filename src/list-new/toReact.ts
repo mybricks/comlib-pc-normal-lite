@@ -1,6 +1,8 @@
+import { transformComStyle } from "../utils/toReact";
+
 import { Data, Layout } from './constants';
 
-export default function ({ data, slots }: { data: Data; slots: any }) {
+export default function ({ id, data, slots, style }: { id: string; data: Data; slots: any; style: any }) {
   // 获取插槽内容
   const slotContent = slots?.item?.render() || '';
 
@@ -9,7 +11,7 @@ export default function ({ data, slots }: { data: Data; slots: any }) {
 
   if (data.layout === Layout.Vertical) {
     // 垂直布局
-    jsx = `<div className="list-new__root" style={{ width: '100%', height: '100%' }}>
+    jsx = `<div className="${id} list-new__root" ${transformComStyle(style)}>
   {${JSON.stringify(data.dataSource || [])}?.map((item, index) => (
     <div key={index} className="list-new__item" style={{ marginBottom: '${data.grid?.gutter?.[1] || 16}px' }}>
       ${slotContent}
@@ -19,13 +21,14 @@ export default function ({ data, slots }: { data: Data; slots: any }) {
   } else if (data.layout === Layout.Horizontal) {
     // 横向布局
     const isUniform = data.horizonLayout === 'UniformLayout';
-    jsx = `<div className="list-new__root" style={{ 
-  width: '100%', 
-  height: '100%', 
-  overflowX: 'auto',
-  whiteSpace: 'nowrap',
-  ${isUniform ? "display: 'flex', justifyContent: 'space-between'" : ''}
-}}>
+    jsx = `<div className="${id} list-new__root" 
+    ${transformComStyle({
+      ...style,
+      overflowX: 'auto',
+      whiteSpace: 'nowrap', 
+      ...(isUniform ? { display: 'flex', justifyContent: 'space-between' } : {})
+    })}
+>
   {${JSON.stringify(data.dataSource || [])}?.map((item, index) => (
     <div 
       key={index} 
@@ -44,6 +47,8 @@ export default function ({ data, slots }: { data: Data; slots: any }) {
     // 栅格布局
     const column = data.grid?.column || 3;
     jsx = `<List
+  className="${id} list-new__root"
+  ${transformComStyle(style)}
   grid={{ column: ${column}, gutter: ${JSON.stringify(data.grid?.gutter || [0, 16])} }}
   dataSource={${JSON.stringify(data.dataSource || [])}}
   renderItem={(item, index) => (

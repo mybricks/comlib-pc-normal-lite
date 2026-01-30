@@ -1,5 +1,7 @@
-export default function ({ data }) {
-  const jsx = `<Typography.Text className="text">
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, style }) {
+  const jsx = `<Typography.Text className="${id} text" ${transformComStyle(style)}>
   {${JSON.stringify(data.content || '')}}
 </Typography.Text>`;
 

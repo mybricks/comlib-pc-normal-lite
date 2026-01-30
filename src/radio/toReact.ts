@@ -1,4 +1,6 @@
-export default function ({ data }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, style }) {
   const options = data.config?.options || [];
   
   // 构建 Space 的属性
@@ -6,19 +8,21 @@ export default function ({ data }) {
   if (data.layout === 'vertical') {
     spaceProps.push('direction="vertical"');
   }
-  spaceProps.push(`wrap={${data.autoBreakLine || false}}`);
+  if (data.autoBreakLine) {
+    spaceProps.push(`wrap={true}`);
+  }
   
   const jsx = `<Radio.Group
-  optionType="${data.enableButtonStyle ? 'button' : 'default'}"
+  className="${id}"
+  ${transformComStyle(style)}
+  ${data.enableButtonStyle ? `optionType="button"` : ""}
   buttonStyle="${data.buttonStyle}"
-  disabled={${data.config?.disabled || false}}
-  value="${data.value || ''}"
+  ${data.config?.disabled ? `disabled={true}`: ""}
 >
   <Space ${spaceProps.join(' ')}>
     ${options.map((item, index) => `<Radio
-      key="${item.key || index}"
       value="${item.value}"
-      disabled={${item.disabled || false}}
+      ${item.disabled ? `disabled={true}`: ""}
     >
       ${item.label}
     </Radio>`).join('\n    ')}

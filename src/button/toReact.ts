@@ -1,6 +1,8 @@
-export default function ({ data }) {  
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ data, style }) {
   const jsx = `<Button
-    style={${JSON.stringify({ width: "100%", height: "100%" })}}
+    ${transformComStyle(style)}
     type="${data.type}"
   >
     ${data.text}

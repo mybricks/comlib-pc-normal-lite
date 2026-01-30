@@ -194,7 +194,7 @@ export default {
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
             target: ({ id }: EditorResult<Data>) =>
-              `ul.ant-menu, .ant-menu-submenu-title`
+              `.ant-menu, .ant-menu-submenu-title`
           },
           {
             title: '菜单项',
@@ -206,7 +206,7 @@ export default {
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
             target: 
-            ['ul li:not(.ant-menu-item-selected)','.ant-menu-light .ant-menu-submenu-title']
+            ['.ant-menu li:not(.ant-menu-item-selected)','.ant-menu-light .ant-menu-submenu-title']
           },
           {
             title: '菜单',
@@ -216,7 +216,7 @@ export default {
               'padding',
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
-            target: 'ul.ant-menu:hover'
+            target: '.ant-menu:hover'
           },
           {
             title: '菜单项',
@@ -225,7 +225,7 @@ export default {
               { type: 'font', config: { disableTextAlign: true } }
             ],
             target: [
-              'ul li:hover','.ant-menu-light .ant-menu-submenu-title:hover',
+              '.ant-menu li:hover','.ant-menu-light .ant-menu-submenu-title:hover',
               '.ant-menu-horizontal:not(.ant-menu-dark) > .ant-menu-item-open',
               '.ant-menu-horizontal:not(.ant-menu-dark) > .ant-menu-item:hover',  
               '.ant-menu-horizontal:not(.ant-menu-dark) > .ant-menu-submenu-open',
@@ -239,7 +239,7 @@ export default {
               'padding',
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
-            target: 'ul li:hover'
+            target: '.ant-menu li:hover'
           },
           ,
           {
@@ -263,13 +263,13 @@ export default {
               'padding',
               { type: 'background', config: { disableBackgroundImage: true } }
             ],
-            target: 'ul li.ant-menu-item-selected'
+            target: '.ant-menu li.ant-menu-item-selected'
           },
           {
             title: '选中标记',
             catelog: '选中',
             options: ['border'],
-            target: 'ul li.ant-menu-item-selected:after'
+            target: '.ant-menu li.ant-menu-item-selected:after'
           }
         ]
       }

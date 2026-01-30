@@ -1,7 +1,10 @@
-export default function ({ data, slots }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, slots, style }) {
   const jsx = `<Tabs
-    activeKey="${data.defaultActiveKey}"
-    onChange={(key) => { data.defaultActiveKey = key; }}
+    className="${id}"
+    ${transformComStyle(style)}
+    defaultActiveKey="${data.defaultActiveKey}"
   >
     ${data.tabList.map((item) => `<Tabs.TabPane tab="${item.name}" key="${item.key}">
       ${slots[item.id]?.render()}

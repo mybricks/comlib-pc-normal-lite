@@ -1,10 +1,11 @@
-export default function ({ data }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, style }) {
   const jsx = `<Image
+    className="${id}"
+    ${transformComStyle({ ...style, objectFit: data.objectFit })}
     src="${data.src}"
-    width="100%"
-    height="100%"
     preview={false}
-    style={{ objectFit: "${data.objectFit}"}}
   />`;
 
   return {

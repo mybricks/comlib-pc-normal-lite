@@ -1,3 +1,5 @@
+import { transformComStyle } from "../utils/toReact";
+
 export default function ({ data, style }) {
   const mockData = data.mockData || data.chartData || [
     { year: "1991", value: 3, category: "类型1" },
@@ -10,13 +12,15 @@ export default function ({ data, style }) {
 
   const { xField = 'year', yField = 'value', seriesField = 'category' } = data.config || {};
 
-  const jsx = `<Line
-    style={${JSON.stringify({ width: style.width, height: style.height })}}
+  const jsx = `<div ${transformComStyle(style)}>
+  <Line
+    autoFit={true}
     data={${JSON.stringify(mockData)}}
     xField="${xField}"
     yField="${yField}"
     seriesField="${seriesField}"
-  />`;
+  />
+  </div>`;
 
   return {
     imports: [

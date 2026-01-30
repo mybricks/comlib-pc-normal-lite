@@ -1,4 +1,6 @@
-export default function ({ data, style }) {
+import { transformComStyle } from "../utils/toReact";
+
+export default function ({ id, data, style }) {
   const fontSize = style.width === 'fit-content'
     ? 32
     : style.width !== '100%'
@@ -6,20 +8,9 @@ export default function ({ data, style }) {
       : undefined;
 
   const IconComponent = data.icon;
-
-  const jsx = `<div
-    className="icon"
-    style={{ 
-    fontSize: ${fontSize},
-    width: ${fontSize},
-    height: ${fontSize},
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    }}
-  >
-    <${IconComponent} />
-  </div>`;
+  const comStyle = { ...style, fontSize };
+  Reflect.deleteProperty(comStyle, "width");
+  const jsx = `<${IconComponent} className="${id} icon" ${transformComStyle(comStyle)}/>`
 
   return {
     imports: [
