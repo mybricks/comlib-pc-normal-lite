@@ -1,3 +1,17 @@
+// 分页器尺寸类型
+export enum PaginatorSizeTypeEnum {
+  Default = 'default',
+  Small = 'small',
+  Simple = 'simple'
+}
+
+// 分页器对齐类型
+export enum PaginatorAlignTypeEnum {
+  FlexStart = 'flex-start',
+  Center = 'center',
+  FlexEnd = 'flex-end'
+}
+
 export const COLUMN_EDITORS_CLASS_KEY =
   'thead th:not(.ant-table-selection-column):not(.ant-table-cell-scrollbar):not(.ant-table-row-expand-icon-cell):not(.column-draggle)';
 

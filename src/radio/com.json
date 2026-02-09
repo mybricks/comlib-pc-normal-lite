@@ -14,5 +14,5 @@
   "target": {
     "toReact": "./toReact.ts"
   },
-  "schema": ["mybricks.normal-pc.form-container/form-item", "*"]
+  "schema": ["mybricks.normal-pc-lite.form-container/form-item", "*"]
 }

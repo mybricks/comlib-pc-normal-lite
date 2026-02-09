@@ -1,5 +1,27 @@
 import { TformattersValue } from 'src/utils/dataFormatter/types';
-import { Data as PaginationData } from './components/Paginator/constants';
+import { PaginatorSizeTypeEnum, PaginatorAlignTypeEnum } from './constants';
+
+// 分页器配置数据
+export interface PaginationData {
+  total: number;
+  text: string;
+  current: number;
+  currentPage: {
+    pageNum: number;
+    pageSize: number;
+  };
+  isDynamic: boolean;
+  disabled?: boolean;
+  defaultPageSize: number;
+  align: PaginatorAlignTypeEnum;
+  size: PaginatorSizeTypeEnum;
+  showSizeChanger?: boolean;
+  pageSizeOptions?: string[];
+  showQuickJumper?: boolean;
+  hideOnSinglePage?: boolean;
+  pageSize?: number;
+  useFrontPage?: boolean;
+}
 
 export enum ContentTypeEnum {
   Text = 'text',

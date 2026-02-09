@@ -1,0 +1,25 @@
+{
+  "title": "表单容器",
+  "namespace": "mybricks.normal-pc-lite.form-container",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "version": "1.0.0",
+  "description": "表单容器",
+  "icon": "./icon.svg",
+  "data": "./data.json",
+  "preview": "https://f2.eckwai.com/kos/nlav11092/u_x0zid8.182f138fe94b85f8.png",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.tsx",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "slots": [
+    {
+      "id": "content",
+      "title": "表单容器",
+      "type": "scope"
+    }
+  ],
+  "schema": ["mybricks.normal-pc-lite.form-container/form-item", "*"]
+}

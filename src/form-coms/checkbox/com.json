@@ -1,0 +1,22 @@
+{
+  "title": "多选框",
+  "namespace": "mybricks.normal-pc-lite.checkbox",
+  "version": "1.0.0",
+  "description": "多选框",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "icon": "./icon.svg",
+  "preview": "https://f2.eckwai.com/kos/nlav11092/u_bntrt5.c5fcf109dc97a785.png",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.ts",
+  "upgrade": "./upgrade.ts",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "schema": [
+    "mybricks.normal-pc-lite.form-container/form-item",
+    "*"
+  ]
+}

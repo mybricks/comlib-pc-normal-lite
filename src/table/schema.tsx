@@ -1,7 +1,56 @@
 import { InputIds, OutputIds, SlotIds } from './constants';
 import { ContentTypeEnum, Data, IColumn } from './types';
-import { setPath } from '../utils/path';
-import { getColumnItem, getColumnItemDataIndex } from './utils';
+
+// 内联 setPath 函数
+const setPath = (obj: any, path: string, value: any, merge = true) => {
+  const keys = path.split('.');
+  let current = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!current[keys[i]]) current[keys[i]] = {};
+    current = current[keys[i]];
+  }
+  if (merge && current[keys[keys.length - 1]]) {
+    Object.assign(current[keys[keys.length - 1]], value);
+  } else {
+    current[keys[keys.length - 1]] = value;
+  }
+};
+
+// 内联 findColumnItemByKey 函数
+const findColumnItemByKey = (columns: IColumn[], key: string): IColumn | undefined => {
+  for (const column of columns) {
+    if (column.key === key) return column;
+    if (column.children) {
+      const found = findColumnItemByKey(column.children, key);
+      if (found) return found;
+    }
+  }
+  return undefined;
+};
+
+// 内联 getColumnItem 函数
+const getColumnItem = (data: Data, focusArea: any): IColumn | undefined => {
+  const key = focusArea?.dataset?.tableThIdx;
+  return key ? findColumnItemByKey(data.columns, key) : undefined;
+};
+
+// 内联 formatColumnItemDataIndex 函数
+function formatColumnItemDataIndex(item: IColumn): string | string[] {
+  if (item.dataIndex) return item.dataIndex;
+  let titleDataIndex: string | string[] = (item.title || '')
+    .split('')
+    .filter((val) => /[\u4e00-\u9fa5A-Za-z0-9._]/.test(val))
+    .join('')
+    .split('.');
+  if (titleDataIndex.length <= 1) titleDataIndex = titleDataIndex[0];
+  return titleDataIndex;
+}
+
+// 内联 getColumnItemDataIndex 函数
+function getColumnItemDataIndex(item: IColumn): string {
+  const colDataIndex = formatColumnItemDataIndex(item);
+  return Array.isArray(colDataIndex) ? colDataIndex.join('.') : colDataIndex;
+}
 
 interface Props {
   data: Data;

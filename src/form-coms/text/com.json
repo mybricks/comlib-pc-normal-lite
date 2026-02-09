@@ -1,0 +1,18 @@
+{
+  "title": "文本框",
+  "namespace": "mybricks.normal-pc-lite.form-text",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "version": "1.0.0",
+  "description": "文本框",
+  "icon": "./icon.svg",
+  "data": "./data.json",
+  "preview": "https://f2.eckwai.com/kos/nlav11092/u_x0zid8.182f138fe94b85f8.png",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.tsx",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "schema": ["mybricks.normal-pc-lite.form-container/form-item", "*"]
+}

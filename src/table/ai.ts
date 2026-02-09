@@ -30,7 +30,6 @@ height: 可配置，建议配置fit-content
   },
   editors: {
     ':root': [
-      '常规/列/列宽分配',
       {
         title: '常规/表格列',
         description: `通过数组来配置所有列
@@ -67,109 +66,6 @@ height: 可配置，建议配置fit-content
           }
         }
       },
-      '常规/分页模式',
-      '样式/默认/表格容器',
-      '样式/默认/表格',
-      '样式/默认/单元格',
-      '样式/默认/行'
     ],
-    // [COLUMN_EDITORS_CLASS_KEY]: {
-    //   get title() {
-    //     return 'thead th[data-table-th-idx="列的key字段"]'
-    //   },
-    //   configs: [
-    //     '常规/内容省略展示',
-    //     '高级/排序/使用排序',
-    //     '样式/单行',
-    //     '样式/双行',
-    //     '样式/默认/表头',
-    //     '样式/默认/分割线',
-    //     '样式/默认/内容',
-    //     '样式/表头对齐方式'
-    //   ]
-    // },
-    ['[data-table-pagination]']: {
-      get title() {
-        return "[data-table-pagination]"
-      },
-      configs: [
-        '常规/位置',
-        '常规/默认每页显示条数',
-        '高级/跳页功能',
-        '高级/条数选择功能',
-        '高级/条数配置',
-        '样式/默认/页码',
-        '样式/默认/页码字体',
-        '样式/默认/翻页按钮',
-        '样式/默认/前置文案字体',
-        '样式/默认/条数选择',
-        '样式/默认/条数选择标签',
-        '样式/激活/页码',
-        '样式/激活/页码字体',
-        '样式/激活/条数选择',
-        '样式/激活/条数选择标签',
-      ]
-    }
   },
-//   editors: [
-//     '常规/列/列宽分配',
-//     {
-//       title: '常规/表格列',
-//       description: `通过数组来配置所有列
-// [ # 表格列配置
-//   {
-//     key: string # 列唯一标识
-//     dataIndex: string
-//     title: string # 列标题
-//     width: string | number 
-//     isRowKey: boolean 
-//     contentType: ['text', 'link', 'slotItem'] # 列内容类型，默认为text
-//   }
-// ]
-// `,
-//       type: 'array',
-//       value: {
-//         set: ({ data, slot, ...extra }, value) => {
-//           data.columns = value.map(t => ({
-//             ...t,
-//             visible: t.visible ?? true
-//           }))
-//           data.columns.forEach(col => {
-//             if (col.contentType === 'slotItem') {
-//               const slotId = col.key;
-//               col.slotId = slotId;
-              
-//               slot.add({ id: slotId, title: `${col.title}-列`, type: 'scope' })
-//               if (col.keepDataIndex) {
-//                 slot.get(slotId).inputs.add(InputIds.SLOT_ROW_VALUE, '当前列数据', Schemas.Any);
-//               }
-//               slot.get(slotId).inputs.add(InputIds.SLOT_ROW_RECORD, '当前行数据', Schemas.Object);
-//               slot.get(slotId).inputs.add(InputIds.INDEX, '当前行序号', Schemas.Number);
-//               slot.get(slotId).outputs.add(OutputIds.Edit_Table_Data, '更新行数据', {
-//                 type: 'object',
-//                 properties: {
-//                   index: {
-//                     type: 'number'
-//                   },
-//                   value: {
-//                     type: 'any'
-//                   }
-//                 }
-//               });
-//               slot.get(slotId).outputs.add(OutputIds.Row_Move_Up, '上移行', Schemas.Number);
-//               slot.get(slotId).outputs.add(OutputIds.Row_Move_Down, '下移行', Schemas.Number);
-//               slot.get(slotId).outputs.add(OutputIds.Remove_Row, '移除行', Schemas.Number);
-//             }
-//           })
-//         }
-//       }
-//     },
-//     '常规/分页模式',
-//     '样式/默认/表格容器',
-//     '样式/默认/表格',
-//     '样式/默认/表头',
-//     '样式/默认/单元格',
-//     '样式/默认/行',
-//     '高级/表格行展开/表格行展开'
-//   ],
 }

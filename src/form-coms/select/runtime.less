@@ -1,0 +1,36 @@
+.select {
+  --select--selection-overflow-max-height: none;
+
+  :global {
+    .ant-select {
+      width: 100%;
+    }
+
+    .ant-select-selection-overflow {
+      max-height: var(--select--selection-overflow-max-height, 'none');
+      overflow-y: auto;
+    }
+    .ant-select-multiple .ant-select-selection-item {
+      height: inherit;
+    }
+  }
+}
+
+.selectColor {
+  :global{
+    .ant-select-disabled.ant-select:not(.ant-select-customize-input) .ant-select-selector{
+      color: unset !important;
+    }
+    .ant-select-selection-item{
+      color: unset !important;
+    }
+  }
+}
+
+.antd5Select {
+  :global {
+    .ant-select:not(.ant-select-customize-input) .ant-select-selector {
+      border-radius: 6px;
+    }
+  }
+}

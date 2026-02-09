@@ -1,0 +1,21 @@
+{
+  "title": "下拉框",
+  "namespace": "mybricks.normal-pc-lite.select",
+  "version": "1.0.0",
+  "description": "下拉框",
+  "author": "MyBricks",
+  "author_name": "MyBricks",
+  "icon": "./icon.svg",
+  "preview": "https://f2.eckwai.com/kos/nlav11092/u_0nxwk5.ce543f08d939685b.png",
+  "data": "./data.json",
+  "runtime": "./runtime.tsx",
+  "editors": "./editors.ts",
+  "ai": "./ai.ts",
+  "target": {
+    "toReact": "./toReact.ts"
+  },
+  "schema": [
+    "mybricks.normal-pc-lite.form-container/form-item",
+    "*"
+  ]
+}
