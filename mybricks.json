@@ -3,8 +3,9 @@
     {
       "title": "排版布局",
       "comAry": [
-        "./src/custom-container/com.json"
-
+        "./src/custom-container/com.json",
+        "./src/mix/com.json",
+        "./src/mixjs/com.json"
       ]
     }
   ],

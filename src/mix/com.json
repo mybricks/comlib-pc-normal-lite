@@ -1,0 +1,19 @@
+{
+  "title": "Antd5-Echars",
+  "namespace": "mybricks.basic-comlib.ai-mix",
+  "author": "MyBricks Team",
+  "author_name": "MyBricks Team",
+  "version": "1.0.19",
+  "description": "AI组件",
+  "icon": "./icon.svg",
+  "runtime": "./runtime.tsx",
+  "runtime.edit": "./runtime.edit.tsx",
+  "ai": "./ai.ts",
+  "editors": "./editors.tsx",
+  "data": "./data.json",
+  "slots": [],
+  "docs": "",
+  "target": {
+    "toReact": "./toReact.ts"
+  }
+}
