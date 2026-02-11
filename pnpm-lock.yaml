@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@ant-design/charts':
         specifier: ^2.6.7
-        version: 2.6.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.104.1))
+        version: 2.6.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.105.1))
       '@ant-design/icons':
         specifier: ^6.1.0
         version: 6.1.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -19,22 +19,22 @@ importers:
         version: 2.4.35
       antd:
         specifier: ^5.22.2
-        version: 5.29.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 5.29.3(moment@2.30.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
       lodash-es:
         specifier: ^4.17.23
         version: 4.17.23
+      moment:
+        specifier: ^2.30.1
+        version: 2.30.1
       react:
         specifier: ^19.2.4
         version: 19.2.4
       react-dom:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
-      react-sortable-hoc:
-        specifier: ^2.0.0
-        version: 2.0.0(prop-types@15.8.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
     devDependencies:
       '@types/react':
         specifier: ^18.3.27
@@ -42,6 +42,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.7
         version: 18.3.7(@types/react@18.3.27)
+      webpack:
+        specifier: ^5.105.1
+        version: 5.105.1
 
 packages:
 
@@ -846,8 +849,8 @@ packages:
     resolution: {integrity: sha512-/kyM18EfinwXZbno9FyUGeFh87KC8HRQBQGildHZbEuRyWFOmv1U10o9BBp8XVZDVNNuQKyIGIu5ZYAAXJ0V2Q==}
     engines: {node: '>= 4'}
 
-  enhanced-resolve@5.18.4:
-    resolution: {integrity: sha512-LgQMM4WXU3QI+SYgEc2liRgznaD5ojbmY3sb8LxyguVkIg5FxdpTkvk72te2R38/TGKxH634oLxXRGY6d7AP+Q==}
+  enhanced-resolve@5.19.0:
+    resolution: {integrity: sha512-phv3E1Xl4tQOShqSte26C7Fl84EwUdZsyOuSSk9qtAGyyQs2s3jJzComh+Abf4g187lUUAvH+H26omrqia2aGg==}
     engines: {node: '>=10.13.0'}
 
   es-abstract@1.24.1:
@@ -1039,9 +1042,6 @@ packages:
     resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
     engines: {node: '>=12'}
 
-  invariant@2.2.4:
-    resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
-
   is-any-array@2.0.1:
     resolution: {integrity: sha512-UtilS7hLRu++wb/WBAw9bNuP1Eg04Ivn1vERJck8zJthEvXCBEBpGR/33u/xLKWEQf95803oalHrVDptcAvFdQ==}
 
@@ -1157,9 +1157,6 @@ packages:
     resolution: {integrity: sha512-7vuh85V5cdDofPyxn58nrPjBktZo0u9x1g8WtjQol+jZDaE+fhN+cIvTj11GndBnMnyfrUOG1sZQxCdjKh+DKg==}
     engines: {node: '>= 10.13.0'}
 
-  js-tokens@4.0.0:
-    resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
-
   json-parse-even-better-errors@2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
 
@@ -1204,10 +1201,6 @@ packages:
     resolution: {integrity: sha512-k+yt5n3l48JU4k8ftnKG6V7u32wyH2NfKzeMto9F/QRE0amxy/LayxwlvjjkZEIzqR+19IrtFO8p5kB9QaYUFg==}
     engines: {node: '>=0.10.0'}
 
-  loose-envify@1.4.0:
-    resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
-    hasBin: true
-
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -1245,6 +1238,9 @@ packages:
     resolution: {integrity: sha512-2emPTb1reeLLYwHxyVx993iYyCHEiRRO+y8NFXFPL5kl5q14sgTK76cXyEKkeKCHeRw35SfdkUJ10Q1KfHuiIQ==}
     engines: {node: '>= 0.4'}
 
+  moment@2.30.1:
+    resolution: {integrity: sha512-uEmtNhbDOrWPFS+hdjFCBfy9f2YoyzRpwcl+DqpC6taX21FzsTLQVbMV/W7PzNSX6x/bhC1zA3c2UQ5NzH6how==}
+
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -1255,10 +1251,6 @@ packages:
 
   node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
-
-  object-assign@4.1.1:
-    resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
-    engines: {node: '>=0.10.0'}
 
   object-inspect@1.12.3:
     resolution: {integrity: sha512-geUvdk7c+eizMNUDkRpW1wJwgfOiOeHbxBR/hLXK1aT6zmVSO0jsQcs7fj6MGw89jC/cjGfLcNOrtMYtGqm81g==}
@@ -1309,9 +1301,6 @@ packages:
   postcss@8.4.49:
     resolution: {integrity: sha512-OCVPnIObs4N29kxTjzLfUryOkvZEq+pf8jTF0lg8E7uETuWHA+v7j3c/xJmiqpX450191LlmZfUKkXxkTry7nA==}
     engines: {node: ^10 || ^12 || >=14}
-
-  prop-types@15.8.1:
-    resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
 
   randombytes@2.1.0:
     resolution: {integrity: sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==}
@@ -1549,18 +1538,8 @@ packages:
     peerDependencies:
       react: ^19.2.4
 
-  react-is@16.13.1:
-    resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
-
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
-
-  react-sortable-hoc@2.0.0:
-    resolution: {integrity: sha512-JZUw7hBsAHXK7PTyErJyI7SopSBFRcFHDjWW5SWjcugY0i6iH7f+eJkY8cJmGMlZ1C9xz1J3Vjz0plFpavVeRg==}
-    peerDependencies:
-      prop-types: ^15.5.7
-      react: ^16.3.0 || ^17.0.0
-      react-dom: ^16.3.0 || ^17.0.0
 
   react@19.2.4:
     resolution: {integrity: sha512-9nfp2hYpCwOjAN+8TZFGhtWEwgvWHXqESH8qT89AT/lWklpLON22Lc8pEtnpsZz7VmawabSU0gCjnj8aC0euHQ==}
@@ -1835,8 +1814,8 @@ packages:
     resolution: {integrity: sha512-yd1RBzSGanHkitROoPFd6qsrxt+oFhg/129YzheDGqeustzX0vTZJZsSsQjVQC4yzBQ56K55XU8gaNCtIzOnTg==}
     engines: {node: '>=10.13.0'}
 
-  webpack@5.104.1:
-    resolution: {integrity: sha512-Qphch25abbMNtekmEGJmeRUhLDbe+QfiWTiqpKYkpCOWY64v9eyl+KRRLmqOFA2AvKPpc9DC6+u2n76tQLBoaA==}
+  webpack@5.105.1:
+    resolution: {integrity: sha512-Gdj3X74CLJJ8zy4URmK42W7wTZUJrqL+z8nyGEr4dTN0kb3nVs+ZvjbTOqRYPD7qX4tUmwyHL9Q9K6T1seW6Yw==}
     engines: {node: '>=10.13.0'}
     hasBin: true
     peerDependencies:
@@ -1894,9 +1873,9 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@ant-design/charts@2.6.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.104.1))':
+  '@ant-design/charts@2.6.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.105.1))':
     dependencies:
-      '@ant-design/graphs': 2.1.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.104.1))
+      '@ant-design/graphs': 2.1.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.105.1))
       '@ant-design/plots': 2.6.8(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       lodash: 4.17.23
       react: 19.2.4
@@ -1938,12 +1917,12 @@ snapshots:
 
   '@ant-design/fast-color@3.0.1': {}
 
-  '@ant-design/graphs@2.1.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.104.1))':
+  '@ant-design/graphs@2.1.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.105.1))':
     dependencies:
       '@ant-design/charts-util': 0.0.1-alpha.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@antv/g6': 5.0.51(workerize-loader@2.0.2(webpack@5.104.1))
-      '@antv/g6-extension-react': 0.2.6(@antv/g6@5.0.51(workerize-loader@2.0.2(webpack@5.104.1)))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@antv/graphin': 3.0.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.104.1))
+      '@antv/g6': 5.0.51(workerize-loader@2.0.2(webpack@5.105.1))
+      '@antv/g6-extension-react': 0.2.6(@antv/g6@5.0.51(workerize-loader@2.0.2(webpack@5.105.1)))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@antv/graphin': 3.0.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.105.1))
       lodash: 4.17.23
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -2187,15 +2166,15 @@ snapshots:
       size-sensor: 1.0.3
       tslib: 2.8.1
 
-  '@antv/g6-extension-react@0.2.6(@antv/g6@5.0.51(workerize-loader@2.0.2(webpack@5.104.1)))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@antv/g6-extension-react@0.2.6(@antv/g6@5.0.51(workerize-loader@2.0.2(webpack@5.105.1)))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@antv/g': 6.3.1
       '@antv/g-svg': 2.1.1
-      '@antv/g6': 5.0.51(workerize-loader@2.0.2(webpack@5.104.1))
+      '@antv/g6': 5.0.51(workerize-loader@2.0.2(webpack@5.105.1))
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@antv/g6@5.0.51(workerize-loader@2.0.2(webpack@5.104.1))':
+  '@antv/g6@5.0.51(workerize-loader@2.0.2(webpack@5.105.1))':
     dependencies:
       '@antv/algorithm': 0.1.26
       '@antv/component': 2.1.11
@@ -2205,7 +2184,7 @@ snapshots:
       '@antv/g-plugin-dragndrop': 2.1.1
       '@antv/graphlib': 2.0.4
       '@antv/hierarchy': 0.7.1
-      '@antv/layout': 1.2.14-beta.9(workerize-loader@2.0.2(webpack@5.104.1))
+      '@antv/layout': 1.2.14-beta.9(workerize-loader@2.0.2(webpack@5.105.1))
       '@antv/util': 3.3.11
       bubblesets-js: 2.3.4
     transitivePeerDependencies:
@@ -2219,9 +2198,9 @@ snapshots:
       gl-matrix: 3.4.4
       html2canvas: 1.4.1
 
-  '@antv/graphin@3.0.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.104.1))':
+  '@antv/graphin@3.0.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(workerize-loader@2.0.2(webpack@5.105.1))':
     dependencies:
-      '@antv/g6': 5.0.51(workerize-loader@2.0.2(webpack@5.104.1))
+      '@antv/g6': 5.0.51(workerize-loader@2.0.2(webpack@5.105.1))
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
     transitivePeerDependencies:
@@ -2233,12 +2212,12 @@ snapshots:
 
   '@antv/hierarchy@0.7.1': {}
 
-  '@antv/layout@1.2.14-beta.9(workerize-loader@2.0.2(webpack@5.104.1))':
+  '@antv/layout@1.2.14-beta.9(workerize-loader@2.0.2(webpack@5.105.1))':
     dependencies:
       '@antv/event-emitter': 0.1.3
       '@antv/graphlib': 2.0.4
       '@antv/util': 3.3.11
-      '@naoak/workerize-transferable': 0.1.0(workerize-loader@2.0.2(webpack@5.104.1))
+      '@naoak/workerize-transferable': 0.1.0(workerize-loader@2.0.2(webpack@5.105.1))
       comlink: 4.4.2
       d3-force: 3.0.0
       d3-force-3d: 3.0.6
@@ -2388,9 +2367,9 @@ snapshots:
     dependencies:
       call-bind: 1.0.8
 
-  '@naoak/workerize-transferable@0.1.0(workerize-loader@2.0.2(webpack@5.104.1))':
+  '@naoak/workerize-transferable@0.1.0(workerize-loader@2.0.2(webpack@5.105.1))':
     dependencies:
-      workerize-loader: 2.0.2(webpack@5.104.1)
+      workerize-loader: 2.0.2(webpack@5.105.1)
 
   '@rc-component/async-validator@5.1.0':
     dependencies:
@@ -2663,7 +2642,7 @@ snapshots:
 
   ansi-styles@2.2.1: {}
 
-  antd@5.29.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  antd@5.29.3(moment@2.30.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@ant-design/colors': 7.2.1
       '@ant-design/cssinjs': 1.24.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -2695,7 +2674,7 @@ snapshots:
       rc-motion: 2.9.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rc-notification: 5.6.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rc-pagination: 5.1.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      rc-picker: 4.11.3(dayjs@1.11.19)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      rc-picker: 4.11.3(dayjs@1.11.19)(moment@2.30.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rc-progress: 4.0.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rc-rate: 2.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rc-resize-observer: 1.4.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -3015,7 +2994,7 @@ snapshots:
 
   emojis-list@3.0.0: {}
 
-  enhanced-resolve@5.18.4:
+  enhanced-resolve@5.19.0:
     dependencies:
       graceful-fs: 4.2.11
       tapable: 2.3.0
@@ -3260,10 +3239,6 @@ snapshots:
 
   internmap@2.0.3: {}
 
-  invariant@2.2.4:
-    dependencies:
-      loose-envify: 1.4.0
-
   is-any-array@2.0.1: {}
 
   is-arguments@1.2.0:
@@ -3390,8 +3365,6 @@ snapshots:
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
-  js-tokens@4.0.0: {}
-
   json-parse-even-better-errors@2.3.1: {}
 
   json-schema-traverse@1.0.0: {}
@@ -3425,10 +3398,6 @@ snapshots:
   lodash@4.17.23: {}
 
   longest@1.0.1: {}
-
-  loose-envify@1.4.0:
-    dependencies:
-      js-tokens: 4.0.0
 
   math-intrinsics@1.1.0: {}
 
@@ -3474,13 +3443,13 @@ snapshots:
       hasown: 2.0.2
       isarray: 2.0.5
 
+  moment@2.30.1: {}
+
   nanoid@3.3.11: {}
 
   neo-async@2.6.2: {}
 
   node-releases@2.0.27: {}
-
-  object-assign@4.1.1: {}
 
   object-inspect@1.12.3: {}
 
@@ -3529,12 +3498,6 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
-
-  prop-types@15.8.1:
-    dependencies:
-      loose-envify: 1.4.0
-      object-assign: 4.1.1
-      react-is: 16.13.1
 
   randombytes@2.1.0:
     dependencies:
@@ -3690,7 +3653,7 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  rc-picker@4.11.3(dayjs@1.11.19)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  rc-picker@4.11.3(dayjs@1.11.19)(moment@2.30.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@babel/runtime': 7.28.6
       '@rc-component/trigger': 2.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -3702,6 +3665,7 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
     optionalDependencies:
       dayjs: 1.11.19
+      moment: 2.30.1
 
   rc-progress@4.0.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
@@ -3864,17 +3828,7 @@ snapshots:
       react: 19.2.4
       scheduler: 0.27.0
 
-  react-is@16.13.1: {}
-
   react-is@18.3.1: {}
-
-  react-sortable-hoc@2.0.0(prop-types@15.8.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
-    dependencies:
-      '@babel/runtime': 7.28.6
-      invariant: 2.2.4
-      prop-types: 15.8.1
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
 
   react@19.2.4: {}
 
@@ -4121,14 +4075,14 @@ snapshots:
       resolve: 1.22.11
       string.prototype.trim: 1.2.10
 
-  terser-webpack-plugin@5.3.16(webpack@5.104.1):
+  terser-webpack-plugin@5.3.16(webpack@5.105.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       serialize-javascript: 6.0.2
       terser: 5.46.0
-      webpack: 5.104.1
+      webpack: 5.105.1
 
   terser@5.46.0:
     dependencies:
@@ -4218,7 +4172,7 @@ snapshots:
 
   webpack-sources@3.3.3: {}
 
-  webpack@5.104.1:
+  webpack@5.105.1:
     dependencies:
       '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.8
@@ -4230,7 +4184,7 @@ snapshots:
       acorn-import-phases: 1.0.4(acorn@8.15.0)
       browserslist: 4.28.1
       chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.18.4
+      enhanced-resolve: 5.19.0
       es-module-lexer: 2.0.0
       eslint-scope: 5.1.1
       events: 3.3.0
@@ -4242,7 +4196,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.0
-      terser-webpack-plugin: 5.3.16(webpack@5.104.1)
+      terser-webpack-plugin: 5.3.16(webpack@5.105.1)
       watchpack: 2.5.1
       webpack-sources: 3.3.3
     transitivePeerDependencies:
@@ -4295,10 +4249,10 @@ snapshots:
 
   wordwrap@0.0.2: {}
 
-  workerize-loader@2.0.2(webpack@5.104.1):
+  workerize-loader@2.0.2(webpack@5.105.1):
     dependencies:
       loader-utils: 2.0.4
-      webpack: 5.104.1
+      webpack: 5.105.1
 
   wrappy@1.0.2: {}
 
