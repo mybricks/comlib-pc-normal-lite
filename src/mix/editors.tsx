@@ -243,13 +243,16 @@ export default function (props: Props) {
           }
 
           if (key === ":root") {
-            if (!focusAreaConfigs[selector].items) {
-              focusAreaConfigs[selector].items = [
-                genResizer()
-              ]
-            } else {
+            if (focusAreaConfigs[selector].items?.length) {
               focusAreaConfigs[selector].items.push(genResizer())
             }
+            // if (!focusAreaConfigs[selector].items) {
+            //   focusAreaConfigs[selector].items = [
+            //     genResizer()
+            //   ]
+            // } else {
+            //   focusAreaConfigs[selector].items.push(genResizer())
+            // }
   
             focusAreaConfigs[selector].style.push(genResizer())
           }
@@ -397,6 +400,7 @@ export default function (props: Props) {
   context.setAiComParams(props.id, props);
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
+  console.log("[@focusAreaConfigs]", focusAreaConfigs)
 
   return {
     ...focusAreaConfigs,
