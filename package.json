@@ -1,6 +1,6 @@
 {
   "name": "@mybricks/comlib-pc-normal-lite",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "MyBricks PC组件库 lite版",
   "main": "index.js",
   "scripts": {},
