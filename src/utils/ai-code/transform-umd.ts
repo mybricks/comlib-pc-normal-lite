@@ -108,6 +108,7 @@ export function updateRender({data}, renderCode) {
     data.runtimeJsxConstituency = constituency
     data._jsxErr = ''
   }).catch(e => {
+    console.error("[@transformTsx error]", e);
     data._jsxErr = e?.message ?? '未知错误'
   })
 }
@@ -118,6 +119,7 @@ export function updateStyle({id, data}, styleCode) {
     data.styleSource = encodeURIComponent(styleCode)
     data._cssErr = '';
   }).catch(e => {
+    console.error("[@transformLess error]", e);
     data._cssErr = e?.message ?? '未知错误'
   })
 }

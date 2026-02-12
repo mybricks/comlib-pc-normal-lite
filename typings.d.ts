@@ -170,6 +170,7 @@ type StyleModeType<T> = Partial<{
 declare interface Window {
   ace: any;
   Babel: any;
+  less: any; // Less 编译器，CDN 加载
   myTinymce: any; // Tinymce
   jstt: any;
 }
