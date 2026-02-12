@@ -400,7 +400,6 @@ export default function (props: Props) {
   context.setAiComParams(props.id, props);
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
-  console.log("[@focusAreaConfigs]", focusAreaConfigs)
 
   return {
     ...focusAreaConfigs,

@@ -204,7 +204,7 @@ export default function (props: RuntimeParams<Data>) {
       className={`${css.container} root`}
       style={{
         position: useFixed ? 'fixed' : 'static',
-        cursor: outputs[OutputIds.Click].getConnections().length ? 'pointer' : '',
+        // cursor: outputs[OutputIds.Click].getConnections().length ? 'pointer' : '',
         ...legacyStyle,
         ...dynamicStyle
       }}

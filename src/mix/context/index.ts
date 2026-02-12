@@ -48,9 +48,19 @@ class Context {
         aiComParams.data.componentConfig = encodeURIComponent(content);
         const oriInputs = aiComParams.input.get();
         const oriOutputs = aiComParams.output.get();
-        const { title, inputs, outputs } = JSON.parse(content);
+        let parsed: { title?: string; inputs?: unknown[]; outputs?: unknown[] };
+        try {
+          parsed = JSON.parse(content);
+        } catch {
+          break;
+        }
+        const title = parsed?.title;
+        const inputs = Array.isArray(parsed?.inputs) ? parsed.inputs : [];
+        const outputs = Array.isArray(parsed?.outputs) ? parsed.outputs : [];
 
-        inputs.forEach(({ id, title, desc, schema }) => {
+        inputs.forEach((item: any) => {
+          const { id, title, desc, schema } = item ?? {};
+          if (id == null) return;
           const oriInputIndex = oriInputs.findIndex((input) => input.id === id);
           if (oriInputIndex !== - 1) {
             // 修改
@@ -73,7 +83,9 @@ class Context {
           aiComParams.input.remove(input.id);
         })
 
-        outputs.forEach(({ id, title, desc, schema }) => {
+        outputs.forEach((item: any) => {
+          const { id, title, desc, schema } = item ?? {};
+          if (id == null) return;
           const oriOutputIndex = oriOutputs.findIndex((output) => output.id === id);
           if (oriOutputIndex !== - 1) {
             // 修改

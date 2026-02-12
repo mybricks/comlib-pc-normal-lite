@@ -19,8 +19,8 @@ interface Config {
   onOpenCodes: () => void;
   enabledBatch?: boolean;
   hasAttachments?: boolean;
-  /** 批量时：按文件维度回调，stream 中 isComplete 时调用 */
-  onComponentUpdate?: (comId: string, fileName: string, content: string) => void;
+  /** 批量时：由 host 提供，stream 收到 files 时调用，内部调 batchUpdateComponentFiles */
+  onStream?: (files: Array<Record<string, unknown>> | RxFiles | undefined) => void;
   /** 非批量时：execute 时一次性传入完整 files，由 host 直接调 updateComponentFiles(files, comId, context) */
   execute?: (params: { files: Array<{ fileName: string; content: string }> }) => void;
   /** 批量时解析 fileName 用；非批量不传 */
@@ -34,24 +34,27 @@ function normalizeFiles(files: Array<ComponentFileItem | NormalizedFileItem> | R
   if (!files) return [];
   if (Array.isArray(files)) {
     return files
-      .map((f) => ({
-        fileName: f.fileName ?? '',
-        content: f.content ?? '',
-        isComplete: (f as NormalizedFileItem).isComplete ?? false,
-      }))
+      .map((f) => {
+        const raw = f as Record<string, unknown>;
+        return {
+          fileName: (raw.fileName as string) ?? '',
+          content: (raw.content as string) ?? '',
+          isComplete: (raw.isComplete as boolean) ?? false,
+        };
+      })
       .filter((f) => f.fileName);
   }
   const list: NormalizedFileItem[] = [];
   Object.entries(files).forEach(([key, fileOrArr]) => {
     const arr = Array.isArray(fileOrArr) ? fileOrArr : [fileOrArr];
     arr.forEach((f) => {
-      const file = f as RxFile;
-      const fileName = file.fileName ?? key;
+      const file = f as unknown as Record<string, unknown>;
+      const fileName = (file.fileName as string) ?? key;
       if (fileName) {
         list.push({
           fileName,
-          content: file.content ?? '',
-          isComplete: file.isComplete ?? false,
+          content: (file.content as string) ?? '',
+          isComplete: (file.isComplete as boolean) ?? false,
         });
       }
     });
@@ -67,7 +70,7 @@ function parseBatchFileName(fileName: string): { comId: string; baseFileName: st
   return { comId: uuid!, baseFileName: `${name}${ext}` };
 }
 
-/** 仅对 isComplete 且未重复的 (comId, baseFileName) 调用 onComponentUpdate，并打印调试参数 */
+/** 非批量时：用 normalizeFiles 结果，按 (comId, baseFileName) 分组后调用 onComponentUpdate（无 language 时沿用原逻辑） */
 function applyFilesToOnComponentUpdate(
   files: NormalizedFileItem[],
   config: {
@@ -79,10 +82,11 @@ function applyFilesToOnComponentUpdate(
 ) {
   const { enabledBatch, focusComId, onComponentUpdate, updatedKeys } = config;
   const seen = updatedKeys ?? new Set<string>();
+  type Group = { comId: string; baseFileName: string; items: NormalizedFileItem[] };
+  const groupBy = new Map<string, Group>();
 
-  files.forEach(({ fileName, content, isComplete }) => {
-    if (!isComplete) return;
-
+  files.forEach((item) => {
+    const { fileName } = item;
     let comId: string;
     let baseFileName: string;
     if (enabledBatch) {
@@ -95,11 +99,25 @@ function applyFilesToOnComponentUpdate(
       baseFileName = fileName;
     }
     if (!comId) return;
-
     const key = `${comId}|${baseFileName}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    if (!groupBy.has(key)) groupBy.set(key, { comId, baseFileName, items: [] });
+    groupBy.get(key)!.items.push(item);
+  });
 
+  groupBy.forEach((group, key) => {
+    if (seen.has(key)) return;
+    const { comId, baseFileName, items } = group;
+    let content: string;
+    if (items.length >= 2 && items[0].isComplete && items[1].isComplete) {
+      const has0 = items[0].content.length > 0;
+      const has1 = items[1].content.length > 0;
+      if (has1) content = items[1].content;
+      else if (has0) content = items[0].content;
+      else return;
+    } else if (items.length === 1 && items[0].isComplete && items[0].content.length > 0) {
+      content = items[0].content;
+    } else return;
+    seen.add(key);
     console.log('[开发模块 - 文件更新]', { comId, fileName: baseFileName, contentLength: content.length, contentPreview: content.slice(0, 80) + (content.length > 80 ? '...' : '') });
     onComponentUpdate(comId, baseFileName, content);
   });
@@ -113,8 +131,6 @@ function applyFilesToOnComponentUpdate(
 export default function developMyBricksModule(config: Config) {
   const langs = "React、Less"
   const libTitles = `${langs}、mybricks`
-  /** 本工具实例内已通过 onComponentUpdate 更新过的 (comId|fileName)，避免 stream 多次调用重复更新 */
-  const updatedKeys = new Set<string>()
 
   return {
     name: NAME,
@@ -1053,19 +1069,13 @@ if (enabledBatch) {
 </examples>
 `
     },
-    ...(config.enabledBatch && config.onComponentUpdate
+    ...(config.enabledBatch && config.onStream
       ? {
           execute(_params: any) {
             return '编写完成';
           },
           stream({ files, replaceContent }: { files?: Array<ComponentFileItem | NormalizedFileItem> | RxFiles; status?: string; replaceContent?: string }) {
-            const list = normalizeFiles(files);
-            applyFilesToOnComponentUpdate(list, {
-              enabledBatch: true,
-              focusComId: config.focusComId,
-              onComponentUpdate: config.onComponentUpdate!,
-              updatedKeys,
-            });
+            config.onStream!(files as Array<Record<string, unknown>> | RxFiles | undefined);
             return replaceContent ?? '';
           },
         }

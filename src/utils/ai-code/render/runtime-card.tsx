@@ -105,12 +105,17 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
 
-    // 存在需求文档时只展示文档卡片，不展示组件预览
-    if (data.document) {
+    // 仅当有 data.document 且没有其他代码时展示需求文档，否则维持原来的展示逻辑
+    if ((data.document && !data.runtimeJsxCompiled) || data.loading) {
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
           <div className={css.documentCard}>
             <div className={css.documentContent}>{data.document}</div>
+            {data.loading && (
+              <div className={css.loadingMask}>
+                <antd.Spin />
+              </div>
+            )}
           </div>
         </Wrapper>
       );

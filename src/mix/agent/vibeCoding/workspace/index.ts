@@ -6,78 +6,78 @@
 import { KnowledgeBase } from './knowledges/knowledge-base';
 import { DirectoryProvider, IKnowledgeNode, KnowledgeNodeType, IFileInfo } from './knowledges/types';
 
-import antdPrompt from "./../../../prompts/antd-summary.md"
-import echartsPrompt from "./../../../prompts/echarts-summary.md"
-import iconPrompt from "./../../../prompts/icon-summary.md"
+// import antdPrompt from "./../../../prompts/antd-summary.md"
+// import echartsPrompt from "./../../../prompts/echarts-summary.md"
+// import iconPrompt from "./../../../prompts/icon-summary.md"
 
-import { ANTD_KNOWLEDGES_MAP, ECHARTS_KNOWLEDGES_MAP } from '../../../knowledges'
+// import { ANTD_KNOWLEDGES_MAP, ECHARTS_KNOWLEDGES_MAP } from '../../../knowledges'
 
 import { getLibraryDoc } from './../../../avaliableLibraries'
 
-function getLibraryDocumentation() {
-  return antdPrompt + `\n\n` + echartsPrompt;
-}
+// function getLibraryDocumentation() {
+//   return antdPrompt + `\n\n` + echartsPrompt;
+// }
 
-function loadKnowledge (items) {
-  const rtn: any = []
-  items.forEach((now) => {
-    const library = now.from || now.lib
+// function loadKnowledge (items) {
+//   const rtn: any = []
+//   items.forEach((now) => {
+//     const library = now.from || now.lib
 
-    // 加载antd知识
-    if (library === 'antd') {
-      const knowledge = ANTD_KNOWLEDGES_MAP[now.item.toUpperCase()]
-      if (knowledge) {
-        rtn.push({
-          lib: library,
-          item: now.item,
-          knowledge,
-        })
-      }
-    }
+//     // 加载antd知识
+//     if (library === 'antd') {
+//       const knowledge = ANTD_KNOWLEDGES_MAP[now.item.toUpperCase()]
+//       if (knowledge) {
+//         rtn.push({
+//           lib: library,
+//           item: now.item,
+//           knowledge,
+//         })
+//       }
+//     }
 
-    // 加载echarts知识
-    if (library === 'echarts-for-react') {
-      const knowledge = ECHARTS_KNOWLEDGES_MAP[now.item.toLowerCase()]
+//     // 加载echarts知识
+//     if (library === 'echarts-for-react') {
+//       const knowledge = ECHARTS_KNOWLEDGES_MAP[now.item.toLowerCase()]
 
-      // @ts-ignore
-      if (typeof ECHARTS_KNOWLEDGES_MAP['base']?.docs === 'string') {
-        // @ts-ignore
-        ECHARTS_KNOWLEDGES_MAP['base']?.docs = ECHARTS_KNOWLEDGES_MAP['base']?.docs.replace(/import ReactECharts from 'echarts-for-react'/g, `import { 图表占位 } from 'echarts-for-react'`).replace(/ReactECharts/g, '图表占位')
-      }
-      if (typeof ECHARTS_KNOWLEDGES_MAP['base'] === 'string') {
-        ECHARTS_KNOWLEDGES_MAP['base'] = ECHARTS_KNOWLEDGES_MAP['base'].replace(/import ReactECharts from 'echarts-for-react'/g, `import { 图表占位 } from 'echarts-for-react'`).replace(/ReactECharts/g, '图表占位')
-      }
+//       // @ts-ignore
+//       if (typeof ECHARTS_KNOWLEDGES_MAP['base']?.docs === 'string') {
+//         // @ts-ignore
+//         ECHARTS_KNOWLEDGES_MAP['base']?.docs = ECHARTS_KNOWLEDGES_MAP['base']?.docs.replace(/import ReactECharts from 'echarts-for-react'/g, `import { 图表占位 } from 'echarts-for-react'`).replace(/ReactECharts/g, '图表占位')
+//       }
+//       if (typeof ECHARTS_KNOWLEDGES_MAP['base'] === 'string') {
+//         ECHARTS_KNOWLEDGES_MAP['base'] = ECHARTS_KNOWLEDGES_MAP['base'].replace(/import ReactECharts from 'echarts-for-react'/g, `import { 图表占位 } from 'echarts-for-react'`).replace(/ReactECharts/g, '图表占位')
+//       }
 
-      // echarts 需要一份 base 的文档
-      rtn.push({
-        lib: library,
-        item: '基础知识',
-        knowledge: ECHARTS_KNOWLEDGES_MAP['base'],
-      })
+//       // echarts 需要一份 base 的文档
+//       rtn.push({
+//         lib: library,
+//         item: '基础知识',
+//         knowledge: ECHARTS_KNOWLEDGES_MAP['base'],
+//       })
 
-      if (knowledge) {
-        rtn.push({
-          lib: library,
-          item: now.item,
-          knowledge,
-        })
-      }
-    }
+//       if (knowledge) {
+//         rtn.push({
+//           lib: library,
+//           item: now.item,
+//           knowledge,
+//         })
+//       }
+//     }
 
-    // if (library.startsWith("@dnd-kit")) {
-    //   const knowledge = DNDKIT_KNOWLEDGES_MAP[now.item.toUpperCase()]
-    //   if (knowledge) {
-    //     rtn.push({
-    //       lib: library,
-    //       item: now.item,
-    //       knowledge,
-    //     })
-    //   }
-    // }
-  })
+//     // if (library.startsWith("@dnd-kit")) {
+//     //   const knowledge = DNDKIT_KNOWLEDGES_MAP[now.item.toUpperCase()]
+//     //   if (knowledge) {
+//     //     rtn.push({
+//     //       lib: library,
+//     //       item: now.item,
+//     //       knowledge,
+//     //     })
+//     //   }
+//     // }
+//   })
 
-  return rtn
-}
+//   return rtn
+// }
 
 export interface WorkspaceConfig {
   /** 组件ID */
@@ -255,18 +255,18 @@ export class Workspace {
     });
   }
 
-  /**
-   * 初始化类库信息
-   * 加载并打开静态的类库说明文档
-   */
-  getAvailableLibraryInfo() {
-    try {
-      // 获取类库说明文档
-      return getLibraryDocumentation();
-    } catch (error) {
-      console.error('[Workspace] 初始化类库信息失败:', error);
-    }
-  }
+  // /**
+  //  * 初始化类库信息
+  //  * 加载并打开静态的类库说明文档
+  //  */
+  // getAvailableLibraryInfo() {
+  //   try {
+  //     // 获取类库说明文档
+  //     return getLibraryDocumentation();
+  //   } catch (error) {
+  //     console.error('[Workspace] 初始化类库信息失败:', error);
+  //   }
+  // }
 
   openModuleCodes() {
     try {
@@ -310,7 +310,7 @@ export class Workspace {
    */
   private async openDefaultFiles() {
     try {
-      await this.openLibraryDoc(['antd', '@ant-design/icons', 'dayjs'])
+      await this.openLibraryDoc(['antd', '@ant-design/icons', 'dayjs','echarts-for-react'])
     } catch (error) {
       
     }
