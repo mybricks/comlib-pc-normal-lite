@@ -1,6 +1,9 @@
 import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
 
+/** 本模块依赖 CDN 注入的全局变量 */
+const win = window as Window & { less?: any; Babel?: any }
+
 export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies = {}): Promise<Function> {
   return new Promise((resolve, reject) => {
     transformTsx(jsxCode).then(code => {
@@ -25,80 +28,69 @@ export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies
 }
 
 export function transformTsx(code): Promise<{ transformCode: string, constituency: any }> {
-  return new Promise((resolve, reject) => {
-    let transformCode
-    const constituency: any = [];
+  const constituency: any = []
+  const options = {
+    presets: [
+      [
+        "env",
+        {
+          "modules": "commonjs"//umd->commonjs
+        }
+      ],
+      'react'
+    ],
+    plugins: [
+      ['proposal-decorators', {legacy: true}],
+      'proposal-class-properties',
+      [
+        'transform-typescript',
+        {
+          isTSX: true
+        }
+      ],
+      babelPlugin({ constituency })
+    ]
+  }
 
-    try {
-      const options = {
-        presets: [
-          [
-            "env",
-            {
-              "modules": "commonjs"//umd->commonjs
-            }
-          ],
-          'react'
-        ],
-        plugins: [
-          ['proposal-decorators', {legacy: true}],
-          'proposal-class-properties',
-          [
-            'transform-typescript',
-            {
-              isTSX: true
-            }
-          ],
-          babelPlugin({ constituency })
-        ]
+  return ensureBabelReady()
+    .then(() => {
+      if (!win.Babel) {
+        throw new Error('当前环境 Babel 编译器 未准备好')
       }
-
-      if (!window.Babel) {
-        loadBabel()
-        reject('当前环境 BaBel编译器 未准备好')
-      } else {
-        transformCode = window.Babel.transform(code, options).code
-      }
-
-    } catch (error) {
-      console.error("[@transformTsx error]", error);
-      reject(error)
-    }
-
-    return resolve({ transformCode, constituency })
-  })
+      const transformCode = win.Babel.transform(code, options).code
+      return { transformCode, constituency }
+    })
+    .catch((error) => {
+      console.error("[@transformTsx error]", error)
+      throw error
+    })
 }
 
-export function transformLess(code): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let res = ''
-    try {
-      if (window?.less) {
+export function transformLess(code: string): Promise<string> {
+  if (!code || code.length === 0) {
+    return Promise.resolve('')
+  }
 
-        if (!code || code.length === 0) {
-          return resolve('')
-        }
-
-        window.less.render(code, {}, (error, result) => {
+  return ensureLessReady()
+    .then(() => {
+      if (!win.less) {
+        throw new Error('当前环境无 Less 编译器，请联系应用负责人')
+      }
+      return new Promise<string>((resolve, reject) => {
+        win.less.render(code, {}, (error, result) => {
           if (error) {
             console.error(error)
-            res = ''
-
-            reject(`Less 代码编译失败: ${error.message}`)
+            reject(new Error(`Less 代码编译失败: ${error.message}`))
           } else {
-            res = result?.css
+            resolve(result?.css ?? '')
           }
         })
-      } else {
-        loadLess() // 重试
-        reject('当前环境无 Less 编译器，请联系应用负责人')
-      }
-    } catch (error) {
-      reject(error)
-    }
-
-    return resolve(res)
-  }) as any
+      })
+    })
+    .catch((error) => {
+      console.error("[@transformLess error]", error)
+      throw error
+    })
 }
 
 export function updateRender({data}, renderCode) {
@@ -139,20 +131,31 @@ async function requireFromCdn(cdnUrl) {
   })
 }
 
-async function loadLess() {
-  if (window?.less) {
-    return
+let lessLoadPromise: Promise<void> | null = null
+/** 确保 window.less 已加载，未加载则拉取 CDN 并等待完成 */
+async function ensureLessReady(): Promise<void> {
+  if (win.less) return
+  if (!lessLoadPromise) {
+    lessLoadPromise = requireFromCdn('https://f2.beckwai.com/udata/pkg/eshop/fangzhou/asset/less/4.2.0/less.js').then(() => {
+      if (!win.less) throw new Error('Less 脚本已加载但 window.less 未就绪')
+    })
   }
-  await requireFromCdn('https://f2.beckwai.com/udata/pkg/eshop/fangzhou/asset/less/4.2.0/less.js')
+  await lessLoadPromise
 }
+ensureLessReady()
 
-async function loadBabel() {
-  if (window?.Babel) {
-    return
+let babelLoadPromise: Promise<void> | null = null
+/** 确保 window.Babel 已加载，未加载则拉取 CDN 并等待完成 */
+async function ensureBabelReady(): Promise<void> {
+  if (win.Babel) return
+  if (!babelLoadPromise) {
+    babelLoadPromise = requireFromCdn('https://f2.beckwai.com/udata/pkg/eshop/fangzhou/asset/babel/standalone/7.24.7/babel.min.js').then(() => {
+      if (!win.Babel) throw new Error('Babel 脚本已加载但 window.Babel 未就绪')
+    })
   }
-
-  await requireFromCdn('https://f2.beckwai.com/udata/pkg/eshop/fangzhou/asset/babel/standalone/7.24.7/babel.min.js')
+  await babelLoadPromise
 }
+ensureBabelReady()
 
 
 function runRender(code, dependencies) {
