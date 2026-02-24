@@ -41,13 +41,116 @@ interface Props {
   focusArea: any;
 }
 
+/**
+ * 根据runtime className 生成友好的分类名称
+ * 例如: 'button' -> '默认', 'buttonActive' -> '激活', 'buttonDisabled' -> '禁用'
+ */
+function getCatelogName(className: string, index: number): string {
+  const lowerClassName = className.toLowerCase();
+  
+  // 常见状态映射
+  const stateMap: Record<string, string> = {
+    'active': '激活',
+    'hover': '悬浮',
+    'focus': '聚焦',
+    'disabled': '禁用',
+    'disable': '禁用',
+    'selected': '选中',
+    'checked': '选中',
+    'error': '错误',
+    'success': '成功',
+    'warning': '警告',
+    'loading': '加载中',
+    'pressed': '按下',
+    'visited': '已访问',
+  };
+  
+  // 检查是否包含状态关键词
+  for (const [key, label] of Object.entries(stateMap)) {
+    if (lowerClassName.includes(key)) {
+      return label;
+    }
+  }
+  
+  // 第一个类名默认为"默认"
+  if (index === 0) {
+    return '默认';
+  }
+  
+  // 其他情况使用类名本身
+  return className;
+}
+
+/**
+ * 根据style中 伪类生成分类名称
+ */
+function getCatelogNameFromPseudo(pseudoClass: string): string {
+  const pseudoMap: Record<string, string> = {
+    'hover': '悬浮',
+    'focus': '聚焦',
+    'focus-visible': '聚焦可见',
+    'active': '激活',
+    'visited': '已访问',
+    'disabled': '禁用',
+    'checked': '选中',
+    'first-child': '第一项',
+    'last-child': '最后一项',
+    'nth-child': '第N项',
+    'before': '前置',
+    'after': '后置',
+  };
+  
+  return pseudoMap[pseudoClass] || pseudoClass;
+}
+
+/**
+ * 从 styleSource 中提取某个类名相关的所有伪类选择器
+ * 例如: '.mainBtn' -> ['.mainBtn:focus', '.mainBtn:hover', '.mainBtn:focus-visible']
+ */
+function extractPseudoSelectors(styleSource: string, baseClassName: string): Array<{ selector: string, pseudo: string, catelog: string }> {
+  try {
+    const cssObj = parseLess(decodeURIComponent(styleSource));
+    const results: Array<{ selector: string, pseudo: string, catelog: string }> = [];
+    
+    Object.keys(cssObj).forEach(selector => {
+      // 检查是否是目标类名的伪类选择器
+      // 匹配 .mainBtn:focus 或 .mainBtn:focus-visible 等
+      const regex = new RegExp(`\\${baseClassName}:([\\w-]+)`);
+      const match = selector.match(regex);
+      
+      if (match) {
+        const pseudo = match[1];
+        results.push({
+          selector: selector,
+          pseudo: pseudo,
+          catelog: getCatelogNameFromPseudo(pseudo)
+        });
+      }
+    });
+    
+    return results;
+  } catch (error) {
+    console.error('解析 CSS 伪类选择器失败:', error);
+    return [];
+  }
+}
+
 const genStyleValue = (params) => {
-  const { comId } = params;
+
+  const { comId, id } = params;
   return {
     set(params, value) {
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
-      const selector = params.selector;
+      let selector = params.selector;
+
+      // 伪类选择器的 target 拼接了组件类名前缀（如 ".u_8ncur .actionRow:hover"），
+      // 但 parseLess 解析出的 key 不含该前缀，需要先剥离再匹配
+      const componentClassPrefix = `.${id || comId} `;
+      if (selector.startsWith(componentClassPrefix)) {
+        selector = selector.slice(componentClassPrefix.length);
+      }
+
       const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) || selector;
   
       if (!cssObj[cssObjKey]) {
@@ -103,12 +206,40 @@ export default function (props: Props) {
     return {};
   }
 
+  const {id} = props;
+
+
   const { data, isLowCodeMode } = props;
   const focusAreaConfigs: any = {};
+
+  const stringifyWithCircular = (obj: any) => {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (key, value) => {
+      // 处理函数
+      if (typeof value === 'function') {
+        return `[Function: ${value.name || 'anonymous'}]`;
+      }
+      // 处理 undefined
+      if (value === undefined) {
+        return '[Undefined]';
+      }
+      // 处理循环引用
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular Reference]';
+        }
+        seen.add(value);
+      }
+      return value;
+    }, 2);
+  };
+
   try {
     const configs = evalConfigJsCompiled(decodeURIComponent(data.configJsCompiled));
     const rawConfig = decodeURIComponent(data.modelConfig);
     const model = JSON.parse(rawConfig);
+
+    //console.log("getEffectedCssPropertyAndOptions allStatesConfig result - 消费",stringifyWithCircular(data))
 
     Object.entries(configs).forEach(([key, value]: any) => {
       const items: any[] = [];
@@ -130,7 +261,7 @@ export default function (props: Props) {
 
       value.style?.forEach((style) => {
         style.items?.forEach((item) => {
-          item.valueProxy = genStyleValue({ comId: props.model?.runtime?.id || props.id });
+          item.valueProxy = genStyleValue({ comId: props.model?.runtime?.id || props.id, id: props.id });
         })
       })
 
@@ -182,6 +313,7 @@ export default function (props: Props) {
 
       if (source === "antd") {
         knowledge = ANTD_KNOWLEDGES_MAP[component.toUpperCase()];
+        //console.log('[antd component]', { component, componentUpper: component.toUpperCase(), knowledge, hasEditors: !!knowledge?.editors });
       } else if (source === "mybricks") {
         knowledge = MYBRICKS_KNOWLEDGES_MAP[component.toUpperCase()];
       } else if (source === "html") {
@@ -191,92 +323,76 @@ export default function (props: Props) {
       }
 
       if (knowledge?.editors) {
+        const cn = `.${className[0]}`;
+        const valueProxy = genStyleValue({ comId: props.model?.runtime?.id || props.id, id: props.id });
+        const allItems: any[] = [];
+
         Object.keys(knowledge.editors).forEach((key) => {
           const editor = knowledge.editors[key];
-          const cn = `.${className[0]}`;
-          const selector = key === ":root" ? cn : `${cn} ${key}`;
-          const items = className.length === 1 ? [
-            {
-              title: '样式',
-              autoOptions: true,
-              valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
+
+          if (key === ':root') {
+            if (className.length > 1) {
+              // runtime 多类名场景（激活态、禁用态等），每个类名对应一个分类
+              className.forEach((cls, index) => {
+                allItems.push({
+                  title: "样式",
+                  catelog: getCatelogName(cls, index),
+                  autoOptions: true,
+                  valueProxy,
+                  target: `.${cls}`,
+                });
+              });
+            } else if (editor.style) {
+              // knowledge 中有自定义样式配置时，按配置展开
+              editor.style.forEach((styleGroup: any) => {
+                styleGroup.items?.forEach((item: any) => {
+                  allItems.push({ ...item, valueProxy });
+                });
+              });
+            } else {
+              // 兜底：通用自动样式
+              allItems.push({ title: '样式', autoOptions: true, valueProxy });
             }
-          ] : className.map((className) => {
-            const target = key === ":root" ? `.${className}` : `.${className} ${key}`;
-            return {
-              title: "样式",
-              autoOptions: true,
-              valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
-              target,
-            }
-          });
-          if (!focusAreaConfigs[selector]) {
-            focusAreaConfigs[selector] = {
-              title: editor.title || cn,
-              items: [],
-              style: [
-                {
-                  // items: [
-                  //   {
-                  //     title: '样式',
-                  //     autoOptions: true,
-                  //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
-                  //   }
-                  // ]
-                  items,
-                }
-              ]
+
+            // 从 styleSource 中提取用户手写的伪类选择器（如 .btn:hover, .btn:focus）
+            if (data.styleSource) {
+              extractPseudoSelectors(data.styleSource, cn).forEach(({ selector, catelog }) => {
+                allItems.push({
+                  title: "样式",
+                  catelog,
+                  autoOptions: true,
+                  valueProxy,
+                  target: `.${id} ${selector}`,
+                });
+              });
             }
           } else {
-            focusAreaConfigs[selector].style = [
-              {
-                items,
-                // items: [
-                //   {
-                //     title: '样式',
-                //     autoOptions: true,
-                //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
-                //   }
-                // ]
-              }
-            ]
+            // 非 :root 状态选择器（如 .ant-btn:hover），以 target 字段合并进根选区
+            editor.style?.forEach((styleGroup: any) => {
+              styleGroup.items?.forEach((item: any) => {
+                allItems.push({ ...item, valueProxy, target: key });
+              });
+            });
           }
+        });
 
-          if (key === ":root") {
-            if (focusAreaConfigs[selector].items?.length) {
-              focusAreaConfigs[selector].items.push(genResizer())
-            }
-            // if (!focusAreaConfigs[selector].items) {
-            //   focusAreaConfigs[selector].items = [
-            //     genResizer()
-            //   ]
-            // } else {
-            //   focusAreaConfigs[selector].items.push(genResizer())
-            // }
-  
-            focusAreaConfigs[selector].style.push(genResizer())
+        // 创建或更新根选区
+        const rootEditor = knowledge.editors[':root'];
+        if (!focusAreaConfigs[cn]) {
+          focusAreaConfigs[cn] = {
+            title: rootEditor?.title || cn,
+            items: [genResizer()],
+            style: [{ items: allItems }, genResizer()],
+          };
+        } else {
+          const existing = focusAreaConfigs[cn];
+          existing.items = existing.items || [];
+          if (!existing.items.some((item: any) => item.type === '_resizer')) {
+            existing.items.push(genResizer());
           }
-        })
+          existing.style = [{ items: allItems }, genResizer()];
+        }
       }
-
-      // if (isLowCodeMode && knowledge?.editors) {
-      //   Object.keys(knowledge.editors).forEach((key) => {
-      //     const editor = knowledge.editors[key];
-      //     const cn = `.${className[0]}`;
-      //     const selector = key === ":root" ? cn : `${cn} ${key}`;
-      //     if (!focusAreaConfigs[selector]) {
-      //       focusAreaConfigs[selector] = {
-      //         title: editor.title || cn,
-      //         items: [],
-      //         style: [
-      //           {
-      //             items: []
-      //           }
-      //         ]
-      //       }
-      //     }
-      //   })
-      // }
     })
   }
 

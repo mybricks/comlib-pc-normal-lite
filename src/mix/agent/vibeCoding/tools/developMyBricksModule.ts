@@ -544,7 +544,7 @@ if (enabledBatch) {
         }
 
       注意：
-        - 配置项的类型仅限于text、textarea、number、select、switch；
+        - 配置项的类型仅限于text、textarea、number、select、switch、ImageSelector；
         - selector为该选区在dom结构中的合法selector，通常对应 runtime 中组件的 className，不能使用不存在的 selector，因此三方库组件必须设置语义化且唯一的 className；
         - configs中的value对象中的get、set方法，要注意对于model的字段进行编辑，这里要注意要检查相关的字段是否在 runtime 的 props 中读取；
   </当需要修改config.js文件时>

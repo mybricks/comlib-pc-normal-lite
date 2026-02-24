@@ -4,6 +4,7 @@ export default {
   description: `按钮组件`,
   editors: {
     ':root': {
+      title: '按钮',
       items: [
         {
           type: '_resizer',
@@ -14,22 +15,69 @@ export default {
           items: [
             {
               title: '样式',
-              options: ['font', 'background', 'border'],
+              catelog: '默认',
+              options: ['font', 'background', 'border', 'padding'],
             }
           ]
         }
       ]
     },
-    // '.ant-btn:not(:disabled):not(.ant-btn-disabled):hover': {
-    //   title: '按钮悬浮态',
-    //   items: [
-    //     {
-    //       title: '样式',
-    //       type: 'style',
-    //       options: ['background', 'font', 'border'],
-    //     }
-    //   ]
-    // }
+    '.ant-btn:not(:disabled):not(.ant-btn-disabled):hover': {
+      title: '按钮悬浮态',
+      style: [
+        {
+          items: [
+            {
+              title: '样式',
+              catelog: '悬浮',
+              options: ['background', 'font', 'border'],
+            }
+          ]
+        }
+      ]
+    },
+    '.ant-btn:focus-visible': {
+      title: '按钮聚焦态',
+      style: [
+        {
+          items: [
+            {
+              title: '样式',
+              catelog: '聚焦',
+              options: ['background', 'font', 'border', 'boxShadow'],
+            }
+          ]
+        }
+      ]
+    },
+    '.ant-btn:active': {
+      title: '按钮激活态',
+      style: [
+        {
+          items: [
+            {
+              title: '样式',
+              catelog: '激活',
+              options: ['background', 'font', 'border'],
+            }
+          ]
+        }
+      ]
+    },
+    '.ant-btn:disabled, .ant-btn.ant-btn-disabled': {
+      title: '按钮禁用态',
+      style: [
+        {
+          items: [
+            {
+              title: '样式',
+              catelog: '禁用',
+              options: ['background', 'font', 'border', 'opacity'],
+            }
+          ]
+        }
+      ]
+    }
   },
   docs: `
 通过设置 Button 的属性来产生不同的按钮样式，推荐顺序为：\`type\` -> \`shape\` -> \`size\` -> \`loading\` -> \`disabled\`。
