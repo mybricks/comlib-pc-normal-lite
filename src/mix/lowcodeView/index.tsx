@@ -11,11 +11,11 @@ interface Params {
 }
 
 const FILES = [
-  "model.json",
+  // "model.json",
   "style.less",
   "runtime.jsx",
-  "config.js",
-  "com.json"
+  // "config.js",
+  // "com.json"
 ] as const;
 
 type FileName = typeof FILES[number];
@@ -49,12 +49,12 @@ export default function LowcodeView(params: Params) {
         isTsx: true
       };
     }
-    if (selectedFileName === "config.js") {
-      return {
-        path,
-        language: 'javascript',
-      };
-    }
+    // if (selectedFileName === "config.js") {
+    //   return {
+    //     path,
+    //     language: 'javascript',
+    //   };
+    // }
     if (FILES.includes(selectedFileName)) {
       return {
         path,
@@ -121,9 +121,9 @@ export default function LowcodeView(params: Params) {
     });
   }, []);
 
-  useEffect(() => {
-    clearFileIfDataChanged("model.json");
-  }, [params.data?.modelConfig]);
+  // useEffect(() => {
+  //   clearFileIfDataChanged("model.json");
+  // }, [params.data?.modelConfig]);
 
   useEffect(() => {
     clearFileIfDataChanged("style.less");
@@ -133,13 +133,13 @@ export default function LowcodeView(params: Params) {
     clearFileIfDataChanged("runtime.jsx");
   }, [params.data?.runtimeJsxSource]);
 
-  useEffect(() => {
-    clearFileIfDataChanged("config.js");
-  }, [params.data?.configJsSource]);
+  // useEffect(() => {
+  //   clearFileIfDataChanged("config.js");
+  // }, [params.data?.configJsSource]);
 
-  useEffect(() => {
-    clearFileIfDataChanged("com.json");
-  }, [params.data?.componentConfig]);
+  // useEffect(() => {
+  //   clearFileIfDataChanged("com.json");
+  // }, [params.data?.componentConfig]);
 
   useEffect(() => {
     return ()=>{
