@@ -71,7 +71,20 @@ interface AIJsxProps {
 
 const STYLE_REPLACE_ID = '__mybricks_ai_module_id__'
 
-export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', dependencies = {}, inMybricksGeoWebview } : any) => {
+const mybricks = ({ env, logger }) => {
+  const _env = {
+    mode: env.runtime ? 'runtime' : 'design',//运行环境，design|runtime
+  }
+  return {
+    comRef: (Component) => {
+      return (props) => {
+        return <Component {...props} _env={_env} logger={logger}/>
+      }
+    }
+  }
+}
+
+export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', dependencies = {}, inMybricksGeoWebview, logger } : any) => {
   const ref = useRef<any>(null);
   const appendCssApi = useMemo<CssApi>(() => {
     if (inMybricksGeoWebview && env.canvas?.css) {
@@ -165,7 +178,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
 
         const Com: any = runRender(oriCode, {
           'react': React,
-          'mybricks': env.mybricksSdk,
+          'mybricks': mybricks({ env, logger }),
           'dayjs': dayjs,
           ...dependencies,
         })

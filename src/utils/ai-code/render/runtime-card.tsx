@@ -62,11 +62,11 @@ interface AIRuntimeProps {
   wrapper?: FunctionComponent<{ children: ReactElement, env: any, canvasContainer: any }>,
 }
 
-const mybricks = {
-  Container: ({ children, ...props}) => {
-    return <div {...props}>{children}</div>
-  }
-}
+// const mybricks = {
+//   Container: ({ children, ...props}) => {
+//     return <div {...props}>{children}</div>
+//   }
+// }
 
 export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: AIRuntimeProps) =>
   ({env, data, inputs, outputs, slots, logger, id}: RuntimeParams<any>) => {
@@ -125,6 +125,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
       <Wrapper env={env} canvasContainer={canvasContainer}>
         <AIJsxRuntime
           env={env}
+          logger={logger}
           id={id}
           styleCode={data.styleCompiled}
           renderCode={data.runtimeJsxCompiled}
@@ -137,7 +138,6 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
             ...(dependencies ?? {}),
             'react': React,
             '@ant-design/icons': icons,
-            'mybricks': mybricks,
           }}
           inMybricksGeoWebview={!!canvasContainer}
         />

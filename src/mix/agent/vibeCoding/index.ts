@@ -1,5 +1,5 @@
 import classLibrarySelection from "./tools/loadExtraComponentDocs"
-import developMyBricksModule from "./tools/developMyBricksModule";
+import developMyBricksModule from "./tools/developMyBricksModuleNext";
 import readModuleCode from "./tools/read-module-code";
 import answer from "./tools/answer";
 import { createWorkspace } from "./workspace";

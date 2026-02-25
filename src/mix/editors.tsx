@@ -168,7 +168,7 @@ export default function (props: Props) {
   } catch {}
 
   if (data.runtimeJsxConstituency) {
-    data.runtimeJsxConstituency.forEach(({ className, component, source }) => {
+    data.runtimeJsxConstituency.forEach(({ className, component, source, jsdoc }) => {
       if (!component) {
         // [TODO] 通常是未处理到的标签，case by case 处理
         return;
@@ -240,6 +240,9 @@ export default function (props: Props) {
                 // ]
               }
             ]
+          }
+          if (jsdoc != null) {
+            focusAreaConfigs[selector].specs = jsdoc;
           }
 
           if (key === ":root") {
