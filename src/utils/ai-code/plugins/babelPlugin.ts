@@ -54,7 +54,7 @@ export default function ({ constituency }) {
   return function () {
     const importRelyMap = new Map();
     /** 按组件声明缓存 { rootJSX, jsdoc }，每个 comRef 组件只计算一次 */
-    const componentJsdocCache = new Map<any, { rootJSX: any; jsdoc: any }>();
+    const componentJsdocCache = new Map<any, any>();
 
     return {
       visitor: {
@@ -94,7 +94,7 @@ export default function ({ constituency }) {
               const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
 
               // 仅当当前 JSX 是「组件根节点」时挂 JSDoc（summary、@prop），并写入 data-loc，供聚焦时读取；按组件缓存避免重复计算
-              // const jsdoc = getJSDocForJSXPath(path, componentJsdocCache);
+              // const jsdoc = getComRefForJSXPath(path, componentJsdocCache);
               // if (jsdoc) {
               //   dataLocValueObject.jsdoc = jsdoc;
               // }
@@ -130,10 +130,11 @@ export default function ({ constituency }) {
 
             let zoneType = "zone";
 
-            const jsdoc = getJSDocForJSXPath(path, componentJsdocCache);
-            if (jsdoc) {
+            const comRef = getComRefForJSXPath(path, componentJsdocCache);
+            if (comRef) {
               zoneType = "com";
-              pushDataAttr(node.openingElement.attributes, "data-jsdoc", JSON.stringify(jsdoc));
+              pushDataAttr(node.openingElement.attributes, "data-jsdoc", JSON.stringify(comRef.jsdoc));
+              pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
             }
 
             pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
@@ -288,10 +289,10 @@ function isComRefCall(callee: any): boolean {
  * 3. 若当前节点不是该组件的根节点（rootJSX），直接返回 null，不挂 JSDoc。
  * 4. 若是根节点，从组件定义前的注释里解析出 @summary 和 @prop，返回给调用方（用于写入 data-loc）。
  */
-function getJSDocForJSXPath(
+function getComRefForJSXPath(
   jsxPath: any,
-  cache: Map<any, { rootJSX: any; jsdoc: any }>
-): { summary?: string; props?: Array<{ type?: string; name: string; description?: string }>; events?: Array<{ key: string; name?: string; description?: string }> } | null {
+  cache: Map<any, any>
+): any | null {
   // 向上找「包裹当前 JSX 的」comRef 组件定义（只认这两种写法）
   const componentPath = jsxPath.findParent((p: any) => {
     if (p.isVariableDeclarator()) {
@@ -309,6 +310,7 @@ function getJSDocForJSXPath(
   // 按组件声明做缓存：每个组件只算一次根节点 + 只解析一次 JSDoc
   let cached = cache.get(componentPath.node);
   if (cached === undefined) {
+    cached = {};
     const rootJSX = getComponentRootJSXNode(componentPath);
     let jsdoc: ReturnType<typeof parseJSDocComment> = null;
     if (rootJSX) {
@@ -318,18 +320,20 @@ function getJSDocForJSXPath(
         node.type === "ExportDefaultDeclaration"
           ? node.leadingComments
           : (componentPath.parentPath?.node?.leadingComments ?? node.leadingComments);
+      cached.name = node.type === "ExportDefaultDeclaration" ? "root" : node.id.name;
       if (Array.isArray(comments) && comments.length > 0) {
         const block = comments.find((c: any) => c.type === "CommentBlock");
         if (block && typeof block.value === "string") jsdoc = parseJSDocComment(block.value);
       }
     }
-    cached = { rootJSX, jsdoc };
+    cached.rootJSX = rootJSX;
+    cached.jsdoc = jsdoc;
     cache.set(componentPath.node, cached);
   }
 
   // 只有「当前节点就是该组件的根节点」时才返回 JSDoc，否则不挂
   if (cached.rootJSX !== jsxPath.node) return null;
-  return cached.jsdoc;
+  return cached;
 }
 
 /**

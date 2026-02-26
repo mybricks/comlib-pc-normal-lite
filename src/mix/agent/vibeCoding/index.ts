@@ -281,6 +281,7 @@ export default function ({ context }) {
         cloneEl.innerHTML = '';
         cloneEl.innerText = focusArea.ele.innerText;
         const loc = JSON.parse(focusArea.ele.closest(`[data-loc]`).dataset.loc);
+        const comName = focusArea.ele.closest(`[data-com-name]`).dataset.comName;
         const runtimeJsxSource = decodeURIComponent(aiComParams.data.runtimeJsxSource);
 
         focusInfo = `
@@ -288,6 +289,7 @@ export default function ({ context }) {
 HTML Element: ${cloneEl.outerHTML}
 Focus Area Code: ${runtimeJsxSource.slice(loc.jsx.start, loc.tag.end)}
 Selector: ${focus.focusArea.selector}
+Component Name: ${comName}
 </选区信息>
         `
       }
