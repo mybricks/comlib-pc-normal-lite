@@ -1,5 +1,54 @@
 import * as types from "./types";
-import { getMapCallbackIndexParam } from "./utils";
+import { getMapCallbackIndexParam, pushDataAttr, pushDataAttrExpression } from "./utils";
+
+/**
+ * 从单个 JSX 元素节点得到「选择器片段」，如 "div.container" 或 "h1"
+ */
+function getSelectorSegment(node: any, importRelyMap: any) {
+  if (!node || node.type !== "JSXElement") return [];
+  const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
+  const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
+  const cnList = [...new Set(extractCssClassNames(classNameExpr))];
+  if (cnList.length) {
+    return cnList.map((c) => "." + c);
+  }
+
+  const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+
+  if (source === "html") {
+    return [relyName]
+  }
+  return [];
+}
+
+/**
+ * 在 AST 访问阶段，根据当前 JSX 的 path 向上收集祖先，拼出完整 CSS 选择器。
+ * 例如根节点 <div className={css.container}> 得到 "div.container"，
+ * 其子 &lt;h1&gt; 得到 "div.container > h1"。
+ */
+function getCssSelectorForJSXPath(path: { node: any; parentPath?: any }, importRelyMap: any) {
+  let segments: string[] = [];
+  let p: any = path;
+  while (p?.node) {
+    if (p.isJSXElement?.()) {
+      const selectors = getSelectorSegment(p.node, importRelyMap);
+      if (selectors.length === 1) {
+        segments =
+          segments.length === 0
+            ? [selectors[0]]
+            : segments.map((segment) => `${selectors[0]} ${segment}`);
+      } else if (selectors.length > 1) {
+        // 多个选择器时分支：当前层（祖先）在前，已有 segment（后代）在后
+        segments =
+          segments.length === 0
+            ? [...selectors]
+            : segments.flatMap((segment) => selectors.map((sel) => `${sel} ${segment}`));
+      }
+    };
+    p = p.parentPath;
+  }
+  return segments;
+}
 
 export default function ({ constituency }) {
   return function () {
@@ -35,7 +84,7 @@ export default function ({ constituency }) {
             const dataLocValueObject: any = {
               jsx: { start: node.start, end: node.end },
               tag: { end: node.openingElement.end },
-            }
+            };
             const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
             const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
             const cnList = [...new Set(extractCssClassNames(classNameExpr))];
@@ -45,16 +94,16 @@ export default function ({ constituency }) {
               const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
 
               // 仅当当前 JSX 是「组件根节点」时挂 JSDoc（summary、@prop），并写入 data-loc，供聚焦时读取；按组件缓存避免重复计算
-              const jsdoc = getJSDocForJSXPath(path, componentJsdocCache);
-              if (jsdoc) {
-                dataLocValueObject.jsdoc = jsdoc;
-              }
+              // const jsdoc = getJSDocForJSXPath(path, componentJsdocCache);
+              // if (jsdoc) {
+              //   dataLocValueObject.jsdoc = jsdoc;
+              // }
 
               constituency.push({
                 className: cnList,
                 component: relyName,
                 source,
-                ...(jsdoc && { jsdoc }),
+                // ...(jsdoc && { jsdoc }),
               })
 
               // node.openingElement.attributes.push({
@@ -75,34 +124,24 @@ export default function ({ constituency }) {
 
               const mapIndexParam = getMapCallbackIndexParam(path);
               if (mapIndexParam != null) {
-                node.openingElement.attributes.push({
-                  type: 'JSXAttribute',
-                  name: { type: 'JSXIdentifier', name: 'data-map-index' },
-                  value: {
-                    type: 'JSXExpressionContainer',
-                    expression: { type: 'Identifier', name: mapIndexParam },
-                  },
-                });
+                pushDataAttrExpression(node.openingElement.attributes, "data-map-index", mapIndexParam);
               }
             }
 
-            const dataLocValue = JSON.stringify(dataLocValueObject)
+            let zoneType = "zone";
 
-            node.openingElement.attributes.push({
-              type: 'JSXAttribute',
-              name: {
-                type: 'JSXIdentifier',
-                name: 'data-loc',
-              },
-              value: {
-                type: 'StringLiteral',
-                value: dataLocValue,
-                extra: {
-                  raw: `"${dataLocValue}"`,
-                  rawValue: dataLocValue
-                }
-              }
-            })
+            const jsdoc = getJSDocForJSXPath(path, componentJsdocCache);
+            if (jsdoc) {
+              zoneType = "com";
+              pushDataAttr(node.openingElement.attributes, "data-jsdoc", JSON.stringify(jsdoc));
+            }
+
+            pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
+
+            const selectors = getCssSelectorForJSXPath(path, importRelyMap);
+            pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+
+            pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
           } catch { }
         },
         Program: {
