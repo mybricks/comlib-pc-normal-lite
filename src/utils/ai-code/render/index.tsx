@@ -84,6 +84,13 @@ const mybricks = ({ env, logger }) => {
   }
 }
 
+const PRIVATE_DEPENDENCIES = {
+  'style.less': {
+    __esModule: true,
+    default: new Proxy({}, { get(target, key) { return key } })
+  }
+}
+
 export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', dependencies = {}, inMybricksGeoWebview, logger } : any) => {
   const ref = useRef<any>(null);
   const appendCssApi = useMemo<CssApi>(() => {
@@ -180,6 +187,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
           'react': React,
           'mybricks': mybricks({ env, logger }),
           'dayjs': dayjs,
+          ...PRIVATE_DEPENDENCIES,
           ...dependencies,
         })
         // TODO 没有key的话会用预览的高度

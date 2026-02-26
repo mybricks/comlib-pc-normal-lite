@@ -102,7 +102,7 @@ export function transformLess(code): Promise<string> {
 }
 
 export function updateRender({data}, renderCode) {
-  transformTsx(renderCode.replace(/import css from ['"][^'"]*style.less['"]/, 'const css = new Proxy({}, { get(target, key) { return key } })')).then(({ transformCode, constituency }) => {
+  transformTsx(renderCode).then(({ transformCode, constituency }) => {
     data.runtimeJsxCompiled = encodeURIComponent(transformCode)
     data.runtimeJsxSource = encodeURIComponent(renderCode)
     data.runtimeJsxConstituency = constituency

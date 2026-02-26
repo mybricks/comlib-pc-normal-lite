@@ -281,7 +281,7 @@ export default function ({ context }) {
         cloneEl.innerHTML = '';
         cloneEl.innerText = focusArea.ele.innerText;
         const loc = JSON.parse(focusArea.ele.closest(`[data-loc]`).dataset.loc);
-        const runtimeJsxSource = decodeURIComponent(aiComParams.data.runtimeJsxSource).replace(/import css from ['"][^'"]*style.less['"]/, 'const css = new Proxy({}, { get(target, key) { return key } })');
+        const runtimeJsxSource = decodeURIComponent(aiComParams.data.runtimeJsxSource);
 
         focusInfo = `
 <选区信息>

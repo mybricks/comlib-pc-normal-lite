@@ -12,8 +12,8 @@ interface Params {
 
 const FILES = [
   // "model.json",
-  "style.less",
   "runtime.jsx",
+  "style.less",
   // "config.js",
   // "com.json"
 ] as const;
