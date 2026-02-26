@@ -43,7 +43,6 @@ item # 列表项插槽
       type: 'number',
       value: {
         set: ({ data }, value) => {
-          console.log('value', value)
           data.mockCount = value
         }
       }

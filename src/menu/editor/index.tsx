@@ -122,7 +122,6 @@ export default {
         },
         value: {
           get({ data }: EditorResult<Data>) {
-            console.log("dataSource",data.dataSource)
             return data.dataSource;
           },
           set(props: EditorResult<Data>, val: any[]) {

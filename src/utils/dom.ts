@@ -1,3 +1,35 @@
+const LAYOUT_IGNORE_PROPS = new Set([
+  'block-size', 'inline-size', 'width', 'height', 'display',
+  'perspective-origin', 'transform-origin',
+  'overflow-block', 'overflow-inline', 'overflow-x', 'overflow-y'
+]);
+
+/**
+ * 获取元素与同标签默认元素相比不同的计算样式
+ * 用于在设置布局时保留容器已有的非默认样式
+ */
+export function getNonDefaultStyles(element: Element): Record<string, string> {
+  const result: Record<string, string> = {};
+  const computed = window.getComputedStyle(element);
+
+  const blank = document.createElement(element.tagName);
+  blank.style.display = 'none';
+  (element.parentNode || document.body).appendChild(blank);
+  const defaults = window.getComputedStyle(blank);
+
+  for (let i = 0; i < computed.length; i++) {
+    const prop = computed[i];
+    if (prop.startsWith('--') || LAYOUT_IGNORE_PROPS.has(prop)) continue;
+    const val = computed.getPropertyValue(prop);
+    if (val !== defaults.getPropertyValue(prop)) {
+      result[prop] = val;
+    }
+  }
+
+  blank.remove();
+  return result;
+}
+
 export function getPosition(ele, relativeDom?) {
   const scrollBarTop = document.body.scrollTop || document.documentElement.scrollTop;
   const scrollBarLeft = document.body.scrollLeft || document.documentElement.scrollLeft;

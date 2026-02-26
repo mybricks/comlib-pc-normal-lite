@@ -49,7 +49,6 @@ height: 可配置，建议配置fit-content
         value: {
           set: ({ data, slot, ...extra }, value) => {
 
-            console.log('data.columns', 111)
             data.columns = value.map(t => ({
               ...t,
               visible: t.visible ?? true

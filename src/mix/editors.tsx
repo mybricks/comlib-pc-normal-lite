@@ -156,9 +156,20 @@ const genStyleValue = (params) => {
       if (!cssObj[cssObjKey]) {
         cssObj[cssObjKey] = {};
       }
+
+      // 从 window 侧通道读取删除信号（由 editors-pc-common handleChange 写入）
+      // 因为编辑器删除了样式之后 data.styleSource 对应的样式并没有被删除，所以需要手动删除
+      const deletions: string[] | undefined = (window as any).__mybricks_style_deletions;
+
+      if (deletions) {
+        (window as any).__mybricks_style_deletions = null;
+        deletions.forEach(key => {
+          delete cssObj[cssObjKey][key];
+        });
+      }
   
-      Object.entries(value).forEach(([key, value]) => {
-        cssObj[cssObjKey][key] = value;
+      Object.entries(value).forEach(([key, val]) => {
+        cssObj[cssObjKey][key] = val;
       })
   
       const cssStr = stringifyLess(cssObj);
@@ -166,6 +177,34 @@ const genStyleValue = (params) => {
     }
   }
 }
+
+const genLayoutEditor = (cn: string) => {
+  return {
+    title: '布局',
+    type: 'layout',
+    value: {
+      get(params) {
+        const aiComParams = context.getAiComParams(params.id);
+        if (!aiComParams?.data?.styleSource) return {};
+        const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
+        const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(cn)) || '';
+        return cssObj[cssObjKey] || {};
+      },
+      set(params, value) {
+
+        const aiComParams = context.getAiComParams(params.id);
+        const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
+        const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(cn)) || cn;
+        if (!cssObj[cssObjKey]) cssObj[cssObjKey] = {};
+        Object.entries(value).forEach(([key, val]) => {
+          cssObj[cssObjKey][key] = val;
+        });
+        const cssStr = stringifyLess(cssObj);
+        context.updateFile(params.id, { fileName: 'style.less', content: cssStr });
+      }
+    }
+  };
+};
 
 const genResizer = () => {
   let cssObj = {};
@@ -381,7 +420,7 @@ export default function (props: Props) {
         if (!focusAreaConfigs[cn]) {
           focusAreaConfigs[cn] = {
             title: rootEditor?.title || cn,
-            items: [genResizer()],
+            items: [genLayoutEditor(cn), genResizer()],
             style: [{ items: allItems }, genResizer()],
           };
         } else {
@@ -389,6 +428,9 @@ export default function (props: Props) {
           existing.items = existing.items || [];
           if (!existing.items.some((item: any) => item.type === '_resizer')) {
             existing.items.push(genResizer());
+          }
+          if (!existing.items.some((item: any) => item.type === 'layout')) {
+            existing.items.push(genLayoutEditor(cn));
           }
           existing.style = [{ items: allItems }, genResizer()];
         }

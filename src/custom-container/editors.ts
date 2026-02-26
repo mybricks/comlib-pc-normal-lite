@@ -8,6 +8,7 @@ import {MaxHeightEditor} from './editors/maxHeightEditor';
 import {FixedEditor} from './editors/fixedEditor';
 import {getFilterSelector} from '../utils/cssSelector';
 import {unitConversion} from '../utils';
+import {getNonDefaultStyles} from '../utils/dom';
 
 const setSlotLayout = (slot, val) => {
   if (!slot) return;
@@ -69,50 +70,30 @@ export default {
           description: '设置布局方式，包括智能布局、纵向排版、横向排版、自由布局',
           options: [],
           value: {
-            get({data, slots}: EditorResult<Data>) {
-              return data.slotStyle || {};
+            get(props) {
+              const {data, slots, style,element} = props
+              const overflow = window.getComputedStyle(element).overflow;
+              return { ...(data.slotStyle || {}), overflow: overflow || 'hidden' };
             },
-            set({data, slots}: EditorResult<Data>, val: any) {
-              console.log('val', val);
+            set({data, slots, style, element}, val: any) {
+              if (val.overflow !== undefined) {
+                const cleaned = getNonDefaultStyles(element);
+                style.setCSS(':root', { ...cleaned, overflow: val.overflow });
+              }
+
               data.slotStyle = val;
               const slotInstance = slots.get('content');
               setSlotLayout(slotInstance, val);
             }
           }
         },
-        // {
-        //   items: [
-        //     {
-        //       title: '禁止冒泡',
-        //       description: '默认关闭，阻止点击事件冒泡',
-        //       type: 'switch',
-        //       value: {
-        //         get({data}) {
-        //           return data.eventBubble;
-        //         },
-        //         set({data}, value: boolean) {
-        //           data.eventBubble = value;
-        //         }
-        //       }
-        //     }
-        //   ]
-        // },
-        // ...EventEditor,
-        // ...AutoScrollEditor,
-        // ...PageScrollEditor,
       ];
-
-      // cate2.title = '交互';
-      // cate2.items = [...EventEditor, ...AutoScrollEditor, ...PageScrollEditor];
 
       return {
         title: '自定义容器'
       };
     },
     style: [
-      // MaxHeightEditor,
-      // OverflowEditor,
-      // ...FixedEditor,
       {
         items: [
           {
