@@ -234,7 +234,8 @@ export default function (props: Props, actions: Actions) {
                         title: "样式",
                         autoOptions: true,
                         valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
-                      }
+                      },
+                      genResizer()
                     ]
                   }
                 ]
@@ -247,7 +248,8 @@ export default function (props: Props, actions: Actions) {
                       title: "样式",
                       autoOptions: true,
                       valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
-                    }
+                    },
+                    genResizer()
                   ]
                 }
               ]
@@ -477,7 +479,8 @@ export default function (props: Props, actions: Actions) {
               title: "样式",
               autoOptions: true,
               valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
-            }
+            },
+            genResizer()
           ]
         }
       ]
