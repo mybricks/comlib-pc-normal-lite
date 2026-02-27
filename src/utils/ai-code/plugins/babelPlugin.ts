@@ -90,12 +90,18 @@ export default function ({ constituency }) {
             const cnList = [...new Set(extractCssClassNames(classNameExpr))];
 
             const selectors = getCssSelectorForJSXPath(path, importRelyMap);
-            pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+            
             pushDataAttr(node.openingElement.attributes, "data-zone-title", selectors.reverse()[0].split(' ').reverse()[0]);
+
+            const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+
+            if (source === "html") {
+              pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+            }
 
             if (cnList.length > 0) {
               dataLocValueObject.cn = cnList
-              const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+              
 
               // 仅当当前 JSX 是「组件根节点」时挂 JSDoc（summary、@prop），并写入 data-loc，供聚焦时读取；按组件缓存避免重复计算
               // const jsdoc = getComRefForJSXPath(path, componentJsdocCache);
