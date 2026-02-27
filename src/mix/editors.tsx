@@ -85,16 +85,26 @@ const genResizer = () => {
       },
       set(params, value, status) {
         if (status.state === 'start') {
-          let { cn } = JSON.parse(params.focusArea.dataset.loc);
-          if (typeof cn === 'string') {
-            // [TODO] 兼容，后续去除
-            cn = [cn]
-          }
-          cn = cn[0]
-          const aiComParams = context.getAiComParams(params.id);
+          const comId = params.id;
+          const aiComParams = context.getAiComParams(comId);
           cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
-          const className = `.${cn}`;
-          cssObjKey = Object.keys(cssObj).find(key => key.endsWith(className)) || className;
+          const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
+          const selector = match?.[1] || params.selector;
+          cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) || selector;
+      
+          if (!cssObj[cssObjKey]) {
+            cssObj[cssObjKey] = {};
+          }
+          // let { cn } = JSON.parse(params.focusArea.dataset.loc);
+          // if (typeof cn === 'string') {
+          //   // [TODO] 兼容，后续去除
+          //   cn = [cn]
+          // }
+          // cn = cn[0]
+          // const aiComParams = context.getAiComParams(params.id);
+          // cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
+          // const className = `.${cn}`;
+          // cssObjKey = Object.keys(cssObj).find(key => key.endsWith(className)) || className;
         } else if (status.state === 'ing') {
           Object.entries(value).forEach(([key, value]) => {
             cssObj[cssObjKey][key] = `${value}px`;
