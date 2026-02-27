@@ -461,7 +461,6 @@ export default function (props: Props, actions: Actions) {
   context.createVibeCodingAgent({ register: window._registerAgent_ })
 
   return {
-    ...focusAreaConfigs,
     /** 可调整宽高 */
     '@resize': {
       options: ['width', 'height'],
