@@ -1,3 +1,5 @@
+import grepCodes from "./grepCodes";
+
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
 
@@ -16,14 +18,9 @@ type RxFiles = Record<string, RxFile | RxFile[]>;
 export type ComponentFileItem = { fileName: string; content: string; isComplete?: boolean };
 
 interface Config {
-  onOpenCodes: () => void;
-  enabledBatch?: boolean;
   hasAttachments?: boolean;
-  /** 批量时：由 host 提供，stream 收到 files 时调用，内部调 batchUpdateComponentFiles */
-  onStream?: (files: Array<Record<string, unknown>> | RxFiles | undefined) => void;
-  /** 非批量时：execute 时一次性传入完整 files，由 host 直接调 updateComponentFiles(files, comId, context) */
+  /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles(files, comId, context) */
   execute?: (params: { files: Array<{ fileName: string; content: string }> }) => void;
-  /** 批量时解析 fileName 用；非批量不传 */
   focusComId?: string;
 }
 
@@ -62,42 +59,24 @@ function normalizeFiles(files: Array<ComponentFileItem | NormalizedFileItem> | R
   return list;
 }
 
-/** 批量时从 fileName 解析出 comId 和基础文件名，如 model@uuid.json -> { comId: uuid, baseFileName: model.json } */
-function parseBatchFileName(fileName: string): { comId: string; baseFileName: string } | null {
-  const match = fileName.match(/^(.+)@([^.]+)(\..+)$/);
-  if (!match) return null;
-  const [, name, uuid, ext] = match;
-  return { comId: uuid!, baseFileName: `${name}${ext}` };
-}
-
-/** 非批量时：用 normalizeFiles 结果，按 (comId, baseFileName) 分组后调用 onComponentUpdate（无 language 时沿用原逻辑） */
+/** 用 normalizeFiles 结果按 (comId, baseFileName) 分组后调用 onComponentUpdate */
 function applyFilesToOnComponentUpdate(
   files: NormalizedFileItem[],
   config: {
-    enabledBatch?: boolean;
     focusComId?: string;
     onComponentUpdate: (comId: string, fileName: string, content: string) => void;
     updatedKeys?: Set<string>;
   }
 ) {
-  const { enabledBatch, focusComId, onComponentUpdate, updatedKeys } = config;
+  const { focusComId, onComponentUpdate, updatedKeys } = config;
   const seen = updatedKeys ?? new Set<string>();
   type Group = { comId: string; baseFileName: string; items: NormalizedFileItem[] };
   const groupBy = new Map<string, Group>();
 
   files.forEach((item) => {
     const { fileName } = item;
-    let comId: string;
-    let baseFileName: string;
-    if (enabledBatch) {
-      const parsed = parseBatchFileName(fileName);
-      if (!parsed) return;
-      comId = parsed.comId;
-      baseFileName = parsed.baseFileName;
-    } else {
-      comId = focusComId ?? '';
-      baseFileName = fileName;
-    }
+    const comId = focusComId ?? '';
+    const baseFileName = fileName;
     if (!comId) return;
     const key = `${comId}|${baseFileName}`;
     if (!groupBy.has(key)) groupBy.set(key, { comId, baseFileName, items: [] });
@@ -130,12 +109,12 @@ export default function developMyBricksModule(config: Config) {
   return {
     name: NAME,
     displayName: "编写组件",
-    description: `根据用户需求，以及类库知识，一次性编写/修改模块中的所有代码，开发MyBricks模块。
+    description: `根据用户需求，以及各类上下文，一次性编写/修改模块中的所有代码，开发代码实现功能。
 参数：无
 
 工具分类：操作执行类；
 
-作用：编写/修改模块中的所有代码，开发MyBricks模块；
+作用：编写/修改模块中的所有代码，开发代码实现功能；
 
 前置：做任何修改前，必须先查看现有代码的情况。
 
@@ -147,6 +126,25 @@ export default function developMyBricksModule(config: Config) {
   你是MyBricks模块开发专家同时也是一名资深的前端开发专家、架构师，技术资深、逻辑严谨、实事求是，同时具备专业的审美和设计能力。
   你的主要任务是设计开发MyBricks模块（以下简称模块），同时，你也可以根据用户的需求，对模块进行修改、优化、升级等。
 </你的角色与任务>
+
+<你的输出逻辑>
+如果当前代码信息不足以完成用户需求，请返回
+\`\`\`json file="action.json"
+{
+  "action": "read",
+  "reason": "当前我需要更多的代码信息来完成用户需求" // 具体原因你来体现
+}
+\`\`\`
+
+如果由于用户需求不明确或者信息不足，请返回
+\`\`\`json file="action.json"
+{
+  "action": "abort",
+  "reason": "你能够提供下你说的接口具体格式是什么吗？" // 具体原因你来体现
+}
+\`\`\`
+如果当前代码信息和用户需求都足够明确，参考下方内容对模块进行开发。
+<你的输出逻辑>
 
 <MyBricks模块定义及文件说明>
   模块的【源代码】由 runtime.jsx、style.less 两个文件构成：
@@ -658,32 +656,46 @@ export default function developMyBricksModule(config: Config) {
 </examples>
 `
     },
-    ...(config.enabledBatch && config.onStream
-      ? {
-          execute(_params: any) {
-            return '编写完成';
-          },
-          stream({ files, replaceContent }: { files?: Array<ComponentFileItem | NormalizedFileItem> | RxFiles; status?: string; replaceContent?: string }) {
-            config.onStream!(files as Array<Record<string, unknown>> | RxFiles | undefined);
-            return replaceContent ?? '';
-          },
+    execute() {
+      return '编写完成';
+    },
+    stream(params: any) {
+      const { status, replaceContent } = params;
+      const files = normalizeFiles(params?.files);
+      const raw =replaceContent ?? '';
+      const actionsFile = files.find((f) => f.fileName === 'action.json');
+      let actionReason = '';
+      let actionType: string | undefined;
+      if (actionsFile) {
+        try {
+          const obj = JSON.parse(actionsFile.content);
+          actionReason = (obj.reason as string) ?? '';
+          actionType = obj.action;
+        } catch {}
+      }
+
+      if (status === 'complete') {
+        if (actionsFile && actionType === 'read') {
+          return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: grepCodes.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
         }
-      : {
-          execute(params: any) {
-            // 非批量：由 host 提供的 execute 直接调 updateComponentFiles(files, comId, context)
-            const list = normalizeFiles(params?.files).map(({ fileName, content }) => ({ fileName, content }));
-            config.execute?.({ files: list });
-            return '编写完成';
-          },
-        }),
+        if (actionsFile && actionType === 'abort') {
+          return actionReason || '已中止';
+        }
+        config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+        return raw
+          .replace(/actions\.json/g, actionReason)
+          .replace(/runtime\.jsx/g, '已修改内容')
+          .replace(/style\.less/g, '已调整样式');
+      }
+
+      return raw
+        .replace(/actions\.json/g, actionReason)
+        .replace(/runtime\.jsx/g, '尝试修改内容...')
+        .replace(/style\.less/g, '尝试调整样式...');
+    },
     aiRole: ({ params, hasAttachments }) => {
       const mode = params?.mode ?? 'generate';
       return (mode === 'generate' && !hasAttachments) ? 'junior' : 'architect'
     },
-    hooks: {
-      before: () => {
-        config.onOpenCodes?.()
-      }
-    }
   };
 }

@@ -1,8 +1,9 @@
 import classLibrarySelection from "./tools/loadExtraComponentDocs"
-import developMyBricksModule from "./tools/developMyBricksModuleNext";
-import readModuleCode from "./tools/read-module-code";
+import developMyBricksModule from "./tools/developMyBricksModule";
+import developModule from "./tools/developMyBricksModuleNext";
+import grepCodes from "./tools/grepCodes";
 import answer from "./tools/answer";
-import { createWorkspace } from "./workspace";
+import { createProject, buildProjectJson } from "./project";
 
 /** 单文件项：fileName + content */
 export type ComponentFileItem = { fileName: string; content: string };
@@ -270,8 +271,6 @@ export default function ({ context }) {
       // 判断是否作为工具被调用（被上级agent调用）
       const asSubAgentTool = !!params.asTool;
 
-      params?.onProgress?.("start");
-
       const { focusArea } = aiComParams ?? {};
 
       let focusInfo = "";
@@ -293,12 +292,33 @@ Component Name: ${comName}
 </选区信息>
         `
       }
-      // 创建workspace实例
-      const workspace = createWorkspace({
-        comId: focus.comId,
-        aiComParams,
-        libraryDocs: [] // 备用的类库文档（可选）
+      // 创建 project 实例（projectJson 由 runtime/style 动态生成，失败时回退 defaultRoot）
+      const runtimeContent = (() => {
+        try {
+          return decodeURIComponent(aiComParams?.data?.runtimeJsxSource ?? '');
+        } catch {
+          return '';
+        }
+      })();
+      const styleContent = (() => {
+        try {
+          return decodeURIComponent(aiComParams?.data?.styleSource ?? '');
+        } catch {
+          return '';
+        }
+      })();
+      const projectJson = buildProjectJson(runtimeContent, styleContent);
+      const project = createProject({
+        projectJson,
+        getRuntimeContent: () => runtimeContent,
+        getStyleContent: () => styleContent,
       });
+
+      // project.read('DataCard')
+      // return project.exportToMessage().then((message) => {
+      //   console.log("[@project.exportToMessage]", message);
+      //   return message;
+      // });
 
       const hasAttachments = Array.isArray(params.attachments) && params.attachments?.length > 0;
 
@@ -327,7 +347,7 @@ Component Name: ${comName}
             cancel: () => { },
           },
           presetMessages: async () => {
-            const content = await workspace.exportToMessage()
+            const content = await project.exportToMessage()
             return [
               {
                 role: 'user',
@@ -335,16 +355,16 @@ Component Name: ${comName}
               },
               {
                 role: 'assistant',
-                content: '感谢您提供的知识，我会参考这些知识进行开发。'
+                content: '感谢您提供的项目信息，我会参考这些信息进行开发。'
               },
             ]
           },
         };
 
-        // asTool 模式：按组件维度批量更新；onStream(files) 时调用 batchUpdateComponentFiles(files, context)
+        // asTool 模式：stream 收到 files 时调用 batchUpdateComponentFiles(files, context)
         const batchUpdateComponentFiles = createBatchUpdateComponentFiles(context);
 
-        // asTool模式，直接被上级agent调用
+        // asTool 模式，直接被上级 agent 调用
         const AsToolModeConfig = {
         ...baseConfig,
         planList: [`${developMyBricksModule.toolName} -mode restore`],
@@ -354,7 +374,7 @@ Component Name: ${comName}
             hasAttachments,
             onStream: batchUpdateComponentFiles,
             onOpenCodes: () => {
-              workspace.openModuleCodes()
+              project.read('root')
             },
           }),
           answer()
@@ -389,16 +409,9 @@ ${text}
             //     workspace.openLibraryDoc(libs)
             //   }
             // }),
-            readModuleCode({
-              onOpenCodes: () => {
-                workspace.openModuleCodes()
-              }
-            }),
-            developMyBricksModule({
+            grepCodes({ project }),
+            developModule({
               hasAttachments,
-              onOpenCodes: () => {
-                workspace.openModuleCodes()
-              },
               execute(p) {
                 updateComponentFiles(p.files ?? [], focus.comId, context);
               },
