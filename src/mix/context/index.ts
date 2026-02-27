@@ -5,12 +5,7 @@ class Context {
   aiComParamsMap: Record<string, any> = {};
 
   setAiCom(id: string, { params, actions }) {
-    if (!this.aiComParamsMap[id]) {
-      this.aiComParamsMap[id] = { aiComParams: params, actions };
-      // actions.updateCSS((params) => {
-      //   console.log("[TODO] updateCSS: ", params)
-      // })
-    }
+    this.aiComParamsMap[id] = { aiComParams: params, actions };
   }
 
   getAiCom(id: string) {
