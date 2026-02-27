@@ -98,77 +98,78 @@ const genResizer = () => {
   }
 }
 
-export default function (props: Props) {
+export default function (props: Props, notifyUpdate) {
   if (!props?.data) {
     return {};
   }
 
   const { data, isLowCodeMode } = props;
   const focusAreaConfigs: any = {};
-  try {
-    const configs = evalConfigJsCompiled(decodeURIComponent(data.configJsCompiled));
-    const rawConfig = decodeURIComponent(data.modelConfig);
-    const model = JSON.parse(rawConfig);
 
-    Object.entries(configs).forEach(([key, value]: any) => {
-      const items: any[] = [];
+  // try {
+  //   const configs = evalConfigJsCompiled(decodeURIComponent(data.configJsCompiled));
+  //   const rawConfig = decodeURIComponent(data.modelConfig);
+  //   const model = JSON.parse(rawConfig);
 
-      value.items?.forEach((item) => {
-        items.push({
-          ...item,
-          value: {
-            get({ focusArea }) {
-              return item.value.get({ data: model, index: Number(focusArea.dataset.mapIndex) });
-            },
-            set({ data, focusArea }, value) {
-              item.value.set({ data: model, index: Number(focusArea.dataset.mapIndex) }, value);
-              data.modelConfig = encodeURIComponent(JSON.stringify(model, null, detectJsonIndent(rawConfig)));
-            }
-          }
-        })
-      })
+  //   Object.entries(configs).forEach(([key, value]: any) => {
+  //     const items: any[] = [];
 
-      value.style?.forEach((style) => {
-        style.items?.forEach((item) => {
-          item.valueProxy = genStyleValue({ comId: props.model?.runtime?.id || props.id });
-        })
-      })
+  //     value.items?.forEach((item) => {
+  //       items.push({
+  //         ...item,
+  //         value: {
+  //           get({ focusArea }) {
+  //             return item.value.get({ data: model, index: Number(focusArea.dataset.mapIndex) });
+  //           },
+  //           set({ data, focusArea }, value) {
+  //             item.value.set({ data: model, index: Number(focusArea.dataset.mapIndex) }, value);
+  //             data.modelConfig = encodeURIComponent(JSON.stringify(model, null, detectJsonIndent(rawConfig)));
+  //           }
+  //         }
+  //       })
+  //     })
 
-      focusAreaConfigs[key] = {
-        ...value,
-        items,
-      }
-    })
-  } catch {}
+  //     value.style?.forEach((style) => {
+  //       style.items?.forEach((item) => {
+  //         item.valueProxy = genStyleValue({ comId: props.model?.runtime?.id || props.id });
+  //       })
+  //     })
 
-  try {
-    const componentConfig = JSON.parse(decodeURIComponent(data.componentConfig));
-    if (componentConfig.outputs?.length) {
-      const eventsConfig = {
-        title: "事件",
-        items: componentConfig.outputs.map(({ id, title }) => {
-          return {
-            title,
-            type: '_Event',
-            options: {
-              outputId: id
-            }
-          }
-        })
-      }
+  //     focusAreaConfigs[key] = {
+  //       ...value,
+  //       items,
+  //     }
+  //   })
+  // } catch {}
 
-      if (!focusAreaConfigs[':root']) {
-        focusAreaConfigs[':root'] = {
-          items: [eventsConfig]
-        }
-      } else {
-        focusAreaConfigs[':root'].items.push(eventsConfig);
-      }
-    }
-  } catch {}
+  // try {
+  //   const componentConfig = JSON.parse(decodeURIComponent(data.componentConfig));
+  //   if (componentConfig.outputs?.length) {
+  //     const eventsConfig = {
+  //       title: "事件",
+  //       items: componentConfig.outputs.map(({ id, title }) => {
+  //         return {
+  //           title,
+  //           type: '_Event',
+  //           options: {
+  //             outputId: id
+  //           }
+  //         }
+  //       })
+  //     }
+
+  //     if (!focusAreaConfigs[':root']) {
+  //       focusAreaConfigs[':root'] = {
+  //         items: [eventsConfig]
+  //       }
+  //     } else {
+  //       focusAreaConfigs[':root'].items.push(eventsConfig);
+  //     }
+  //   }
+  // } catch {}
 
   if (data.runtimeJsxConstituency) {
-    data.runtimeJsxConstituency.forEach(({ className, component, source, jsdoc }) => {
+    data.runtimeJsxConstituency.forEach(({ className, component, source, jsdoc, selectors }) => {
       if (!component) {
         // [TODO] 通常是未处理到的标签，case by case 处理
         return;
@@ -185,7 +186,7 @@ export default function (props: Props) {
       } else if (source === "mybricks") {
         knowledge = MYBRICKS_KNOWLEDGES_MAP[component.toUpperCase()];
       } else if (source === "html") {
-        knowledge = HTML_KNOWLEDGES_MAP[component.toUpperCase()];
+        // knowledge = HTML_KNOWLEDGES_MAP[component.toUpperCase()];
       } else if (source === "@ant-design/icons") {
         knowledge = ANTD_ICONS_KNOWLEDGES_MAP[component.toUpperCase()];
       }
@@ -193,72 +194,106 @@ export default function (props: Props) {
       if (knowledge?.editors) {
         Object.keys(knowledge.editors).forEach((key) => {
           const editor = knowledge.editors[key];
-          const cn = `.${className[0]}`;
-          const selector = key === ":root" ? cn : `${cn} ${key}`;
-          const items = className.length === 1 ? [
-            {
-              title: '样式',
-              autoOptions: true,
-              valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
-            }
-          ] : className.map((className) => {
-            const target = key === ":root" ? `.${className}` : `.${className} ${key}`;
-            return {
-              title: "样式",
-              autoOptions: true,
-              valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
-              target,
-            }
-          });
-          if (!focusAreaConfigs[selector]) {
-            focusAreaConfigs[selector] = {
-              title: editor.title || cn,
-              items: [],
-              style: [
+          // const cn = `.${className[0]}`;
+          // const selector = key === ":root" ? cn : `${cn} ${key}`;
+          // const items = className.length === 1 ? [
+          //   {
+          //     title: '样式',
+          //     autoOptions: true,
+          //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
+          //   }
+          // ] : className.map((className) => {
+          //   const target = key === ":root" ? `.${className}` : `.${className} ${key}`;
+          //   return {
+          //     title: "样式",
+          //     autoOptions: true,
+          //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+          //     target,
+          //   }
+          // });
+
+          selectors?.forEach((selector) => {
+            const nextSelector = key === ":root" ? selector : `${selector} ${key}`;
+            if (!focusAreaConfigs[nextSelector]) {
+              focusAreaConfigs[nextSelector] = {
+                title: editor.title || `.${className[0]}`,
+                items: [],
+                style: [
+                  {
+                    items: [
+                      {
+                        title: "样式",
+                        autoOptions: true,
+                        valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+                      }
+                    ]
+                  }
+                ]
+              }
+            } else {
+              focusAreaConfigs[nextSelector].style = [
                 {
-                  // items: [
-                  //   {
-                  //     title: '样式',
-                  //     autoOptions: true,
-                  //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
-                  //   }
-                  // ]
-                  items,
+                  items: [
+                    {
+                      title: "样式",
+                      autoOptions: true,
+                      valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+                    }
+                  ]
                 }
               ]
             }
-          } else {
-            focusAreaConfigs[selector].style = [
-              {
-                items,
-                // items: [
-                //   {
-                //     title: '样式',
-                //     autoOptions: true,
-                //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
-                //   }
-                // ]
-              }
-            ]
-          }
-          if (jsdoc != null) {
-            focusAreaConfigs[selector].specs = jsdoc;
-          }
+          })
 
-          if (key === ":root") {
-            if (focusAreaConfigs[selector].items?.length) {
-              focusAreaConfigs[selector].items.push(genResizer())
-            }
-            // if (!focusAreaConfigs[selector].items) {
-            //   focusAreaConfigs[selector].items = [
-            //     genResizer()
-            //   ]
-            // } else {
-            //   focusAreaConfigs[selector].items.push(genResizer())
-            // }
+          // if (!focusAreaConfigs[selector]) {
+          //   focusAreaConfigs[selector] = {
+          //     title: editor.title || cn,
+          //     items: [],
+          //     style: [
+          //       {
+          //         // items: [
+          //         //   {
+          //         //     title: '样式',
+          //         //     autoOptions: true,
+          //         //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
+          //         //   }
+          //         // ]
+          //         items,
+          //       }
+          //     ]
+          //   }
+          // } else {
+          //   focusAreaConfigs[selector].style = [
+          //     {
+          //       items,
+          //       // items: [
+          //       //   {
+          //       //     title: '样式',
+          //       //     autoOptions: true,
+          //       //     valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id })
+          //       //   }
+          //       // ]
+          //     }
+          //   ]
+          // }
+          // if (jsdoc != null) {
+          //   focusAreaConfigs[selector].specs = jsdoc;
+          // }
+
+          // if (key === ":root") {
+          //   if (focusAreaConfigs[selector].items?.length) {
+          //     focusAreaConfigs[selector].items.push(genResizer())
+          //   }
+          //   // if (!focusAreaConfigs[selector].items) {
+          //   //   focusAreaConfigs[selector].items = [
+          //   //     genResizer()
+          //   //   ]
+          //   // } else {
+          //   //   focusAreaConfigs[selector].items.push(genResizer())
+          //   // }
   
-            focusAreaConfigs[selector].style.push(genResizer())
-          }
+          //   focusAreaConfigs[selector].style.push(genResizer())
+          // }
         })
       }
 
@@ -400,7 +435,7 @@ export default function (props: Props) {
   //   })
   // }
 
-  context.setAiComParams(props.id, props);
+  context.setAiCom(props.id, props, notifyUpdate);
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
 

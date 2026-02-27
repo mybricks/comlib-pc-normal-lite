@@ -89,6 +89,9 @@ export default function ({ constituency }) {
             const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
             const cnList = [...new Set(extractCssClassNames(classNameExpr))];
 
+            const selectors = getCssSelectorForJSXPath(path, importRelyMap);
+            pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+
             if (cnList.length > 0) {
               dataLocValueObject.cn = cnList
               const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
@@ -103,6 +106,7 @@ export default function ({ constituency }) {
                 className: cnList,
                 component: relyName,
                 source,
+                selectors,
                 // ...(jsdoc && { jsdoc }),
               })
 
@@ -138,10 +142,6 @@ export default function ({ constituency }) {
             }
 
             pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
-
-            const selectors = getCssSelectorForJSXPath(path, importRelyMap);
-            pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
-
             pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
           } catch { }
         },
