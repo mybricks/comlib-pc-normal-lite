@@ -245,24 +245,47 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
   return code;
 }
 
+/** 仅包含组合符（Combinator）的 token，在 Less 中应与下一段选择器合并，如 "> div" */
+const COMBINATOR_ONLY = /^[>+~]+$/;
+
+/**
+ * 按「选择器片段」分割：空格分割后，将单独的 > + ~ 与下一段合并，
+ * 避免 ".btnContainer > div" 被错误拆成 .btnContainer / > / div 导致反解析为 "> { div {} }"
+ */
+const splitSelectorKeys = (selector: string): string[] => {
+  const parts = selector.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts;
+
+  const merged: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (COMBINATOR_ONLY.test(part) && i + 1 < parts.length) {
+      merged.push(part + " " + parts[i + 1]);
+      i += 1;
+    } else {
+      merged.push(part);
+    }
+  }
+  return merged;
+};
+
 const rebuildCSSObj = (cssObj: CSSObj) => {
   const cache: CSSObj = {};
   Object.entries(cssObj).forEach(([key, value]) => {
-    const splitKeys = key.split(" ");
+    const splitKeys = splitSelectorKeys(key);
 
     if (splitKeys.length === 1) {
       cache[key] = value;
     } else {
-      const cssObj = cache[splitKeys[0]];
-
-      if (cssObj) {
-        deepSetCssObj(cssObj, {
-          keys: splitKeys.slice(1),
-          value
-        });
-      } else {
-        cache[key] = value;
+      const firstKey = splitKeys[0];
+      // 始终按嵌套还原：若首段尚不存在则先占位为对象，再写入后续层级，避免被写成扁平 key
+      if (!cache[firstKey]) {
+        cache[firstKey] = {};
       }
+      deepSetCssObj(cache[firstKey] as CSSObj, {
+        keys: splitKeys.slice(1),
+        value
+      });
     }
   })
 
