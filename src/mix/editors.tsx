@@ -41,13 +41,22 @@ interface Props {
   focusArea: any;
 }
 
+interface Actions {
+  lock
+  unlock
+  notifyChanged
+  updateCSS
+}
+
 const genStyleValue = (params) => {
   const { comId } = params;
   return {
     set(params, value) {
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
-      const selector = params.selector;
+      // const selector = params.selector;
+      const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
+      const selector = match?.[1];
       const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) || selector;
   
       if (!cssObj[cssObjKey]) {
@@ -98,8 +107,8 @@ const genResizer = () => {
   }
 }
 
-export default function (props: Props, notifyUpdate) {
-  if (!props?.data) {
+export default function (props: Props, actions: Actions) {
+  if (!props?.data || !props?.id) {
     return {};
   }
 
@@ -435,7 +444,7 @@ export default function (props: Props, notifyUpdate) {
   //   })
   // }
 
-  context.setAiCom(props.id, props, notifyUpdate);
+  context.setAiCom(props.id, { params: props, actions });
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
 
@@ -460,6 +469,19 @@ export default function (props: Props, notifyUpdate) {
         ]
       }
     },
+    '[data-zone-selector]': {
+      style: [
+        {
+          items: [
+            {
+              title: "样式",
+              autoOptions: true,
+              valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+            }
+          ]
+        }
+      ]
+    }
     /** 初始化 */
     // '@init': () => {},
     /** 保存的回调 */
