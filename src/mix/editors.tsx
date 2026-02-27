@@ -56,7 +56,7 @@ const genStyleValue = (params) => {
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
       // const selector = params.selector;
       const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
-      const selector = match?.[1];
+      const selector = match?.[1] || params.selector;
       const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) || selector;
   
       if (!cssObj[cssObjKey]) {

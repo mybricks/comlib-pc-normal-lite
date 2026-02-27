@@ -7,9 +7,9 @@ class Context {
   setAiCom(id: string, { params, actions }) {
     if (!this.aiComParamsMap[id]) {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
-      actions.updateCSS((params) => {
-        console.log("[TODO] updateCSS: ", params)
-      })
+      // actions.updateCSS((params) => {
+      //   console.log("[TODO] updateCSS: ", params)
+      // })
     }
   }
 
