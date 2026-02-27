@@ -1,3 +1,13 @@
+export {
+  replaceFile,
+  multiReplaceFile,
+  registerReplacer,
+  type ReplaceResult,
+  type ReplaceResultItem,
+  type MultiReplaceResult,
+  type Replacer,
+} from "./editReplace";
+
 export class PromiseStack {
   stack: any[] = [];
   currentPromise: any = null;

@@ -19,8 +19,8 @@ export type ComponentFileItem = { fileName: string; content: string; isComplete?
 
 interface Config {
   hasAttachments?: boolean;
-  /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles(files, comId, context) */
-  execute?: (params: { files: Array<{ fileName: string; content: string }> }) => void;
+  /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles；可返回 string 作为工具展示文案 */
+  execute?: (params: { files: Array<{ fileName: string; content: string }> }) => void | string;
   focusComId?: string;
 }
 
@@ -105,6 +105,8 @@ function applyFilesToOnComponentUpdate(
 export default function developMyBricksModule(config: Config) {
   const langs = "React、Less"
   const libTitles = `${langs}、mybricks`
+
+  let excuteMessage = '';
 
   return {
     name: NAME,
@@ -664,8 +666,8 @@ export default function developMyBricksModule(config: Config) {
       if (actionsFile && actionType === 'abort') {
         return { displayContent: actionReason, llmContent: actionReason };
       }
-
-      return '编写完成';
+      // 这个才是会被记录到数据库的，stream只是展示作用，execute在 stream 执行之后执行，所以可以获取到
+      return excuteMessage ?? '已处理';
     },
     stream(params: any) {
       const { status, replaceContent } = params;
@@ -688,12 +690,13 @@ export default function developMyBricksModule(config: Config) {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
-          config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const msg = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          if (msg) {
+            excuteMessage = msg;
+          }
           return raw
-            .replace(/action\.json/g, actionReason)
-            .replace(/runtime\.jsx/g, '已修改内容')
-            .replace(/style\.less/g, '已调整样式');
-
+            .replace(/runtime\.jsx/g, '')
+            .replace(/style\.less/g, '') + '\n' + msg;
         }
       }
 

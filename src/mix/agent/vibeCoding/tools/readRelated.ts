@@ -28,7 +28,7 @@ export default function readRelated(config: ReadRelatedConfig): any {
 
 **使用策略：**
 1. 先看项目架构：preset 中的「1. 项目架构」列出了所有组件的 name、summary、specs；
-2. 按 name 获取：传入要查看的组件 name（可多个，逗号分隔），如 \`names: "Sidebar,GlobalHeader"\`；若要查看全部代码则传 \`names: "root"\`；
+2. 按 name 获取：传入要查看的组件 name，可多个；
 3. 获取后：后续上下文中「2. 文件系统」会展示这些组件在各代码文件中对应的关联代码片段，其余行折叠；
 4. 避免重复：已获取的组件信息会持续保留在上下文中，无需重复传入。
 

@@ -4,16 +4,43 @@ import developModule from "./tools/developMyBricksModuleNext";
 import readRelated from "./tools/readRelated";
 import answer from "./tools/answer";
 import { createProject, buildProjectJson } from "./project";
+import { multiReplaceFile, type ReplaceResultItem } from "../utils/editReplace";
 
 /** 单文件项：fileName + content */
 export type ComponentFileItem = { fileName: string; content: string };
 
+/** 单次 before→after 替换结果（与 utils/editReplace 的 ReplaceResultItem 一致） */
+export type { ReplaceResultItem };
+
+/** 单个文件的更新结果 */
+export type FileUpdateResult = {
+  fileName: string;
+  dataKey: string;
+  fullReplace: boolean;
+  replaceCount: number;
+  results: ReplaceResultItem[];
+  success: boolean;
+};
+
+/** updateComponentFiles 的返回值 */
+export type UpdateComponentFilesResult = {
+  comId: string;
+  fileResults: FileUpdateResult[];
+  success: boolean;
+};
+
 /**
  * 将指定组件的若干源文件（model.json / runtime.jsx / style.less / config.js / com.json）
  * 写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
+ * 使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
  */
-function updateComponentFiles(files: Array<ComponentFileItem>, comId: string, context: any) {
+function updateComponentFiles(
+  files: Array<ComponentFileItem>,
+  comId: string,
+  context: any
+): UpdateComponentFilesResult {
   const aiComParams = context.getAiComParams(comId);
+  const fileResults: FileUpdateResult[] = [];
 
   const fileToDataKey: Array<{ fileName: string; dataKey: string }> = [
     { fileName: 'com.json', dataKey: 'componentConfig' },
@@ -23,35 +50,86 @@ function updateComponentFiles(files: Array<ComponentFileItem>, comId: string, co
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
   ];
 
-  fileToDataKey.forEach(({ fileName, dataKey }) => {
-    const matchedFiles = files.filter((f) => f.fileName === fileName);
-    if (matchedFiles.length === 1) {
-      context.updateFile(comId, { fileName, content: matchedFiles[0].content });
-    } else if (matchedFiles.length > 1) {
-      let current = decodeURIComponent(aiComParams.data[dataKey] || '');
-      for (let i = 0; i < matchedFiles.length; i += 2) {
-        const before = matchedFiles[i];
-        const after = matchedFiles[i + 1];
-        if (!after) continue;
-        const index = current.indexOf(before.content);
-        if (index === -1) {
-          console.error(`[@开发模块 - 文件${fileName}替换失败]`, {
-            current,
-            before: before.content,
-            after: after.content,
-          });
-        }
-        if (before.content === '') {
-          current = after.content;
-        } else {
-          current = current.replace(before.content, after.content);
-        }
-      }
-      context.updateFile(comId, { fileName, content: current });
-    }
-  });
+  /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
+  const pendingWrites: Array<{ fileName: string; content: string }> = [];
 
-  aiComParams.data.document = '';
+  for (const { fileName, dataKey } of fileToDataKey) {
+    const matchedFiles = files.filter((f) => f.fileName === fileName);
+    if (matchedFiles.length === 0) continue;
+
+    if (matchedFiles.length === 1) {
+      fileResults.push({
+        fileName,
+        dataKey,
+        fullReplace: true,
+        replaceCount: 1,
+        results: [{ ok: true, strategy: 'fullReplace' }],
+        success: true,
+      });
+      pendingWrites.push({ fileName, content: matchedFiles[0].content });
+      continue;
+    }
+
+    const current = decodeURIComponent(aiComParams.data[dataKey] || '');
+    const operations: Array<{ before: string; after: string }> = [];
+    for (let i = 0; i < matchedFiles.length; i += 2) {
+      const before = matchedFiles[i];
+      const after = matchedFiles[i + 1];
+      if (!after) continue;
+      operations.push({ before: before.content, after: after.content });
+    }
+
+    const multi = multiReplaceFile(current, operations);
+    if (!multi.ok && multi.results.length > 0) {
+      const firstFail = multi.results.find((r) => !r.ok);
+      if (firstFail?.message) {
+        console.error(`[@开发模块 - 文件${fileName} 替换失败]`, firstFail.message);
+      }
+    }
+
+    fileResults.push({
+      fileName,
+      dataKey,
+      fullReplace: false,
+      replaceCount: multi.results.length,
+      results: multi.results,
+      success: multi.ok,
+    });
+    if (multi.ok && multi.newContent !== undefined) {
+      pendingWrites.push({ fileName, content: multi.newContent });
+    }
+  }
+
+  const success = fileResults.every((r) => r.success);
+  if (success) {
+    for (const { fileName, content } of pendingWrites) {
+      context.updateFile(comId, { fileName, content });
+    }
+    aiComParams.data.document = '';
+  }
+
+  return {
+    comId,
+    fileResults,
+    success,
+  };
+}
+
+/** 将更新结果格式化为给用户/模型展示的文案 */
+function formatUpdateResult(result: UpdateComponentFilesResult): string {
+  if (result.success) {
+    const parts = result.fileResults.map((r) => {
+      if (r.fullReplace) return `${r.fileName}（整文件已更新）`;
+      return `${r.fileName}`;
+    });
+    return `修改完成。已更新：${parts.join('；')}`;
+  }
+  const failed = result.fileResults.filter((r) => !r.success);
+  const details = failed.map((r) => {
+    const errs = r.results.filter((x) => !x.ok).map((x) => x.message ?? x.error ?? '未知错误');
+    return `${r.fileName}: ${errs.join('；')}`;
+  });
+  return `部分更新失败：${details.join('。')}`;
 }
 
 /**
@@ -235,17 +313,6 @@ function createBatchUpdateComponentFiles(context: any) {
       // 标记为已处理
       processedFileKeys.add(groupKey);
 
-      // 日志输出
-      const contentPreview = finalContent.length > 80
-        ? `${finalContent.slice(0, 80)}...`
-        : finalContent;
-      console.log('[开发模块 - 文件更新]', {
-        comId,
-        fileName: baseFileName,
-        contentLength: finalContent.length,
-        contentPreview,
-      });
-
       // 触发组件文件更新
       handleComponentFileUpdate(comId, baseFileName, finalContent);
     });
@@ -426,7 +493,8 @@ ${text}
         // agent模式配置
         const AgentModeConfig = {
           ...baseConfig,
-          system: `> 你的语气和风格，不要那么专业，除了命令行之外请不要提及工具的概念，用户不是专业的开发者`,
+          system: `> 你的语气和风格，不要那么专业，除了命令行之外请不要提及工具的概念，用户不是专业的开发者。
+你的主要任务是获取各类信息，然后开始编写代码，注意理解用户意图，关于“实现”“开发”等词汇，倾向于开发而不是提问和回答。`,
           tools: [
             // classLibrarySelection({
             //   librarySummaryDoc: workspace.getAvailableLibraryInfo() || '',
@@ -439,7 +507,8 @@ ${text}
             developModule({
               hasAttachments,
               execute(p) {
-                updateComponentFiles(p.files ?? [], focus.comId, context);
+                const result = updateComponentFiles(p.files ?? [], focus.comId, context);
+                return formatUpdateResult(result);
               },
             }),
             answer()
