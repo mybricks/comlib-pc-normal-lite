@@ -13,6 +13,9 @@ export interface ProjectNode {
   children: ProjectNode[];
 }
 
+/** 根组件 name，传入时展开整个项目所有代码 */
+export const ROOT_NAME = 'root';
+
 /** 项目配置 */
 export interface ProjectConfig {
   /** project.json 根数组（仅取第一个根节点） */
@@ -237,7 +240,8 @@ export class Project {
     const runtimeContent = getRuntimeContent();
     const styleContent = getStyleContent();
 
-    const projectSpaceDesc = `这是组成整个项目的所有代码，可通过项目结构中的组件 name 批量读取（使用读取工具按组件 name 展开该组件在各代码文件中的相关代码行）。`;
+    const projectSpaceDesc = `这是组成整个项目的所有代码，可通过项目结构中的组件 name 批量读取（使用读取工具按组件 name 展开该组件在各代码文件中的相关代码行）。
+注意；除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
 
     const archMd = buildArchitectureMd(this.root);
 
@@ -247,7 +251,7 @@ export class Project {
 
     const runtimeLines = runtimeContent.split(/\r?\n/);
     const styleLines = styleContent.split(/\r?\n/);
-    const isFullFile = this.expandedNames.has('root');
+    const isFullFile = this.expandedNames.has(ROOT_NAME);
     const defaultImportRanges =
       this.root.commonImports
         ?.filter((c) => c.path === RUNTIME_PATH)

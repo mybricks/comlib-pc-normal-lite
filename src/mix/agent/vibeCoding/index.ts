@@ -1,7 +1,7 @@
 import classLibrarySelection from "./tools/loadExtraComponentDocs"
 import developMyBricksModule from "./tools/developMyBricksModule";
 import developModule from "./tools/developMyBricksModuleNext";
-import grepCodes from "./tools/grepCodes";
+import readRelated from "./tools/readRelated";
 import answer from "./tools/answer";
 import { createProject, buildProjectJson } from "./project";
 
@@ -401,6 +401,7 @@ ${text}
         // agent模式配置
         const AgentModeConfig = {
           ...baseConfig,
+          system: `> 你的语气和风格，不要那么专业，除了命令行之外请不要提及工具的概念，用户不是专业的开发者`,
           tools: [
             // classLibrarySelection({
             //   librarySummaryDoc: workspace.getAvailableLibraryInfo() || '',
@@ -409,7 +410,7 @@ ${text}
             //     workspace.openLibraryDoc(libs)
             //   }
             // }),
-            grepCodes({ project }),
+            readRelated({ project }),
             developModule({
               hasAttachments,
               execute(p) {

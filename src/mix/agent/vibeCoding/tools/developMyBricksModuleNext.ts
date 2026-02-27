@@ -1,4 +1,4 @@
-import grepCodes from "./grepCodes";
+import readRelated from "./readRelated";
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
@@ -343,21 +343,10 @@ export default function developMyBricksModule(config: Config) {
   </典型拆分示例>
 </区块拆分原则与规范>
 
-<按照以下情况分别处理>
+<工作流程>
   对于用户的各类问题，结合【当前选区】，请按照以下不同的情况进行逐步思考，给出答案。
-  
-  首先，判断需求属于以下哪种情况：
 
-  <以下问题做特殊处理>
-    当用户询问以下类型的问题时，给与特定的答案：
-    1、与种族、宗教、色情等敏感话题相关的问题，直接回复“抱歉，我作为智能开发助手，无法回答此类问题。”；
-  </以下问题做特殊处理>
-  
-  <当存在附件图片时>
-    当用户提供了附件图片，要将附件中的图片作为重要参考，参考整张图片，根据需求进行开发。
-  </当存在附件图片时>
-  
-  如果确实要修改模块，按照以下步骤处理：
+  需要修改模块时，按照以下步骤处理：
   1、总体分析，按照以下步骤进行：
     1）确定总体的功能；
       - 总体是什么业务场景，例如是中后台数据管理、门户页面的一部分、中后台数据管理、表单录入、还是看板、卡片、卡片列表等等；
@@ -491,12 +480,12 @@ export default function developMyBricksModule(config: Config) {
 
   整个过程中要注意：
   - 如果模块【源代码】内容有修改，务必通过before/after返回；
-  - 确保所有文件内容中禁止使用emoji等特殊字符；
+  - 确保所有文件内容中禁止使用emoji、特殊字符、表情符号等；
   - 回答问题请确保结果合理严谨、言简意赅，不要出现任何错误;
   - 回答语气要谦和、慎用叹号等表达较强烈语气的符号等，尽量不要用“代码”、“逻辑”等技术术语；
   - 返回的结果中可以使用适当的html标签（可以使用<b/><i/>）以增强良好的阅读体验，不要使用markdown；
   - **最终输出前必须对 runtime.jsx 中所有 comRef 做一次全量 JSDoc 一致性检查**：遍历每一个 comRef，确认其 JSDoc 中的 @prop 与函数参数解构完全匹配、@event 与 JSX 事件绑定完全匹配，存在任何不一致必须在输出前修正；
-</按照以下情况分别处理>
+</工作流程>
 
 <examples>
 
@@ -676,10 +665,10 @@ export default function developMyBricksModule(config: Config) {
 
       if (status === 'complete') {
         if (actionsFile && actionType === 'read') {
-          return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: grepCodes.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
+          return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: readRelated.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
         }
         if (actionsFile && actionType === 'abort') {
-          return actionReason || '已中止';
+          return { displayContent: actionReason, llmContent: actionReason };
         }
         config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
         return raw
