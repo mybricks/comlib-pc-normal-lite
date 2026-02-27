@@ -645,13 +645,8 @@ export default function developMyBricksModule(config: Config) {
 </examples>
 `
     },
-    execute() {
-      return '编写完成';
-    },
-    stream(params: any) {
-      const { status, replaceContent } = params;
+    execute(params) {
       const files = normalizeFiles(params?.files);
-      const raw =replaceContent ?? '';
       const actionsFile = files.find((f) => f.fileName === 'action.json');
       let actionReason = '';
       let actionType: string | undefined;
@@ -660,25 +655,50 @@ export default function developMyBricksModule(config: Config) {
           const obj = JSON.parse(actionsFile.content);
           actionReason = (obj.reason as string) ?? '';
           actionType = obj.action;
-        } catch {}
+        } catch { }
+      }
+
+      if (actionsFile && actionType === 'read') {
+        return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: readRelated.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
+      }
+      if (actionsFile && actionType === 'abort') {
+        return { displayContent: actionReason, llmContent: actionReason };
+      }
+
+      return '编写完成';
+    },
+    stream(params: any) {
+      const { status, replaceContent } = params;
+      const files = normalizeFiles(params?.files);
+      const raw = replaceContent ?? '';
+      const actionsFile = files.find((f) => f.fileName === 'action.json');
+
+      let actionReason = '';
+      let actionType: string | undefined;
+      if (actionsFile) {
+        try {
+          const obj = JSON.parse(actionsFile.content);
+          actionReason = (obj.reason as string) ?? '';
+          actionType = obj.action;
+        } catch { }
       }
 
       if (status === 'complete') {
-        if (actionsFile && actionType === 'read') {
-          return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: readRelated.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
+        if (actionType) {
+          return raw
+            .replace(/action\.json/g, actionReason)
+        } else {
+          config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          return raw
+            .replace(/action\.json/g, actionReason)
+            .replace(/runtime\.jsx/g, '已修改内容')
+            .replace(/style\.less/g, '已调整样式');
+
         }
-        if (actionsFile && actionType === 'abort') {
-          return { displayContent: actionReason, llmContent: actionReason };
-        }
-        config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
-        return raw
-          .replace(/actions\.json/g, actionReason)
-          .replace(/runtime\.jsx/g, '已修改内容')
-          .replace(/style\.less/g, '已调整样式');
       }
 
       return raw
-        .replace(/actions\.json/g, actionReason)
+        .replace(/action\.json/g, actionReason)
         .replace(/runtime\.jsx/g, '尝试修改内容...')
         .replace(/style\.less/g, '尝试调整样式...');
     },
