@@ -475,10 +475,11 @@ export default function developMyBricksModule(config: Config) {
       - 按代码中出现的顺序列出多个before,after。
     5）保持before,after的简洁唯一：
       - 将大型before,after做必要拆分，每次只更改代码的一小部分;
-      - 只包含需要更改的行，出于唯一性的考虑，可以包含一些周围的必要的行;
-    6）特殊操作遵守以下规则：
-      - 新建文件：before中的内容为空字符串;
-      - 删除代码：after中的内容为空字符串。
+      - 只包含需要更改的行，出于唯一性的考虑，需要包含一些周围的必要的行，避免出现误操作;
+    6）操作遵守以下规则：
+      - before 非空 且after 非空 -> 内容替换，如果是替换 before 必须非空；
+      - before 非空 且after 为空 -> 内容删除；
+      - before 为空 且after 非空 -> 空文件写入 / 整文件替换；
 
   整个过程中要注意：
   - 如果模块【源代码】内容有修改，务必通过before/after返回；
