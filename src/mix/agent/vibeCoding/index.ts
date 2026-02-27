@@ -263,13 +263,35 @@ export default function ({ context }) {
     goal: '根据用户需要，开发可运行在MyBricks平台的模块',
     backstory: `基于React + Less`,
     request({ rxai, params, focus }: any) {
-      const aiComParams = context.getAiComParams(focus.comId);
+      // const aiComParams = context.getAiComParams(focus.comId);
+      const aiCom = context.getAiCom(focus.comId);
+      const { aiComParams, actions } = aiCom;
+
+      let comName = "root";
+
       console.log("[@request - params]", params);
       console.log("[@request - focus]", focus);
+      console.log("[aiCom]", aiCom);
       console.log("[aiComParams]", aiComParams);
 
       // 判断是否作为工具被调用（被上级agent调用）
       const asSubAgentTool = !!params.asTool;
+
+      const onProgress = (status) => {
+        console.log("[@comName]", comName);
+        console.log("[@status]", status);
+        if (comName === "root") {
+          params?.onProgress?.(status);
+        } else {
+          if (status === "start") {
+            actions.lock(comName);
+          } else if (status === "complete") {
+            actions.unlock(comName);
+          } else if (status === "error") {
+            actions.unlock(comName);
+          }
+        }
+      }
 
       const { focusArea } = aiComParams ?? {};
 
@@ -280,8 +302,9 @@ export default function ({ context }) {
         cloneEl.innerHTML = '';
         cloneEl.innerText = focusArea.ele.innerText;
         const loc = JSON.parse(focusArea.ele.closest(`[data-loc]`).dataset.loc);
-        const comName = focusArea.ele.closest(`[data-com-name]`).dataset.comName;
         const runtimeJsxSource = decodeURIComponent(aiComParams.data.runtimeJsxSource);
+
+        comName = focusArea.ele.closest(`[data-com-name]`).dataset.comName;
 
         focusInfo = `
 <选区信息>
@@ -322,6 +345,8 @@ Component Name: ${comName}
 
       const hasAttachments = Array.isArray(params.attachments) && params.attachments?.length > 0;
 
+      onProgress("start");
+
       return new Promise((resolve, reject) => {
         // 基础配置（放在 Promise 内，以便 emits 能正确使用 resolve/reject）
         const baseConfig = {
@@ -334,7 +359,7 @@ Component Name: ${comName}
                 delete aiComParams.data.loading;
               }
               resolve('complete');
-              params?.onProgress?.("complete");
+              onProgress?.("complete");
             },
             error: (error: any) => {
               const aiComParams = context.getAiComParams(focus.comId);
@@ -342,7 +367,7 @@ Component Name: ${comName}
                 delete aiComParams.data.loading;
               }
               reject(error);
-              params?.onProgress?.("error");
+              onProgress?.("error");
             },
             cancel: () => { },
           },

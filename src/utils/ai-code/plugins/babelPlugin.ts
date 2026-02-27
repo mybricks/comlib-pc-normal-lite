@@ -91,6 +91,7 @@ export default function ({ constituency }) {
 
             const selectors = getCssSelectorForJSXPath(path, importRelyMap);
             pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+            pushDataAttr(node.openingElement.attributes, "data-zone-title", selectors.reverse()[0].split(' ').reverse()[0]);
 
             if (cnList.length > 0) {
               dataLocValueObject.cn = cnList
