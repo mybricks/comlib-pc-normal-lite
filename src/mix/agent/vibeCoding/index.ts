@@ -526,6 +526,23 @@ ${text}
         const config = asSubAgentTool ? AsToolModeConfig : AgentModeConfig;
         rxai.requestAI(config);
       });
+    },
+    getFocusArea(params) {
+      let comName = "root";
+      try {
+        const { focus } = params;
+        const aiCom = context.getAiCom(focus.comId);
+        const { actions } = aiCom;
+        const focusArea = actions?.getFocusArea?.();
+        if (focusArea) {
+          comName = focusArea.elemenet.closest(`[data-com-name]`).dataset.comName;
+        }
+
+        return comName
+      } catch (e) {
+        console.error("[@getFocusArea - error]", e);
+        return comName;
+      }
     }
   }
 }
