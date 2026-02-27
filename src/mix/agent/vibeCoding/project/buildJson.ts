@@ -29,6 +29,14 @@ function getLineRangeIncludingComments(
   return [startLine, range[1]];
 }
 
+/** 从 leadingComments 中取 JSDoc 块注释的行区间 [起始行, 结束行]；无块注释则返回 null */
+function getCommentBlockRange(leadingComments: any[] | undefined): [number, number] | null {
+  if (!Array.isArray(leadingComments) || leadingComments.length === 0) return null;
+  const block = leadingComments.find((c: any) => c?.type === 'CommentBlock');
+  if (!block?.loc?.start?.line || !block?.loc?.end?.line) return null;
+  return [block.loc.start.line, block.loc.end.line];
+}
+
 function isComRefCall(callee: any): boolean {
   if (callee?.type === 'Identifier') return callee.name === 'comRef';
   if (callee?.type === 'MemberExpression' && callee.property?.type === 'Identifier')
@@ -276,6 +284,10 @@ interface ComponentMeta {
   calledFunctionNames: string[];
   /** 本组件内引用到的模块级变量名（共享变量），其定义行会纳入 contents */
   referencedVariableNames: string[];
+  /** 组件上方 JSDoc 注释行区间 [起始行, 结束行] */
+  comments?: [number, number] | null;
+  /** 组件定义（const X = comRef(...) / export default comRef(...)）行区间 [起始行, 结束行]，不含注释 */
+  def?: [number, number] | null;
 }
 
 interface FunctionMeta {
@@ -346,6 +358,8 @@ function createCollectorPlugin(state: CollectorState) {
             const comments = path.parentPath?.node?.leadingComments ?? node.leadingComments;
             const range = getLineRangeIncludingComments(node, comments) ?? getLineRange(node);
             if (!range) return;
+            const defRange = getLineRange(node) ?? undefined;
+            const commentsRange = getCommentBlockRange(comments) ?? undefined;
             const fn = init.arguments[0];
             const body = fn?.body;
             let jsdoc: ReturnType<typeof parseJSDoc> = null;
@@ -364,6 +378,8 @@ function createCollectorPlugin(state: CollectorState) {
               cssClasses: [],
               calledFunctionNames: [],
               referencedVariableNames: [],
+              comments: commentsRange ?? null,
+              def: defRange ?? null,
             });
             return;
           }
@@ -382,6 +398,8 @@ function createCollectorPlugin(state: CollectorState) {
           const comments = node.leadingComments;
           const range = getLineRangeIncludingComments(node, comments) ?? getLineRange(node);
           if (!range) return;
+          const defRange = getLineRange(node) ?? undefined;
+          const commentsRange = getCommentBlockRange(comments) ?? undefined;
           const fn = decl.arguments[0];
           const body = fn?.body;
           let jsdoc: ReturnType<typeof parseJSDoc> = null;
@@ -400,6 +418,8 @@ function createCollectorPlugin(state: CollectorState) {
             cssClasses: [],
             calledFunctionNames: [],
             referencedVariableNames: [],
+            comments: commentsRange ?? null,
+            def: defRange ?? null,
           };
         },
         Program: {
@@ -693,6 +713,8 @@ export function buildProjectJson(runtimeContent: string, styleContent: string): 
       contents,
       children,
     };
+    if (meta.comments) node.comments = meta.comments;
+    if (meta.def) node.def = meta.def;
 
     if (meta.name === 'root' && state.importRange) {
       node.commonImports = [{ path: RUNTIME_PATH, locs: [[state.importRange.start, state.importRange.end]] }];

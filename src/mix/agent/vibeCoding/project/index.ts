@@ -11,6 +11,10 @@ export interface ProjectNode {
   /** 根节点可选：默认展开的引用部分，如 runtime.jsx 的 import 区间 */
   commonImports?: Array<{ path: string; locs: number[][] }>;
   children: ProjectNode[];
+  /** 组件上方 JSDoc 注释在 runtime 中的行区间 [起始行, 结束行]（1-based） */
+  comments?: [number, number];
+  /** 组件定义（const X = comRef(...) 或 export default comRef(...)）在 runtime 中的行区间 [起始行, 结束行]（1-based） */
+  def?: [number, number];
 }
 
 /** 根组件 name，传入时展开整个项目所有代码 */
@@ -53,12 +57,12 @@ function mergeRanges(ranges: Array<{ start: number; end: number }>): Array<{ sta
 function buildArchitectureMd(node: ProjectNode, indent = ''): string {
   const { name, specs } = node;
   const title = specs?.summary ?? '';
-  const propKeys = specs?.props ? Object.keys(specs.props) : [];
-  const eventKeys = specs?.events ? Object.keys(specs.events) : [];
-  const propsStr = propKeys.length ? `props：${propKeys.join(', ')}` : '';
-  const eventsStr = eventKeys.length ? `事件：${eventKeys.join(', ')}` : '';
-  const extra = [propsStr, eventsStr].filter(Boolean).join('；');
-  const line = `- ${name}${title ? ` — ${title}` : ''}${extra ? `；${extra}` : ''}`;
+  // const propKeys = specs?.props ? Object.keys(specs.props) : [];
+  // const eventKeys = specs?.events ? Object.keys(specs.events) : [];
+  // const propsStr = propKeys.length ? `props：${propKeys.join(', ')}` : '';
+  // const eventsStr = eventKeys.length ? `事件：${eventKeys.join(', ')}` : '';
+  // const extra = [propsStr, eventsStr].filter(Boolean).join('；');
+  const line = `- ${name}${title ? ` — ${title}` : ''}`;
   const childrenMd = node.children?.length
     ? node.children.map((child) => buildArchitectureMd(child, indent + '  ')).join('\n')
     : '';
@@ -105,6 +109,24 @@ function getLocsByComponentName(root: ProjectNode, componentName: string): Array
   walk(root);
   const node = found as ProjectNode | null;
   return node?.contents ?? [];
+}
+
+/**
+ * 收集「初始默认展开」的 runtime 区间：所有组件的注释全文 + 组件定义的仅首行与末行（不含中间函数体）
+ * 用于文件系统一打开就展示 imports、各组件 JSDoc、以及每个组件定义的起止行
+ */
+function getInitialComponentRangesForRuntime(root: ProjectNode): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  function walk(node: ProjectNode) {
+    if (node.comments) ranges.push({ start: node.comments[0], end: node.comments[1] });
+    if (node.def) {
+      ranges.push({ start: node.def[0], end: node.def[0] });
+      if (node.def[1] !== node.def[0]) ranges.push({ start: node.def[1], end: node.def[1] });
+    }
+    (node.children ?? []).forEach(walk);
+  }
+  walk(root);
+  return ranges;
 }
 
 /**
@@ -241,7 +263,7 @@ export class Project {
     const styleContent = getStyleContent();
 
     const projectSpaceDesc = `这是组成整个项目的所有代码，可通过项目结构中的组件 name 批量读取（使用读取工具按组件 name 展开该组件在各代码文件中的相关代码行）。
-注意；除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
+注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
 
     const archMd = buildArchitectureMd(this.root);
 
@@ -260,6 +282,7 @@ export class Project {
       ? [{ start: 1, end: runtimeLines.length }]
       : mergeRanges([
           ...defaultImportRanges,
+          ...getInitialComponentRangesForRuntime(this.root),
           ...getExpandedRangesForFile(this.root, this.expandedNames, RUNTIME_PATH),
         ]);
     const styleRanges = isFullFile
@@ -284,7 +307,8 @@ export class Project {
     return [
       '## 项目空间\n',
       projectSpaceDesc,
-      '\n\n### 1. 项目架构\n',
+      '\n\n### 1. 组件树结构\n',
+      '\n。组件树结构有助于帮助我们理解组件间的关系，代码可以按组件层级展开，父组件包含所有子组件代码，子组件没有父组件代码。\n',
       '根组件 -> 组件（树状结构）：\n\n',
       archMd,
       '\n',

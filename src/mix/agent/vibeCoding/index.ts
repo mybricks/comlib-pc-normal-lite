@@ -376,8 +376,6 @@ export default function ({ context }) {
         focusInfo = `
 <选区信息>
 HTML Element: ${cloneEl.outerHTML}
-Focus Area Code: ${runtimeJsxSource.slice(loc.jsx.start, loc.tag.end)}
-Selector: ${focus.focusArea.selector}
 Component Name: ${comName}
 </选区信息>
         `
@@ -493,8 +491,6 @@ ${text}
         // agent模式配置
         const AgentModeConfig = {
           ...baseConfig,
-          system: `> 你的语气和风格，不要那么专业，除了命令行之外请不要提及工具的概念，用户不是专业的开发者。
-你的主要任务是获取各类信息，然后开始编写代码，注意理解用户意图，关于“实现”“开发”等词汇，倾向于开发而不是提问和回答。`,
           tools: [
             // classLibrarySelection({
             //   librarySummaryDoc: workspace.getAvailableLibraryInfo() || '',
@@ -517,7 +513,7 @@ ${text}
             return `
 <注意>
 1. 如果只是为了了解组件的现状，不需要通过历史记录，会在后续执行工具中提供
-${focusInfo ? "2. 关注选区信息，用户信息是针对选区提出的" : ""}
+${focusInfo ? "2. 选区消息是当前用户聚焦的组件，仅用于参考。" : ""}
 </注意>
 ${focusInfo}
 <用户消息>

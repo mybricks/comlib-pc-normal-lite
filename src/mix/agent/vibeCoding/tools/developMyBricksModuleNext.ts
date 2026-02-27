@@ -111,16 +111,16 @@ export default function developMyBricksModule(config: Config) {
   return {
     name: NAME,
     displayName: "编写组件",
-    description: `根据用户需求，以及各类上下文，一次性编写/修改模块中的所有代码，开发代码实现功能。
+    description: `根据用户需求，以及各类上下文，一次性编写/修改模块中的所有代码，实现功能。
 参数：无
 
 工具分类：操作执行类；
 
 作用：编写/修改模块中的所有代码，开发代码实现功能；
 
-前置：做任何修改前，必须先查看现有代码的情况。
+前置：做任何代码修改前，必须先调用工具读取更多代码信息。
 
-!IMPORTANT: 所有涉及模块代码的生成/修改都必须使用该工具，一次调用即可完成修改；
+!IMPORTANT: 所有涉及模块代码的生成/修改都必须使用该工具。；
 `,
     getPrompts: () => {
       return `
@@ -130,7 +130,7 @@ export default function developMyBricksModule(config: Config) {
 </你的角色与任务>
 
 <你的输出逻辑>
-如果当前代码信息不足以完成用户需求，请返回
+如果当前代码信息不足以完成用户需求，或者如果要修改的代码包含折叠代码，请返回
 \`\`\`json file="action.json"
 {
   "action": "read",
