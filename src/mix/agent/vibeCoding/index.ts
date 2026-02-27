@@ -293,18 +293,18 @@ export default function ({ context }) {
         }
       }
 
-      const { focusArea } = aiComParams ?? {};
+      const focusArea = actions?.getFocusArea?.();
 
       let focusInfo = "";
 
       if (focusArea) {
-        const cloneEl = focusArea.ele.cloneNode(true);
+        const cloneEl = focusArea.elemenet.cloneNode(true);
         cloneEl.innerHTML = '';
-        cloneEl.innerText = focusArea.ele.innerText;
-        const loc = JSON.parse(focusArea.ele.closest(`[data-loc]`).dataset.loc);
+        cloneEl.innerText = focusArea.elemenet.innerText;
+        const loc = JSON.parse(focusArea.elemenet.closest(`[data-loc]`).dataset.loc);
         const runtimeJsxSource = decodeURIComponent(aiComParams.data.runtimeJsxSource);
 
-        comName = focusArea.ele.closest(`[data-com-name]`).dataset.comName;
+        comName = focusArea.elemenet.closest(`[data-com-name]`).dataset.comName;
 
         focusInfo = `
 <选区信息>
