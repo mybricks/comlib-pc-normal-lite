@@ -4,12 +4,16 @@ import { updateRender, updateStyle } from "../../utils/ai-code/transform-umd";
 class Context {
   aiComParamsMap: Record<string, any> = {};
 
-  setAiComParams(id: string, aiComParams: any) {
-    this.aiComParamsMap[id] = aiComParams;
+  setAiCom(id: string, aiComParams: any, notifyUpdate: any) {
+    this.aiComParamsMap[id] = { aiComParams, notifyUpdate };
+  }
+
+  getAiCom(id: string) {
+    return this.aiComParamsMap[id];
   }
 
   getAiComParams(id: string) {
-    return this.aiComParamsMap[id];
+    return this.aiComParamsMap[id]?.aiComParams;
   }
 
   agent: any = {
@@ -36,6 +40,8 @@ class Context {
         break;
       case "runtime.jsx":
         updateRender({ data: aiComParams.data }, content);
+        const aiCom = this.getAiCom(id);
+        aiCom?.notifyUpdate?.();
         break;
       case "style.less":
         updateStyle({ id, data: aiComParams.data }, content);
