@@ -90,13 +90,15 @@ export default function ({ constituency }) {
             const cnList = [...new Set(extractCssClassNames(classNameExpr))];
 
             const selectors = getCssSelectorForJSXPath(path, importRelyMap);
-            
-            pushDataAttr(node.openingElement.attributes, "data-zone-title", selectors.reverse()[0].split(' ').reverse()[0]);
+            const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : node.openingElement.name.name;
+            pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
 
             const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
 
             if (source === "html") {
               pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+            } else {
+              pushDataAttr(node.openingElement.attributes, "data-library-source", source);
             }
 
             if (cnList.length > 0) {
