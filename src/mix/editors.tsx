@@ -50,10 +50,44 @@ interface Actions {
   updateCSS
 }
 
+const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
+  'margin': ['margin-top', 'margin-right', 'margin-bottom', 'margin-left'],
+  'padding': ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
+  'border-width': ['border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width'],
+  'border-color': ['border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color'],
+  'border-style': ['border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style'],
+  'border-radius': ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius'],
+};
+
+const LONGHAND_TO_SHORTHAND: Record<string, string> = {};
+Object.entries(CSS_SHORTHAND_GROUPS).forEach(([shorthand, longhands]) => {
+  longhands.forEach(longhand => { LONGHAND_TO_SHORTHAND[longhand] = shorthand; });
+});
+
+function camelToKebab(str: string): string {
+  return str.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+/** 扩展待删除 key：删长写时顺带删简写，删简写时顺带删所有长写（兼容驼峰和 kebab-case） */
+function expandDeletions(deletions: string[]): string[] {
+  const toDelete = new Set(deletions);
+  deletions.forEach(key => {
+    const kebabKey = camelToKebab(key);
+    // 长写 → 找对应简写（如 marginTop/margin-top → margin）
+    const shorthand = LONGHAND_TO_SHORTHAND[kebabKey] ?? LONGHAND_TO_SHORTHAND[key];
+    if (shorthand) toDelete.add(shorthand);
+    // 简写 → 找对应所有长写（如 margin → margin-top 等）
+    const longhands = CSS_SHORTHAND_GROUPS[kebabKey] ?? CSS_SHORTHAND_GROUPS[key];
+    if (longhands) longhands.forEach(lh => toDelete.add(lh));
+  });
+  return Array.from(toDelete);
+}
+
 const genStyleValue = (params) => {
   const { comId } = params;
   return {
     set(params, value) {
+      const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
       // const selector = params.selector;
@@ -68,6 +102,11 @@ const genStyleValue = (params) => {
       Object.entries(value).forEach(([key, value]) => {
         cssObj[cssObjKey][key] = value;
       })
+
+      if (deletions && deletions.length > 0) {
+        const expandedDeletions = expandDeletions(deletions);
+        expandedDeletions.forEach(key => delete cssObj[cssObjKey][key])
+      }
   
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr })
