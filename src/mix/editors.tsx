@@ -5,8 +5,10 @@ import context from "./context";
 import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from "./knowledges";
 import { parseLess, stringifyLess } from "./utils/transform/less";
 import { deepClone } from "./utils/normal";
+import { convertHyphenToCamel } from "../utils/string";
 import { MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP } from "./context/constants";
 import "../utils/antd";
+import "./utils/dom-to-json";
 
 function evalConfigJsCompiled(code: string) {
   const evalStr = `
@@ -456,11 +458,172 @@ export default function (props: Props, actions: Actions) {
   //   })
   // }
 
+  const exportCategoryConfig = {
+    title: "导出",
+    items: [
+      {
+        title: "导出到 Figma",
+        type: "Button",
+        value: {
+          set(params: { id?: string; focusArea?: any; data?: any }, value: any) {
+            const comId = params?.id;
+            const fn = (window as any).comToMybricksJson;
+            if (typeof fn !== 'function') {
+              console.warn("[导出] window.comToMybricksJson 未定义");
+              return;
+            }
+            const result = fn(comId);
+            const jsonStr = typeof result === 'object' && result !== null
+              ? JSON.stringify(result, null, 2)
+              : String(result);
+            navigator.clipboard.writeText(jsonStr).then(
+              () => console.log("[导出] 已复制到剪切板"),
+              (err) => console.error("[导出] 复制失败", err)
+            );
+          }
+        }
+      },
+      {
+        title: "导出为代码",
+        type: "Button",
+        value: {
+          set(_params: { id?: string; focusArea?: any; data?: any }, _value: any) {
+            // TODO: 代码导出逻辑
+          }
+        }
+      }
+    ]
+  };
+
+  const importCategoryConfig = {
+    title: "导入",
+    items: [
+      {
+        title: "从 Figma 同步",
+        type: "Button",
+        value: {
+          set(params: { id?: string; focusArea?: any; data?: any }, value: any) {
+            const comId = params?.id;
+            if (!comId) {
+              console.warn("[从 Figma 同步] 无组件 ID");
+              return;
+            }
+            navigator.clipboard.readText().then(
+              (text) => {
+                if (!text || String(text).trim() === '') {
+                  alert('剪切板无内容，请先从 Figma 复制后再同步');
+                  return;
+                }
+                try {
+                  const parsed = JSON.parse(text);
+                  const figmaItems: FigmaImportItem[] = Array.isArray(parsed) ? parsed : [parsed];
+                  syncStylesFromFigmaJson(comId, figmaItems);
+                } catch (e) {
+                  console.error("[从 Figma 同步] 剪切板内容不是合法 JSON", e);
+                  alert('剪切板内容不是合法 JSON，请确认已从 Figma 正确复制');
+                }
+              },
+              (err) => {
+                console.error("[从 Figma 同步] 读取剪切板失败", err);
+                alert('读取剪切板失败，请检查浏览器权限或剪切板是否有内容');
+              }
+            );
+          }
+        }
+      }
+    ]
+  };
+
+  /** Figma 导入项：selectors 与 parseLess 的 key 一致，value 为样式键值 */
+  type FigmaImportItem = { selectors: string[]; value: Record<string, string> };
+
+  /** 去掉 Figma 选择器前可能带的组件 ID classname，便于与组件 less 的 key 匹配 */
+  const normalizeFigmaSelector = (selector: string, comId: string): string => {
+    if (!comId || !selector.startsWith('.')) return selector;
+    const escaped = comId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^\\.${escaped}(\\.|\\s+)?`);
+    return selector.replace(re, (_, suffix) => (suffix === '.' ? '.' : '')).trim();
+  };
+
+  /** 从 Figma JSON（含 selectors）同步样式到组件 style.less，只同步有差异的部分 */
+  const syncStylesFromFigmaJson = (comId: string, figmaItems: FigmaImportItem[]) => {
+    const aiComParams = context.getAiComParams(comId);
+    if (!aiComParams?.data?.styleSource) {
+      console.warn("[从 Figma 同步] 组件无 styleSource，跳过同步");
+      return;
+    }
+    const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
+    const componentSelectors = Object.keys(cssObj);
+    let hasChange = false;
+    const matched: string[] = [];
+    const skipped: string[] = [];
+    const diffs: { selector: string; key: string; from: string; to: string }[] = [];
+
+    console.log("[从 Figma 同步] 收到 Figma 条目数:", figmaItems.length, "组件现有选择器数:", componentSelectors.length);
+
+    figmaItems.forEach((item) => {
+      const { selectors, value: styles } = item;
+      if (!Array.isArray(selectors) || selectors.length === 0 || !styles || typeof styles !== 'object') {
+        skipped.push(String(selectors?.[0] ?? '(无 selectors)'));
+        return;
+      }
+      const rawSelector = selectors[0];
+      const selector = normalizeFigmaSelector(rawSelector, comId);
+      if (!selector) {
+        skipped.push(rawSelector);
+        return;
+      }
+      const cssObjKey = Object.keys(cssObj).find(
+        (key) => key === selector || key.endsWith(' ' + selector)
+      ) ?? null;
+      if (!cssObjKey || !cssObj[cssObjKey]) {
+        skipped.push(selector);
+        return;
+      }
+      matched.push(cssObjKey);
+      Object.entries(styles).forEach(([cssKey, figmaValue]) => {
+        const camelKey = convertHyphenToCamel(cssKey);
+        const currentValue = cssObj[cssObjKey][camelKey];
+        if (currentValue !== figmaValue) {
+          diffs.push({ selector: cssObjKey, key: camelKey, from: String(currentValue ?? ''), to: figmaValue });
+          cssObj[cssObjKey][camelKey] = figmaValue;
+          hasChange = true;
+        }
+      });
+    });
+
+    if (skipped.length > 0) {
+      console.log("[从 Figma 同步] 未命中的选择器（组件 less 中不存在）:", skipped.length, "个", skipped.slice(0, 20), skipped.length > 20 ? "..." : "");
+    }
+    console.log("[从 Figma 同步] 命中的选择器:", matched.length, "个", matched.slice(0, 30), matched.length > 30 ? "..." : "");
+    if (diffs.length > 0) {
+      console.log("[从 Figma 同步] 有差异并已同步的样式:", diffs.length, "条");
+      diffs.forEach((d) => console.log("  -", d.selector, d.key, d.from, "->", d.to));
+    }
+
+    if (hasChange) {
+      const cssStr = stringifyLess(cssObj);
+      context.updateFile(comId, { fileName: 'style.less', content: cssStr });
+      console.log("[从 Figma 同步] 已写入 style.less，共更新", diffs.length, "条样式");
+    } else {
+      console.log("[从 Figma 同步] 无差异，未写入文件");
+    }
+  };
+
+  if (!focusAreaConfigs[':root']) {
+    focusAreaConfigs[':root'] = {
+      items: [exportCategoryConfig, importCategoryConfig]
+    };
+  } else {
+    focusAreaConfigs[':root'].items.push(exportCategoryConfig, importCategoryConfig);
+  }
+
   context.setAiCom(props.id, { params: props, actions });
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
 
   return {
+    ...focusAreaConfigs,
     /** 可调整宽高 */
     '@resize': {
       options: ['width', 'height'],
