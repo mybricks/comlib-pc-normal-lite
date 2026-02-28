@@ -16,6 +16,14 @@ export function isImportSpecifier(node, opts?) {
   return opts == null || shallowEqual(node, opts);
 }
 
+export function isImportDefaultSpecifier(node, opts?) {
+  if (!node) return false;
+
+  if (node.type !== "ImportDefaultSpecifier") return false;
+
+  return opts == null || shallowEqual(node, opts);
+}
+
 
 export function isMemberExpression(node, opts?) {
   if (!node) return false;

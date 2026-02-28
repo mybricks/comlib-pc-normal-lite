@@ -146,8 +146,13 @@ export default function ({ constituency }) {
             const comRef = getComRefForJSXPath(path, componentJsdocCache);
             if (comRef) {
               zoneType = "com";
-              pushDataAttr(node.openingElement.attributes, "data-jsdoc", JSON.stringify(comRef.jsdoc));
+              pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
               pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
+
+              const events = comRef.jsdoc?.events;
+              if (events) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
+              }
             }
 
             pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
