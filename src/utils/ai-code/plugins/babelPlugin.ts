@@ -62,7 +62,7 @@ export default function ({ constituency }) {
           try {
             const { node } = path;
             node.specifiers.forEach((specifier) => {
-              if (types.isImportSpecifier(specifier)) {
+              if (types.isImportSpecifier(specifier) || types.isImportDefaultSpecifier(specifier)) {
                 importRelyMap.set(specifier.local.name, node.source.value);
               }
             })
