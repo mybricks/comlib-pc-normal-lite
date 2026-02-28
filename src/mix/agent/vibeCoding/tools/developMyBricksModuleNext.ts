@@ -1,4 +1,5 @@
 import readRelated from "./readRelated";
+import type { ReplaceResultItem } from "../../utils/editReplace";
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
@@ -17,10 +18,54 @@ type RxFiles = Record<string, RxFile | RxFile[]>;
 
 export type ComponentFileItem = { fileName: string; content: string; isComplete?: boolean };
 
+/** 单个文件的更新结果（与 updateComponentFiles 返回结构一致） */
+export type FileUpdateResult = {
+  fileName: string;
+  dataKey: string;
+  fullReplace: boolean;
+  replaceCount: number;
+  results: ReplaceResultItem[];
+  success: boolean;
+};
+
+/** updateComponentFiles 的返回值 */
+export type UpdateComponentFilesResult = {
+  comId: string;
+  fileResults: FileUpdateResult[];
+  success: boolean;
+};
+
+/** 将更新结果格式化为给用户/模型展示的文案 */
+function formatUpdateResult(result: UpdateComponentFilesResult): string {
+  if (result.success) {
+    const lines: string[] = [];
+    for (const r of result.fileResults) {
+      const total = r.results.length;
+      r.results.forEach((_, idx) => {
+        lines.push(`${r.fileName} 第 ${idx + 1}/${total} 步：成功`);
+      });
+    }
+    return `\n准备执行修改\n\n${lines.join('\n')}`;
+  }
+  const failed = result.fileResults.filter((r) => !r.success);
+  const lines: string[] = [];
+  for (const r of failed) {
+    const total = r.results.length;
+    r.results.forEach((item, idx) => {
+      const msg = item.ok ? '成功' : (item.message ?? item.error ?? '未知错误');
+      lines.push(`${r.fileName} 第 ${idx + 1}/${total} 步：${msg}`);
+    });
+  }
+  return `\n准备执行修改\n\n${lines.join('\n')}\n\n所有操作已回退，请重新生成`;
+}
+
+/** execute 返回值：直接返回 UpdateComponentFilesResult，由本工具根据 success 格式化并决定是否抛错 */
+export type ExecuteResult = void | UpdateComponentFilesResult;
+
 interface Config {
   hasAttachments?: boolean;
-  /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles；可返回 string 作为工具展示文案 */
-  execute?: (params: { files: Array<{ fileName: string; content: string }> }) => void | string;
+  /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles；直接返回结果，本工具统一格式化与抛错 */
+  execute?: (params: { files: Array<{ fileName: string; content: string }> }) => ExecuteResult;
   focusComId?: string;
 }
 
@@ -648,7 +693,7 @@ export default function developMyBricksModule(config: Config) {
 </examples>
 `
     },
-    execute(params) {
+    execute(params, context) {
       const files = normalizeFiles(params?.files);
       const actionsFile = files.find((f) => f.fileName === 'action.json');
       let actionReason = '';
@@ -670,8 +715,9 @@ export default function developMyBricksModule(config: Config) {
       // 这个才是会被记录到数据库的，stream只是展示作用，execute在 stream 执行之后执行，所以可以获取到
       return excuteMessage ?? '已处理';
     },
-    stream(params: any) {
+    stream(params: any, context) {
       const { status, replaceContent } = params;
+      const { ToolRetryError } = context ?? {};
       const files = normalizeFiles(params?.files);
       const raw = replaceContent ?? '';
       const actionsFile = files.find((f) => f.fileName === 'action.json');
@@ -691,7 +737,18 @@ export default function developMyBricksModule(config: Config) {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
-          const msg = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const result = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const msg = result ? formatUpdateResult(result) : '';
+
+          if (result && !result.success) {
+            const errMsg = msg || '执行失败';
+            throw ToolRetryError?.({
+              llmContent:  errMsg + '\n\n 下面是上一轮你的输出 \n\n' + params.content,
+              displayContent: '执行失败，当前操作已回滚，请重试',
+              autoRetry: true,
+              maxRetries: 1
+            });
+          }
           if (msg) {
             excuteMessage = msg;
           }

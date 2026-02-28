@@ -7,8 +7,27 @@
  * - **新增**：before 为空 且 after 非空 → 整段内容视为由 after 覆盖（常用于新建或整文件替换）。
  * - **删除**：before 非空 且 after 为空 → 在内容中查找与 before 匹配的片段并删除。
  *
- * 匹配采用多策略链（精确 → 行 trim → 首尾行锚点 → 空格归一化），无三方依赖；
- * 可通过 registerReplacer 注册依赖三方库的扩展策略。
+ * ## 匹配策略（多策略链，按顺序尝试，命中即替换）
+ *
+ * 内置策略无三方依赖；可通过 registerReplacer 注册扩展策略（如模糊匹配），在内置之后尝试。
+ *
+ * 1. **exact**（精确）
+ *    - 用 content.includes(find) 判断 find 是否作为子串出现。
+ *    - 要求字节级完全一致（空格、缩进、换行均不可差）。
+ *
+ * 2. **lineTrimmed**（行 trim）
+ *    - 将 content 与 find 按行切分，逐行比较 trim 后的结果。
+ *    - 只要每行去掉首尾空白后相等即视为匹配，行内缩进、行尾空格可不同。
+ *
+ * 3. **blockAnchor**（首尾行锚点）— 暂不启用
+ *    - 要求 find 至少 3 行。仅用「首行 trim」和「末行 trim」在 content 中定位候选块：
+ *      即 content 中「首行 trim 相等且末行 trim 相等」的连续行区间（中间行不要求一致）。
+ *    - 若有多个候选，用中间行与 find 中间行的 Levenshtein 相似度选最佳；单候选时相似度阈值 0，多候选时阈值 0.3。
+ *    - 因单候选时不校验中间内容，易误匹配；当前已注释，不参与策略链。
+ *
+ * 4. **whitespaceNormalized**（空格归一化）
+ *    - 将整段或整行中的连续空白压成单个空格再 trim，再与 find 做同样归一化后比较。
+ *    - 支持单行或多行块；对缩进、换行、多余空格不敏感。
  */
 
 /** 返回在 content 中匹配 find 的片段列表（每个元素为 content 中的一段子串） */
@@ -165,7 +184,8 @@ function whitespaceNormalizedReplacer(content: string, find: string): string[] {
 const BUILTIN_REPLACERS: Array<{ name: string; fn: Replacer }> = [
   { name: 'exact', fn: simpleReplacer },
   { name: 'lineTrimmed', fn: lineTrimmedReplacer },
-  { name: 'blockAnchor', fn: blockAnchorReplacer },
+  // blockAnchor 暂不启用：单候选时几乎不校验中间内容，易误匹配
+  // { name: 'blockAnchor', fn: blockAnchorReplacer },
   { name: 'whitespaceNormalized', fn: whitespaceNormalizedReplacer },
 ];
 
@@ -209,7 +229,8 @@ export function replaceFile(content: string, before: string, after: string): Rep
   let foundMultiple = false;
   for (const { name, fn } of getAllReplacers()) {
     const matches = fn(content, before);
-    for (const search of matches) {
+    for (let i = 0; i < matches.length; i++) {
+      const search = matches[i];
       const index = content.indexOf(search);
       if (index === -1) continue;
       const lastIndex = content.lastIndexOf(search);
@@ -227,13 +248,13 @@ export function replaceFile(content: string, before: string, after: string): Rep
     return {
       ok: false,
       error: 'MULTIPLE_MATCH',
-      message: 'before 在文件中出现多次，请提供更多上下文使匹配唯一',
+      message: '原始片段在文件中出现多次，请提供更多上下文使匹配唯一',
     };
   }
   return {
     ok: false,
     error: 'NOT_FOUND',
-    message: '未在文件中找到 before 片段，请确认与当前文件内容一致（含空格、缩进、换行）',
+    message: '未在文件中找到原始片段，请确认与当前文件内容一致',
   };
 }
 
@@ -264,7 +285,8 @@ export function multiReplaceFile(
   const results: ReplaceResultItem[] = [];
   let current = content;
 
-  for (const { before, after } of operations) {
+  for (let opIndex = 0; opIndex < operations.length; opIndex++) {
+    const { before, after } = operations[opIndex];
     const result = replaceFile(current, before, after);
     results.push({
       ok: result.ok,

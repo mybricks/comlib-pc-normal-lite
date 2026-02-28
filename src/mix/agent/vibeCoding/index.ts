@@ -4,30 +4,21 @@ import developModule from "./tools/developMyBricksModuleNext";
 import readRelated from "./tools/readRelated";
 import answer from "./tools/answer";
 import { createProject, buildProjectJson } from "./project";
-import { multiReplaceFile, type ReplaceResultItem } from "../utils/editReplace";
+import { multiReplaceFile } from "../utils/editReplace";
+import type { ReplaceResultItem } from "../utils/editReplace";
+import {
+  type ComponentFileItem,
+  type FileUpdateResult,
+  type UpdateComponentFilesResult,
+} from "./tools/developMyBricksModuleNext";
 
 /** 单文件项：fileName + content */
-export type ComponentFileItem = { fileName: string; content: string };
+export type { ComponentFileItem };
 
 /** 单次 before→after 替换结果（与 utils/editReplace 的 ReplaceResultItem 一致） */
 export type { ReplaceResultItem };
 
-/** 单个文件的更新结果 */
-export type FileUpdateResult = {
-  fileName: string;
-  dataKey: string;
-  fullReplace: boolean;
-  replaceCount: number;
-  results: ReplaceResultItem[];
-  success: boolean;
-};
-
-/** updateComponentFiles 的返回值 */
-export type UpdateComponentFilesResult = {
-  comId: string;
-  fileResults: FileUpdateResult[];
-  success: boolean;
-};
+export type { FileUpdateResult, UpdateComponentFilesResult };
 
 /**
  * 将指定组件的若干源文件（model.json / runtime.jsx / style.less / config.js / com.json）
@@ -113,23 +104,6 @@ function updateComponentFiles(
     fileResults,
     success,
   };
-}
-
-/** 将更新结果格式化为给用户/模型展示的文案 */
-function formatUpdateResult(result: UpdateComponentFilesResult): string {
-  if (result.success) {
-    const parts = result.fileResults.map((r) => {
-      if (r.fullReplace) return `${r.fileName}（整文件已更新）`;
-      return `${r.fileName}`;
-    });
-    return `修改完成。已更新：${parts.join('；')}`;
-  }
-  const failed = result.fileResults.filter((r) => !r.success);
-  const details = failed.map((r) => {
-    const errs = r.results.filter((x) => !x.ok).map((x) => x.message ?? x.error ?? '未知错误');
-    return `${r.fileName}: ${errs.join('；')}`;
-  });
-  return `部分更新失败：${details.join('。')}`;
 }
 
 /**
@@ -503,8 +477,7 @@ ${text}
             developModule({
               hasAttachments,
               execute(p) {
-                const result = updateComponentFiles(p.files ?? [], focus.comId, context);
-                return formatUpdateResult(result);
+                return updateComponentFiles(p.files ?? [], focus.comId, context);
               },
             }),
             answer()
