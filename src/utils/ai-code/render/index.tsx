@@ -88,6 +88,10 @@ const PRIVATE_DEPENDENCIES = {
   'style.less': {
     __esModule: true,
     default: new Proxy({}, { get(target, key) { return key } })
+  },
+  './style.less': {
+    __esModule: true,
+    default: new Proxy({}, { get(target, key) { return key } })
   }
 }
 
