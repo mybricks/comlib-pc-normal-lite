@@ -44,10 +44,10 @@ interface Props {
 }
 
 interface Actions {
+  getFocusArea
   lock
-  unlock
   notifyChanged
-  updateCSS
+  unlock
 }
 
 const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
