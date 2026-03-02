@@ -8,7 +8,7 @@ import zhCN from 'antd/locale/zh_CN'
 
 
 export default genAIRuntime({
-  title: 'AI组件',
+  title: 'AI',
   examples: [
     '创建一个查询商品分类的表单',
     '一个用来表示员工所在地的表格',

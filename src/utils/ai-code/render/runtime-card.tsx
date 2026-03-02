@@ -32,7 +32,7 @@ const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = 
       {/*<div className={css.title}>{title}</div>*/}
       <div className={css.content}>
         欢迎使用 {orgName} {title}，
-        <strong>请和我对话完成组件开发吧</strong>
+        <strong>请点击右下角 AI 按钮开始对话</strong>
       </div>
       <p>例如：</p>
       {examples.map((example) => {

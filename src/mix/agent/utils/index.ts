@@ -8,6 +8,12 @@ export {
   type Replacer,
 } from "./editReplace";
 
+export {
+  extractDomSummary,
+  getListFocusIndex,
+  buildFocusInfo,
+} from "./focusDomSummary";
+
 export class PromiseStack {
   stack: any[] = [];
   currentPromise: any = null;

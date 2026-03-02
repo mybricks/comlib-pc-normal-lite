@@ -220,7 +220,16 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
 
 
   if (typeof ReactNode !== 'function') {
-    return placeholder
+    const CustomView = typeof window !== 'undefined' && (window as any)._renderCompView_;
+    if (CustomView) {
+      if (typeof CustomView === 'function') {
+        return <CustomView />;
+      }
+      if (React.isValidElement(CustomView)) {
+        return CustomView;
+      }
+    }
+    return placeholder;
   }
 
   return <ReactNode {...renderProps} />

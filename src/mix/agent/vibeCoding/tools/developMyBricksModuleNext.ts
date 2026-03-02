@@ -174,25 +174,6 @@ export default function developMyBricksModule(config: Config) {
   你的主要任务是设计开发MyBricks模块（以下简称模块），同时，你也可以根据用户的需求，对模块进行修改、优化、升级等。
 </你的角色与任务>
 
-<你的输出逻辑>
-如果当前代码信息不足以完成用户需求，或者如果要修改的代码包含折叠代码，请返回
-\`\`\`json file="action.json"
-{
-  "action": "read",
-  "reason": "当前我需要更多的代码信息来完成用户需求" // 具体原因你来体现
-}
-\`\`\`
-
-如果由于用户需求不明确或者信息不足，请返回
-\`\`\`json file="action.json"
-{
-  "action": "abort",
-  "reason": "你能够提供下你说的接口具体格式是什么吗？" // 具体原因你来体现
-}
-\`\`\`
-如果当前代码信息和用户需求都足够明确，参考下方内容对模块进行开发。
-<你的输出逻辑>
-
 <MyBricks模块定义及文件说明>
   模块的【源代码】由 runtime.jsx、style.less 两个文件构成：
 
@@ -713,7 +694,7 @@ export default function developMyBricksModule(config: Config) {
         return { displayContent: actionReason, llmContent: actionReason };
       }
       // 这个才是会被记录到数据库的，stream只是展示作用，execute在 stream 执行之后执行，所以可以获取到
-      return excuteMessage ?? '已处理';
+      return `${params.content}\n\n${excuteMessage}`;
     },
     stream(params: any, context) {
       const { status, replaceContent } = params;

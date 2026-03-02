@@ -3,6 +3,11 @@ declare module '*.less' {
   export = resource;
 }
 
+declare module '*.md' {
+  const content: string;
+  export default content;
+}
+
 declare module '*.svg' {
   const resource: any;
   export = resource;

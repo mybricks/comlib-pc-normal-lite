@@ -2,9 +2,14 @@ import classLibrarySelection from "./tools/loadExtraComponentDocs"
 import developMyBricksModule from "./tools/developMyBricksModule";
 import developModule from "./tools/developMyBricksModuleNext";
 import readRelated from "./tools/readRelated";
+import explore from "./tools/explore";
+import read from "./tools/read";
+import grep from "./tools/grep";
+import glob from "./tools/glob";
 import answer from "./tools/answer";
 import { createProject, buildProjectJson } from "./project";
-import { multiReplaceFile } from "../utils/editReplace";
+import { CodeBase } from "./codeBase";
+import { multiReplaceFile, buildFocusInfo } from "../utils";
 import type { ReplaceResultItem } from "../utils/editReplace";
 import {
   type ComponentFileItem,
@@ -339,20 +344,8 @@ export default function ({ context }) {
       let focusInfo = "";
 
       if (focusArea) {
-        const cloneEl = focusArea.elemenet.cloneNode(true);
-        cloneEl.innerHTML = '';
-        cloneEl.innerText = focusArea.elemenet.innerText;
-        const loc = JSON.parse(focusArea.elemenet.closest(`[data-loc]`).dataset.loc);
-        const runtimeJsxSource = decodeURIComponent(aiComParams.data.runtimeJsxSource);
-
-        comName = focusArea.elemenet.closest(`[data-com-name]`).dataset.comName;
-
-        focusInfo = `
-<选区信息>
-HTML Element: ${cloneEl.outerHTML}
-Component Name: ${comName}
-</选区信息>
-        `
+        comName = focusArea.elemenet.closest(`[data-com-name]`)?.dataset?.comName ?? '';
+        focusInfo = buildFocusInfo(focusArea.elemenet);
       }
       // 创建 project 实例（projectJson 由 runtime/style 动态生成，失败时回退 defaultRoot）
       const runtimeContent = (() => {
@@ -462,17 +455,19 @@ ${text}
         },
         };
 
+        const formatUserMessage = (text: string) => {
+          return `
+${focusInfo}
+<用户消息>
+${text}
+</用户消息>
+`;
+        };
+
         // agent模式配置
         const AgentModeConfig = {
           ...baseConfig,
           tools: [
-            // classLibrarySelection({
-            //   librarySummaryDoc: workspace.getAvailableLibraryInfo() || '',
-            //   fileFormat: context.plugins.aiService.fileFormat,
-            //   onOpenLibraryDoc: (libs) => {
-            //     workspace.openLibraryDoc(libs)
-            //   }
-            // }),
             readRelated({ project }),
             developModule({
               hasAttachments,
@@ -482,21 +477,43 @@ ${text}
             }),
             answer()
           ],
-          formatUserMessage: (text: string) => {
-            return `
-<注意>
-1. 如果只是为了了解组件的现状，不需要通过历史记录，会在后续执行工具中提供
-${focusInfo ? "2. 选区消息是当前用户聚焦的组件，仅用于参考。" : ""}
-</注意>
-${focusInfo}
-<用户消息>
-${text}
-</用户消息>
-`
-          },
+          historyMessageMode: "expanded",
+          formatUserMessage,
         };
 
+        // ReAct 模式
+        // const codeBase = new CodeBase();
+        // codeBase.addFile('/runtime.jsx', () => runtimeContent);
+        // codeBase.addFile('/style.less', () => styleContent);
+        // const ReActModeConfig = {
+        //   ...baseConfig,
+        //   presetMessages: async () => {
+        //     const content = await Promise.resolve(codeBase.exportToMessage());
+        //     return [
+        //       { role: 'user' as const, content },
+        //       { role: 'assistant' as const, content: '感谢您提供的项目信息，我会参考这些信息进行开发。' },
+        //     ];
+        //   },
+        //   maxAppendDepth: 99,
+        //   planList: [`${explore.name}`],
+        //   tools: [
+        //     explore(),
+        //     read({ codeBase }),
+        //     grep({ codeBase }),
+        //     glob({ codeBase }),
+        //     developModule({
+        //       hasAttachments,
+        //       execute(p) {
+        //         return updateComponentFiles(p.files ?? [], focus.comId, context);
+        //       },
+        //     }),
+        //   ],
+        //   formatUserMessage,
+        // };
+
         const config = asSubAgentTool ? AsToolModeConfig : AgentModeConfig;
+        // 如需 ReAct 模式
+        // const config = asSubAgentTool ? AsToolModeConfig : ReActModeConfig;
         rxai.requestAI(config);
       });
     },
