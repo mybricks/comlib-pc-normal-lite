@@ -92,7 +92,7 @@ const SYMBOL_GETSNAPSHOT = Symbol("getSnapshot");
 
 class DefaultStore {}
 
-const genListenersStore = (Store) => {
+const genListenersStore = (Store, { mode}) => {
   const listenersMap = new Map();
   let store;
   try {
@@ -123,6 +123,10 @@ const genListenersStore = (Store) => {
       const value = store[key];
 
       if (typeof value === 'function') {
+        if (mode === 'design') {
+          // 设计态，不执行函数，返回空函数
+          return () => {};
+        }
         return value.bind(new Proxy({}, {
           get(_, key) {
             return store[key];
@@ -326,7 +330,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
 
         const Com: any = runRender(oriCode, {
           'react': React,
-          'mybricks': mybricks({ env, logger, store: genListenersStore(storeCode) }),
+          'mybricks': mybricks({ env, logger, store: genListenersStore(storeCode, { mode: env.runtime ? 'runtime' : 'design' }) }),
           'dayjs': dayjs,
           ...PRIVATE_DEPENDENCIES,
           ...dependencies,
