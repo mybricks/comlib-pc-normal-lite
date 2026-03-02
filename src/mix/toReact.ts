@@ -18,6 +18,8 @@ interface ToReactParams {
     runtimeJsxSource?: string;
     styleCompiled?: string;
     styleSource?: string;
+    storeJsSource?: string;
+    storeJsCompiled?: string;
     _cssErr?: string;
     _jsxErr?: string;
   };

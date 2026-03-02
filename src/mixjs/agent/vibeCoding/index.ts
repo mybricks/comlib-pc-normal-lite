@@ -27,6 +27,9 @@ function updateComponentFiles(files: Array<{ fileName: string; content: string }
       fileName: 'config.js', dataKey: 'configJsSource'
     },
     {
+      fileName: 'store.js', dataKey: 'storeJsSource'
+    },
+    {
       fileName: 'com.json', dataKey: 'componentConfig'
     },
   ];

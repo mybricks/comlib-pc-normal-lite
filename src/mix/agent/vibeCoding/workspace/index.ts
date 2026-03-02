@@ -212,6 +212,16 @@ export class Workspace {
             }
             return configCode
           }
+          case 'store.js': {
+            let storeCode = data.storeJsSource ?? ''
+            try {
+              storeCode = decodeURIComponent(storeCode)
+            } catch (error) {
+              storeCode = ''
+              console.error('[Workspace.readFile] 获取store.js失败:', error);
+            }
+            return storeCode
+          }
           case 'com.json': {
             let componentConfigCode = data.componentConfig ?? ''
             try {

@@ -5,7 +5,9 @@ class Context {
   aiComParamsMap: Record<string, any> = {};
 
   setAiCom(id: string, { params, actions }) {
-    this.aiComParamsMap[id] = { aiComParams: params, actions };
+    if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
+      this.aiComParamsMap[id] = { aiComParams: params, actions };
+    }
   }
 
   getAiCom(id: string) {
@@ -49,6 +51,10 @@ class Context {
       case "config.js":
         aiComParams.data.configJsCompiled = encodeURIComponent(content);
         aiComParams.data.configJsSource = encodeURIComponent(content);
+        break;
+      case "store.js":
+        aiComParams.data.storeJsCompiled = encodeURIComponent(content);
+        aiComParams.data.storeJsSource = encodeURIComponent(content);
         break;
       case "com.json":
         aiComParams.data.componentConfig = encodeURIComponent(content);

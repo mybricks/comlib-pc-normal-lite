@@ -44,10 +44,10 @@ interface Props {
 }
 
 interface Actions {
+  getFocusArea
   lock
-  unlock
   notifyChanged
-  updateCSS
+  unlock
 }
 
 const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
@@ -89,23 +89,43 @@ const genStyleValue = (params) => {
     set(params, value) {
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
+      // 根据 AI 组件 id 拿到整份样式表
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
-      // const selector = params.selector;
-      const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
-      const selector = match?.[1] || params.selector;
-      const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) || selector;
-  
-      if (!cssObj[cssObjKey]) {
-        cssObj[cssObjKey] = {};
+
+      // 引擎传入的 params.selector 可能是 [data-zone-selector=['.heroBanner']] 这种属性选择器格式，
+      // 而 cssObj 的 key 是类名如 .heroBanner，需抽出括号内的选择器才能正确匹配
+      // const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
+      // const selector = match?.[1] ?? params.selector;
+      // // parseLess 的 key 是完整选择器路径（如 .container .mainContent .heroBanner），需用 endsWith 匹配当前 zone 的 selector，并用完整 key 读写
+      // const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
+      // console.log("selector",selector,"cssObjKey",cssObjKey)
+
+      //这里尝试直接用params.selector作为完整的key
+      const fullSelector = params.selector;
+      const lastSelector = fullSelector.trim().split(/\s+/).at(-1); 
+      let targetKey = '';
+
+      if (cssObj[lastSelector] !== undefined) {
+        // 顶层直接存在 .bannerContent，就用它
+        targetKey = lastSelector;
+      } else {
+        // 顶层没有，则回退到用完整路径（或新建）
+        targetKey = fullSelector;
       }
+
+      // console.log("fullSelector",fullSelector,"lastSelector",lastSelector,"targetKey",targetKey,"cssObj[targetKey]",cssObj[lastSelector])
+
+      // if (!cssObj[targetKey]) {
+      //   cssObj[targetKey] = {};
+      // }
   
       Object.entries(value).forEach(([key, value]) => {
-        cssObj[cssObjKey][key] = value;
+        cssObj[targetKey][key] = value;
       })
 
       if (deletions && deletions.length > 0) {
         const expandedDeletions = expandDeletions(deletions);
-        expandedDeletions.forEach(key => delete cssObj[cssObjKey][key])
+        expandedDeletions.forEach(key => delete cssObj[targetKey][key])
       }
   
       const cssStr = stringifyLess(cssObj);
@@ -129,9 +149,10 @@ const genResizer = () => {
           const comId = params.id;
           const aiComParams = context.getAiComParams(comId);
           cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
+          // 同上：从 [data-zone-selector=['.xxx']] 中抽出 .xxx；cssObj 的 key 为完整选择器路径，用 endsWith 匹配
           const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
-          const selector = match?.[1] || params.selector;
-          cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) || selector;
+          const selector = match?.[1] ?? params.selector;
+          cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
       
           if (!cssObj[cssObjKey]) {
             cssObj[cssObjKey] = {};

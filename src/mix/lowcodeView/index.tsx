@@ -14,6 +14,7 @@ const FILES = [
   // "model.json",
   "runtime.jsx",
   "style.less",
+  "store.js",
   // "config.js",
   // "com.json"
 ] as const;
@@ -25,7 +26,8 @@ const FILES_MAP: Record<string, string> = {
   "style.less": "styleSource",
   "runtime.jsx": "runtimeJsxSource",
   "config.js": "configJsSource",
-  "com.json": "componentConfig"
+  "com.json": "componentConfig",
+  "store.js": "storeJsSource"
 };
 
 export default function LowcodeView(params: Params) {
@@ -34,7 +36,7 @@ export default function LowcodeView(params: Params) {
 
   const coderOptions = useMemo(() => {
     const path = `file:///${"组件id"}/${selectedFileName}`;
-    if (selectedFileName === "runtime.jsx") {
+    if (selectedFileName === "runtime.jsx" || selectedFileName === "store.js") {
       return {
         path,
         language: 'typescript',
@@ -140,6 +142,10 @@ export default function LowcodeView(params: Params) {
   // useEffect(() => {
   //   clearFileIfDataChanged("com.json");
   // }, [params.data?.componentConfig]);
+
+  useEffect(() => {
+    clearFileIfDataChanged("store.js");
+  }, [params.data?.storeJsSource]);
 
   useEffect(() => {
     return ()=>{

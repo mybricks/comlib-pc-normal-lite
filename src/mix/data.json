@@ -6,5 +6,7 @@
   "runtimeJsxSource": "",
   "configJsCompiled": "",
   "configJsSource": "",
-  "componentConfig": "{}"
+  "componentConfig": "{}",
+  "storeJsSource": "",
+  "storeJsCompiled": ""
 }

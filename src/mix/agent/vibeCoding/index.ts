@@ -44,6 +44,7 @@ function updateComponentFiles(
     { fileName: 'model.json', dataKey: 'modelConfig' },
     { fileName: 'style.less', dataKey: 'styleSource' },
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
+    { fileName: 'store.js', dataKey: 'storeJsSource' },
   ];
 
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
