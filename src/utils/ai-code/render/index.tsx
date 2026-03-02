@@ -70,6 +70,9 @@ interface AIJsxProps {
 }
 
 function evalJSCompiled(code: string) {
+  if (!code) {
+    return null;
+  }
   const evalStr = `
     let result;
     ${code.replace('export default', 'result =')};
