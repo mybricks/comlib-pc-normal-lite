@@ -178,6 +178,7 @@ export default function developMyBricksModule(config: Config) {
   模块的【源代码】由 runtime.jsx、style.less 两个文件构成：
 
   1. runtime.jsx文件
+  <代码示例>
   \`\`\`jsx file="runtime.jsx"
   import { comRef } from "mybricks";
   import css from 'style.less'
@@ -192,15 +193,14 @@ export default function developMyBricksModule(config: Config) {
 
   /**
    * @summary 跳转登录页按钮
-   * @event {loginBtn} 跳转登录 - flowchart LR; B[跳转登录页]
+   * @event {redirectToLogin} 跳转登录 - flowchart LR; B[跳转登录页]
    */
-  const LoginButton = comRef(({ logger }) => {
+  const LoginButton = comRef(({ store }) => {
     return (
       <button
-        /** onClick:loginBtn */
+        /** onClick:redirectToLogin */
         onClick={() => {
-          logger.info("跳转登录页")
-          window.open('https://login.example.com')
+          store.redirectToLogin();
         }}
       >登录</button>
     )
@@ -212,61 +212,94 @@ export default function developMyBricksModule(config: Config) {
   export default comRef(() => {
     return (
       <div className={css.container}>
-        <Title title="Hello, World!" />
+        <Title title="Hello" />
+        <Title title="World" />
         <LoginButton />
       </div>
     )
   })
   \`\`\`
+  </代码示例>
 
-  comRef与JSDoc说明：
-  1. comRef是MyBricks提供的高阶函数，用于创建一个组件，透传组件的Props同时扩展以下*保留字段*：
-    - _env，环境变量
-      - _env.mode: 运行环境，design|runtime
-    - _store: 全局状态管理
-    - logger，输出日志
-      - logger.info(message)：输出日志信息
+  <编写规范>
+  1. 组件 props 禁止传递*保留字段*：_env，store，logger；
+  2. 拆分的各区块应从自身内部 store 读取所需数据，不要由父组件通过 props 把 store 的字段再传一遍；仅当区块是可复用单元（如 列表单项的单条数据）时才通过 props 传参；
+  3. 所有组件都需要使用 comRef 包装；
+  4. 遵循下文 <区块拆分原则与规范/>；
+  5. 禁止编写未实现的事件函数；
+  </编写规范>
 
-  2. comRef包裹的组件必须提供JSDoc，格式如下：
+  <comRef说明>
+    comRef是MyBricks提供的高阶函数，用于创建一个组件。
+    1. 该组件默认接收以下*保留字段*：
+      1. _env，环境变量
+        - _env.mode: 运行环境，design|runtime
+      2. store，全局状态管理
+    2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
+  </comRef说明>
+
+  <JSDoc说明>
+    所有comRef创建的组件必须提供JSDoc。
+    <代码示例>
     \`\`\`jsdoc
     /**
-     * @summary 组件摘要
+     * @summary 组件详细摘要
      * @prop {类型} 接收参数的属性名 - 属性描述
      * @event {事件key（与触发元素上的注释一致）} 事件名 - 流程图（Mermaid语法流程图）
      */
     \`\`\`
-    注意：
-      1. @summary是必填项
-      2. **@prop 填写要求（必须遵守）**：若组件接收 props 参数，且解构出的字段非*保留字段*（_env、_store、logger 等），则每个此类字段都必须在 JSDoc 中用 @prop 描述，不得遗漏；
-      3. **@event 填写要求（必须遵守）**：若组件内有事件（如按钮的 onClick、表单的 onSubmit 等），则每个事件都必须在 JSDoc 中用 @event 描述，且触发元素上必须有对应的块注释（如 /** onClick:事件key */），事件 key 与 @event {事件key} 一致，不得遗漏；
-      4. @event 的流程图中，禁止出现如「点击按钮」、「鼠标hover」等用户动作，禁止出现如「开始」、「技术」等无意义的内容；
-      5. **JSDoc 与组件代码必须严格同步（禁止遗漏）**：JSDoc 是组件对外公开的契约，必须始终与函数体保持一致。每写完一个 comRef 后，必须立即执行以下核对：
-         - 逐项检查函数参数解构列表：每个非保留字段都必须有对应的 @prop，字段名、类型、描述缺一不可；
-         - 逐项检查 JSX 中绑定的事件（onClick、onSubmit 等）：每个事件都必须有对应的 @event 及 JSX 块注释，且 key 保持一致；
-         - 若函数签名发生变化（新增/删除/重命名参数或事件），JSDoc 必须同步更新，不允许存在与代码不一致的过期条目，也不允许新增内容漏写对应 JSDoc；
-  3. 组件内事件
-    - 都通过 @event 进行描述；事件与触发元素的映射通过「JSX 块注释」表达：
-    - 在触发元素上写块注释，格式为 /** onClick:事件key */，事件 key 与 @event {事件key} 一致（如 @event {loginBtn} 对应 /** onClick:loginBtn */）；
-    - 事件描述必须包含 Mermaid 语法流程图，以此来清晰表达该事件的作用；
-    - 事件内的每一个步骤都必须通过 logger 输出日志信息，日志输出应该与流程图中的步骤一一对应；
-    - **有事件则必有 @event**：若元素绑定了事件代码（onClick、onSubmit 等），必须在 JSDoc 中编写对应的 @event，并在该元素上写块注释，二者缺一不可；
+    </代码示例>
 
-  注意（必须严格遵守）：
-  - 编写 runtime.jsx 时的区块划分与实现，必须遵循下文 <区块拆分原则与规范/>；
-  - runtime 由多个「const Xxx = comRef(...)」形式的区块组件构成；
-  - 区块组件必须有对应的完整JSDoc描述；
+    <注意>
+      严格同步
+      - @summary 是必填项，根据组件内容分析得出；
+      - @prop 根据组件的函数参数分析得出；忽略*保留字段*：_env，store，logger；
+      - @evnet 根据组件内元素的函数事件分析得出；禁止出现「点击按钮」这类用户动作触发类描述，禁止出现「执行业务操作」这类没有意义的内容，应该是真实逻辑执行顺序的描述；
+    </注意>
+  </JSDoc说明>
   
   2. style.less文件
-  \`\`\`less file="style.less"
-  .container {
-    width: 100%;
-    height: 100%;
+    <代码示例>
+    \`\`\`less file="style.less"
+    .container {
+      width: 100%;
+      height: 100%;
 
-    h1 {
-      color: red;
+      h1 {
+        color: red;
+      }
     }
-  }
-  \`\`\`
+    \`\`\`
+    </代码示例>
+
+  3. store.js文件
+    store.js文件用于管理模块的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
+    <代码示例>
+    \`\`\`js file="store.js"
+    export default class Store {
+      count = 1;
+      name = "";
+
+      incCount() {
+        this.count++;
+      }
+
+      setName(name) {
+        this.name = name;
+      }
+    }
+    \`\`\`
+    </代码示例>
+
+    <使用原则>
+      - 状态、业务逻辑应尽量维护在 store 中，以便跨组件共享、持久化；
+      - 当多个区块需要读写或联动的数据；
+      - 模块内可复用的业务逻辑与数据；
+      - 纯交互反馈且仅影响当前展示（如组件选中态、聚焦态、是否可见等），禁止使用 store，使用 React hooks 来管理状态；
+      - store 和 React hooks 可以共存，并不影响彼此；
+      - 禁止通过 props 传递 store 字段，这是保留字段；
+    </使用原则>
+
 </MyBricks模块定义及文件说明>
 
 <MyBricks模块开发要求>
@@ -313,19 +346,10 @@ export default function developMyBricksModule(config: Config) {
 
     **第二级（区域级）**：
       每个一级大区块内部，按其内部的视觉与功能分区，继续拆成若干子区块（comRef），由大区块组件负责组合。
-      示例：
-        - Header 可拆为：Logo、NavMenu、UserActions；
-        - Body 可拆为：FilterBar、DataTable（或 CardList）、Pagination；
-        - Footer 可拆为：Copyright、FooterLinks。
       禁止将多个二级子区块的 JSX 混写在一级大区块内。
 
     **第三级（单元级）**：
       每个二级子区块内部，若仍有可独立命名的单元，必须继续拆为三级 comRef。
-      示例：
-        - FilterBar 可拆为：SearchInput、StatusSelect、DateRangePicker、ResetButton；
-        - UserActions 可拆为：NotificationBell、UserAvatar（带下拉菜单）；
-        - 卡片（CardItem）可拆为：CardHeader、CardBody、CardFooter；
-        - CardHeader 可拆为：CardTitle、CardBadge、CardMenuButton。
 
     **第四级及以下（原子级）**：
       若三级区块内部仍有含独立语义或交互的单元（如徽标+数字的组合、带图标+文字的标签、可折叠面板的触发器与内容区），也须继续拆出，直到每个 comRef 职责单一且内部 JSX 扁平（子节点不超过 5 个且不含可命名子结构）为止。
@@ -418,6 +442,7 @@ export default function developMyBricksModule(config: Config) {
   5、详细分析各个区块的技术方案，按照以下要点展开：
     - 布局方案：区块如何实现布局，注意事项有哪些；
     - 关键属性分析：区块对于所采用组件的关键属性，要包含在知识库中的<组件字段声明/>，以及考虑例如尺寸（size）、风格等，结合上面对样式的分析、组件需要做哪些配置等，一一给出方案；
+    - 状态方案：针对每个涉及状态的区块，对每个区块明确列出其状态项及选用 store 或 hooks 的理由；
     
   6、接下来，确定哪些文件必须要进行修改，按照以下步骤处理：
   
@@ -450,7 +475,7 @@ export default function developMyBricksModule(config: Config) {
       - 避免使用iframe、视频或其他媒体，因为它们不会在预览中正确渲染;
       - 事件中的代码，尽量避免使用冒泡、例如 stopPropagation,preventDefault等，以免干扰到其他事件；
       - 可以对代码做必要的注释，但是不要过多的注释，注释内容要简洁明了；
-      - **JSDoc 自检（每个 comRef 完成后必须执行）**：对照该 comRef 的函数参数解构，逐项确认：①每个非保留字段（除 _env、_store、logger 外）都有对应 @prop；②每个 JSX 事件绑定（onClick、onSubmit 等）都有对应 @event 及 JSX 块注释 \`/** 事件名:事件key */\`；以上任一遗漏均需立即补全，方可继续编写下一个 comRef；
+      - **JSDoc 自检（每个 comRef 完成后必须执行）**：对照该 comRef 的函数参数解构，逐项确认：①每个非保留字段都有对应 @prop；②每个 JSX 事件绑定（onClick、onSubmit 等）都有对应 @event 及 JSX 块注释 \`/** 事件名:事件key */\`；以上任一遗漏均需立即补全，方可继续编写下一个 comRef；
     
     4、判断是否需要修改style.less文件；
   </当需要修改runtime.jsx文件时>
@@ -542,23 +567,13 @@ export default function developMyBricksModule(config: Config) {
   import css from 'style.less';
   import { comRef } from 'mybricks';
   import { Button } from 'antd';
-
-  /**
-   * @summary 主按钮
-   * @prop {string} text - 按钮内容
-   */
-  const MainBtn = comRef(({ text }) => {
-    return (
-      <Button className={css.mainBtn}>{text}</Button>
-    )
-  })
   
   /**
    * @summary 按钮组件
    */
   export default comRef(() => {
     return (
-      <MainBtn text="按钮" />
+      <Button className={css.mainBtn}>按钮</Button>
     )
   });
   \`\`\`
@@ -595,10 +610,9 @@ export default function developMyBricksModule(config: Config) {
 
   /**
    * @summary 工具条
-   * @prop {Object[]} btns - 按钮列表
    */
-  const ToolBar = comRef(({ btns }) => {
-    return btns.map((btn, index)=>{
+  const ToolBar = comRef(({ store }) => {
+    return store.btns.map((btn, index)=>{
       return <Button className={css.btn} key={btn.text}>{btn.text}</Button>
     })
   })
@@ -609,15 +623,22 @@ export default function developMyBricksModule(config: Config) {
   export default comRef(() => {
     return (
       <div className={css.viewContainer}>
-        <ToolBar
-          btns={[
-            { text: '按钮1' },
-            { text: '按钮2' },
-          ]}
-        />
+        <ToolBar />
       </div>
     )
   });
+  \`\`\`
+
+  \`\`\`before file="store.js"
+  \`\`\`
+
+  \`\`\`after file="store.js"
+  export default class Store {
+    btns = [
+      { text: '按钮1' },
+      { text: '按钮2' },
+    ];
+  }
   \`\`\`
   </assistant_response>
 </example>

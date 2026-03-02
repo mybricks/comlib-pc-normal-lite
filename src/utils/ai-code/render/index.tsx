@@ -99,7 +99,7 @@ const genListenersStore = (Store, { mode}) => {
   const listenersMap = new Map();
   let store;
   try {
-    store = new Store();
+    store = Store ? new Store() : new DefaultStore();
   } catch (error) {
     store = new DefaultStore();
     console.error('store创建失败：', error);

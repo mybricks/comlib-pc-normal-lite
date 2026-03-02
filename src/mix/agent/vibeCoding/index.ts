@@ -363,11 +363,19 @@ export default function ({ context }) {
           return '';
         }
       })();
+      const storeContent = (() => {
+        try {
+          return decodeURIComponent(aiComParams?.data?.storeJsSource ?? '');
+        } catch {
+          return '';
+        }
+      })();
       const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
         projectJson,
         getRuntimeContent: () => runtimeContent,
         getStyleContent: () => styleContent,
+        getStoreContent: () => storeContent,
       });
 
       // project.read('DataCard')

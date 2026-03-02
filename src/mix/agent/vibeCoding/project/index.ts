@@ -33,10 +33,13 @@ export interface ProjectConfig {
   getRuntimeContent: () => string;
   /** 获取 style.less 全文 */
   getStyleContent: () => string;
+  /** 获取 store.js 全文 */
+  getStoreContent: () => string;
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
 const STYLE_PATH = '/style.less';
+const STORE_PATH = '/store.js';
 /** 折叠占位提示（不耦合具体工具名） */
 const FOLD_HINT = '// ... 这部分代码已折叠，如需要可通过读取工具打开 ...';
 
@@ -263,9 +266,10 @@ export class Project {
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent } = this.config;
+    const { getRuntimeContent, getStyleContent, getStoreContent } = this.config;
     const runtimeContent = getRuntimeContent();
     const styleContent = getStyleContent();
+    const storeContent = getStoreContent();
 
     const projectSpaceDesc = `这是组成整个项目的所有代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
@@ -280,6 +284,7 @@ export class Project {
 
     const runtimeLines = runtimeContent.split(/\r?\n/);
     const styleLines = styleContent.split(/\r?\n/);
+    const storeLines = storeContent.split(/\r?\n/);
     const isFullFile = this.expandedNames.has(ROOT_NAME);
     const defaultImportRanges =
       this.root.commonImports
@@ -295,6 +300,9 @@ export class Project {
     const styleRanges = isFullFile
       ? [{ start: 1, end: styleLines.length }]
       : getExpandedRangesForFile(this.root, this.expandedNames, STYLE_PATH);
+    const storeRanges = isFullFile
+      ? [{ start: 1, end: storeLines.length }]
+      : getExpandedRangesForFile(this.root, this.expandedNames, STORE_PATH);
 
     if (runtimeRanges.length > 0) {
       fileSectionParts.push(
