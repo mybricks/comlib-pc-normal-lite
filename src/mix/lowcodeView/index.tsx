@@ -30,17 +30,13 @@ const FILES_MAP: Record<string, string> = {
   "store.js": "storeJsSource"
 };
 
-const suffixToLanguage: Record<string, string> = {
-  "js": "javascript",
-};
-
 export default function LowcodeView(params: Params) {
   const [selectedFileName, setSelectedFileName] = useState<FileName>(FILES[0]);
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
 
   const coderOptions = useMemo(() => {
     const path = `file:///${"组件id"}/${selectedFileName}`;
-    if (selectedFileName === "runtime.jsx") {
+    if (selectedFileName === "runtime.jsx" || selectedFileName === "store.js") {
       return {
         path,
         language: 'typescript',
@@ -62,10 +58,9 @@ export default function LowcodeView(params: Params) {
     //   };
     // }
     if (FILES.includes(selectedFileName)) {
-      const suffix = selectedFileName.split(".").pop() || "";
       return {
         path,
-        language: suffixToLanguage[suffix] || suffix,
+        language: selectedFileName.split(".").pop()
       };
     }
     return {};
