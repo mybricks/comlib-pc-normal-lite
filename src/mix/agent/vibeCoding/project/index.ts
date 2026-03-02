@@ -318,6 +318,13 @@ export class Project {
     } else {
       fileSectionParts.push(buildFileSection('style.less', styleContent, [], 'less'));
     }
+    if (storeRanges.length > 0) {
+      fileSectionParts.push(
+        buildFileSection('store.js', styleContent, storeRanges, 'js')
+      );
+    } else {
+      fileSectionParts.push(buildFileSection('store.js', styleContent, [], 'js'));
+    }
 
     return [
       '## 项目空间\n',
