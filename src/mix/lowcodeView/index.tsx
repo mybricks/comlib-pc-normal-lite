@@ -14,6 +14,7 @@ const FILES = [
   // "model.json",
   "runtime.jsx",
   "style.less",
+  "store.js",
   // "config.js",
   // "com.json"
 ] as const;
@@ -25,7 +26,12 @@ const FILES_MAP: Record<string, string> = {
   "style.less": "styleSource",
   "runtime.jsx": "runtimeJsxSource",
   "config.js": "configJsSource",
-  "com.json": "componentConfig"
+  "com.json": "componentConfig",
+  "store.js": "storeJsSource"
+};
+
+const suffixToLanguage: Record<string, string> = {
+  "js": "javascript",
 };
 
 export default function LowcodeView(params: Params) {
@@ -56,9 +62,10 @@ export default function LowcodeView(params: Params) {
     //   };
     // }
     if (FILES.includes(selectedFileName)) {
+      const suffix = selectedFileName.split(".").pop() || "";
       return {
         path,
-        language: selectedFileName.split(".").pop()
+        language: suffixToLanguage[suffix] || suffix,
       };
     }
     return {};
@@ -140,6 +147,10 @@ export default function LowcodeView(params: Params) {
   // useEffect(() => {
   //   clearFileIfDataChanged("com.json");
   // }, [params.data?.componentConfig]);
+
+  useEffect(() => {
+    clearFileIfDataChanged("store.js");
+  }, [params.data?.storeJsSource]);
 
   useEffect(() => {
     return ()=>{

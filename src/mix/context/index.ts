@@ -52,6 +52,10 @@ class Context {
         aiComParams.data.configJsCompiled = encodeURIComponent(content);
         aiComParams.data.configJsSource = encodeURIComponent(content);
         break;
+      case "store.js":
+        aiComParams.data.storeJsCompiled = encodeURIComponent(content);
+        aiComParams.data.storeJsSource = encodeURIComponent(content);
+        break;
       case "com.json":
         aiComParams.data.componentConfig = encodeURIComponent(content);
         const oriInputs = aiComParams.input.get();
