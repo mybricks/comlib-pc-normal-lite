@@ -8,7 +8,7 @@ export default function answerUserQuestion(): any {
   return {
     name: NAME,
     displayName: "分析当前信息",
-    description: `分析所有「信息获取类」工具的信息和「项目上下文」，回答用户问题。
+    description: `仅在*非代码开发目的*下，比如询问教程、总结文档等场景下使用此工具。用自然语言回答用户问题。
 参数：无；
 作用：针对用户的问题，基于前序信息获取类工具的消息，解答用户的问题，以自然语言形式呈现给用户；
 返回值：自然语言；

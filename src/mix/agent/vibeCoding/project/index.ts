@@ -271,15 +271,20 @@ export class Project {
     const styleContent = getStyleContent();
     const storeContent = getStoreContent();
 
-    const projectSpaceDesc = `这是组成整个模块的所有源代码。
+    const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
+
+    // 最佳实践：在此补充项目约定的开发习惯、推荐写法等，供 Agent 参考
+    const bestPracticesContent = `
+- 美学要求：保证现代化、响应式、间距合理；
+`;
 
     const archMd = buildArchitectureMd(this.root);
 
     const libraryDocsContent = [antdPrompt, echartsPrompt, iconPrompt].join('\n\n');
 
     const fileSectionParts: string[] = [];
-    fileSectionParts.push('\n### 3. 文件系统\n');
+    fileSectionParts.push('\n## 源代码\n');
     fileSectionParts.push('包含项目中的各代码文件。所有折叠内容可通过读取工具展开\n');
 
     const runtimeLines = runtimeContent.split(/\r?\n/);
@@ -327,15 +332,18 @@ export class Project {
     }
 
     return [
-      '## 项目空间\n',
+      '# 项目空间\n',
       projectSpaceDesc,
-      '\n### 1. 允许使用的类库\n',
+      '\n## 开发指南\n',
+      '\n### 最佳实践\n',
+      bestPracticesContent,
+      '\n### 允许使用的类库\n',
       '\n---\n\n',
       libraryDocsContent,
       '\n\n---\n\n',
-      '### 2. 组件树结构\n',
-      '\n。组件树结构有助于帮助我们理解组件间的关系，代码可以按组件层级展开，父组件包含所有子组件代码，子组件没有父组件代码。\n',
-      '根组件 -> 组件（树状结构）：\n\n',
+      '## 组件架构\n',
+      '\n组件树结构与层级关系有助于理解组件间关系；代码按组件层级展开，父组件包含所有子组件代码，子组件不包含父组件代码。\n',
+      '根组件 → 组件（树状结构）：\n\n',
       archMd,
       '\n',
       ...fileSectionParts,

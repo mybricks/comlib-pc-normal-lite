@@ -742,10 +742,10 @@ export default function developMyBricksModule(config: Config) {
           const result = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
           const msg = result ? formatUpdateResult(result) : '';
 
-          if (result && !result.success) {
+          if (result && !result.success && ToolRetryError) {
             const errMsg = msg || '执行失败';
-            throw ToolRetryError?.({
-              llmContent:  errMsg + '\n\n 下面是上一轮你的输出 \n\n' + params.content,
+            throw new ToolRetryError({
+              llmContent:  errMsg + '\n\n 下面是上一轮你的输出 \n\n' + params.content, // 报错过程目前没有代码，需要添加下，后续可以看看
               displayContent: '执行失败，当前操作已回滚，请重试',
               autoRetry: true,
               maxRetries: 1
@@ -756,14 +756,16 @@ export default function developMyBricksModule(config: Config) {
           }
           return raw
             .replace(/runtime\.jsx/g, '')
-            .replace(/style\.less/g, '') + '\n' + msg;
+            .replace(/style\.less/g, '')
+            .replace(/store\.js/g, '') + '\n' + msg;
         }
       }
 
       return raw
         .replace(/action\.json/g, actionReason)
         .replace(/runtime\.jsx/g, '尝试修改内容...')
-        .replace(/style\.less/g, '尝试调整样式...');
+        .replace(/style\.less/g, '尝试调整样式...')
+        .replace(/store\.js/g, '尝试修改逻辑...');
     },
     aiRole: ({ params, hasAttachments }) => {
       const mode = params?.mode ?? 'generate';
