@@ -13,3 +13,20 @@ export function findRelyAndSource(relyName, importRelyMap) {
   // 除了三方库，就是html
   return { relyName, source: value || "html" };
 }
+
+/**
+ * 从 JSX 标签名节点得到字符串：JSXIdentifier => name，JSXMemberExpression => "Foo.Bar"
+ */
+export function getJSXElementNameString(nameNode: any): string | null {
+  if (!nameNode) return null;
+  if (nameNode.type === "JSXIdentifier") {
+    return nameNode.name ?? null;
+  }
+  if (nameNode.type === "JSXMemberExpression") {
+    const objectPart = getJSXElementNameString(nameNode.object);
+    const propertyPart = nameNode.property?.type === "JSXIdentifier" ? nameNode.property.name : null;
+    if (objectPart != null && propertyPart != null) return `${objectPart}.${propertyPart}`;
+    return objectPart ?? propertyPart;
+  }
+  return null;
+}

@@ -7,7 +7,8 @@ import {
   extractCssClassNames,
   findRelyAndSource,
   getComRefForJSXPath,
-  getEvents
+  getEvents,
+  getJSXElementNameString
 } from "./utils";
 
 export default function ({ constituency }) {
@@ -54,10 +55,14 @@ export default function ({ constituency }) {
               const cnList = [...new Set(extractCssClassNames(classNameExpr))];
   
               const selectors = getCssSelectorForJSXPath(path, importRelyMap);
-              const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : node.openingElement.name.name;
+              const tagName = getJSXElementNameString(node.openingElement.name)?.split(".")[0];
+              if (!tagName) {
+                return;
+              }
+              const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
               pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
   
-              const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+              const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
   
               if (source === "html") {
                 pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
