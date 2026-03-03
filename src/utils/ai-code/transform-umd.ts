@@ -101,12 +101,13 @@ export function transformLess(code): Promise<string> {
   }) as any
 }
 
-export function updateRender({data}, renderCode) {
+export function updateRender({data, success}, renderCode) {
   transformTsx(renderCode).then(({ transformCode, constituency }) => {
     data.runtimeJsxCompiled = encodeURIComponent(transformCode)
     data.runtimeJsxSource = encodeURIComponent(renderCode)
     data.runtimeJsxConstituency = constituency
     data._jsxErr = ''
+    success();
   }).catch(e => {
     console.error("[@transformTsx error]", e);
     data._jsxErr = e?.message ?? '未知错误'
