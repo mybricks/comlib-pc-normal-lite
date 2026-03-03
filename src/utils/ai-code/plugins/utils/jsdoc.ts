@@ -57,3 +57,40 @@ export function parseJSDocComment(raw: string): { summary?: string; props?: Arra
   }
   return result;
 }
+
+/** 匹配注释中的「属性名:处理函数名」，提取冒号后的 handler 名 */
+const EVENT_COMMENT_REGEX = /\b\w+\s*:\s*(\w+)\b/g;
+
+function extractHandlerNamesFromCommentValue(value: string): string[] {
+  if (value == null || typeof value !== "string") return [];
+  const normalized = value.replace(/\s*\*\s?/g, " ").trim();
+  const names: string[] = [];
+  let m;
+  EVENT_COMMENT_REGEX.lastIndex = 0;
+  while ((m = EVENT_COMMENT_REGEX.exec(normalized)) !== null) {
+    names.push(m[1]);
+  }
+  return names;
+}
+
+/**
+ * 遍历 openingElement.attributes，从各属性的 leadingComments / trailingComments 中
+ * 解析形如 /** onClick:primaryClick *\/ 的注释，提取出 handler 名（如 primaryClick）。
+ * 因同一行注释可能同时出现在前一个的 trailing 与后一个的 leading，结果会去重。
+ */
+export function getEvents(node: { openingElement?: { attributes?: Array<{ leadingComments?: Array<{ value?: string }>; trailingComments?: Array<{ value?: string }> }> } }): string[] {
+  const eventNames = new Set<string>();
+  const attrs = node.openingElement?.attributes ?? [];
+  for (const attribute of attrs) {
+    const comments = [
+      ...(attribute.leadingComments ?? []),
+      ...(attribute.trailingComments ?? []),
+    ];
+    for (const comment of comments) {
+      const value = comment.value ?? "";
+      const names = extractHandlerNamesFromCommentValue(value);
+      names.forEach((name) => eventNames.add(name));
+    }
+  }
+  return Array.from(eventNames);
+}

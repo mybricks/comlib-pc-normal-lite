@@ -6,7 +6,8 @@ import {
   getCssSelectorForJSXPath,
   extractCssClassNames,
   findRelyAndSource,
-  getComRefForJSXPath
+  getComRefForJSXPath,
+  getEvents
 } from "./utils";
 
 export default function ({ constituency }) {
@@ -14,6 +15,9 @@ export default function ({ constituency }) {
     const importRelyMap = new Map();
     /** 按组件声明缓存 { rootJSX, jsdoc }，每个 comRef 组件只计算一次 */
     const componentJsdocCache = new Map<any, any>();
+
+    /** 遍历时 comRef 的 jsdoc 栈，子元素通过栈顶读到当前组件的 jsdoc */
+    const jsdocStack: any[] = [];
 
     return {
       visitor: {
@@ -37,86 +41,127 @@ export default function ({ constituency }) {
             }
           } catch { }
         },
-        JSXElement(path) {
-          try {
-            const { node } = path;
-            const dataLocValueObject: any = {
-              jsx: { start: node.start, end: node.end },
-              tag: { end: node.openingElement.end },
-            };
-            const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
-            const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
-            const cnList = [...new Set(extractCssClassNames(classNameExpr))];
+        JSXElement: {
+          enter(path) {
+            try {
+              const { node } = path;
+              const dataLocValueObject: any = {
+                jsx: { start: node.start, end: node.end },
+                tag: { end: node.openingElement.end },
+              };
+              const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
+              const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
+              const cnList = [...new Set(extractCssClassNames(classNameExpr))];
+  
+              const selectors = getCssSelectorForJSXPath(path, importRelyMap);
+              const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : node.openingElement.name.name;
+              pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
+  
+              const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+  
+              if (source === "html") {
+                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+              } else {
+                pushDataAttr(node.openingElement.attributes, "data-library-source", source);
+              }
+  
+              if (cnList.length > 0) {
+                dataLocValueObject.cn = cnList
+                
+  
+                // 仅当当前 JSX 是「组件根节点」时挂 JSDoc（summary、@prop），并写入 data-loc，供聚焦时读取；按组件缓存避免重复计算
+                // const jsdoc = getComRefForJSXPath(path, componentJsdocCache);
+                // if (jsdoc) {
+                //   dataLocValueObject.jsdoc = jsdoc;
+                // }
+  
+                constituency.push({
+                  className: cnList,
+                  component: relyName,
+                  source,
+                  selectors,
+                  // ...(jsdoc && { jsdoc }),
+                })
+  
+                // node.openingElement.attributes.push({
+                //   type: 'JSXAttribute',
+                //   name: {
+                //     type: 'JSXIdentifier',
+                //     name: 'data-cn',
+                //   },
+                //   value: {
+                //     type: 'StringLiteral',
+                //     value: cnList.join(' '),
+                //     extra: {
+                //       raw: `"${cnList.join(' ')}"`,
+                //       rawValue: cnList.join(' ')
+                //     }
+                //   }
+                // })
+  
+                const mapIndexParam = getMapCallbackIndexParam(path);
+                if (mapIndexParam != null) {
+                  pushDataAttrExpression(node.openingElement.attributes, "data-map-index", mapIndexParam);
+                }
+              }
+  
+              let zoneType = "zone";
+  
+              const comRef = getComRefForJSXPath(path, componentJsdocCache);
 
-            const selectors = getCssSelectorForJSXPath(path, importRelyMap);
-            const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : node.openingElement.name.name;
-            pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
+              if (comRef) {
+                jsdocStack.push(comRef.jsdoc);
 
-            const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+                zoneType = "com";
+                // pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
+                pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
 
-            if (source === "html") {
-              pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
-            } else {
-              pushDataAttr(node.openingElement.attributes, "data-library-source", source);
-            }
 
-            if (cnList.length > 0) {
-              dataLocValueObject.cn = cnList
-              
+  
+                // const events = comRef.jsdoc?.events;
+                // if (events) {
+                //   pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
+                // }
+              }
 
-              // 仅当当前 JSX 是「组件根节点」时挂 JSDoc（summary、@prop），并写入 data-loc，供聚焦时读取；按组件缓存避免重复计算
-              // const jsdoc = getComRefForJSXPath(path, componentJsdocCache);
-              // if (jsdoc) {
-              //   dataLocValueObject.jsdoc = jsdoc;
-              // }
+              const events = getEvents(node);
+              const jsdoc = jsdocStack[jsdocStack.length - 1];
 
-              constituency.push({
-                className: cnList,
-                component: relyName,
-                source,
-                selectors,
-                // ...(jsdoc && { jsdoc }),
+              const eventsMap = (jsdoc?.events || []).reduce((pre, cur) => {
+                pre[cur.key] = cur;
+                return pre;
+              }, {});
+
+              const dataZoneDocsEvents = events.map((event) => {
+                return eventsMap[event] || {
+                  key: event,
+                  name: event,
+                  description: ""
+                }
               })
 
-              // node.openingElement.attributes.push({
-              //   type: 'JSXAttribute',
-              //   name: {
-              //     type: 'JSXIdentifier',
-              //     name: 'data-cn',
-              //   },
-              //   value: {
-              //     type: 'StringLiteral',
-              //     value: cnList.join(' '),
-              //     extra: {
-              //       raw: `"${cnList.join(' ')}"`,
-              //       rawValue: cnList.join(' ')
-              //     }
-              //   }
-              // })
-
-              const mapIndexParam = getMapCallbackIndexParam(path);
-              if (mapIndexParam != null) {
-                pushDataAttrExpression(node.openingElement.attributes, "data-map-index", mapIndexParam);
+              if (dataZoneDocsEvents.length > 0) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(dataZoneDocsEvents.length));
               }
-            }
 
-            let zoneType = "zone";
-
-            const comRef = getComRefForJSXPath(path, componentJsdocCache);
-            if (comRef) {
-              zoneType = "com";
-              pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
-              pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
-
-              const events = comRef.jsdoc?.events;
-              if (events) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
+              if (comRef) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({...comRef.jsdoc, events: dataZoneDocsEvents}));
+              } else {
+                pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({events: dataZoneDocsEvents}));
               }
-            }
-
-            pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
-            pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
-          } catch { }
+  
+              pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
+              pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
+            } catch {}
+          },
+          exit(path) {
+            try {
+              const comRef = getComRefForJSXPath(path, componentJsdocCache);
+              if (comRef) {
+                jsdocStack.pop();
+              }
+            } catch {}
+          }
         },
         Program: {
           exit() {
