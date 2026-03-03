@@ -175,7 +175,7 @@ export default function developMyBricksModule(config: Config) {
 </你的角色与任务>
 
 <MyBricks模块定义及文件说明>
-  模块的【源代码】由 runtime.jsx、style.less 两个文件构成：
+  MyBricks模块的代码文件组成如下：
 
   1. runtime.jsx文件
   <代码示例>

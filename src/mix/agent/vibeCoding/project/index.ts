@@ -271,7 +271,7 @@ export class Project {
     const styleContent = getStyleContent();
     const storeContent = getStoreContent();
 
-    const projectSpaceDesc = `这是组成整个项目的所有代码。
+    const projectSpaceDesc = `这是组成整个模块的所有源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
 
     const archMd = buildArchitectureMd(this.root);
