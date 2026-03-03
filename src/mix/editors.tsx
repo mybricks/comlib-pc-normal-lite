@@ -148,11 +148,41 @@ function expandDeletions(deletions: string[]): string[] {
   return Array.from(toDelete);
 }
 
+/**
+ * 从 cssObj 中找与目标元素 classList 精确对应的复合类名 key。
+ * 条件：key 为单段（无空格），且 key 中解析出的所有类名都包含在 eleClassList 中。
+ * 若有多个满足条件的 key，返回「匹配类名数最多」的（最精确）。
+ */
+function findCompoundClassKey(
+  cssObj: Record<string, any>,
+  eleClassList: string[]
+): string | undefined {
+  const validClasses = new Set(eleClassList.filter(c => c && c !== 'undefined'));
+
+  let best: string | undefined;
+  let bestCount = 0;
+
+  for (const key of Object.keys(cssObj)) {
+    if (key.includes(' ')) continue;
+
+    // 解析 key 中的类名，如 ".actionBtn.secondary" → ["actionBtn", "secondary"]
+    const classes = (key.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
+    if (classes.length < 2) continue; // 单类名已由后缀收缩处理
+
+    if (classes.every(c => validClasses.has(c)) && classes.length > bestCount) {
+      best = key;
+      bestCount = classes.length;
+    }
+  }
+
+  return best;
+}
+
 const genStyleValue = (params) => {
-  console.log("params-----",params)
   const { comId } = params;
   return {
     set(params, value) {
+
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
@@ -160,26 +190,20 @@ const genStyleValue = (params) => {
       const fullSelector = params.selector;
       const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
-      // 确定写入目标 key：先精确匹配，再后缀收缩匹配，最后兜底新建
-      let targetKey = fullSelector;
+      // 确定写入目标 key：阶段1 精确匹配 → 阶段2 后缀收缩匹配 → 阶段3 复合类名匹配 → 兜底新建
+      const ele: Element | null = params.focusArea?.ele ?? null;
+      const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
 
-      if (cssObj[fullSelector] !== undefined) {
-        targetKey = fullSelector;
-      } else {
-        let matched = false;
-        for (let i = 1; i < segments.length; i++) {
-          const candidateKey = segments.slice(i).join(' ');
-          if (cssObj[candidateKey] !== undefined) {
-            targetKey = candidateKey;
-            matched = true;
-            break;
-          }
-        }
-
-        if (!matched) {
-          targetKey = fullSelector;
-        }
-      }
+      const targetKey: string =
+        cssObj[fullSelector] !== undefined
+          ? fullSelector
+          : (segments.slice(1).reduce((found: string | undefined, _, i) => {
+              if (found) return found;
+              const candidate = segments.slice(i + 1).join(' ');
+              return cssObj[candidate] !== undefined ? candidate : undefined;
+            }, undefined) as string | undefined)
+          ?? (eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined)
+          ?? fullSelector;
 
       // Step 3.5：将路径中间节点的孤立根层级 key 并入嵌套结构，避免输出多余的根层级块
       absorbOrphans(cssObj, targetKey);
