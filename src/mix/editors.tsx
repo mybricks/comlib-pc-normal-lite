@@ -57,6 +57,7 @@ const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
   'border-color': ['border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color'],
   'border-style': ['border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style'],
   'border-radius': ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius'],
+  'background': ['background-color', 'background-image', 'background-repeat', 'background-position', 'background-size', 'background-attachment', 'background-origin', 'background-clip'],
 };
 
 const LONGHAND_TO_SHORTHAND: Record<string, string> = {};
@@ -68,15 +69,79 @@ function camelToKebab(str: string): string {
   return str.replace(/([A-Z])/g, '-$1').toLowerCase();
 }
 
-/** 扩展待删除 key：删长写时顺带删简写，删简写时顺带删所有长写（兼容驼峰和 kebab-case） */
+/** 去掉选择器尾部伪类/伪元素，返回基础路径 */
+function getBaseSelector(selector: string): string {
+  return selector.replace(/:{1,2}[a-zA-Z-]+(\([^)]*\))?$/, '').trim();
+}
+
+/**
+ * 找出 cssObj 中与 targetSelector 同元素的孤儿 key（含伪类变体），用于清空后联动删除。
+ */
+function findOrphanKeys(cssObj: Record<string, any>, targetSelector: string): string[] {
+  const segments = targetSelector.trim().split(/\s+/).filter(Boolean);
+  const lastSegment = segments[segments.length - 1]; // 如 ".primary"
+
+  return Object.keys(cssObj).filter(key => {
+    if (key === targetSelector) return false;
+    const base = getBaseSelector(key);
+
+    // 原有逻辑：base 与 targetSelector 完全匹配，或 targetSelector 以 " base" 结尾
+    if (base === targetSelector || targetSelector.endsWith(' ' + base)) return true;
+
+    // 根层级复合类（如 ".actionBtn.secondary"）时匹配其伪类变体；多段路径不触发，避免误删真实规则
+    if (
+      segments.length === 1 &&
+      lastSegment.startsWith('.') &&
+      base.endsWith(lastSegment) &&
+      !base.includes(' ')
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+/**
+ * 将 targetKey 路径中间节点的孤立根层级 key 并入嵌套路径，避免 stringifyLess 输出根层级孤立块。
+ * 若某中间节点被多个父容器共享则跳过，保守处理。
+ */
+function absorbOrphans(cssObj: Record<string, any>, targetKey: string): void {
+  const segments = targetKey.trim().split(/\s+/).filter(Boolean);
+
+  if (segments.length < 3) return;
+
+  for (let i = 1; i < segments.length - 1; i++) {
+    const candidate = segments[i];
+
+    if (!candidate.startsWith('.') || !cssObj[candidate]) continue;
+
+    const parentRoots = new Set(
+      Object.keys(cssObj)
+        .filter(key => {
+          const segs = key.trim().split(/\s+/);
+          return segs.length > 1 && segs.includes(candidate);
+        })
+        .map(key => key.trim().split(/\s+/)[0])
+    );
+
+    if (parentRoots.size > 1) continue;
+
+    const nestedPath = segments.slice(0, i + 1).join(' ');
+
+    cssObj[nestedPath] = { ...cssObj[candidate], ...(cssObj[nestedPath] ?? {}) };
+
+    delete cssObj[candidate];
+  }
+}
+
+/** 删除 CSS 属性时，长写与简写互相扩展（兼容驼峰和 kebab-case） */
 function expandDeletions(deletions: string[]): string[] {
   const toDelete = new Set(deletions);
   deletions.forEach(key => {
     const kebabKey = camelToKebab(key);
-    // 长写 → 找对应简写（如 marginTop/margin-top → margin）
     const shorthand = LONGHAND_TO_SHORTHAND[kebabKey] ?? LONGHAND_TO_SHORTHAND[key];
     if (shorthand) toDelete.add(shorthand);
-    // 简写 → 找对应所有长写（如 margin → margin-top 等）
     const longhands = CSS_SHORTHAND_GROUPS[kebabKey] ?? CSS_SHORTHAND_GROUPS[key];
     if (longhands) longhands.forEach(lh => toDelete.add(lh));
   });
@@ -84,50 +149,61 @@ function expandDeletions(deletions: string[]): string[] {
 }
 
 const genStyleValue = (params) => {
+  console.log("params-----",params)
   const { comId } = params;
   return {
     set(params, value) {
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
-      // 根据 AI 组件 id 拿到整份样式表
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
 
-      // 引擎传入的 params.selector 可能是 [data-zone-selector=['.heroBanner']] 这种属性选择器格式，
-      // 而 cssObj 的 key 是类名如 .heroBanner，需抽出括号内的选择器才能正确匹配
-      // const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
-      // const selector = match?.[1] ?? params.selector;
-      // // parseLess 的 key 是完整选择器路径（如 .container .mainContent .heroBanner），需用 endsWith 匹配当前 zone 的 selector，并用完整 key 读写
-      // const cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
-      // console.log("selector",selector,"cssObjKey",cssObjKey)
-
-      //这里尝试直接用params.selector作为完整的key
       const fullSelector = params.selector;
-      const lastSelector = fullSelector.trim().split(/\s+/).at(-1); 
-      let targetKey = '';
+      const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
-      if (cssObj[lastSelector] !== undefined) {
-        // 顶层直接存在 .bannerContent，就用它
-        targetKey = lastSelector;
-      } else {
-        // 顶层没有，则回退到用完整路径（或新建）
+      // 确定写入目标 key：先精确匹配，再后缀收缩匹配，最后兜底新建
+      let targetKey = fullSelector;
+
+      if (cssObj[fullSelector] !== undefined) {
         targetKey = fullSelector;
+      } else {
+        let matched = false;
+        for (let i = 1; i < segments.length; i++) {
+          const candidateKey = segments.slice(i).join(' ');
+          if (cssObj[candidateKey] !== undefined) {
+            targetKey = candidateKey;
+            matched = true;
+            break;
+          }
+        }
+
+        if (!matched) {
+          targetKey = fullSelector;
+        }
       }
 
-      // console.log("fullSelector",fullSelector,"lastSelector",lastSelector,"targetKey",targetKey,"cssObj[targetKey]",cssObj[lastSelector])
+      // Step 3.5：将路径中间节点的孤立根层级 key 并入嵌套结构，避免输出多余的根层级块
+      absorbOrphans(cssObj, targetKey);
 
-      // if (!cssObj[targetKey]) {
-      //   cssObj[targetKey] = {};
-      // }
-  
+      if (!cssObj[targetKey]) {
+        cssObj[targetKey] = {};
+      }
+
       Object.entries(value).forEach(([key, value]) => {
         cssObj[targetKey][key] = value;
       })
 
       if (deletions && deletions.length > 0) {
         const expandedDeletions = expandDeletions(deletions);
-        expandedDeletions.forEach(key => delete cssObj[targetKey][key])
+        expandedDeletions.forEach(key => delete cssObj[targetKey][key]);
       }
-  
+
+      // targetKey 清空后，联动删除同元素的孤儿 key（含伪类变体）
+      if (Object.keys(cssObj[targetKey] || {}).length === 0) {
+        const orphanKeys = findOrphanKeys(cssObj, targetKey);
+        orphanKeys.forEach(key => delete cssObj[key]);
+        delete cssObj[targetKey];
+      }
+
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr })
     }
@@ -149,7 +225,6 @@ const genResizer = () => {
           const comId = params.id;
           const aiComParams = context.getAiComParams(comId);
           cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
-          // 同上：从 [data-zone-selector=['.xxx']] 中抽出 .xxx；cssObj 的 key 为完整选择器路径，用 endsWith 匹配
           const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
           const selector = match?.[1] ?? params.selector;
           cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
