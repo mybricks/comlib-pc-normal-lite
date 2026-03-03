@@ -193,7 +193,7 @@ export default function developMyBricksModule(config: Config) {
 
   /**
    * @summary 跳转登录页按钮
-   * @event {redirectToLogin} 跳转登录 - flowchart LR; B[跳转登录页]
+   * @event {redirectToLogin} 跳转登录 - flowchart LR; A[调用 store.redirectToLogin]
    */
   const LoginButton = comRef(({ store }) => {
     return (
@@ -223,10 +223,14 @@ export default function developMyBricksModule(config: Config) {
 
   <编写规范>
   1. 组件 props 禁止传递*保留字段*：_env，store，logger；
-  2. 拆分的各区块应从自身内部 store 读取所需数据，不要由父组件通过 props 把 store 的字段再传一遍；仅当区块是可复用单元（如 列表单项的单条数据）时才通过 props 传参；
+    - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
+  2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
   3. 所有组件都需要使用 comRef 包装；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
+  6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；UI、组件、dom元素间交互逻辑写在 区块 内（例如：loading、弹窗提示、选中态等）；
+  7. 包含事件的标签内必须包含注释「/** 事件名:事件key */」，且事件key必须与 @event 的 事件key 一致；
+  8. 事件与 JSDoc 一一对应：组件内只要写了事件注释（如 \`/** onChange:updateSearchClass */\`），该组件的 JSDoc 中就必须有对应的 \`@event {updateSearchClass} 描述 - 流程图\` 条目，不得遗漏；反之 JSDoc 中声明的 @event 也必须在代码中有对应的事件注释；
   </编写规范>
 
   <comRef说明>
@@ -245,17 +249,30 @@ export default function developMyBricksModule(config: Config) {
     /**
      * @summary 组件详细摘要
      * @prop {类型} 接收参数的属性名 - 属性描述
-     * @event {事件key（与触发元素上的注释一致）} 事件名 - 流程图（Mermaid语法流程图）
+     * @event {事件key（与触发元素上的注释一致）} 事件名 - Mermaid语法流程图
      */
     \`\`\`
     </代码示例>
 
-    <注意>
-      严格同步
-      - @summary 是必填项，根据组件内容分析得出；
-      - @prop 根据组件的函数参数分析得出；忽略*保留字段*：_env，store，logger；
-      - @evnet 根据组件内元素的函数事件分析得出；禁止出现「点击按钮」这类用户动作触发类描述，禁止出现「执行业务操作」这类没有意义的内容，应该是真实逻辑执行顺序的描述；
-    </注意>
+    <@summary>
+      必填项，根据组件内容分析得出组件的内容摘要；
+    </@summary>
+
+    <@prop>
+      根据组件接收的参数分析得出；
+      例如：当组件接收字符类型的参数「title」,需提供 \`@prop {string} title - 标题\`；
+      注意：忽略*保留字段*：_env，store，logger；
+    </@prop>
+
+    <@event>
+      根据组件dom元素或三方组件的函数事件分析得出；有事件则必写，不得遗漏。
+      例如：当组件内有个按钮有「onClick」事件且标签内包含注释\`/** onClick:onSearch */\`，需提供 \`@event {onSearch} 查询数据 - flowchart LR; A[调用 store.searchData]\`；
+      强制要求：组件内每出现一处事件注释（如 \`/** onChange:updateSearchClass */\`），JSDoc 中必须有且仅有一条与之事件key 相同的 \`@event {updateSearchClass} 描述 - 流程图\`；Select/Input 等组件的 onChange、onClick 等均算事件，均需同时写注释和 @event。
+      注意：
+        - 仅描述该事件处理函数本身的直接调用/操作，不展开 store 的内部流程，例如（若代码中调用 store 内的 xxx 方法，那么该步骤应该为「调用 store.xxx」）；
+        - 流程图节点用动作描述，不写具体取值：例如用「设置loading状态」「取消loading状态」，禁止「设置loading为true」「设置loading为false」；
+        - 禁止：用户动作类描述（如「点击按钮」）、空洞节点（如「开始」「结束」「执行业务操作」）；
+    </@event>
   </JSDoc说明>
   
   2. style.less文件
@@ -292,13 +309,21 @@ export default function developMyBricksModule(config: Config) {
     </代码示例>
 
     <使用原则>
-      - 状态、业务逻辑应尽量维护在 store 中，以便跨组件共享、持久化；
-      - 当多个区块需要读写或联动的数据；
+      - 业务逻辑应尽量维护在 store 中，以便跨组件共享、持久化；
+      - 当多个区块需要读写或联动的派生数据；
       - 模块内可复用的业务逻辑与数据；
-      - 纯交互反馈且仅影响当前展示（如组件选中态、聚焦态、是否可见等），禁止使用 store，使用 React hooks 来管理状态；
+      - 纯交互反馈且仅影响当前展示（如组件选中态、聚焦态、loading状态、是否可见等），禁止使用 store，使用 React hooks 来管理状态；
       - store 和 React hooks 可以共存，并不影响彼此；
-      - 禁止通过 props 传递 store 字段，这是保留字段；
+      - 禁止通过 props 传递 store 字段，这是保留字段，禁止对 store 进行解构够通过 props 传递；
+      - 当需要更新嵌套对象内容时，必须使用扩展运算符更新整个对象
+        - 正确：\`this.user = {...this.user, name: "名称"};\`
+        - 错误：\`this.user.name = "名称";\`
     </使用原则>
+
+    <注意>
+      - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要更新字段A时，必须修改A的值；
+      - 禁止使用 getter 方法（例如：get count() {...}）;
+    </注意>
 
 </MyBricks模块定义及文件说明>
 
@@ -330,13 +355,11 @@ export default function developMyBricksModule(config: Config) {
   <拆分强制原则>
     以下情况，无论处于哪一级，都必须拆出独立 comRef，不得内联写在父组件中：
     1. 任何可以被独立命名的视觉区域（如标题栏、操作区、内容区、统计区、图表区、筛选区、分页区等）；
-    2. 任何含有独立交互或事件的元素（如搜索框、按钮组、单个操作按钮、可点击卡片等）；
-    3. 列表/网格中的「单项」结构（无论结构复杂度，单项必须独立成 comRef）；
-    4. 卡片内部若包含多个可命名区域（如卡片头部、卡片体、卡片底部操作行），每个区域须单独拆出；
-    5. 表单中的每个字段分组（如基本信息分组、联系方式分组）或独立的复合字段（如带说明文字的输入项）；
-    6. 任何内部子节点超过 3 个且可语义分组的容器；
-    7. 任何带有条件渲染（if/三元）的区域，条件分支中的每个结构块须独立成 comRef；
-    8. 任何需要独立维护数据或逻辑的功能单元（如分页、筛选、排序栏等）。
+    2. 任何含有独立交互或事件的元素（如按钮组、可点击卡片等）；
+    3. 列表/网格中的复杂「单项」结构；
+    4. 任何内部子节点超过 3 个且可语义分组的容器；
+    5. 任何带有条件渲染（if/三元）的区域，条件分支中的每个结构块须独立成 comRef；
+    6. 任何需要独立维护数据或逻辑的功能单元（如筛选等）。
   </拆分强制原则>
 
   <分级拆分>
@@ -371,27 +394,24 @@ export default function developMyBricksModule(config: Config) {
 
   <命名与实现>
     - 命名：使用语义化、见名知意的 PascalCase 名称，能从名称直接推断出其在页面中的位置与职责；
-    - 实现：每个区块必须为「const 区块名 = comRef(...)」，并写清 JSDoc；JSDoc 必须与该组件的函数签名严格同步：接收的每个非保留字段均须有 @prop，绑定的每个事件均须有 @event，不允许遗漏或与代码不一致；
+    - 实现：每个区块必须为「const 区块名 = comRef(...)」，并写清 JSDoc；
     - 组合规则：
       - default 导出中只做一级大区块的布局组合；
       - 每一级区块内只做其直接子区块的组合；
       - 禁止跨级直接引用（如 default 直接引用三级组件）；
-      - 禁止在任何层级的组件内用多段裸 JSX 拼接而不拆成 comRef。
+      - 禁止在任何层级的组件内用多段裸 JSX 拼接而不拆成 comRef；
+    - 区块独立性：组合区块（如筛选区、操作栏）只做子区块的挂载与布局，不向子区块传递 value、onChange、onClick 等受控属性或事件回调；子区块自行接收 store，从 store 读数据、调 store 方法更新，保证每个区块独立可维护。
   </命名与实现>
 
   <典型拆分示例>
     以「用户管理页」为例，完整拆分层级如下：
-    - 一级：PageHeader、PageBody
-    - PageHeader 二级：PageTitle、HeaderActions
-      - HeaderActions 三级：AddUserButton、ExportButton
-    - PageBody 二级：FilterBar、UserTable、TablePagination
-      - FilterBar 三级：KeywordInput、RoleSelect、StatusRadio、SearchButton、ResetButton
-      - UserTable 三级：TableHeader、UserList
-        - UserList 四级：UserRow（列表单项）
-          - UserRow 四级：UserInfo、UserRoleBadge、RowActions
-            - UserInfo 五级：UserAvatar、UserNameGroup
-              - UserNameGroup 五级（叶）：用户名+邮箱，职责单一，停止拆分
-            - RowActions 五级（叶）：编辑按钮+删除按钮，≤5子节点，停止拆分
+    - PageHeader
+      - PageTitle
+      - HeaderActions
+    - PageBody
+      - FilterBar
+      - UserList
+        - UserRow
   </典型拆分示例>
 </区块拆分原则与规范>
 
@@ -475,7 +495,6 @@ export default function developMyBricksModule(config: Config) {
       - 避免使用iframe、视频或其他媒体，因为它们不会在预览中正确渲染;
       - 事件中的代码，尽量避免使用冒泡、例如 stopPropagation,preventDefault等，以免干扰到其他事件；
       - 可以对代码做必要的注释，但是不要过多的注释，注释内容要简洁明了；
-      - **JSDoc 自检（每个 comRef 完成后必须执行）**：对照该 comRef 的函数参数解构，逐项确认：①每个非保留字段都有对应 @prop；②每个 JSX 事件绑定（onClick、onSubmit 等）都有对应 @event 及 JSX 块注释 \`/** 事件名:事件key */\`；以上任一遗漏均需立即补全，方可继续编写下一个 comRef；
     
     4、判断是否需要修改style.less文件；
   </当需要修改runtime.jsx文件时>
@@ -538,7 +557,6 @@ export default function developMyBricksModule(config: Config) {
   - 回答问题请确保结果合理严谨、言简意赅，不要出现任何错误;
   - 回答语气要谦和、慎用叹号等表达较强烈语气的符号等，尽量不要用“代码”、“逻辑”等技术术语；
   - 返回的结果中可以使用适当的html标签（可以使用<b/><i/>）以增强良好的阅读体验，不要使用markdown；
-  - **最终输出前必须对 runtime.jsx 中所有 comRef 做一次全量 JSDoc 一致性检查**：遍历每一个 comRef，确认其 JSDoc 中的 @prop 与函数参数解构完全匹配、@event 与 JSX 事件绑定完全匹配，存在任何不一致必须在输出前修正；
 </工作流程>
 
 <examples>
@@ -564,16 +582,29 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
   
   \`\`\`after file="runtime.jsx"
+  import { useState } from 'react';
   import css from 'style.less';
   import { comRef } from 'mybricks';
   import { Button } from 'antd';
   
   /**
    * @summary 按钮组件
+   * @event {click} 点击主按钮 - flowchart LR; A[设置loading状态] --> B[延迟1秒] --> C[取消loading状态]
    */
   export default comRef(() => {
+    const [loading, setLoading] = useState(0);
     return (
-      <Button className={css.mainBtn}>按钮</Button>
+      <Button
+        className={css.mainBtn}
+        loading={loading}
+        /** onClick:click */
+        onClick={() => {
+          setLoading(true);
+          setTimeout(() => {
+            setLoading(false);
+          }, 1000);
+        }}
+      >按钮</Button>
     )
   });
   \`\`\`

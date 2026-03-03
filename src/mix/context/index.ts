@@ -41,9 +41,14 @@ class Context {
         aiComParams.data.modelConfig = encodeURIComponent(content);
         break;
       case "runtime.jsx":
-        updateRender({ data: aiComParams.data }, content);
-        const aiCom = this.getAiCom(id);
-        aiCom?.actions?.notifyChanged?.();
+        updateRender({
+          data: aiComParams.data,
+          success: () => {
+            const aiCom = this.getAiCom(id);
+            aiCom?.actions?.notifyChanged?.();
+          }},
+          content
+        );
         break;
       case "style.less":
         updateStyle({ id, data: aiComParams.data }, content);

@@ -1,4 +1,4 @@
-import { findRelyAndSource } from "./rely";
+import { findRelyAndSource, getJSXElementNameString } from "./rely";
 
 /**
  * 从 className 表达式中提取所有 css.xxx 的 xxx 值
@@ -51,7 +51,13 @@ export function getSelectorSegment(node: any, importRelyMap: any) {
     return cnList.map((c) => "." + c);
   }
 
-  const { relyName, source } = findRelyAndSource(node.openingElement.name.name, importRelyMap);
+  const tagName = getJSXElementNameString(node.openingElement.name);
+
+  if (!tagName) {
+    return [];
+  }
+
+  const { relyName, source } = findRelyAndSource(tagName.split(".")[0], importRelyMap);
 
   if (source === "html") {
     return [relyName]
