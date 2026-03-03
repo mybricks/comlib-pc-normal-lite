@@ -320,10 +320,10 @@ export class Project {
     }
     if (storeRanges.length > 0) {
       fileSectionParts.push(
-        buildFileSection('store.js', styleContent, storeRanges, 'js')
+        buildFileSection('store.js', storeContent, storeRanges, 'js')
       );
     } else {
-      fileSectionParts.push(buildFileSection('store.js', styleContent, [], 'js'));
+      fileSectionParts.push(buildFileSection('store.js', storeContent, [], 'js'));
     }
 
     return [
