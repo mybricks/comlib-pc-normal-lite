@@ -473,7 +473,11 @@ ${text}
 `;
         };
 
-        // agent模式配置
+        // agent模式配置：planningCheck 保证「代码开发」前必须调用 readRelated
+        const READ_RELATED_NAME = (readRelated as any).toolName;
+        const DEVELOP_MODULE_NAME = (developModule as any).toolName;
+        const ANSWER_NAME = (answer as any).toolName;
+
         const AgentModeConfig = {
           ...baseConfig,
           tools: [
@@ -486,6 +490,29 @@ ${text}
             }),
             answer()
           ],
+          planningCheck: (tools: any[]) => {
+            const toolNames = tools.map((t: any) => t[1]);
+            const resultTools = [...tools];
+
+            // 规则1: 如果 信息获取类 在最后一个，则添加一个 answer
+            const infoToolNames = [READ_RELATED_NAME];
+            if (toolNames.length > 0 && infoToolNames.includes(toolNames[toolNames.length - 1])) {
+              resultTools.push(['node', ANSWER_NAME]);
+              return resultTools;
+            }
+
+            // 规则2: 开发代码前必须调用 readRelated
+            const developIndex = toolNames.indexOf(DEVELOP_MODULE_NAME);
+            if (developIndex > -1) {
+              const hasReadRelated = toolNames.slice(0, developIndex).includes(READ_RELATED_NAME);
+              if (!hasReadRelated) {
+                resultTools.splice(developIndex, 0, ['node', READ_RELATED_NAME]);
+                return resultTools;
+              }
+            }
+
+            return resultTools;
+          },
           historyMessageMode: "expanded",
           formatUserMessage,
         };
