@@ -246,10 +246,11 @@ const genResizer = () => {
       },
       set(params, value, status) {
         if (status.state === 'start') {
+          if (!params.selector) return;
           const comId = params.id;
           const aiComParams = context.getAiComParams(comId);
           cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
-          const match = params.selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
+          const match = params.selector?.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
           const selector = match?.[1] ?? params.selector;
           cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
       
