@@ -186,9 +186,11 @@ const genStyleValue = (params) => {
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
 
-      const activeZoneSelector: string | undefined = (window as any).__mybricks_active_zone_selector
-      const fullSelector = activeZoneSelector ?? params.selector;
-      console.log("fullSelector",fullSelector)
+      //const activeZoneSelector: string | undefined = (window as any).__mybricks_active_zone_selector
+      //const fullSelector = activeZoneSelector ?? params.selector;
+      const fullSelector = params.selector;
+
+      // console.log("fullSelector",fullSelector)
 
       const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
