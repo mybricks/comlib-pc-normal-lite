@@ -52,7 +52,9 @@ export default function ({ constituency }) {
               };
               const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
               const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
-              const cnList = [...new Set(extractCssClassNames(classNameExpr))];
+              // extractCssClassNames 现在返回 CssClassName[]，这里提取 .name 并去重
+              // 保持 cnList 为 string[]，data-loc 和 constituency.className 的下游消费者无需改动
+              const cnList = [...new Set(extractCssClassNames(classNameExpr).map(c => c.name))];
   
               const selectors = getCssSelectorForJSXPath(path, importRelyMap);
               const tagName = getJSXElementNameString(node.openingElement.name)?.split(".")[0];

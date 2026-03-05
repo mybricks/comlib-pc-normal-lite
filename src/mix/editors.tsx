@@ -182,12 +182,14 @@ const genStyleValue = (params) => {
   const { comId } = params;
   return {
     set(params, value) {
-
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
 
-      const fullSelector = params.selector;
+      const activeZoneSelector: string | undefined = (window as any).__mybricks_active_zone_selector
+      const fullSelector = activeZoneSelector ?? params.selector;
+      console.log("fullSelector",fullSelector)
+
       const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
       // 确定写入目标 key：阶段1 精确匹配 → 阶段2 后缀收缩匹配 → 阶段3 复合类名匹配 → 兜底新建
@@ -268,6 +270,7 @@ const genResizer = () => {
           // const className = `.${cn}`;
           // cssObjKey = Object.keys(cssObj).find(key => key.endsWith(className)) || className;
         } else if (status.state === 'ing') {
+          if (!cssObjKey || !cssObj[cssObjKey]) return;
           Object.entries(value).forEach(([key, value]) => {
             cssObj[cssObjKey][key] = `${value}px`;
           })
@@ -781,6 +784,8 @@ export default function (props: Props, actions: Actions) {
   context.setAiCom(props.id, { params: props, actions });
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
+
+  console.log("focusAreaConfigs",focusAreaConfigs)
 
   return {
     ...focusAreaConfigs,
