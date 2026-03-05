@@ -1,38 +1,51 @@
 import { findRelyAndSource, getJSXElementNameString } from "./rely";
 
+export interface CssClassName {
+  name: string;
+  /** 是否来自条件表达式（ConditionalExpression 的分支 或 LogicalExpression 的 right） */
+  conditional: boolean;
+}
+
 /**
- * 从 className 表达式中提取所有 css.xxx 的 xxx 值
+ * 从 className 表达式中提取所有 css.xxx，并标记是否为条件性 class。
  * 支持：css.button、`${css.button} ${css.submit}`、条件表达式中的 css.disabled 等
+ *
+ * @param node          - AST 节点
+ * @param isConditional - 当前节点是否处于条件分支上下文中（由父节点递归传入）
  */
-export function extractCssClassNames(node: any): string[] {
-  const result: string[] = [];
+export function extractCssClassNames(node: any, isConditional = false): CssClassName[] {
+  const result: CssClassName[] = [];
   if (!node) return result;
 
   if (node.type === "MemberExpression") {
     const obj = node.object;
     const prop = node.property;
     if (obj?.type === "Identifier" && obj.name === "css" && prop?.type === "Identifier") {
-      result.push(prop.name);
+      result.push({ name: prop.name, conditional: isConditional });
     }
     return result;
   }
 
   if (node.type === "TemplateLiteral") {
+    // 模板字符串本身不改变 conditional 语义，透传父级的 isConditional
     for (const expr of node.expressions || []) {
-      result.push(...extractCssClassNames(expr));
+      result.push(...extractCssClassNames(expr, isConditional));
     }
     return result;
   }
 
   if (node.type === "ConditionalExpression") {
-    result.push(...extractCssClassNames(node.consequent));
-    result.push(...extractCssClassNames(node.alternate));
+    // consequent / alternate 都是条件性的，无论父级是否已经是条件分支
+    result.push(...extractCssClassNames(node.consequent, true));
+    result.push(...extractCssClassNames(node.alternate, true));
     return result;
   }
 
   if (node.type === "LogicalExpression") {
-    result.push(...extractCssClassNames(node.left));
-    result.push(...extractCssClassNames(node.right));
+    // left 通常是布尔判断（如 isActive），不含 css.xxx，透传父级 isConditional
+    result.push(...extractCssClassNames(node.left, isConditional));
+    // right 只在条件成立时生效，标记为 conditional
+    result.push(...extractCssClassNames(node.right, true));
     return result;
   }
 
@@ -40,15 +53,54 @@ export function extractCssClassNames(node: any): string[] {
 }
 
 /**
- * 从单个 JSX 元素节点得到「选择器片段」，如 "div.container" 或 "h1"
+ * 从单个 JSX 元素节点得到「选择器片段」列表。
+ *
+ * 处理规则：
+ * - 非条件 class（base）各自独立输出，如 [".actionBtn", ".primary"]
+ * - 条件 class 与每个 base class 组合成复合选择器，如 ".navItem.active"
+ *   这样 ".navItem.active" 才能精确匹配"同时具有两个 class 的元素"，
+ *   而不是裸的 ".active" 误匹配任意元素
+ * - 若无 base class，条件 class 退化为独立输出（向后兼容）
  */
-export function getSelectorSegment(node: any, importRelyMap: any) {
+export function getSelectorSegment(node: any, importRelyMap: any): string[] {
   if (!node || node.type !== "JSXElement") return [];
   const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
   const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
-  const cnList = [...new Set(extractCssClassNames(classNameExpr))];
+
+  const raw = extractCssClassNames(classNameExpr);
+
+  // 按 name 去重，保留第一次出现的条目
+  const seen = new Set<string>();
+  const cnList = raw.filter(item => {
+    if (seen.has(item.name)) return false;
+    seen.add(item.name);
+    return true;
+  });
+
   if (cnList.length) {
-    return cnList.map((c) => "." + c);
+    const baseClasses = cnList.filter(c => !c.conditional);
+    const conditionalClasses = cnList.filter(c => c.conditional);
+
+    const result: string[] = baseClasses.map(c => `.${c.name}`);
+
+    if (conditionalClasses.length > 0) {
+      if (baseClasses.length > 0) {
+        // 每个条件 class 与每个 base class 组合成复合选择器（无空格）
+        // 例：base=".navItem"，conditional="active" → ".navItem.active"
+        for (const cond of conditionalClasses) {
+          for (const base of baseClasses) {
+            result.push(`.${base.name}.${cond.name}`);
+          }
+        }
+      } else {
+        // 没有 base class 时，条件 class 退化为独立路径
+        for (const cond of conditionalClasses) {
+          result.push(`.${cond.name}`);
+        }
+      }
+    }
+
+    return result;
   }
 
   const tagName = getJSXElementNameString(node.openingElement.name);
