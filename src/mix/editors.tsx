@@ -186,28 +186,39 @@ const genStyleValue = (params) => {
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
 
-      //const activeZoneSelector: string | undefined = (window as any).__mybricks_active_zone_selector
-      //const fullSelector = activeZoneSelector ?? params.selector;
+      // const activeZoneSelector: string | undefined = (window as any).__mybricks_active_zone_selector
+      // const fullSelector = activeZoneSelector ?? params.selector;
       const fullSelector = params.selector;
 
-      // console.log("fullSelector",fullSelector)
+      // debugger
+      // console.log("组件接收selector",fullSelector)
 
       const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
-      // 确定写入目标 key：阶段1 精确匹配 → 阶段2 后缀收缩匹配 → 阶段3 复合类名匹配 → 兜底新建
+      // 确定写入目标 key：阶段1 后缀遍历匹配（取最长路径）→ 阶段2 后缀收缩匹配 → 阶段3 复合类名匹配 → 兜底新建
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
 
+      // 后缀遍历匹配：在 cssObj 中找以 fullSelector 为路径后缀的 key，取路径最长（最具体）的一个。
+      // 优先于精确匹配，防止历史错误写入的浅层 key 被再次命中。
+      // 已知局限：若存在两个等长的不同根路径（如 .a .x 与 .b .x），仍无法区分，取首个。
+      const suffixMatchKey = Object.keys(cssObj)
+        .filter(k => k === fullSelector || k.endsWith(' ' + fullSelector))
+        .sort((a, b) => b.length - a.length)[0];
+
+      const shrinkMatchKey = segments.slice(1).reduce((found: string | undefined, _, i) => {
+        if (found) return found;
+        const candidate = segments.slice(i + 1).join(' ');
+        return cssObj[candidate] !== undefined ? candidate : undefined;
+      }, undefined) as string | undefined;
+
+      const compoundMatchKey = eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined;
+
       const targetKey: string =
-        cssObj[fullSelector] !== undefined
-          ? fullSelector
-          : (segments.slice(1).reduce((found: string | undefined, _, i) => {
-              if (found) return found;
-              const candidate = segments.slice(i + 1).join(' ');
-              return cssObj[candidate] !== undefined ? candidate : undefined;
-            }, undefined) as string | undefined)
-          ?? (eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined)
-          ?? fullSelector;
+        suffixMatchKey
+        ?? shrinkMatchKey
+        ?? compoundMatchKey
+        ?? fullSelector;
 
       // Step 3.5：将路径中间节点的孤立根层级 key 并入嵌套结构，避免输出多余的根层级块
       absorbOrphans(cssObj, targetKey);
