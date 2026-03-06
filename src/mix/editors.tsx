@@ -823,7 +823,8 @@ export default function (props: Props, actions: Actions) {
           ]
         }
       ]
-    }
+    },
+    '[data-library-source]':{}
     /** 初始化 */
     // '@init': () => {},
     /** 保存的回调 */
