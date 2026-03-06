@@ -6,6 +6,64 @@ import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
 
+/** 统一错误面板：编译失败、generate.error、eval 失败等共用同一套样式 */
+export const RuntimeCardErrorView = ({ title = '错误', desc = '' }: { title?: string; desc?: string }) => {
+  const onRetry = useCallback(() => {
+    const message = desc || title || '未知错误';
+    setTimeout(() => {
+      if ((window as any)._sendToFocusVibeAgent_) {
+        (window as any)._sendToFocusVibeAgent_({ message: `当前组件出错了，${message}` });
+      }
+    }, 500)
+  }, [title, desc]);
+
+  return (
+    <div className={css.runtimeCardErrorView}>
+      <div className={css.runtimeCardError}>
+        <span className={css.runtimeCardErrorIcon}>!</span>
+        <div className={css.runtimeCardErrorTitle}>{title}</div>
+        <pre className={css.runtimeCardErrorDesc}>{desc || '未知错误'}</pre>
+        <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+      </div>
+    </div>
+  );
+};
+
+/** 生成中流式 loading：上下边缘模糊淡出，中间展示文件名与全量内容；error 时展示错误面板 */
+const GenerateLoadingView = ({
+  fileName = '',
+  content = '',
+  error = false,
+  errorMessage = '',
+}: { fileName?: string; content?: string; error?: boolean; errorMessage?: string }) => {
+  const onRetry = useCallback(() => {
+    const message = errorMessage || '未知错误';
+    if ((window as any)._sendToFocusVibeAgent_) {
+      (window as any)._sendToFocusVibeAgent_({ message });
+    }
+  }, [errorMessage]);
+
+  return (
+    <div className={css.generateRoot}>
+      <div className={css.generateContent}>
+        {error ? (
+          <div className={css.generateError}>
+            <span className={css.generateErrorIcon}>!</span>
+            <div className={css.generateErrorTitle}>生成失败</div>
+            <pre className={css.generateErrorDesc}>{errorMessage || '未知错误'}</pre>
+            <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+          </div>
+        ) : (
+          <>
+            {fileName ? <div className={css.generateFileName}>{fileName}</div> : null}
+            <pre className={css.generateCode}>{content || ' '}</pre>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = []}: any) => {
   const copy = useCallback((text) => {
     copyToClipboard(text).then((res) => {
@@ -22,7 +80,7 @@ const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = 
            width="16" height="16">
         <path
           d="M337.28 138.688a27.968 27.968 0 0 0-27.968 27.968v78.72h377.344c50.816 0 92.032 41.152 92.032 91.968v377.344h78.656a28.032 28.032 0 0 0 27.968-28.032V166.656a28.032 28.032 0 0 0-27.968-27.968H337.28z m441.408 640v78.656c0 50.816-41.216 91.968-92.032 91.968H166.656a92.032 92.032 0 0 1-91.968-91.968V337.28c0-50.816 41.152-92.032 91.968-92.032h78.72V166.656c0-50.816 41.152-91.968 91.968-91.968h520c50.816 0 91.968 41.152 91.968 91.968v520c0 50.816-41.152 92.032-91.968 92.032h-78.72zM166.656 309.312a27.968 27.968 0 0 0-27.968 28.032v520c0 15.424 12.544 27.968 27.968 27.968h520a28.032 28.032 0 0 0 28.032-27.968V337.28a28.032 28.032 0 0 0-28.032-28.032H166.656z"
-          fill="#707070"></path>
+          fill="currentColor"></path>
       </svg>
     )
   }, [])
@@ -105,7 +163,23 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
 
-    // 仅当有 data.document 且没有其他代码时展示需求文档，否则维持原来的展示逻辑
+    const hasCompiledCode = data.runtimeJsxCompiled && String(data.runtimeJsxCompiled).trim() !== ''
+
+    // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
+    if (data.generate) {
+      return (
+        <Wrapper env={env} canvasContainer={canvasContainer}>
+          <GenerateLoadingView
+            fileName={data.generateFileName ?? ''}
+            content={data.generateContent ?? ''}
+            error={!!data.generateError}
+            errorMessage={data.generateErrorMessage ?? ''}
+          />
+        </Wrapper>
+      );
+    }
+
+    // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
     if ((data.document && !data.runtimeJsxCompiled) || data.loading) {
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
@@ -121,26 +195,45 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
       );
     }
 
+    // 3. error：Less/Babel 编译失败或 generate 的 error，统一错误样式
+    if (errorInfo) {
+      return (
+        <Wrapper env={env} canvasContainer={canvasContainer}>
+          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} />
+        </Wrapper>
+      );
+    }
+
+    // 4. runtime：编译成功，渲染组件
+    if (hasCompiledCode) {
+      return (
+        <Wrapper env={env} canvasContainer={canvasContainer}>
+          <AIJsxRuntime
+            env={env}
+            logger={logger}
+            id={id}
+            styleCode={data.styleCompiled}
+            renderCode={data.runtimeJsxCompiled}
+            data={data}
+            inputs={inputs}
+            outputs={outputs}
+            placeholder={<IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
+            renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} />}
+            dependencies={{
+              ...(dependencies ?? {}),
+              'react': React,
+              '@ant-design/icons': icons,
+            }}
+            inMybricksGeoWebview={!!canvasContainer}
+          />
+        </Wrapper>
+      );
+    }
+
+    // 5. placeholder：等待中，展示提示词
     return (
       <Wrapper env={env} canvasContainer={canvasContainer}>
-        <AIJsxRuntime
-          env={env}
-          logger={logger}
-          id={id}
-          styleCode={data.styleCompiled}
-          renderCode={data.runtimeJsxCompiled}
-          data={data}
-          inputs={inputs}
-          outputs={outputs}
-          errorInfo={errorInfo}
-          placeholder={<IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-          dependencies={{
-            ...(dependencies ?? {}),
-            'react': React,
-            '@ant-design/icons': icons,
-          }}
-          inMybricksGeoWebview={!!canvasContainer}
-        />
+        <IdlePlaceholder title={title} orgName={orgName} examples={examples} />
       </Wrapper>
-    )
+    );
   }

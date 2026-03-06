@@ -33,6 +33,45 @@ class Context {
 
   plugins: any;
 
+  /** 生成中：start 后展示流式界面，stream 传全量（多次即流式），end 删 data 并渲染，error 展示错误面板 */
+  generate = {
+    start: (id: string) => {
+      const aiComParams = this.getAiComParams(id);
+      if (!aiComParams?.data) return;
+      aiComParams.data.generate = true;
+      aiComParams.data.generateFileName = '';
+      aiComParams.data.generateContent = '';
+      aiComParams.data.generateError = false;
+      aiComParams.data.generateErrorMessage = '';
+      this.getAiCom(id)?.actions?.notifyChanged?.();
+    },
+    stream: (id: string, payload: { fileName: string; content: string }) => {
+      const aiComParams = this.getAiComParams(id);
+      if (!aiComParams?.data) return;
+      aiComParams.data.generateFileName = payload.fileName ?? '';
+      aiComParams.data.generateContent = payload.content ?? '';
+      this.getAiCom(id)?.actions?.notifyChanged?.();
+    },
+    error: (id: string, message: string) => {
+      const aiComParams = this.getAiComParams(id);
+      if (!aiComParams?.data) return;
+      aiComParams.data.generate = true;
+      aiComParams.data.generateError = true;
+      aiComParams.data.generateErrorMessage = message ?? '';
+      this.getAiCom(id)?.actions?.notifyChanged?.();
+    },
+    end: (id: string) => {
+      const aiComParams = this.getAiComParams(id);
+      if (!aiComParams?.data) return;
+      delete aiComParams.data.generate;
+      delete aiComParams.data.generateFileName;
+      delete aiComParams.data.generateContent;
+      delete aiComParams.data.generateError;
+      delete aiComParams.data.generateErrorMessage;
+      this.getAiCom(id)?.actions?.notifyChanged?.();
+    },
+  };
+
   updateFile(id, { fileName, content }) {
     const aiComParams = this.getAiComParams(id);
 
@@ -51,7 +90,13 @@ class Context {
         );
         break;
       case "style.less":
-        updateStyle({ id, data: aiComParams.data }, content);
+        updateStyle({
+          id,
+          data: aiComParams.data,
+          success: () => {
+            this.getAiCom(id)?.actions?.notifyChanged?.();
+          },
+        }, content);
         break;
       case "config.js":
         aiComParams.data.configJsCompiled = encodeURIComponent(content);

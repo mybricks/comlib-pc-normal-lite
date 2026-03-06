@@ -101,28 +101,39 @@ export function transformLess(code): Promise<string> {
   }) as any
 }
 
-export function updateRender({data, success}, renderCode) {
+export function updateRender({ data, success }, renderCode) {
+  const writeSource = () => {
+    data.runtimeJsxSource = encodeURIComponent(renderCode);
+  };
   transformTsx(renderCode).then(({ transformCode, constituency }) => {
-    data.runtimeJsxCompiled = encodeURIComponent(transformCode)
-    data.runtimeJsxSource = encodeURIComponent(renderCode)
-    data.runtimeJsxConstituency = constituency
-    data._jsxErr = ''
-    success();
+    data.runtimeJsxCompiled = encodeURIComponent(transformCode);
+    writeSource();
+    data.runtimeJsxConstituency = constituency;
+    data._jsxErr = '';
+    success?.();
   }).catch(e => {
     console.error("[@transformTsx error]", e);
-    data._jsxErr = e?.message ?? '未知错误'
-  })
+    writeSource();
+    data._jsxErr = typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误');
+    success?.();
+  });
 }
 
-export function updateStyle({id, data}, styleCode) {
+export function updateStyle({ id, data, success }, styleCode) {
+  const writeSource = () => {
+    data.styleSource = encodeURIComponent(styleCode);
+  };
   transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`).then(css => {
-    data.styleCompiled = encodeURIComponent(css)
-    data.styleSource = encodeURIComponent(styleCode)
+    data.styleCompiled = encodeURIComponent(css);
+    writeSource();
     data._cssErr = '';
+    success?.();
   }).catch(e => {
     console.error("[@transformLess error]", e);
-    data._cssErr = e?.message ?? '未知错误'
-  })
+    writeSource();
+    data._cssErr = typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误');
+    success?.();
+  });
 }
 
 

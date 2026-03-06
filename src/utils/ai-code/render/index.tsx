@@ -238,7 +238,7 @@ const PRIVATE_DEPENDENCIES = {
   }
 }
 
-export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', dependencies = {}, inMybricksGeoWebview, logger } : any) => {
+export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', renderError, dependencies = {}, inMybricksGeoWebview, logger } : any) => {
   const ref = useRef<any>(null);
   const appendCssApi = useMemo<CssApi>(() => {
     if (inMybricksGeoWebview && env.canvas?.css) {
