@@ -9,13 +9,26 @@ import css from './runtime-card.less'
 /** 统一错误面板：编译失败、generate.error、eval 失败等共用同一套样式 */
 export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [] }: { title?: string; desc?: string; errors?: any[] }) => {
   const onRetry = useCallback(() => {
-    const message = desc || title || '未知错误';
+    let message = '';
+    
+    // 如果有多条错误，组合所有错误信息
+    if (errors && errors.length > 0) {
+      message = '当前组件出现了以下错误：\n';
+      errors.forEach((err, idx) => {
+        const fileLabel = err.file ? `[${err.file}] ` : '[运行时] ';
+        message += `${idx + 1}. ${fileLabel}${err.message}\n`;
+      });
+    } else {
+      // 没有 errors 数组，使用传入的 title 和 desc
+      message = `当前组件出错了，${desc || title || '未知错误'}`;
+    }
+    
     setTimeout(() => {
       if ((window as any)._sendToFocusVibeAgent_) {
-        (window as any)._sendToFocusVibeAgent_({ message: `当前组件出错了，${message}` });
+        (window as any)._sendToFocusVibeAgent_({ message });
       }
     }, 500)
-  }, [title, desc]);
+  }, [title, desc, errors]);
 
   return (
     <div className={css.runtimeCardErrorView}>
