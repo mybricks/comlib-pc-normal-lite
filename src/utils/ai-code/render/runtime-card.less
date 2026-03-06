@@ -227,6 +227,44 @@
   opacity: 0.8;
 }
 
+// 错误详情折叠面板
+.errorDetails {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+  font-size: 12px;
+  
+  summary {
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+    color: currentColor;
+    opacity: 0.7;
+    margin-bottom: 8px;
+    
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+.errorItem {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  font-size: 12px;
+  line-height: 1.4;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  strong {
+    color: var(--doc-theme, var(--mybricks-color-primary, #1677ff));
+    font-weight: 600;
+  }
+}
+
 .runtimeCardErrorRetry {
   margin-top: 8px;
   padding: 6px 16px;

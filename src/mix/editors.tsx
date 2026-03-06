@@ -7,6 +7,7 @@ import { parseLess, stringifyLess } from "./utils/transform/less";
 import { deepClone } from "./utils/normal";
 import { convertHyphenToCamel } from "../utils/string";
 import { MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP } from "./context/constants";
+import { generateCodeStructure, exportCode, isExportSupported } from "../utils/code-export";
 import "../utils/antd";
 import "./utils/dom-to-json";
 
@@ -652,8 +653,70 @@ export default function (props: Props, actions: Actions) {
         title: "导出为代码",
         type: "Button",
         value: {
-          set(_params: { id?: string; focusArea?: any; data?: any }, _value: any) {
-            // TODO: 代码导出逻辑
+          async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
+            const comId = params?.id;
+            if (!comId) {
+              console.warn("[导出为代码] 无组件 ID");
+              return;
+            }
+
+            try {
+              const aiComParams = context.getAiComParams(comId);
+              if (!aiComParams?.data) {
+                console.error("[导出为代码] 组件数据不存在");
+                return;
+              }
+
+              // 生成文件结构（只包含 runtime.jsx, style.less, store.js）
+              const files = generateCodeStructure(aiComParams.data);
+
+              console.log('[导出为代码] 生成文件列表:', files.length, '个');
+
+              // 检查是否支持导出
+              if (!isExportSupported()) {
+                console.error('[导出为代码] 当前环境不支持导出');
+                alert('当前环境不支持导出，请使用 Chrome、Edge 或在 VSCode 中打开');
+                return;
+              }
+
+              // 显示导出中提示
+              const message = (window as any).antd?.message;
+              let hideLoading: any = null;
+              if (message) {
+                hideLoading = message.loading('正在导出代码...', 0);
+              }
+
+              // 导出代码（自动检测 VSCode 或浏览器）
+              await exportCode(files, {
+                folderName: 'mybricks-component',
+                onProgress: (progress) => {
+                  console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
+                },
+              });
+
+              // 关闭 loading，显示成功
+              if (hideLoading) hideLoading();
+              if (message) {
+                message.success('导出代码成功！');
+              } else {
+                alert('导出代码成功！');
+              }
+              console.log('[导出为代码] 导出成功');
+            } catch (error) {
+              // 关闭 loading
+              const message = (window as any).antd?.message;
+              
+              if ((error as any)?.message?.includes('取消')) {
+                console.log('[导出为代码] 用户取消导出');
+              } else {
+                if (message) {
+                  message.error(`导出失败: ${(error as any)?.message || '未知错误'}`);
+                } else {
+                  alert(`导出失败: ${(error as any)?.message || '未知错误'}`);
+                }
+                console.error('[导出为代码] 导出失败', error);
+              }
+            }
           }
         }
       }

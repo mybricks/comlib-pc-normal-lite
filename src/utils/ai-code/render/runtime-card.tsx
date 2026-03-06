@@ -7,7 +7,7 @@ import {copyToClipboard} from './../index'
 import css from './runtime-card.less'
 
 /** 统一错误面板：编译失败、generate.error、eval 失败等共用同一套样式 */
-export const RuntimeCardErrorView = ({ title = '错误', desc = '' }: { title?: string; desc?: string }) => {
+export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [] }: { title?: string; desc?: string; errors?: any[] }) => {
   const onRetry = useCallback(() => {
     const message = desc || title || '未知错误';
     setTimeout(() => {
@@ -23,6 +23,16 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '' }: { title?: 
         <span className={css.runtimeCardErrorIcon}>!</span>
         <div className={css.runtimeCardErrorTitle}>{title}</div>
         <pre className={css.runtimeCardErrorDesc}>{desc || '未知错误'}</pre>
+        {errors && errors.length > 1 && (
+          <details className={css.errorDetails}>
+            <summary>查看所有错误 ({errors.length})</summary>
+            {errors.map((err, idx) => (
+              <div key={idx} className={css.errorItem}>
+                <strong>{err.file || '运行时'}</strong>: {err.message}
+              </div>
+            ))}
+          </details>
+        )}
         <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
       </div>
     </div>
@@ -135,6 +145,34 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     // }, [])
 
     const errorInfo = useMemo(() => {
+      // 使用统一的错误列表
+      if (data._errors && Array.isArray(data._errors) && data._errors.length > 0) {
+        // 按优先级排序：runtime > compile，同类型按时间（数组顺序）
+        const sortedErrors = [...data._errors].sort((a, b) => {
+          if (a.type === 'runtime' && b.type !== 'runtime') return -1;
+          if (a.type !== 'runtime' && b.type === 'runtime') return 1;
+          return 0;
+        });
+        
+        const firstError = sortedErrors[0];
+        const fileLabel = firstError.file ? ` (${firstError.file})` : '';
+        const titleMap = {
+          'runtime.jsx': 'JSX 编译失败',
+          'style.less': 'Less 编译失败',
+          'store.js': 'Store 执行失败',
+        };
+        const title = firstError.type === 'runtime' 
+          ? '组件运行时错误' 
+          : (titleMap[firstError.file] || '编译失败');
+        
+        return {
+          title: title + fileLabel,
+          desc: firstError.message,
+          errors: data._errors, // 保留所有错误，供错误面板展示
+        };
+      }
+
+      // 向后兼容旧字段（逐步迁移后可删除）
       if (!!data._jsxErr) {
         return {
           title: 'JSX 编译失败',
@@ -148,7 +186,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
           desc: data._cssErr,
         }
       }
-    }, [data._jsxErr, data._cssErr])
+    }, [data._errors, data._jsxErr, data._cssErr])
 
     const Wrapper = useMemo(() => {
       let comp = ({children, env, canvasContainer}) => <>{children}</>
@@ -199,7 +237,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     if (errorInfo) {
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
-          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} />
+          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} />
         </Wrapper>
       );
     }

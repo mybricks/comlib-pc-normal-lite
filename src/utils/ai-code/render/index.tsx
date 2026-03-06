@@ -26,18 +26,62 @@ class ErrorBoundary extends Component {
   }
 
   state = {
+    hasError: false,
     error: null,
     errorInfo: null
   };
 
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
   componentDidCatch(error, errorInfo) {
-    this.setState({ error, errorInfo });
+    this.setState({ errorInfo });
+    // 添加运行时错误到统一错误列表
+    const { data } = this.props as any;
+    if (data) {
+      if (!data._errors) data._errors = [];
+      // 移除旧的运行时错误（没有 file 字段的）
+      data._errors = data._errors.filter(err => err.file);
+      const errorMessage = error?.toString ? error.toString() : (errorInfo ? errorInfo.componentStack : '未知运行时错误');
+      data._errors.push({
+        message: errorMessage,
+        type: 'runtime'
+      });
+    }
+  }
+
+  componentDidMount() {
+    // 组件成功挂载，清除之前的运行时错误
+    const { data } = this.props as any;
+    if (data && data._errors) {
+      data._errors = data._errors.filter(err => err.file);
+    }
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    // 如果从错误状态恢复（比如重新渲染修复了bug），清除运行时错误
+    if (prevState.hasError && !this.state.hasError) {
+      const { data } = this.props as any;
+      if (data && data._errors) {
+        data._errors = data._errors.filter(err => err.file);
+      }
+    }
+    // 如果props变化导致组件成功渲染，也清除运行时错误
+    if (!this.state.hasError && prevProps !== this.props) {
+      const { data } = this.props as any;
+      if (data && data._errors) {
+        data._errors = data._errors.filter(err => err.file);
+      }
+    }
   }
 
   render() {
     // @ts-ignore
     const errorTip = this.state?.error?.toString ? this.state.error.toString() : (this.state.errorInfo ? this.state.errorInfo.componentStack : null);
   
+
+    console.log('errorTip', errorTip);
     if (errorTip) {
       return <ErrorTip title={'组件渲染错误'} desc={errorTip} />
     }
@@ -69,7 +113,7 @@ interface AIJsxProps {
   outputs: any;
 }
 
-function evalJSCompiled(code: string) {
+function evalJSCompiled(code: string, data: any) {
   if (!code) {
     return null;
   }
@@ -82,7 +126,18 @@ function evalJSCompiled(code: string) {
   try {
     return eval(evalStr);
   } catch (error) {
+    const message = error?.message ?? error?.toString?.() ?? '未知错误';
     console.error('eval执行失败：', error);
+    // 添加 store.js 执行错误到统一错误列表（运行时错误，不是编译错误）
+    // 编译错误应该在保存时就被 context/index.ts 捕获了
+    if (!data._errors) data._errors = [];
+    // 移除旧的 store.js 运行时错误（保留编译错误）
+    data._errors = data._errors.filter(err => !(err.file === 'store.js' && err.type === 'runtime'));
+    data._errors.push({
+      file: 'store.js',
+      message: `Store 执行失败: ${message}`,
+      type: 'runtime'  // 这是运行时错误，不是编译错误
+    });
     return null;
   }
 }
@@ -329,7 +384,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
     if (renderCode) {
       try {
         const oriCode = decodeURIComponent(renderCode);
-        const storeCode = evalJSCompiled(decodeURIComponent(data.storeJsCompiled));
+        const storeCode = evalJSCompiled(decodeURIComponent(data.storeJsCompiled), data);
 
         const Com: any = runRender(oriCode, {
           'react': React,
@@ -338,8 +393,15 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
           ...PRIVATE_DEPENDENCIES,
           ...dependencies,
         })
+        
+        // 组件定义成功获取，清除之前的运行时错误（如果有的话）
+        // 注意：实际的运行时渲染错误会在 ErrorBoundary 中捕获
+        if (data._errors) {
+          data._errors = data._errors.filter(err => err.file || err.type !== 'runtime');
+        }
+        
         // TODO 没有key的话会用预览的高度
-        return (props) => cloneElement(<Com ref={ref} {...props} />, {}, null);
+        return (props) => <ErrorBoundary data={data}><Com ref={ref} {...props} /></ErrorBoundary>;
 
 
         // let RT = window[`mbcrjsx_${id}`]
@@ -355,6 +417,13 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
         //   return <RT {...props}></RT>
         // };
       } catch (error) {
+        // 捕获组件定义获取失败的错误
+        if (!data._errors) data._errors = [];
+        data._errors = data._errors.filter(err => err.type !== 'runtime' || err.file);
+        data._errors.push({
+          message: `获取组件定义失败: ${error?.toString?.() ?? '未知错误'}`,
+          type: 'runtime'
+        });
         return () => <ErrorTip title={'获取组件定义失败'} desc={error?.toString?.()} />;
       }
     } else {

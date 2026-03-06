@@ -109,12 +109,21 @@ export function updateRender({ data, success }, renderCode) {
     data.runtimeJsxCompiled = encodeURIComponent(transformCode);
     writeSource();
     data.runtimeJsxConstituency = constituency;
-    data._jsxErr = '';
+    // 清除 runtime.jsx 相关错误
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
     success?.();
   }).catch(e => {
     console.error("[@transformTsx error]", e);
     writeSource();
-    data._jsxErr = typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误');
+    // 添加编译错误到统一错误列表
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
+    data._errors.push({
+      file: 'runtime.jsx',
+      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+      type: 'compile'
+    });
     success?.();
   });
 }
@@ -126,12 +135,21 @@ export function updateStyle({ id, data, success }, styleCode) {
   transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`).then(css => {
     data.styleCompiled = encodeURIComponent(css);
     writeSource();
-    data._cssErr = '';
+    // 清除 style.less 相关错误
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'style.less');
     success?.();
   }).catch(e => {
     console.error("[@transformLess error]", e);
     writeSource();
-    data._cssErr = typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误');
+    // 添加编译错误到统一错误列表
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'style.less');
+    data._errors.push({
+      file: 'style.less',
+      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+      type: 'compile'
+    });
     success?.();
   });
 }
