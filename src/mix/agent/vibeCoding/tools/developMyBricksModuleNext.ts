@@ -186,7 +186,7 @@ export default function developMyBricksModule(config: Config) {
   1. runtime.jsx文件
   <代码示例>
   \`\`\`jsx file="runtime.jsx"
-  import { comRef } from "mybricks";
+  import { comRef, pageRef, appRef } from "mybricks";
   import css from 'style.less'
 
   /**
@@ -628,7 +628,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`after file="runtime.jsx"
   import { useState } from 'react';
   import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, redirect } from 'mybricks';
   import { Button } from 'antd';
 
   /**
