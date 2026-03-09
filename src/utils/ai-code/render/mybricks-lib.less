@@ -1,0 +1,35 @@
+// 设计态：横向滚动容器，整体撑满父级
+.routesDesign {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  gap: 24px;
+}
+
+// 设计态每个页面的独立画布：最小 1200×600，有阴影与圆角，避免与相邻页面混在一起
+.routeDesignItem {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  min-width: 1200px;
+  min-height: 600px;
+  height: 100%;
+  position: relative;
+}
+
+// 运行态：整体占满，子项按 display 切换
+.routesRuntime {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.routeRuntimeItem {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}

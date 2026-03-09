@@ -215,7 +215,7 @@ export default function developMyBricksModule(config: Config) {
   /**
    * @summary Hello World
    */
-  export default comRef(() => {
+  const HelloWorld = comRef(() => {
     return (
       <div className={css.container}>
         <Title title="Hello" />
@@ -224,6 +224,13 @@ export default function developMyBricksModule(config: Config) {
       </div>
     )
   })
+
+  /**
+   * @title Hello World 项目
+   */
+  export default appRef(() => {
+    return <HelloWorld />
+  })
   \`\`\`
   </代码示例>
 
@@ -231,7 +238,11 @@ export default function developMyBricksModule(config: Config) {
   1. 组件 props 禁止传递*保留字段*：_env，store，logger；
     - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 所有组件都需要使用 comRef 包装，所有页面和弹窗都需要通过 pageRef 包装；
+  3. 页面、弹窗、组件必须遵循规范进行定义和jsDoc的编写
+    - 整个项目有且只能有一个export default导出，那就是appRef;
+    - 所有页面和弹窗都需要通过 pageRef 包装，无需导出；
+    - 所有组件和模块都需要使用 comRef 包装，无需导出;
+    - 路由通过 Routes + Route 进行渲染；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
   6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；UI、组件、dom元素间交互逻辑写在 区块 内（例如：loading、弹窗提示、选中态等）；
@@ -294,7 +305,6 @@ export default function developMyBricksModule(config: Config) {
     \`\`\`jsdoc
     /**
      * @title 页面名称
-     * @path /index 页面路由
      */
     \`\`\`
     </代码示例>
@@ -302,10 +312,6 @@ export default function developMyBricksModule(config: Config) {
     <@title>
       必填项，页面名称，字数在3-20字之间，不允许重复；
     </@title>
-
-    <@path>
-      必填项，页面路由，不允许重复
-    </@path>
   </JSDoc说明>
   
   2. style.less文件
@@ -441,13 +447,15 @@ export default function developMyBricksModule(config: Config) {
 
   <典型拆分示例>
     以「用户管理页」为例，完整拆分层级如下：
-    - PageHeader
-      - PageTitle
-      - HeaderActions
-    - PageBody
-      - FilterBar
-      - UserList
-        - UserRow
+    - App
+      - Header
+        - Logo
+        - Navs
+      - Routes
+        - UserPage
+          - FilterBar
+          - UserList
+            - UserRow
   </典型拆分示例>
 </区块拆分原则与规范>
 
@@ -620,7 +628,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`after file="runtime.jsx"
   import { useState } from 'react';
   import css from 'style.less';
-  import { comRef, pageRef } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes } from 'mybricks';
   import { Button } from 'antd';
 
   /**
@@ -645,13 +653,23 @@ export default function developMyBricksModule(config: Config) {
 
   /**
    * @title 按钮页面
-   * @path /index
-   */
-  export default pageRef(() => {
+   */ 
+  const PageButton = pageRef(() => {
     return (
       <div className={css.viewContainer}>
         <MainButton />
       </div>
+    )
+  })
+
+  /**
+   * @title 按钮组件
+   */
+  export default appRef(() => {
+    return (
+      <Routes>
+        <Route index element={<PageButton />} />
+      </Routes>
     )
   });
   \`\`\`
@@ -659,9 +677,9 @@ export default function developMyBricksModule(config: Config) {
 </example>
 
 <example>
-  <user_query>开发两个按钮构成的工具条</user_query>
+  <user_query>开发两个按钮查看和修改，点击查看页面和修改页面</user_query>
   <assistant_response>
-  好的，我将为您开发一个工具条，包含两个按钮。
+  好的，我将为您开发三个页面，包含主页面，点击查看页面和修改页面。
 
   \`\`\`before file="style.less"
   \`\`\`
@@ -683,7 +701,7 @@ export default function developMyBricksModule(config: Config) {
 
   \`\`\`after file="runtime.jsx"
   import css from 'style.less';
-  import { comRef, pageRef } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, redirect } from 'mybricks';
   import { Button } from 'xy-ui';
 
   /**
@@ -691,19 +709,45 @@ export default function developMyBricksModule(config: Config) {
    */
   const ToolBar = comRef(({ store }) => {
     return store.btns.map((btn, index)=>{
-      return <Button className={css.btn} key={btn.text}>{btn.text}</Button>
+      return <Button className={css.btn} key={btn.text} onClick={() => redirect(btn.path)}>{btn.text}</Button>
     })
   })
-    
-  /**
-   * @title 包含两个按钮的工具条
-   * @path /index
-   */
-  export default pageRef(() => {
+
+  const PageButton = pageRef(() => {
     return (
       <div className={css.viewContainer}>
         <ToolBar />
       </div>
+    )
+  })
+  
+
+  const PageView = pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        // 查看页面内容
+      </div>
+    )
+  })
+
+  const PageEdit = pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        // 编辑页面内容
+      </div>
+    )
+  })
+    
+  /**
+   * @title 双按钮项目
+   */
+  export default appRef(() => {
+    return (
+      <Routes>
+        <Route index element={<PageButton />} />
+        <Route path="view" element={<PageView />} />
+        <Route path="edit" element={<PageEdit />} />
+      </Routes>
     )
   });
   \`\`\`
@@ -714,8 +758,8 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`after file="store.js"
   export default class Store {
     btns = [
-      { text: '按钮1' },
-      { text: '按钮2' },
+      { text: '按钮1', path: '/view' },
+      { text: '按钮2', path: '/edit' },
     ];
   }
   \`\`\`

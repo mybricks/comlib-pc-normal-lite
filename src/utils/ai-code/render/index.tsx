@@ -1,7 +1,7 @@
 import React, {useEffect, useMemo, useState, Component, ReactElement, cloneElement, useRef, useSyncExternalStore} from 'react';
 import css from './index.less'
 import dayjs from "dayjs";
-
+import { createMybricks, genListenersStore } from './mybricks-lib';
 
 interface CssApi {
   set: (id: string, content: string) => void
@@ -144,167 +144,6 @@ function evalJSCompiled(code: string, data: any) {
 
 const STYLE_REPLACE_ID = '__mybricks_ai_module_id__'
 
-const SYMBOL_SETLISTENER = Symbol("setListener");
-const SYMBOL_SUBSCRIBE = Symbol("subscribe");
-const SYMBOL_GETSNAPSHOT = Symbol("getSnapshot");
-
-class DefaultStore {}
-
-const genListenersStore = (Store, { mode}) => {
-  const listenersMap = new Map();
-  let store;
-  try {
-    store = Store ? new Store() : new DefaultStore();
-  } catch (error) {
-    store = new DefaultStore();
-    console.error('store创建失败：', error);
-  }
-  const setListener = (key, listener) => {
-    let listeners = listenersMap.get(key);
-    if (!listeners) {
-      listeners = new Set();
-      listenersMap.set(key, listeners)
-    }
-    listeners.add(listener);
-
-    return () => {
-      listeners.delete(listener);
-    }
-  }
-
-  return new Proxy({}, {
-    get(target, key) {
-      if (key === SYMBOL_SETLISTENER) {
-        return setListener;
-      }
-
-      const value = store[key];
-
-      if (typeof value === 'function') {
-        if (mode === 'design') {
-          // 设计态，不执行函数，返回空函数
-          return () => {};
-        }
-        return value.bind(new Proxy({}, {
-          get(_, key) {
-            return store[key];
-          },
-          set(_, key, value) {
-            store[key] = value;
-
-            const listeners = listenersMap.get(key);
-            if (listeners) {
-              listeners.forEach(listener => listener({ key, value }));
-            }
-            
-            return true;
-          }
-        }));
-      }
-
-      return store[key];
-    },
-  })
-}
-
-class Store {
-  constructor(store) {
-    let state = {};
-    const collectionsListener = new Map();
-    const listeners = new Set<() => void>();
-    const subscribe = (callback) => {
-      listeners.add(callback);
-      return () => {
-        collectionsListener.forEach((destory) => destory());
-        listeners.delete(callback)
-      };
-    }
-    const getSnapshot = () => {
-      return state;
-    }
-
-    return new Proxy({} as any, {
-      get(target, key) {
-        if (key === SYMBOL_SUBSCRIBE) {
-          return subscribe;
-        } else if (key === SYMBOL_GETSNAPSHOT) {
-          return getSnapshot;
-        }
-
-        const value = store[key];
-        
-        if (!collectionsListener.has(key)) {
-          const collectionListener = ({ key, value }) => {
-            state = {
-              ...state,
-              [key]: value
-            }
-            listeners.forEach(listener => listener());
-          }
-
-          collectionsListener.set(key, store[SYMBOL_SETLISTENER](key, collectionListener));
-        }
-
-        return value;
-      },
-    })
-  }
-}
-
-const mybricks = ({ env, logger, store }) => {
-  const _env = {
-    mode: env.runtime ? 'runtime' : 'design',//运行环境，design|runtime
-  }
-  return {
-    comRef: (Component) => {
-      return (props) => {
-        const autoStore = useRef<any>(null);
-        if (!autoStore.current) {
-          autoStore.current = new Store(store);
-        }
-    
-        const state = useSyncExternalStore(
-          autoStore.current[SYMBOL_SUBSCRIBE],
-          autoStore.current[SYMBOL_GETSNAPSHOT]
-        )
-    
-        return (
-          <Component
-            {...props}
-            _env={_env}
-            logger={logger}
-            store={autoStore.current}
-            _state={state}
-          />
-        )
-      }
-    },
-    pageRef: (Component) => {
-      return (props) => {
-        const autoStore = useRef<any>(null);
-        if (!autoStore.current) {
-          autoStore.current = new Store(store);
-        }
-    
-        const state = useSyncExternalStore(
-          autoStore.current[SYMBOL_SUBSCRIBE],
-          autoStore.current[SYMBOL_GETSNAPSHOT]
-        )
-    
-        return (
-          <Component
-            {...props}
-            _env={_env}
-            logger={logger}
-            store={autoStore.current}
-            _state={state}
-          />
-        )
-      }
-    }
-  }
-}
-
 const PRIVATE_DEPENDENCIES = {
   'style.less': {
     __esModule: true,
@@ -411,7 +250,12 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
 
         const Com: any = runRender(oriCode, {
           'react': React,
-          'mybricks': mybricks({ env, logger, store: genListenersStore(storeCode, { mode: env.runtime ? 'runtime' : 'design' }) }),
+          'mybricks': createMybricks({
+            env,
+            logger,
+            store: genListenersStore(storeCode, { mode: env.runtime ? 'runtime' : 'design' }),
+            useSyncExternalStore,
+          }),
           'dayjs': dayjs,
           ...PRIVATE_DEPENDENCIES,
           ...dependencies,
