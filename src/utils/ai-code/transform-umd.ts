@@ -109,9 +109,10 @@ export function updateRender({ data, success }, renderCode) {
     data.runtimeJsxCompiled = encodeURIComponent(transformCode);
     writeSource();
     data.runtimeJsxConstituency = constituency;
-    // 清除 runtime.jsx 相关错误
+    // 清除 runtime.jsx 编译错误以及旧的 React 渲染时 runtime 错误（即将用新代码重新渲染）
     if (!data._errors) data._errors = [];
     data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
+    data._errors = data._errors.filter(err => err.file);
     success?.();
   }).catch(e => {
     console.error("[@transformTsx error]", e);

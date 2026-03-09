@@ -258,7 +258,6 @@ const genResizer = () => {
     type: '_resizer',
     value: {
       get() {
-        console.log("[@_resizer -get]");
       },
       set(params, value, status) {
         if (status.state === 'start') {
@@ -654,7 +653,6 @@ export default function (props: Props, actions: Actions) {
               ? JSON.stringify(result, null, 2)
               : String(result);
             navigator.clipboard.writeText(jsonStr).then(
-              () => console.log("[导出] 已复制到剪切板"),
               (err) => console.error("[导出] 复制失败", err)
             );
           }
@@ -680,8 +678,6 @@ export default function (props: Props, actions: Actions) {
 
               // 生成文件结构（只包含 runtime.jsx, style.less, store.js）
               const files = generateCodeStructure(aiComParams.data);
-
-              console.log('[导出为代码] 生成文件列表:', files.length, '个');
 
               // 检查是否支持导出
               if (!isExportSupported()) {
@@ -798,8 +794,6 @@ export default function (props: Props, actions: Actions) {
     const skipped: string[] = [];
     const diffs: { selector: string; key: string; from: string; to: string }[] = [];
 
-    console.log("[从 Figma 同步] 收到 Figma 条目数:", figmaItems.length, "组件现有选择器数:", componentSelectors.length);
-
     figmaItems.forEach((item) => {
       const { selectors, value: styles } = item;
       if (!Array.isArray(selectors) || selectors.length === 0 || !styles || typeof styles !== 'object') {
@@ -831,21 +825,9 @@ export default function (props: Props, actions: Actions) {
       });
     });
 
-    if (skipped.length > 0) {
-      console.log("[从 Figma 同步] 未命中的选择器（组件 less 中不存在）:", skipped.length, "个", skipped.slice(0, 20), skipped.length > 20 ? "..." : "");
-    }
-    console.log("[从 Figma 同步] 命中的选择器:", matched.length, "个", matched.slice(0, 30), matched.length > 30 ? "..." : "");
-    if (diffs.length > 0) {
-      console.log("[从 Figma 同步] 有差异并已同步的样式:", diffs.length, "条");
-      diffs.forEach((d) => console.log("  -", d.selector, d.key, d.from, "->", d.to));
-    }
-
     if (hasChange) {
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr });
-      console.log("[从 Figma 同步] 已写入 style.less，共更新", diffs.length, "条样式");
-    } else {
-      console.log("[从 Figma 同步] 无差异，未写入文件");
     }
   };
 
@@ -860,8 +842,6 @@ export default function (props: Props, actions: Actions) {
   context.setAiCom(props.id, { params: props, actions });
 
   context.createVibeCodingAgent({ register: window._registerAgent_ })
-
-  console.log("focusAreaConfigs",focusAreaConfigs)
 
   return {
     ...focusAreaConfigs,

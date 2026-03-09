@@ -244,17 +244,18 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
 
     if (isDesign) {
       // 兜底路由（path="*" 或 path="/*"）若与其他路由使用相同的 element 引用，则不重复展示
-      const seenElements = new Set<React.ReactNode>();
+      const seenElementTypes = new Set<any>();
       const visibleRoutes = routes.filter((r) => {
         const isCatchAll =
           !r.props.index &&
           (r.props.path === '*' || r.props.path === '/*' || r.props.path === undefined);
+        const elementType = r.props.element?.type ?? r.props.element;
         if (!isCatchAll) {
-          seenElements.add(r.props.element);
+          seenElementTypes.add(elementType);
           return true;
         }
-        // 兜底路由：element 已被其他路由使用过则跳过
-        return !seenElements.has(r.props.element);
+        // 兜底路由：element 类型已被其他路由使用过则跳过
+        return !seenElementTypes.has(elementType);
       });
 
       return (
@@ -371,9 +372,33 @@ export function createMybricks(options: CreateMybricksOptions) {
     };
   };
 
+  const wrapPageWithStore = (Component: any) => {
+    return (props: any) => {
+      const autoStore = useRef<any>(null);
+      if (!autoStore.current) {
+        autoStore.current = createReactiveStore(store);
+      }
+      const state = useSyncExternalStore(
+        autoStore.current[SYMBOL_SUBSCRIBE],
+        autoStore.current[SYMBOL_GETSNAPSHOT]
+      );
+      return (
+        <div data-zone-type="page" style={{ display: 'contents' }}>
+          <Component
+            {...props}
+            _env={_env}
+            logger={logger}
+            store={autoStore.current}
+            _state={state}
+          />
+        </div>
+      );
+    };
+  };
+
   return {
     comRef: wrapWithStore,
-    pageRef: wrapWithStore,
+    pageRef: wrapPageWithStore,
     appRef: routerLib.createAppRef(store, logger, useSyncExternalStore),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
