@@ -161,25 +161,105 @@ function normalizeSvgPathForFigma(d) {
 }
 
 /**
+ * 解析 CSS background-image 中的 url(...) → 提取出的 URL 字符串，用于导出为图片 fill。
+ */
+function parseUrlFromBgImage(bgImage) {
+  if (!bgImage || typeof bgImage !== 'string') return null;
+  var m = bgImage.trim().match(/url\s*\(\s*['"]?([^'")\s]+)['"]?\s*\)/);
+  return m ? m[1].trim() : null;
+}
+
+/**
  * 解析 CSS background-image 中的 linear-gradient → { type: 'GRADIENT_LINEAR', gradientStops, angle }。
- * 例: linear-gradient(90deg, #6dd5a6 0%, #4dbd8a 100%) 或 rgb(...) 色值。
+ *
+ * 修复 1（正则不够宽松）：原正则 /linear-gradient\s*\(\s*([\d.]+)?deg\s*,\s*(.+)\)/ 只能匹配
+ *   Ndeg 形式，无法处理 "to right"/"to bottom right" 等 CSS 方向关键字写法，导致 computed 值里
+ *   出现方向关键字时 gradientFill 返回 null，渐变丢失。
+ *   修复：改用逐字符括号匹配提取括号内完整内容，再分别处理角度和色标。
+ *
+ * 修复 2（色标 split 切断 rgba）：原来用 /\s*,\s*(?=#|rgb)/ 分割色标，但 rgba(255,0,0,0.5) 里
+ *   的逗号也满足 (?=rgb) 前面是 0 的条件，会把 rgba 切断为碎片，导致 cssColorToRgba 无法解析，
+ *   stops < 2，gradientFill 为 null。
+ *   修复：改为逐字符扫描，遇到括号内的逗号不拆分，只在括号外的逗号处分割色标。
  */
 function parseLinearGradientFromBgImage(bgImage) {
   if (!bgImage || typeof bgImage !== 'string') return null;
-  var match = bgImage.match(/linear-gradient\s*\(\s*([\d.]+)?deg\s*,\s*(.+)\)/);
-  if (!match) return null;
-  var angle = match[1] != null ? parseFloat(match[1], 10) : 0;
-  var rest = match[2];
+  var str = bgImage.trim();
+  // 找到 linear-gradient( 的起始位置
+  var idx = str.indexOf('linear-gradient');
+  if (idx < 0) return null;
+  // 逐字符提取括号内全部内容
+  var start = str.indexOf('(', idx);
+  if (start < 0) return null;
+  var depth = 0;
+  var end = -1;
+  for (var i = start; i < str.length; i++) {
+    if (str[i] === '(') depth++;
+    else if (str[i] === ')') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end < 0) return null;
+  var inner = str.slice(start + 1, end).trim();
+
+  // 按括号感知的逗号分割，括号内的逗号不分割
+  function splitTopLevel(s) {
+    var parts = [];
+    var cur = '';
+    var d = 0;
+    for (var j = 0; j < s.length; j++) {
+      var ch = s[j];
+      if (ch === '(' || ch === '[') { d++; cur += ch; }
+      else if (ch === ')' || ch === ']') { d--; cur += ch; }
+      else if (ch === ',' && d === 0) { parts.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    return parts;
+  }
+
+  var parts = splitTopLevel(inner);
+  if (parts.length < 2) return null;
+
+  // 解析角度：第一段可能是 "135deg"、"to right"、"to bottom right" 等
+  var angle = 0;
+  var stopsStartIndex = 0;
+  var firstPart = parts[0].trim().toLowerCase();
+  var degMatch = firstPart.match(/^(-?[\d.]+)deg$/);
+  if (degMatch) {
+    angle = parseFloat(degMatch[1]);
+    stopsStartIndex = 1;
+  } else if (firstPart.startsWith('to ')) {
+    // 方向关键字 → 转换为角度（CSS 规范：to top=0, to right=90, to bottom=180, to left=270）
+    var dirMap = {
+      'to top': 0, 'to top right': 45, 'to right top': 45,
+      'to right': 90, 'to bottom right': 135, 'to right bottom': 135,
+      'to bottom': 180, 'to bottom left': 225, 'to left bottom': 225,
+      'to left': 270, 'to top left': 315, 'to left top': 315,
+    };
+    angle = dirMap[firstPart] != null ? dirMap[firstPart] : 180;
+    stopsStartIndex = 1;
+  } else {
+    // 没有角度/方向，第一段直接是色标
+    stopsStartIndex = 0;
+  }
+
   var stops = [];
-  var part = rest.split(/\s*,\s*(?=#|rgb)/);
-  for (var i = 0; i < part.length; i++) {
-    var seg = part[i].trim();
-    var pct = seg.match(/\s+(\d+(?:\.\d+)?)%?\s*$/);
-    var pos = pct ? parseFloat(pct[1], 10) / 100 : (i === 0 ? 0 : i === part.length - 1 ? 1 : i / (part.length - 1));
-    var colorStr = seg.replace(/\s+\d+(?:\.\d+)?%?\s*$/, '').trim();
-    var outColor = cssColorToRgba(colorStr);
+  for (var k = stopsStartIndex; k < parts.length; k++) {
+    var seg = parts[k].trim();
+    // 末尾的百分比位置（可能是 "50%" 或 "0.5"）
+    var pctMatch = seg.match(/\s+([\d.]+)%\s*$/);
+    var pos;
+    if (pctMatch) {
+      pos = parseFloat(pctMatch[1]) / 100;
+      seg = seg.slice(0, seg.length - pctMatch[0].length).trim();
+    } else {
+      var stopIdx = k - stopsStartIndex;
+      var total = parts.length - stopsStartIndex - 1;
+      pos = total > 0 ? stopIdx / total : 0;
+    }
+    var outColor = cssColorToRgba(seg);
     if (outColor) stops.push({ position: pos, color: outColor });
   }
+
   if (stops.length < 2) return null;
   return { type: 'GRADIENT_LINEAR', gradientStops: stops, angle: angle };
 }
@@ -393,11 +473,26 @@ function comToMybricksJson(comId) {
   if (!comEl) {
     return emptyRoot();
   }
+  console.log("comEl",comEl)
   var frameId = findArtboardIdFromElement(comEl);
   if (!frameId) {
     return emptyRoot();
   }
+
+  console.log("domToMybricksJson",domToMybricksJson(frameId, comId))
   return domToMybricksJson(frameId, comId);
+}
+
+/** 同上，但会请求 background-image url() 并内联为 base64，供导出到 Figma 时带背景图。返回 Promise。 */
+function comToMybricksJsonWithInlineImages(comId) {
+  var host = getShadowHost();
+  if (!host || !host.shadowRoot) return Promise.resolve(emptyRoot());
+  var shadowRoot = host.shadowRoot;
+  var comEl = shadowRoot.querySelector('#' + CSS.escape(comId));
+  if (!comEl) return Promise.resolve(emptyRoot());
+  var frameId = findArtboardIdFromElement(comEl);
+  if (!frameId) return Promise.resolve(emptyRoot());
+  return domToMybricksJsonWithInlineImages(frameId, comId);
 }
 
 function domToMybricksJson(frameId, styleTagId) {
@@ -431,7 +526,10 @@ function domToMybricksJson(frameId, styleTagId) {
     if (computed.display === 'none' || computed.visibility === 'hidden') return null;
 
     // body 下方 class 以 selection- 开头的节点不参与输出
+    // append- 是 MyBricks 画布的组件追加区域包裹层，boardTitle- 是画布标题区，均属画布内部骨架节点，不应导出为设计稿内容
     if (hasClassPrefix(el, 'selection-')) return null;
+    if (hasClassPrefix(el, 'append-')) return null;
+    if (hasClassPrefix(el, 'boardTitle-')) return null;
 
     const nodeType = inferNodeType(el, computed, tag);
     const style = buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont);
@@ -444,6 +542,7 @@ function domToMybricksJson(frameId, styleTagId) {
       content: undefined,
       children: undefined,
     };
+
     var matchedSelectors = cssRuleMap ? getMatchedSelectorsForElement(el, cssRuleMap) : [];
     if (matchedSelectors.length) node.selectors = matchedSelectors;
 
@@ -471,6 +570,8 @@ function domToMybricksJson(frameId, styleTagId) {
             (elChild.tagName || '').toLowerCase() === 'link';
           if (skip) continue;
           if (hasClassPrefix(elChild, 'selection-')) continue;
+          if (hasClassPrefix(elChild, 'append-')) continue;
+          if (hasClassPrefix(elChild, 'boardTitle-')) continue;
           const childNode = walk(elChild, rect);
           if (childNode) childNodes.push(childNode);
         } else if (child.nodeType === 3) {
@@ -500,8 +601,20 @@ function domToMybricksJson(frameId, styleTagId) {
           ensureItemSpacingFromPositions(node, childNodes, layoutMode);
           var finalSpacing = (node.style && node.style.itemSpacing != null) ? node.style.itemSpacing : null;
           if (finalSpacing == null || finalSpacing < 0) {
-            delete node.style.layoutMode;
-            delete node.style.itemSpacing;
+            // 架构级修复：不再依赖标签名白名单。
+            // 只要节点配置了对齐方式（非默认的 MIN）或存在内边距，说明它在视觉上依赖 AutoLayout 
+            // 来维持内部排版（如居中、Padding包裹）。此时即使算不出间距（如单节点），也不能删除 layoutMode。
+            var s = node.style || {};
+            var hasAlignment = (s.primaryAxisAlignItems && s.primaryAxisAlignItems !== 'MIN') ||
+                               (s.counterAxisAlignItems && s.counterAxisAlignItems !== 'MIN');
+            var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
+            
+            if (hasAlignment || hasPadding) {
+              node.style.itemSpacing = 0;
+            } else {
+              delete node.style.layoutMode;
+              delete node.style.itemSpacing;
+            }
           } else {
             for (var i = 0; i < childNodes.length; i++) {
               var s = childNodes[i].style || {};
@@ -535,12 +648,13 @@ function domToMybricksJson(frameId, styleTagId) {
 
     return node;
   }
-
-  const contentChildren = [];
   var rootDesignRect = getDesignRect(dom, geo);
+  const contentChildren = [];
   for (let i = 0; i < dom.children.length; i++) {
     const child = dom.children[i];
     if (hasClassPrefix(child, 'selection-')) continue;
+    if (hasClassPrefix(child, 'append-')) continue;
+    if (hasClassPrefix(child, 'boardTitle-')) continue;
     const tag = (child.tagName || '').toLowerCase();
     if (tag === 'script' || tag === 'style' || tag === 'link') continue;
     const childNode = walk(child, rootDesignRect);
@@ -587,6 +701,89 @@ function domToMybricksJson(frameId, styleTagId) {
   return { page: pagePayload };
 }
 
+/** 将 URL 转为 base64 data URL，供 Figma 插件直接解码使用。SVG 会先绘制到 Canvas 再转 PNG。失败时保留 url。 */
+function fetchImageAsBase64DataUrl(url) {
+  return fetch(url, { mode: 'cors' })
+    .then(function (res) { return res.ok ? res.blob() : Promise.reject(new Error(res.statusText)); })
+    .then(function (blob) {
+      var mimeType = blob.type || '';
+      if (mimeType.indexOf('svg') >= 0 || url.toLowerCase().endsWith('.svg')) {
+        // SVG 转 PNG：通过 Image + Canvas 光栅化
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onloadend = function () {
+            var svgDataUrl = reader.result;
+            var img = new window.Image();
+            img.onload = function () {
+              var canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth || 400;
+              canvas.height = img.naturalHeight || 400;
+              var ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              try {
+                resolve(canvas.toDataURL('image/png'));
+              } catch (e) {
+                reject(e);
+              }
+            };
+            img.onerror = reject;
+            img.src = svgDataUrl;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+      // 非 SVG 直接转 base64 data URL
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onloadend = function () { resolve(reader.result); };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    });
+}
+
+/** 递归将树中 style.fills 里 type===IMAGE 且仅有 url 的项，请求图片并写入 content（base64 data URL）。 */
+function inlineImageFillsInTree(obj) {
+  if (!obj) return Promise.resolve();
+  var style = obj.style;
+  if (style && style.fills && Array.isArray(style.fills)) {
+    var promises = style.fills.map(function (fill, i) {
+      if (fill && fill.type === 'IMAGE' && fill.url && !fill.content) {
+        return fetchImageAsBase64DataUrl(fill.url).then(function (dataUrl) {
+          style.fills[i] = { type: 'IMAGE', content: dataUrl };
+          console.log('[image fill] 内联成功', fill.url, 'contentLen=', (dataUrl && dataUrl.length) || 0);
+        }).catch(function (err) {
+          console.warn('[image fill] 内联失败', fill.url, err && err.message);
+        });
+      }
+      return Promise.resolve();
+    });
+    return Promise.all(promises).then(function () {
+      var children = obj.children;
+      if (children && children.length) {
+        return Promise.all(children.map(inlineImageFillsInTree));
+      }
+    });
+  }
+  var children = obj.children;
+  if (children && children.length) {
+    return Promise.all(children.map(inlineImageFillsInTree));
+  }
+  return Promise.resolve();
+}
+
+function domToMybricksJsonAsync(frameId, styleTagId) {
+  var syncPayload = domToMybricksJson(frameId, styleTagId);
+  var content = syncPayload.page && syncPayload.page.content;
+  if (!content || !content.length) return Promise.resolve(syncPayload);
+  return inlineImageFillsInTree(content[0]).then(function () { return syncPayload; });
+}
+
+function domToMybricksJsonWithInlineImages(frameId, styleTagId) {
+  return domToMybricksJsonAsync(frameId, styleTagId);
+}
+
 function inferNodeType(el, computed, tag) {
   if (tag === 'img') return 'image';
   if (tag === 'svg') return 'component';
@@ -595,12 +792,30 @@ function inferNodeType(el, computed, tag) {
   const display = computed.display;
   const isFlex = display === 'flex' || display === 'inline-flex';
   const isBlock = display === 'block' || display === 'flex' || display === 'grid' || display === 'inline-block';
-  const textTags = ['p', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'label', 'a', 'button', 'li', 'td', 'th'];
   const hasElementChildren = el.children && el.children.length > 0;
   const hasOnlyText = !hasElementChildren; // 无子元素
-  if (textTags.indexOf(tag) >= 0 && hasOnlyText) return 'text';
-  // div 等仅含文本（无子元素）时当作 text
-  if (hasOnlyText && (el.textContent || '').trim()) return 'text';
+  if (hasOnlyText) {
+    // 架构级修复：不再依赖 textTags 白名单。
+    // 任何无子元素的叶子节点，只要带有非透明背景色、padding 或 border-radius，
+    // 在视觉上就是一个容器（如 badge、tag、button 或带样式的 div），
+    // 必须识别为 frame 以保留背景色、圆角和内边距等样式。
+    var elBg = computed.backgroundColor || '';
+    var elRadius = computed.borderRadius || computed.borderTopLeftRadius || '';
+    var elPaddingTop = computed.paddingTop || '';
+    var elPaddingRight = computed.paddingRight || '';
+    var elPaddingBottom = computed.paddingBottom || '';
+    var elPaddingLeft = computed.paddingLeft || '';
+    var hasVisualBg = elBg && elBg !== 'rgba(0, 0, 0, 0)' && elBg !== 'transparent';
+    var hasRadius = elRadius && elRadius !== '0px' && elRadius !== '0';
+    var hasPadding = (elPaddingTop && elPaddingTop !== '0px') ||
+                    (elPaddingRight && elPaddingRight !== '0px') ||
+                    (elPaddingBottom && elPaddingBottom !== '0px') ||
+                    (elPaddingLeft && elPaddingLeft !== '0px');
+    if (hasVisualBg || hasRadius || hasPadding) {
+      return 'frame';
+    }
+    if ((el.textContent || '').trim()) return 'text';
+  }
   // 既有子元素又有文本时当作容器，子列表里会包含文本节点
   if (tag === 'input' && (el.type === 'text' || el.type === 'password' || !el.type)) return 'text';
   if (tag === 'textarea') return 'text';
@@ -674,6 +889,9 @@ function buildInlineTextStyle(parentEl, computed, textRect, parentRect, cssRuleM
   var style = {};
   style.x = Math.round(textRect.left - parentRect.left);
   style.y = Math.round(textRect.top - parentRect.top);
+  // 写入文字的实测宽高，使其在 Figma 里精确对齐（尤其是 block button 靠 padding 居中时，y 已经是正确偏移）
+  if (textRect.width != null && textRect.width > 0) style.width = textRect.width;
+  if (textRect.height != null && textRect.height > 0) style.height = textRect.height;
   var decl = (cssRuleMap && parentEl && Object.keys(cssRuleMap).length > 0) ? getDeclaredStyleForElement(parentEl, cssRuleMap) : {};
   function d(keys) {
     var k = Array.isArray(keys) ? keys : [keys];
@@ -683,7 +901,14 @@ function buildInlineTextStyle(parentEl, computed, textRect, parentRect, cssRuleM
   var num = function (v) { return (v === '' || v == null ? undefined : parseFloat(String(v))); };
   var px = function (v) { var n = num(v); return n != null && !Number.isNaN(n) ? Math.round(n) : undefined; };
   var fontSize = px(d(['font-size', 'fontSize']) || (computed && computed.fontSize));
-  if (fontSize != null) style.fontSize = fontSize;
+  if (fontSize != null) {
+    if (fontSize < 1) {
+      var rawFsVal = d(['font-size', 'fontSize']) || (computed && computed.fontSize);
+      console.warn('[fontSize<1] buildStyleJSON', { className: parentEl && parentEl.className, rawValue: rawFsVal, rounded: fontSize, el: parentEl });
+    } else {
+      style.fontSize = fontSize;
+    }
+  }
   var color = d(['color']) || (computed && computed.color);
   if (color) {
     var rgba = cssColorToRgba(color);
@@ -755,12 +980,33 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     if (!Number.isNaN(o) && o < 1) style.opacity = o;
   }
 
+  // overflow: visible → Figma clipsContent = false（默认 true 会裁切溢出内容）
+  var overflowVal = d(['overflow']) || computed.overflow;
+  if (overflowVal && overflowVal.trim() === 'visible') {
+    style.clipsContent = false;
+  }
+
   // Background -> fills（优先 style 标签里的 background-image/background，再 computed）
-  var bgImageDecl = d(['background-image', 'backgroundImage']) || d(['background']);
-  var bgImage = (bgImageDecl && bgImageDecl.indexOf('linear-gradient') >= 0) ? bgImageDecl : (computed.backgroundImage || '');
+  // 修复：bgImageDecl 存在但不含渐变时（如纯色 background 简写），不应屏蔽 computed.backgroundImage 里的渐变。
+  // 正确策略：先用 declared background-image，没有则用 computed.backgroundImage，两者都没有再试 declared background 简写。
+  var bgImageDecl = d(['background-image', 'backgroundImage']);
+  var bgImageComputed = computed.backgroundImage || '';
+  var bgImageFromBackground = d(['background']);
+  var bgImage = '';
+  if (bgImageDecl && bgImageDecl !== 'none') {
+    bgImage = bgImageDecl;
+  } else if (bgImageComputed && bgImageComputed !== 'none') {
+    bgImage = bgImageComputed;
+  } else if (bgImageFromBackground && bgImageFromBackground.indexOf('linear-gradient') >= 0) {
+    bgImage = bgImageFromBackground;
+  }
   var gradientFill = bgImage ? parseLinearGradientFromBgImage(bgImage) : null;
+  var imageUrl = bgImage ? parseUrlFromBgImage(bgImage) : null;
   if (gradientFill) {
     style.fills = [gradientFill];
+  } else if (imageUrl) {
+    style.fills = [{ type: 'IMAGE', url: imageUrl }];
+    console.log('[image fill] 导出 url', imageUrl);
   } else {
     var bg = d(['background-color', 'backgroundColor', 'background']) || computed.backgroundColor;
     if (bg) {
@@ -825,6 +1071,23 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER' };
     style.primaryAxisAlignItems = alignMap[justifyContent] || 'MIN';
     style.counterAxisAlignItems = alignMap[alignItems] || 'MIN';
+  } else if (display === 'block' || display === 'inline-block' || display === 'inline') {
+    // 架构级修复：不再依赖 blockTextTags 白名单。
+    // 如果一个 block/inline 元素没有子元素（只有文本），但因为有背景/padding被升级为 frame，
+    // 我们为其开启 HORIZONTAL 自动布局，以完美模拟 CSS 的 padding 包裹效果。
+    const hasElementChildren = el.children && el.children.length > 0;
+    if (!hasElementChildren) {
+      style.layoutMode = 'HORIZONTAL';
+      // 动态读取 text-align，而不是无脑居中，兼容 div 的左对齐和 button 的居中
+      var textAlign = (d(['text-align', 'textAlign']) || computed.textAlign || '').toString().toLowerCase();
+      var alignMap = { left: 'MIN', right: 'MAX', center: 'CENTER', justify: 'MIN', start: 'MIN', end: 'MAX' };
+      style.primaryAxisAlignItems = alignMap[textAlign] || 'MIN';
+      style.counterAxisAlignItems = 'CENTER'; // 单行文本垂直方向默认居中
+      style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
+      style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
+      style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
+      style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
+    }
   } else if (display === 'grid' || display === 'inline-grid') {
     // grid-auto-flow: row = 按行排（横向多列）→ HORIZONTAL；column = 按列排（纵向多行）→ VERTICAL
     style.layoutMode = (d(['grid-auto-flow']) || computed.gridAutoFlow || 'row') === 'column' ? 'VERTICAL' : 'HORIZONTAL';
@@ -848,7 +1111,14 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
 
   // Text styles（优先 style 标签，再 computed）；字体仅在与全局不同时输出
   var fontSize = px(d(['font-size', 'fontSize']) || computed.fontSize);
-  if (fontSize != null) style.fontSize = fontSize;
+  if (fontSize != null) {
+    if (fontSize < 1) {
+      var rawFsVal = d(['font-size', 'fontSize']) || computed.fontSize;
+      console.warn('[fontSize<1] buildInlineTextStyle', { className: el.className, rawValue: rawFsVal, rounded: fontSize, el: el });
+    } else {
+      style.fontSize = fontSize;
+    }
+  }
   var color = d(['color']) || computed.color;
   if (color) {
     var rgba = cssColorToRgba(color);
@@ -1108,6 +1378,8 @@ function getCssRulesBySelector(styleTagId, root) {
 if (typeof window !== 'undefined') {
   window.SHADOW_HOST_ID = SHADOW_HOST_ID;
   window.domToMybricksJson = domToMybricksJson;
+  window.domToMybricksJsonWithInlineImages = domToMybricksJsonWithInlineImages;
+  window.comToMybricksJsonWithInlineImages = comToMybricksJsonWithInlineImages;
   window.comToMybricksJson = comToMybricksJson;
   window.getCssRulesBySelector = getCssRulesBySelector;
   window.getShadowHost = getShadowHost;
@@ -1116,5 +1388,5 @@ if (typeof window !== 'undefined') {
 
 // ES module export if supported
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SHADOW_HOST_ID, domToMybricksJson, comToMybricksJson, getCssRulesBySelector, getShadowHost, resolveFrameRoot };
+  module.exports = { SHADOW_HOST_ID, domToMybricksJson, comToMybricksJson, domToMybricksJsonWithInlineImages, comToMybricksJsonWithInlineImages, getCssRulesBySelector, getShadowHost, resolveFrameRoot };
 }
