@@ -32,6 +32,7 @@ export default function readRelated(config: ReadRelatedConfig): any {
 
 **重要说明：**
 - 所有通过本操作获取的信息仅在当前轮次/上下文中有效；
+- 读取代码后必须衔接操作类工具，比如有代码分析或者开发工具作为结束；
 
 > !IMPORTANT: 在需要阅读或修改开发前，必须先调用本工具获取相关组件的信息。
 `,

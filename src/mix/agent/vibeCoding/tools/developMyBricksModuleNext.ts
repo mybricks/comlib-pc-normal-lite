@@ -156,16 +156,22 @@ export default function developMyBricksModule(config: Config) {
   return {
     name: NAME,
     displayName: "编写组件",
-    description: `根据用户需求，以及各类上下文，一次性编写/修改模块中的所有代码，实现功能。
+    description: `根据用户需求，以及各类上下文，一次性编写、修改页面中的代码，实现功能。
 参数：无
-
 工具分类：操作执行类；
 
-作用：编写/修改模块中的所有代码，开发代码实现功能；
+作用：编写、修改页面代码，完成需求，包含但不限于下列场景：
+- 开发代码实现功能；
+- 修复代码报错；
+- 优化代码；
+- 优化样式；
+- 还原附件效果、内容；
+- ...所有涉及代码修改的需求
+以上场景，规划中必须包含该工具。
 
 前置：做任何代码修改前，必须先调用工具读取更多代码信息。
 
-!IMPORTANT: 所有涉及模块代码的生成/修改都必须使用该工具。；
+!IMPORTANT: 所有涉及代码的生成/修改都必须包含该工具的调用。
 `,
     getPrompts: () => {
       return `
@@ -225,7 +231,7 @@ export default function developMyBricksModule(config: Config) {
   1. 组件 props 禁止传递*保留字段*：_env，store，logger；
     - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 所有组件都需要使用 comRef 包装；
+  3. 所有组件都需要使用 comRef 包装，所有页面和弹窗都需要通过 pageRef 包装；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
   6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；UI、组件、dom元素间交互逻辑写在 区块 内（例如：loading、弹窗提示、选中态等）；
@@ -241,6 +247,15 @@ export default function developMyBricksModule(config: Config) {
       2. store，全局状态管理
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
+
+  <pageRef说明>
+    pageRef是MyBricks提供的高阶函数，用于创建一个页面或弹窗。
+    1. 该页面或弹窗默认接收以下*保留字段*：
+      1. _env，环境变量
+        - _env.mode: 运行环境，design|runtime
+      2. store，全局状态管理
+    2. 该页面或弹窗是一个响应式页面或弹窗，页面或弹窗内使用store中的数据时，数据变更会自动刷新页面或弹窗；
+  </pageRef说明>
 
   <JSDoc说明>
     所有comRef创建的组件必须提供JSDoc。
@@ -273,6 +288,24 @@ export default function developMyBricksModule(config: Config) {
         - 流程图节点用动作描述，不写具体取值：例如用「设置loading状态」「取消loading状态」，禁止「设置loading为true」「设置loading为false」；
         - 禁止：用户动作类描述（如「点击按钮」）、空洞节点（如「开始」「结束」「执行业务操作」）；
     </@event>
+
+    所有pageRef创建的组件必须提供JSDoc。
+    <代码示例>
+    \`\`\`jsdoc
+    /**
+     * @title 页面名称
+     * @path /index 页面路由
+     */
+    \`\`\`
+    </代码示例>
+
+    <@title>
+      必填项，页面名称，字数在3-20字之间，不允许重复；
+    </@title>
+
+    <@path>
+      必填项，页面路由，不允许重复
+    </@path>
   </JSDoc说明>
   
   2. style.less文件
@@ -363,6 +396,9 @@ export default function developMyBricksModule(config: Config) {
   </拆分强制原则>
 
   <分级拆分>
+    **第0级（页面级） **：
+      按照页面维度进行拆分，不同路由应该拆分到不同的页面里。
+
     **第一级（模块级）**：
       按视觉与功能的最大边界，将整个模块拆成若干大区块（如 Header、Body、Footer、Sidebar 等），每个大区块对应一个 comRef。
       default 导出中仅做这些一级大区块的布局组合，不写任何内联 UI 内容。
@@ -584,27 +620,38 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`after file="runtime.jsx"
   import { useState } from 'react';
   import css from 'style.less';
-  import { comRef } from 'mybricks';
+  import { comRef, pageRef } from 'mybricks';
   import { Button } from 'antd';
-  
+
   /**
    * @summary 按钮组件
    * @event {click} 点击主按钮 - flowchart LR; A[设置loading状态] --> B[延迟1秒] --> C[取消loading状态]
    */
-  export default comRef(() => {
-    const [loading, setLoading] = useState(0);
+  const MainButton = comRef(({ store, logger }) => {
     return (
       <Button
         className={css.mainBtn}
-        loading={loading}
         /** onClick:click */
         onClick={() => {
-          setLoading(true);
+          store.click();
+          store.setLoading(true);
           setTimeout(() => {
-            setLoading(false);
+            store.setLoading(false);
           }, 1000);
         }}
       >按钮</Button>
+    )
+  });
+
+  /**
+   * @title 按钮页面
+   * @path /index
+   */
+  export default pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        <MainButton />
+      </div>
     )
   });
   \`\`\`
@@ -636,7 +683,7 @@ export default function developMyBricksModule(config: Config) {
 
   \`\`\`after file="runtime.jsx"
   import css from 'style.less';
-  import { comRef } from 'mybricks';
+  import { comRef, pageRef } from 'mybricks';
   import { Button } from 'xy-ui';
 
   /**
@@ -649,9 +696,10 @@ export default function developMyBricksModule(config: Config) {
   })
     
   /**
-   * @summary 包含两个按钮的工具条
+   * @title 包含两个按钮的工具条
+   * @path /index
    */
-  export default comRef(() => {
+  export default pageRef(() => {
     return (
       <div className={css.viewContainer}>
         <ToolBar />

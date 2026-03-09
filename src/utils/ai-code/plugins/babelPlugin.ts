@@ -7,6 +7,7 @@ import {
   extractCssClassNames,
   findRelyAndSource,
   getComRefForJSXPath,
+  getPageRefForJSXPath,
   getEvents,
   getJSXElementNameString
 } from "./utils";
@@ -16,6 +17,8 @@ export default function ({ constituency }) {
     const importRelyMap = new Map();
     /** 按组件声明缓存 { rootJSX, jsdoc }，每个 comRef 组件只计算一次 */
     const componentJsdocCache = new Map<any, any>();
+    /** 按组件声明缓存 pageRef 的 { rootJSX, jsdoc, name }，每个 pageRef 只计算一次 */
+    const pageRefCache = new Map<any, any>();
 
     /** 遍历时 comRef 的 jsdoc 栈，子元素通过栈顶读到当前组件的 jsdoc */
     const jsdocStack: any[] = [];
@@ -62,8 +65,16 @@ export default function ({ constituency }) {
                 return;
               }
               const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
-              pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
-  
+
+              const pageRef = getPageRefForJSXPath(path, pageRefCache);
+              if (pageRef) {
+                const pageTitle = pageRef.jsdoc?.summary ?? pageRef.name ?? lastSelector;
+                pushDataAttr(node.openingElement.attributes, "data-zone-title", pageTitle);
+                pushDataAttr(node.openingElement.attributes, "title", pageTitle);
+              } else {
+                pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
+              }
+
               const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
   
               if (source === "html") {
@@ -113,8 +124,11 @@ export default function ({ constituency }) {
               }
   
               let zoneType = "zone";
-  
+
               const comRef = getComRefForJSXPath(path, componentJsdocCache);
+              if (pageRef) {
+                zoneType = "page";
+              }
 
               if (comRef) {
                 jsdocStack.push(comRef.jsdoc);

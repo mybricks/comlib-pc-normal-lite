@@ -278,6 +278,29 @@ const mybricks = ({ env, logger, store }) => {
           />
         )
       }
+    },
+    pageRef: (Component) => {
+      return (props) => {
+        const autoStore = useRef<any>(null);
+        if (!autoStore.current) {
+          autoStore.current = new Store(store);
+        }
+    
+        const state = useSyncExternalStore(
+          autoStore.current[SYMBOL_SUBSCRIBE],
+          autoStore.current[SYMBOL_GETSNAPSHOT]
+        )
+    
+        return (
+          <Component
+            {...props}
+            _env={_env}
+            logger={logger}
+            store={autoStore.current}
+            _state={state}
+          />
+        )
+      }
     }
   }
 }
