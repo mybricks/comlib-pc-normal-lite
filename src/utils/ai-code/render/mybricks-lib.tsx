@@ -266,15 +266,15 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
         </>
       )
 
-      return (
-        <div className={css.routesDesign}>
-          {visibleRoutes.map((r, i) => (
-            <div key={i} className={css.routeDesignItem}>
-              {r.props.element}
-            </div>
-          ))}
-        </div>
-      );
+      // return (
+      //   <div className={css.routesDesign}>
+      //     {visibleRoutes.map((r, i) => (
+      //       <div key={i} className={css.routeDesignItem}>
+      //         {r.props.element}
+      //       </div>
+      //     ))}
+      //   </div>
+      // );
     }
 
     const active = Math.max(0, findBestRouteIndex(routes, ctx?.currentPath ?? ''));
@@ -383,7 +383,7 @@ export function createMybricks(options: CreateMybricksOptions) {
         autoStore.current[SYMBOL_GETSNAPSHOT]
       );
       return (
-        <div data-zone-type="page" style={{ display: 'contents' }}>
+        <div data-zone-type="page" style={{ width: 1200, minHeight: 600, display: 'inline-block' }}>
           <Component
             {...props}
             _env={_env}
