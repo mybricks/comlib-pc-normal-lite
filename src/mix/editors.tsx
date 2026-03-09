@@ -846,9 +846,9 @@ export default function (props: Props, actions: Actions) {
   return {
     ...focusAreaConfigs,
     /** 可调整宽高 */
-    '@resize': {
-      options: ['width', 'height'],
-    },
+    // '@resize': {
+    //   options: ['width', 'height'],
+    // },
     /** 代码编辑器面板 */
     '@lowcode':{
       render(params, plugins){
