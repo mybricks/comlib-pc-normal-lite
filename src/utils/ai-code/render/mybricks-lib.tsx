@@ -113,6 +113,96 @@ function createReactiveStore(store: any) {
   });
 }
 
+// --- 路由匹配（参考 react-router v6 评分规则） ---
+
+type RouteElement = React.ReactElement<{ index?: boolean; path?: string; element: React.ReactNode }>;
+
+/** 去掉首尾多余的 / */
+function normalizePath(p: string): string {
+  return p.replace(/^\/+|\/+$/g, '');
+}
+
+/**
+ * 对单段 pattern 与实际 segment 计算匹配分数：
+ *   静态段完全相同 → 10
+ *   动态段 :param  →  9
+ *   通配符 *       →  2
+ *   不匹配         → -1
+ */
+function segmentScore(patternSeg: string, pathSeg: string): number {
+  if (patternSeg === pathSeg) return 10;
+  if (patternSeg.startsWith(':')) return 9;
+  if (patternSeg === '*') return 2;
+  return -1;
+}
+
+/**
+ * 计算 route pattern 对 path 的匹配分数，不匹配返回 -1。
+ * 支持：静态路径、:param 动态段、末尾 * 通配、纯 * 兜底
+ */
+function scoreRoute(pattern: string, path: string): number {
+  const normPattern = normalizePath(pattern);
+  const normPath = normalizePath(path);
+
+  // 纯 * 兜底，匹配一切
+  if (normPattern === '*') return 0;
+
+  const patternSegs = normPattern ? normPattern.split('/') : [];
+  const pathSegs = normPath ? normPath.split('/') : [];
+  const lastSeg = patternSegs[patternSegs.length - 1];
+
+  if (lastSeg === '*') {
+    // 前缀 + 末尾通配，例如 users/*
+    const prefixSegs = patternSegs.slice(0, -1);
+    if (pathSegs.length < prefixSegs.length) return -1;
+    let score = 1; // 末尾 * 贡献 1 分（低于精确匹配）
+    for (let i = 0; i < prefixSegs.length; i++) {
+      const s = segmentScore(prefixSegs[i], pathSegs[i]);
+      if (s < 0) return -1;
+      score += s;
+    }
+    return score;
+  }
+
+  // 必须段数完全一致（精确 / 动态）
+  if (patternSegs.length !== pathSegs.length) return -1;
+
+  let score = 0;
+  for (let i = 0; i < patternSegs.length; i++) {
+    const s = segmentScore(patternSegs[i], pathSegs[i]);
+    if (s < 0) return -1;
+    score += s;
+  }
+  return score;
+}
+
+/**
+ * 在 routes 数组中找到与 currentPath 匹配分数最高的索引。
+ * index 路由仅匹配空路径，优先级相当于完整静态匹配。
+ * 无任何匹配时返回 -1。
+ */
+function findBestRouteIndex(routes: RouteElement[], currentPath: string): number {
+  const normPath = normalizePath(currentPath);
+  let bestIdx = -1;
+  let bestScore = -1;
+
+  routes.forEach((r, i) => {
+    let score: number;
+    if (r.props.index) {
+      // index 只匹配空路径
+      score = normPath === '' ? 10 : -1;
+    } else {
+      score = scoreRoute(r.props.path ?? '', normPath);
+    }
+    if (score >= 0 && score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  });
+
+  return bestIdx;
+}
+
 // --- 路由相关：RouterContext / Route / Routes / redirect / appRef ---
 
 interface RouterContextValue {
@@ -153,9 +243,31 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
     if (routes.length === 0) return null;
 
     if (isDesign) {
+      // 兜底路由（path="*" 或 path="/*"）若与其他路由使用相同的 element 引用，则不重复展示
+      const seenElements = new Set<React.ReactNode>();
+      const visibleRoutes = routes.filter((r) => {
+        const isCatchAll =
+          !r.props.index &&
+          (r.props.path === '*' || r.props.path === '/*' || r.props.path === undefined);
+        if (!isCatchAll) {
+          seenElements.add(r.props.element);
+          return true;
+        }
+        // 兜底路由：element 已被其他路由使用过则跳过
+        return !seenElements.has(r.props.element);
+      });
+
+      return (
+        <>
+          {visibleRoutes.map((r, i) => (
+            r.props.element
+          ))}
+        </>
+      )
+
       return (
         <div className={css.routesDesign}>
-          {routes.map((r, i) => (
+          {visibleRoutes.map((r, i) => (
             <div key={i} className={css.routeDesignItem}>
               {r.props.element}
             </div>
@@ -164,13 +276,7 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
       );
     }
 
-    const rawPath = ctx?.currentPath ?? '';
-    const currentPath = rawPath.replace(/^\/+/, '');
-    const activeIndex = routes.findIndex((r) => {
-      if (r.props.index) return currentPath === '';
-      return (r.props.path ?? '').replace(/^\/+/, '') === currentPath;
-    });
-    const active = activeIndex >= 0 ? activeIndex : 0;
+    const active = Math.max(0, findBestRouteIndex(routes, ctx?.currentPath ?? ''));
 
     return (
       <div className={css.routesRuntime}>
