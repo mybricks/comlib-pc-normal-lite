@@ -14,8 +14,8 @@ export default {
         }
       ]
     },
-    '.ant-steps-item .ant-steps-item-title': {
-      title: '步骤标题',
+    '.ant-steps-item.ant-steps-item-active .ant-steps-item-content .ant-steps-item-title': {
+      title: '步骤标题(已完成)',
       style: [
         {
           items: [
@@ -27,8 +27,21 @@ export default {
         }
       ]
     },
-    '.ant-steps-item .ant-steps-item-icon': {
-      title: '步骤图标',
+    '.ant-steps-item.ant-steps-item-wait .ant-steps-item-content .ant-steps-item-title': {
+      title: '步骤标题(未完成)',
+      style: [
+        {
+          items: [
+            {
+              title: '样式',
+              options: ['font'],
+            }
+          ]
+        }
+      ]
+    },
+    '.ant-steps-item.ant-steps-item-active .ant-steps-item-container .ant-steps-item-icon': {
+      title: '步骤图标(已完成)',
       style: [
         {
           items: [
@@ -40,34 +53,8 @@ export default {
         }
       ]
     },
-    '.ant-steps-item .ant-steps-item-description': {
-      title: '步骤描述',
-      style: [
-        {
-          items: [
-            {
-              title: '样式',
-              options: ['font'],
-            }
-          ]
-        }
-      ]
-    },
-    '.ant-steps-item-active .ant-steps-item-title': {
-      title: '当前步骤标题',
-      style: [
-        {
-          items: [
-            {
-              title: '样式',
-              options: ['font'],
-            }
-          ]
-        }
-      ]
-    },
-    '.ant-steps-item-active .ant-steps-item-icon': {
-      title: '当前步骤图标',
+    '.ant-steps-item.ant-steps-item-wait .ant-steps-item-container .ant-steps-item-icon': {
+      title: '步骤图标(未完成)',
       style: [
         {
           items: [
@@ -79,19 +66,71 @@ export default {
         }
       ]
     },
-    '.ant-steps-item-active .ant-steps-item-description': {
-      title: '当前步骤描述',
-      style: [
-        {
-          items: [
-            {
-              title: '样式',
-              options: ['font'],
-            }
-          ]
-        }
-      ]
-    },
+    // '.ant-steps-item .ant-steps-item-description': {
+    //   title: '步骤描述',
+    //   style: [
+    //     {
+    //       items: [
+    //         {
+    //           title: '样式',
+    //           options: ['font'],
+    //         }
+    //       ]
+    //     }
+    //   ]
+    // },
+    // '.ant-steps-item.ant-steps-item-active .ant-steps-item-title': {
+    //   title: '当前步骤标题（已完成）',
+    //   style: [
+    //     {
+    //       items: [
+    //         {
+    //           title: '样式',
+    //           options: ['font'],
+    //         }
+    //       ]
+    //     }
+    //   ]
+    // },
+    // '.ant-steps-item.ant-steps-item-wait .ant-steps-item-title': {
+    //   title: '当前步骤标题（未完成）',
+    //   style: [
+    //     {
+    //       items: [
+    //         {
+    //           title: '样式',
+    //           options: ['font'],
+    //         }
+    //       ]
+    //     }
+    //   ]
+    // },
+    // '.ant-steps-item-active .ant-steps-item-icon': {
+    //   title: '当前步骤图标',
+    //   style: [
+    //     {
+    //       items: [
+    //         {
+    //           title: '样式',
+    //           options: ['background', 'font'],
+    //         }
+    //       ]
+    //     }
+    //   ]
+    // },
+    // '.ant-steps-item-active .ant-steps-item-description': {
+    //   title: '当前步骤描述',
+    //   style: [
+    //     {
+    //       items: [
+    //         {
+    //           title: '样式',
+    //           options: ['font'],
+    //         }
+    //       ]
+    //     }
+    //   ]
+    // },
   },
   docs: require('./Steps.md').default
 }
