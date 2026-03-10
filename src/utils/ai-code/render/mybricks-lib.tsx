@@ -320,7 +320,7 @@ function createRouterLib(
       const targetRoute = routes.find((r) => {
         const el = r.props.element;
         const type = React.isValidElement(el) ? el.type : null;
-        return type === pageRefRegistry[debugPageIndex];
+        return type === pageRefRegistry[debugPageIndex].__enhanced__;
       });
       debugInitialPathRef.current = targetRoute
         ? normalizePath(targetRoute.props.index ? '/' : (targetRoute.props.path ?? '/'))
@@ -464,7 +464,7 @@ function createRouterLib(
 // --- mybricks 主入口 ---
 
 export interface CreateMybricksOptions {
-  env: { runtime?: boolean; _debugPageIndex?: number };
+  env: { runtime?: boolean; _debugTarget?: { type: 'page'; pageIndex: number; style: React.CSSProperties } };
   logger: any;
   store: any;
   useSyncExternalStore: typeof React.useSyncExternalStore;
@@ -485,7 +485,7 @@ export function createMybricks(options: CreateMybricksOptions) {
    * undefined 表示不限制（正常渲染所有页面或走 appRef 路由）。
    */
   const debugPageIndex: number | undefined =
-    env.runtime && env._debugPageIndex !== undefined ? env._debugPageIndex : undefined;
+    env.runtime && env._debugTarget !== undefined ? env._debugTarget.pageIndex : undefined;
 
   /**
    * pageRef 注册表：按声明顺序收集所有 pageRef 包装后的组件。
@@ -534,7 +534,7 @@ export function createMybricks(options: CreateMybricksOptions) {
       );
 
       return (
-        <div data-zone-type="page" data-desn-page={pageIndex} style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)' }}>
+        <div data-zone-type="page" data-desn-page={pageIndex} style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)', ...env._debugTarget?.style }}>
           <Component
             {...props}
             _env={_env}

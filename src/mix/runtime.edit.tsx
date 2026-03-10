@@ -14,7 +14,7 @@ export default (props: any) => {
         edit: undefined,
         runtime: { debug: true },
         // 将目标页索引透传给 createMybricks，用于过滤只渲染该页
-        _debugPageIndex: debugTarget.pageIndex,
+        _debugTarget: debugTarget,
       };
     }
     return env;

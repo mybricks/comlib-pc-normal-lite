@@ -654,7 +654,9 @@ export default function (props: Props, actions: Actions, ...args) {
             const jsonStr = typeof result === 'object' && result !== null
               ? JSON.stringify(result, null, 2)
               : String(result);
+              // console.log('[导出] 导出结果', jsonStr);
             navigator.clipboard.writeText(jsonStr).then(
+              () => console.log("[导出] 复制成功"),
               (err) => console.error("[导出] 复制失败", err)
             );
           }
@@ -877,6 +879,28 @@ export default function (props: Props, actions: Actions, ...args) {
         return [
           lowcodeViewCss
         ]
+      }
+    },
+    '@debug'(params, stop) {
+      if (stop) {
+        data.debugTarget = undefined;
+        return;
+      }
+
+      const page = params.focusArea.ele.closest('[data-desn-page]');
+      const pageIndex = page?.getAttribute("data-desn-page");
+
+      if (pageIndex) {
+        const pageBCR = page.getBoundingClientRect();
+        const rootBCR = page.parentElement.getBoundingClientRect();
+
+        data.debugTarget = {
+          type: 'page',
+          pageIndex: Number(pageIndex),
+          style: {
+            transform: `scale(1) translate(${pageBCR.left - rootBCR.left - 20}px, 0px)`
+          }
+        };
       }
     },
     '[data-desn-page]': {

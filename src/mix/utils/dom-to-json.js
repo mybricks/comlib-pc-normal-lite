@@ -522,7 +522,9 @@ function domToMybricksJson(frameId, styleTagId) {
     const tag = (el.tagName || '').toLowerCase();
 
     // Skip invisible or zero-size
-    if (rect.width <= 0 && rect.height <= 0 && tag !== 'svg') return null;
+    // display:contents 元素自身无盒模型（width/height 均为 0），但其子节点参与布局，需透传遍历
+    const isDisplayContents = computed.display === 'contents';
+    if (!isDisplayContents && rect.width <= 0 && rect.height <= 0 && tag !== 'svg') return null;
     if (computed.display === 'none' || computed.visibility === 'hidden') return null;
 
     // body 下方 class 以 selection- 开头的节点不参与输出
@@ -530,6 +532,28 @@ function domToMybricksJson(frameId, styleTagId) {
     if (hasClassPrefix(el, 'selection-')) return null;
     if (hasClassPrefix(el, 'append-')) return null;
     if (hasClassPrefix(el, 'boardTitle-')) return null;
+
+    // display:contents 节点自身不作为独立 frame，直接将其子节点合并到父级
+    if (isDisplayContents) {
+      const childNodes = [];
+      for (let i = 0; i < el.childNodes.length; i++) {
+        const child = el.childNodes[i];
+        if (child.nodeType === 1) {
+          const elChild = child;
+          const skipTag = (elChild.tagName || '').toLowerCase();
+          if (skipTag === 'script' || skipTag === 'style' || skipTag === 'link') continue;
+          if (hasClassPrefix(elChild, 'selection-')) continue;
+          if (hasClassPrefix(elChild, 'append-')) continue;
+          if (hasClassPrefix(elChild, 'boardTitle-')) continue;
+          const childNode = walk(elChild, parentRect);
+          if (childNode) childNodes.push(childNode);
+        }
+      }
+      if (childNodes.length === 0) return null;
+      if (childNodes.length === 1) return childNodes[0];
+      // 多个子节点时包成一个 group 透传
+      return { type: 'group', name: 'contents-wrapper', style: undefined, children: childNodes };
+    }
 
     const nodeType = inferNodeType(el, computed, tag);
     const style = buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont);
@@ -1163,6 +1187,15 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   if (mR != null) style.marginRight = mR;
   if (mB != null) style.marginBottom = mB;
   if (mL != null) style.marginLeft = mL;
+
+  // position: absolute/fixed → 消费端需让该节点脱离 Auto Layout 流式排布，统一标记为 'absolute'
+  // 用 getPropertyValue 而非 .position 直接访问，Shadow DOM 环境下后者可能返回空字符串
+  var positionDeclared = d(['position']);
+  var positionComputed = computed.getPropertyValue ? computed.getPropertyValue('position') : computed.position;
+  var positionVal = (positionDeclared || positionComputed || '').toString().toLowerCase();
+  if (positionVal === 'absolute' || positionVal === 'fixed') {
+    style.positionType = 'absolute';
+  }
 
   return style;
 }
