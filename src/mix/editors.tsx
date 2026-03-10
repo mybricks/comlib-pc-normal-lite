@@ -652,7 +652,9 @@ export default function (props: Props, actions: Actions) {
             const jsonStr = typeof result === 'object' && result !== null
               ? JSON.stringify(result, null, 2)
               : String(result);
+              // console.log('[导出] 导出结果', jsonStr);
             navigator.clipboard.writeText(jsonStr).then(
+              () => console.log("[导出] 复制成功"),
               (err) => console.error("[导出] 复制失败", err)
             );
           }
