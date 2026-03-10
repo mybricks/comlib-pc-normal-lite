@@ -320,7 +320,7 @@ function createRouterLib(
       const targetRoute = routes.find((r) => {
         const el = r.props.element;
         const type = React.isValidElement(el) ? el.type : null;
-        return type === pageRefRegistry[debugPageIndex];
+        return type === pageRefRegistry[debugPageIndex].__enhanced__;
       });
       debugInitialPathRef.current = targetRoute
         ? normalizePath(targetRoute.props.index ? '/' : (targetRoute.props.path ?? '/'))

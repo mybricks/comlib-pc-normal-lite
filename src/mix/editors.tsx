@@ -864,6 +864,14 @@ export default function (props: Props, actions: Actions) {
         ]
       }
     },
+    '@debug'(params) {
+      const page = params.focusArea.ele.closest('[data-desn-page]');
+      const pageIndex = page?.getAttribute("data-desn-page");
+
+      if (pageIndex) {
+        data.debugTarget = { type: 'page', pageIndex: Number(pageIndex) };
+      }
+    },
     '[data-desn-page]': {
       title: "页面",
       items: (props, cate1) => {
