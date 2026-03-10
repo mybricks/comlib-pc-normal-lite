@@ -245,11 +245,23 @@ export interface RouterContextValue {
  * 每次调用返回新的 RouterContext，作用域限定在一个 AIJsxRuntime 内。
  * pageRefRegistry：由 createMybricks 注入，收集所有 pageRef 注册的组件，供设计态渲染。
  */
-function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: any[]) {
+function createRouterLib(
+  _env: { mode: 'design' | 'runtime' },
+  pageRefRegistry: any[],
+  debugPageIndex?: number
+) {
   const RouterContext = createContext<RouterContextValue | null>(null);
 
   /** 稳定容器，持有 appRef 挂载后的 setCurrentPath，避免渲染期间副作用 */
   const setterRef: { current: ((p: string) => void) | null } = { current: null };
+
+  /**
+   * 页面调试时，由 Routes 首次渲染填充目标页对应的路由路径。
+   * null  = 尚未检测（Routes 还没渲染过）
+   * ''    = 目标页不在任何 Route 声明中
+   * other = 找到的路径，供 createAppRef 的 useLayoutEffect 跳转
+   */
+  const debugInitialPathRef: { current: string | null } = { current: null };
 
   /** 跳转路由：runtime 下切换当前展示的 Route；design 下无效 */
   const redirect = (path: string) => {
@@ -303,8 +315,23 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
       );
     }
 
+    // 页面调试模式：首次渲染时探测目标页对应的路由路径，供 createAppRef 的 layoutEffect 消费
+    if (debugPageIndex !== undefined && debugInitialPathRef.current === null) {
+      const targetRoute = routes.find((r) => {
+        const el = r.props.element;
+        const type = React.isValidElement(el) ? el.type : null;
+        return type === pageRefRegistry[debugPageIndex];
+      });
+      debugInitialPathRef.current = targetRoute
+        ? normalizePath(targetRoute.props.index ? '/' : (targetRoute.props.path ?? '/'))
+        : ''; // '' 表示目标页不在任何 Route 中
+    }
+
     // runtime：只渲染当前激活的 Route，避免非活跃页面的副作用（如数据请求、定时器）执行
     const currentPath = ctx?.currentPath ?? '';
+
+    // 调试初始化期间（哨兵占位），Routes 暂不渲染任何内容，等待 layoutEffect 设置真实路径
+    if (currentPath === '__debug_pending__') return null;
     const active = Math.max(0, findBestRouteIndex(routes, currentPath));
     const activeRoute = routes[active];
     if (!activeRoute) return null;
@@ -330,10 +357,28 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
   function createAppRef(store: any, logger: any, useSyncExternalStore: any) {
     return function appRef(Component: any) {
       return (props: any) => {
-        const [currentPath, setCurrentPath] = useState('');
+        /**
+         * 页面调试模式下的初始路径：
+         * - 用 "__debug_pending__" 哨兵值占位，Routes 子组件 render 时同步把目标路径
+         *   写入 debugInitialPathRef，然后 layoutEffect 读取并 setCurrentPath。
+         * - 哨兵值保证第一次渲染时不命中任何 Route，避免触发错误页面的副作用。
+         * - 约定：Route 的 element 必须是 mybricks.pageRef() 的返回值，探测才能生效。
+         * - 非调试模式维持 '' 原有行为。
+         */
+        const PENDING = '__debug_pending__';
+        const [currentPath, setCurrentPath] = useState<string>(
+          debugPageIndex !== undefined ? PENDING : ''
+        );
 
         useLayoutEffect(() => {
           setterRef.current = setCurrentPath;
+
+          if (debugPageIndex !== undefined) {
+            // Routes 在首次 render 时已同步写入 debugInitialPathRef
+            const detectedPath = debugInitialPathRef.current ?? '';
+            setCurrentPath(detectedPath || '');
+          }
+
           return () => { setterRef.current = null; };
         }, []);
 
@@ -419,7 +464,7 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
 // --- mybricks 主入口 ---
 
 export interface CreateMybricksOptions {
-  env: { runtime?: boolean };
+  env: { runtime?: boolean; _debugPageIndex?: number };
   logger: any;
   store: any;
   useSyncExternalStore: typeof React.useSyncExternalStore;
@@ -436,6 +481,13 @@ export function createMybricks(options: CreateMybricksOptions) {
   };
 
   /**
+   * 页面调试模式：指定要单独渲染的页面索引（仅在 runtime 态生效）。
+   * undefined 表示不限制（正常渲染所有页面或走 appRef 路由）。
+   */
+  const debugPageIndex: number | undefined =
+    env.runtime && env._debugPageIndex !== undefined ? env._debugPageIndex : undefined;
+
+  /**
    * pageRef 注册表：按声明顺序收集所有 pageRef 包装后的组件。
    * 在模块 eval 阶段（pageRef 调用时）填充，在 appRef 设计态渲染时消费。
    * 每次 createMybricks 调用时重新创建，天然隔离（无跨 eval 污染）。
@@ -443,7 +495,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   const pageRefRegistry: any[] = [];
   const pageRefOriginalsSet = new Set<any>();
 
-  const routerLib = createRouterLib(_env, pageRefRegistry);
+  const routerLib = createRouterLib(_env, pageRefRegistry, debugPageIndex);
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
@@ -468,6 +520,9 @@ export function createMybricks(options: CreateMybricksOptions) {
   };
 
   const wrapPageWithStore = (Component: any) => {
+    // push 之前捕获，确保 pageIndex 与注册顺序一致
+    const pageIndex = pageRefRegistry.length;
+
     const wrapped = (props: any) => {
       const autoStore = useRef<any>(null);
       if (!autoStore.current) {
@@ -477,8 +532,9 @@ export function createMybricks(options: CreateMybricksOptions) {
         autoStore.current[SYMBOL_SUBSCRIBE],
         autoStore.current[SYMBOL_GETSNAPSHOT]
       );
+
       return (
-        <div data-zone-type="page" style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)' }}>
+        <div data-zone-type="page" data-desn-page={pageIndex} style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)' }}>
           <Component
             {...props}
             _env={_env}

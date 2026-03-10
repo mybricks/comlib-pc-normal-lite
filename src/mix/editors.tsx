@@ -864,6 +864,44 @@ export default function (props: Props, actions: Actions) {
         ]
       }
     },
+    '[data-desn-page]': {
+      title: "页面",
+      items: (props, cate1) => {
+        const { focusArea, data } = props;
+        // focusArea 是被点选的 [data-desn-page] DOM 元素
+        // data-desn-page={N} → dataset.desnPage === "N"
+        const pageIndex = Number(focusArea?.dataset?.desnPage ?? 0);
+        const isDebugging =
+          data.debugTarget?.type === 'page' &&
+          data.debugTarget?.pageIndex === pageIndex;
+
+        console.log('data', data);
+        console.log('focusArea', focusArea);
+        window.testDebug = (index) => {
+          data.debugTarget = { type: 'page', pageIndex: index };
+        }
+
+        cate1.title = "页面";
+        cate1.items = [
+          {
+            title: isDebugging ? '取消调试' : '调试此页面',
+            type: 'Button',
+            value: {
+              set() {
+                if (isDebugging) {
+                  // 取消调试，恢复组件编辑态
+                  data.debugTarget = null;
+                } else {
+                  // 以此页面为入口进入调试
+                  data.debugTarget = { type: 'page', pageIndex };
+                }
+              }
+            }
+          }
+        ];
+        return;
+      }
+    },
     '[data-zone-selector]': {
       style: [
         {
