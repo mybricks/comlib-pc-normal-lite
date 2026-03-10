@@ -295,13 +295,15 @@ const genResizer = () => {
   }
 }
 
-export default function (props: Props, actions: Actions) {
+export default function (props: Props, actions: Actions, ...args) {
   if (!props?.data || !props?.id) {
     return {};
   }
 
   const { data, isLowCodeMode } = props;
   const focusAreaConfigs: any = {};
+
+  console.log('props', props, actions, ...args);
 
   // try {
   //   const configs = evalConfigJsCompiled(decodeURIComponent(data.configJsCompiled));
@@ -849,10 +851,23 @@ export default function (props: Props, actions: Actions) {
     '@resize': {
       options: ['width', 'height'],
     },
+    '@error': (err) => {
+      const aiComParams = context.getAiComParams(props.id);
+      if (aiComParams?.data) {
+        const data = aiComParams.data;
+        if (!data._errors) data._errors = [];
+        data._errors = data._errors.filter((e: any) => e.file);
+        data._errors.push({ message: err.message, type: 'runtime' });
+        context.getAiCom(props.id)?.actions?.notifyChanged?.();
+      }
+    },
     /** 代码编辑器面板 */
     '@lowcode':{
       render(params, plugins){
         context.plugins = plugins;
+
+        const showAIDialog = plugins.showAIDialog;
+        (window as any)._showAIDialog_ = showAIDialog;
 
         return (
           <LowcodeView {...params}/>
@@ -877,9 +892,6 @@ export default function (props: Props, actions: Actions) {
 
         console.log('data', data);
         console.log('focusArea', focusArea);
-        window.testDebug = (index) => {
-          data.debugTarget = { type: 'page', pageIndex: index };
-        }
 
         cate1.title = "页面";
         cate1.items = [

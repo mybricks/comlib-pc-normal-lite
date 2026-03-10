@@ -7,7 +7,7 @@ import {copyToClipboard} from './../index'
 import css from './runtime-card.less'
 
 /** 统一错误面板：编译失败、generate.error、eval 失败等共用同一套样式 */
-export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [] }: { title?: string; desc?: string; errors?: any[] }) => {
+export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
   const onRetry = useCallback(() => {
     let message = '';
     
@@ -23,12 +23,13 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [] 
       message = `当前组件出错了，${desc || title || '未知错误'}`;
     }
     
+    (window as any)._showAIDialog_?.(comId);
     setTimeout(() => {
       if ((window as any)._sendToFocusVibeAgent_) {
         (window as any)._sendToFocusVibeAgent_({ message });
       }
     }, 500)
-  }, [title, desc, errors]);
+  }, [title, desc, errors, comId]);
 
   return (
     <div className={css.runtimeCardErrorView}>
@@ -58,13 +59,15 @@ const GenerateLoadingView = ({
   content = '',
   error = false,
   errorMessage = '',
-}: { fileName?: string; content?: string; error?: boolean; errorMessage?: string }) => {
+  comId,
+}: { fileName?: string; content?: string; error?: boolean; errorMessage?: string; comId?: string }) => {
   const onRetry = useCallback(() => {
     const message = errorMessage || '未知错误';
+    (window as any)._showAIDialog_?.(comId);
     if ((window as any)._sendToFocusVibeAgent_) {
       (window as any)._sendToFocusVibeAgent_({ message });
     }
-  }, [errorMessage]);
+  }, [errorMessage, comId]);
 
   return (
     <div className={css.generateRoot}>
@@ -225,6 +228,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
             content={data.generateContent ?? ''}
             error={!!data.generateError}
             errorMessage={data.generateErrorMessage ?? ''}
+            comId={id}
           />
         </Wrapper>
       );
@@ -250,7 +254,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     if (errorInfo) {
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
-          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} />
+          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />
         </Wrapper>
       );
     }
@@ -269,7 +273,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
             inputs={inputs}
             outputs={outputs}
             placeholder={<IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-            renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} />}
+            renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} comId={id} />}
             dependencies={{
               ...(dependencies ?? {}),
               'react': React,
