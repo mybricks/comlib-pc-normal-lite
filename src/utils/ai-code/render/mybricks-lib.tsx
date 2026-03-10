@@ -359,11 +359,9 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
         if (_env.mode === 'design') {
           return (
             <RouterContext.Provider value={routerContextValue}>
-              <div className={css.routesDesign}>
-                {pageRefRegistry.map((Page, i) => (
-                  <Page key={i} />
-                ))}
-              </div>
+              {pageRefRegistry.map((Page, i) => (
+                <Page key={i} />
+              ))}
             </RouterContext.Provider>
           );
         }
