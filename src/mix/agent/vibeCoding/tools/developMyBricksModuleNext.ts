@@ -237,6 +237,7 @@ export default function developMyBricksModule(config: Config) {
   <编写规范>
   1. 组件 props 禁止传递*保留字段*：_env，store，logger；
     - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
+    - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
   3. 页面、弹窗、组件必须遵循规范进行定义和jsDoc的编写
     - 整个项目有且只能有一个export default导出，那就是appRef;
@@ -245,9 +246,10 @@ export default function developMyBricksModule(config: Config) {
     - 路由通过 Routes + Route 进行渲染；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
-  6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；UI、组件、dom元素间交互逻辑写在 区块 内（例如：loading、弹窗提示、选中态等）；
-  7. 包含事件的标签内必须包含注释「/** 事件名:事件key */」，且事件key必须与 @event 的 事件key 一致；
-  8. 事件与 JSDoc 一一对应：组件内只要写了事件注释（如 \`/** onChange:updateSearchClass */\`），该组件的 JSDoc 中就必须有对应的 \`@event {updateSearchClass} 描述 - 流程图\` 条目，不得遗漏；反之 JSDoc 中声明的 @event 也必须在代码中有对应的事件注释；
+  6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
+  7. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
+  8. 包含事件的标签内必须包含注释「/** 事件名:事件key */」，且事件key必须与 @event 的 事件key 一致；
+  9. 事件与 JSDoc 一一对应：组件内只要写了事件注释（如 \`/** onChange:updateSearchClass */\`），该组件的 JSDoc 中就必须有对应的 \`@event {updateSearchClass} 描述 - 流程图\` 条目，不得遗漏；反之 JSDoc 中声明的 @event 也必须在代码中有对应的事件注释；
   </编写规范>
 
   <comRef说明>
@@ -351,8 +353,7 @@ export default function developMyBricksModule(config: Config) {
       - 业务逻辑应尽量维护在 store 中，以便跨组件共享、持久化；
       - 当多个区块需要读写或联动的派生数据；
       - 模块内可复用的业务逻辑与数据；
-      - 纯交互反馈且仅影响当前展示（如组件选中态、聚焦态、loading状态、是否可见等），禁止使用 store，使用 React hooks 来管理状态；
-      - store 和 React hooks 可以共存，并不影响彼此；
+      - 禁止与 React hooks 混用；
       - 禁止通过 props 传递 store 字段，这是保留字段，禁止对 store 进行解构够通过 props 传递；
       - 当需要更新嵌套对象内容时，必须使用扩展运算符更新整个对象
         - 正确：\`this.user = {...this.user, name: "名称"};\`
@@ -496,7 +497,7 @@ export default function developMyBricksModule(config: Config) {
   4、详细分析各个区块的技术方案，按照以下要点展开：
     - 布局方案：区块如何实现布局，注意事项有哪些；
     - 关键属性分析：区块对于所采用组件的关键属性，要包含在知识库中的<组件字段声明/>，以及考虑例如尺寸（size）、风格等，结合上面对样式的分析、组件需要做哪些配置等，一一给出方案；
-    - 状态方案：针对每个涉及状态的区块，对每个区块明确列出其状态项及选用 store 或 hooks 的理由；
+    - 状态方案：针对每个涉及状态的区块，对每个区块明确列出其在 store 中的状态项；
     
   5、接下来，确定哪些文件必须要进行修改，按照以下步骤处理：
   
@@ -616,7 +617,6 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
   
   \`\`\`after file="runtime.jsx"
-  import { useState } from 'react';
   import css from 'style.less';
   import { comRef, pageRef, appRef, Routes, Route } from 'mybricks';
   import { Button } from 'antd';
