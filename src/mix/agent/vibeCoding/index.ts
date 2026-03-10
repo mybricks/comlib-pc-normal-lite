@@ -25,10 +25,14 @@ export type { ReplaceResultItem };
 
 export type { FileUpdateResult, UpdateComponentFilesResult };
 
+const SUPPORTED_FILE_EXTENSION_MAP = {
+  'jsx': true,
+  'less': true,
+  'js': true,
+}
 /**
- * 将指定组件的若干源文件（model.json / runtime.jsx / style.less / config.js / com.json）
- * 写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
- * 使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
+ * 将指定组件的若干源文件写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
+ * 文件列表为动态（任意 fileName），使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
  */
 function updateComponentFiles(
   files: Array<ComponentFileItem>,
@@ -38,21 +42,22 @@ function updateComponentFiles(
   const aiComParams = context.getAiComParams(comId);
   const fileResults: FileUpdateResult[] = [];
 
-  const fileToDataKey: Array<{ fileName: string; dataKey: string }> = [
-    { fileName: 'com.json', dataKey: 'componentConfig' },
-    { fileName: 'config.js', dataKey: 'configJsSource' },
-    { fileName: 'model.json', dataKey: 'modelConfig' },
-    { fileName: 'style.less', dataKey: 'styleSource' },
-    { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
-    { fileName: 'store.js', dataKey: 'storeJsSource' },
-  ];
-
+  /** 按 fileName 分组：同一 fileName 可能出现多次（内容替换时为 before/after 一对），此处只得到待处理的文件名列表，每个文件名下会收集该文件的所有条目做整文件替换或片段替换 */
+  const fileNames = [...new Set(files.filter((f) => SUPPORTED_FILE_EXTENSION_MAP[f.fileName.split('.').pop() ?? '']).map((f) => f.fileName))];
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
   const pendingWrites: Array<{ fileName: string; content: string }> = [];
 
-  for (const { fileName, dataKey } of fileToDataKey) {
+  const currentFilesMap = aiComParams.data.files.reduce((pre, cur) => {
+    pre[cur.fileName] = cur;
+    return pre;
+  }, {})
+
+  for (const fileName of fileNames) {
     const matchedFiles = files.filter((f) => f.fileName === fileName);
     if (matchedFiles.length === 0) continue;
+
+    /** 动态文件下用 fileName 作为 data 的 key，与 context.updateFile(comId, { fileName, content }) 一致 */
+    const dataKey = fileName;
 
     if (matchedFiles.length === 1) {
       fileResults.push({
@@ -67,7 +72,7 @@ function updateComponentFiles(
       continue;
     }
 
-    const current = decodeURIComponent(aiComParams.data[dataKey] || '');
+    const current = decodeURIComponent(currentFilesMap[fileName]?.source || '');
     const operations: Array<{ before: string; after: string }> = [];
     for (let i = 0; i < matchedFiles.length; i += 2) {
       const before = matchedFiles[i];

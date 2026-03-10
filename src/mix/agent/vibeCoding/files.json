@@ -1,0 +1,182 @@
+[
+  {
+    "fileName": "code_block_1.txt",
+    "content": "学生成绩查询页面 (pages/ScoreQueryPage/index.jsx)\n├── 页面头部 (Header)\n│   └── 标题区域 (TitleArea)\n├── 搜索筛选区 (SearchBar)\n│   ├── 学生姓名输入框 (NameInput)\n│   ├── 学号输入框 (StudentIdInput)\n│   ├── 班级选择器 (ClassSelect)\n│   └── 查询按钮 (QueryButton)\n├── 成绩列表区 (ScoreList)\n│   ├── 表格头部 (TableHeader)\n│   └── 表格内容 (TableContent)\n│       └── 成绩行 (ScoreRow) - 循环渲染\n└── 分页区 (PaginationArea)"
+  },
+  {
+    "fileName": "index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "index.jsx",
+    "content": "import { appRef, Routes, Route } from \"mybricks\";\nimport ScoreQueryPage from \"./pages/ScoreQueryPage\";\n\n/**\n * @title 学生成绩查询系统\n */\nexport default appRef(() => {\n  return (\n    <Routes>\n      <Route index element={<ScoreQueryPage />} />\n    </Routes>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/index.jsx",
+    "content": "import { pageRef } from \"mybricks\";\nimport Header from \"./Header\";\nimport SearchBar from \"./SearchBar\";\nimport ScoreList from \"./ScoreList\";\nimport PaginationArea from \"./PaginationArea\";\nimport css from \"./index.less\";\n\n/**\n * @title 成绩查询页面\n */\nexport default pageRef(() => {\n  return (\n    <div className={css.pageContainer}>\n      <Header />\n      <div className={css.contentWrapper}>\n        <SearchBar />\n        <ScoreList />\n        <PaginationArea />\n      </div>\n    </div>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/index.less",
+    "content": ".pageContainer {\n  position: relative;\n  width: 100%;\n  height: 100%;\n  background-color: #f5f5f5;\n  display: flex;\n  flex-direction: column;\n}\n\n.contentWrapper {\n  position: relative;\n  flex: 1;\n  padding: 16px;\n  overflow: auto;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport TitleArea from \"./TitleArea\";\nimport css from \"./index.less\";\n\n/**\n * @summary 页面头部\n */\nexport default comRef(() => {\n  return (\n    <div className={css.headerContainer}>\n      <TitleArea />\n    </div>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/index.less",
+    "content": ".headerContainer {\n  position: relative;\n  width: 100%;\n  height: 60px;\n  background-color: #fff;\n  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);\n  display: flex;\n  align-items: center;\n  padding: 0 24px;\n  flex-shrink: 0;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/TitleArea/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/TitleArea/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Typography } from \"antd\";\nimport css from \"./index.less\";\n\nconst { Title } = Typography;\n\n/**\n * @summary 标题区域\n */\nexport default comRef(() => {\n  return (\n    <Title level={4} className={css.pageTitle}>\n      学生成绩查询\n    </Title>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/TitleArea/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/Header/TitleArea/index.less",
+    "content": ".pageTitle {\n  margin: 0 !important;\n  font-size: 18px;\n  font-weight: 500;\n  color: #262626;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport NameInput from \"./NameInput\";\nimport StudentIdInput from \"./StudentIdInput\";\nimport ClassSelect from \"./ClassSelect\";\nimport QueryButton from \"./QueryButton\";\nimport css from \"./index.less\";\n\n/**\n * @summary 搜索筛选区\n */\nexport default comRef(() => {\n  return (\n    <div className={css.searchBarContainer}>\n      <NameInput />\n      <StudentIdInput />\n      <ClassSelect />\n      <QueryButton />\n    </div>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/index.less",
+    "content": ".searchBarContainer {\n  position: relative;\n  width: 100%;\n  background-color: #fff;\n  border-radius: 8px;\n  padding: 20px 24px;\n  display: flex;\n  align-items: center;\n  gap: 16px;\n  flex-wrap: wrap;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/NameInput/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/NameInput/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Input } from \"antd\";\nimport css from \"./index.less\";\n\n/**\n * @summary 学生姓名输入框\n * @prop {string} value - 输入值\n * @event {updateName} 更新姓名 - flowchart LR; A[调用 store.setSearchName]\n */\nexport default comRef(({ store }) => {\n  return (\n    <Input\n      className={css.nameInput}\n      placeholder=\"请输入学生姓名\"\n      value={store.searchName}\n      allowClear\n      /** onChange:updateName */\n      onChange={(e) => store.setSearchName(e.target.value)}\n    />\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/NameInput/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/NameInput/index.less",
+    "content": ".nameInput {\n  width: 180px;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/StudentIdInput/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/StudentIdInput/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Input } from \"antd\";\nimport css from \"./index.less\";\n\n/**\n * @summary 学号输入框\n * @prop {string} value - 输入值\n * @event {updateStudentId} 更新学号 - flowchart LR; A[调用 store.setSearchStudentId]\n */\nexport default comRef(({ store }) => {\n  return (\n    <Input\n      className={css.studentIdInput}\n      placeholder=\"请输入学号\"\n      value={store.searchStudentId}\n      allowClear\n      /** onChange:updateStudentId */\n      onChange={(e) => store.setSearchStudentId(e.target.value)}\n    />\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/StudentIdInput/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/StudentIdInput/index.less",
+    "content": ".studentIdInput {\n  width: 180px;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/ClassSelect/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/ClassSelect/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Select } from \"antd\";\nimport css from \"./index.less\";\n\n/**\n * @summary 班级选择器\n * @prop {string} value - 选中值\n * @event {updateClass} 更新班级 - flowchart LR; A[调用 store.setSearchClass]\n */\nexport default comRef(({ store }) => {\n  return (\n    <Select\n      className={css.classSelect}\n      placeholder=\"请选择班级\"\n      value={store.searchClass}\n      allowClear\n      /** onChange:updateClass */\n      onChange={(value) => store.setSearchClass(value)}\n    >\n      {store.classOptions.map((item) => (\n        <Select.Option key={item.value} value={item.value}>\n          {item.label}\n        </Select.Option>\n      ))}\n    </Select>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/ClassSelect/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/ClassSelect/index.less",
+    "content": ".classSelect {\n  width: 160px;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/QueryButton/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/QueryButton/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Button } from \"antd\";\nimport { SearchOutlined } from \"@ant-design/icons\";\nimport css from \"./index.less\";\n\n/**\n * @summary 查询按钮\n * @event {queryData} 查询数据 - flowchart LR; A[设置loading状态] --> B[调用 store.fetchScoreList] --> C[取消loading状态]\n */\nexport default comRef(({ store }) => {\n  return (\n    <Button\n      className={css.queryButton}\n      type=\"primary\"\n      icon={<SearchOutlined />}\n      loading={store.loading}\n      /** onClick:queryData */\n      onClick={() => store.fetchScoreList()}\n    >\n      查询\n    </Button>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/QueryButton/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/SearchBar/QueryButton/index.less",
+    "content": ".queryButton {\n  min-width: 88px;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/ScoreList/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/ScoreList/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Table } from \"antd\";\nimport css from \"./index.less\";\n\n/**\n * @summary 成绩列表区\n */\nexport default comRef(({ store }) => {\n  const columns = [\n    {\n      title: \"序号\",\n      dataIndex: \"index\",\n      key: \"index\",\n      width: 80,\n      align: \"center\",\n      render: (_, __, index) => index + 1 + (store.pagination.current - 1) * store.pagination.pageSize,\n    },\n    {\n      title: \"学号\",\n      dataIndex: \"studentId\",\n      key: \"studentId\",\n      width: 120,\n    },\n    {\n      title: \"姓名\",\n      dataIndex: \"name\",\n      key: \"name\",\n      width: 100,\n    },\n    {\n      title: \"班级\",\n      dataIndex: \"className\",\n      key: \"className\",\n      width: 120,\n    },\n    {\n      title: \"语文\",\n      dataIndex: \"chinese\",\n      key: \"chinese\",\n      width: 100,\n      align: \"center\",\n      render: (score) => <span className={score < 60 ? css.failScore : \"\"}>{score}</span>,\n    },\n    {\n      title: \"数学\",\n      dataIndex: \"math\",\n      key: \"math\",\n      width: 100,\n      align: \"center\",\n      render: (score) => <span className={score < 60 ? css.failScore : \"\"}>{score}</span>,\n    },\n    {\n      title: \"英语\",\n      dataIndex: \"english\",\n      key: \"english\",\n      width: 100,\n      align: \"center\",\n      render: (score) => <span className={score < 60 ? css.failScore : \"\"}>{score}</span>,\n    },\n    {\n      title: \"总分\",\n      dataIndex: \"total\",\n      key: \"total\",\n      width: 100,\n      align: \"center\",\n      render: (_, record) => {\n        const total = record.chinese + record.math + record.english;\n        return <span className={css.totalScore}>{total}</span>;\n      },\n    },\n    {\n      title: \"平均分\",\n      dataIndex: \"average\",\n      key: \"average\",\n      width: 100,\n      align: \"center\",\n      render: (_, record) => {\n        const average = ((record.chinese + record.math + record.english) / 3).toFixed(1);\n        return <span className={css.averageScore}>{average}</span>;\n      },\n    },\n    {\n      title: \"排名\",\n      dataIndex: \"rank\",\n      key: \"rank\",\n      width: 80,\n      align: \"center\",\n      render: (rank) => <span className={css.rank}>{rank}</span>,\n    },\n  ];\n\n  return (\n    <div className={css.scoreListContainer}>\n      <Table\n        className={css.scoreTable}\n        columns={columns}\n        dataSource={store.scoreList}\n        rowKey=\"id\"\n        loading={store.loading}\n        pagination={false}\n        scroll={{ x: 1000 }}\n      />\n    </div>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/ScoreList/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/ScoreList/index.less",
+    "content": ".scoreListContainer {\n  position: relative;\n  width: 100%;\n  background-color: #fff;\n  border-radius: 8px;\n  margin-top: 16px;\n  padding: 20px 24px;\n  flex: 1;\n  min-height: 0;\n}\n\n.scoreTable {\n  :global(.ant-table-thead > tr > th) {\n    background-color: #fafafa;\n    font-weight: 500;\n    color: #262626;\n  }\n}\n\n.failScore {\n  color: #ff4d4f;\n  font-weight: 500;\n}\n\n.totalScore {\n  color: #1890ff;\n  font-weight: 600;\n}\n\n.averageScore {\n  color: #52c41a;\n  font-weight: 500;\n}\n\n.rank {\n  color: #faad14;\n  font-weight: 600;\n}"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/PaginationArea/index.jsx",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/PaginationArea/index.jsx",
+    "content": "import { comRef } from \"mybricks\";\nimport { Pagination } from \"antd\";\nimport css from \"./index.less\";\n\n/**\n * @summary 分页区\n * @event {changePage} 切换页码 - flowchart LR; A[调用 store.setPagination] --> B[调用 store.fetchScoreList]\n * @event {changePageSize} 切换每页条数 - flowchart LR; A[调用 store.setPagination] --> B[调用 store.fetchScoreList]\n */\nexport default comRef(({ store }) => {\n  return (\n    <div className={css.paginationContainer}>\n      <Pagination\n        className={css.pagination}\n        current={store.pagination.current}\n        pageSize={store.pagination.pageSize}\n        total={store.pagination.total}\n        showSizeChanger\n        showQuickJumper\n        showTotal={(total) => `共 ${total} 条`}\n        pageSizeOptions={[\"10\", \"20\", \"50\", \"100\"]}\n        /** onChange:changePage */\n        onChange={(page, pageSize) => store.handlePageChange(page, pageSize)}\n        /** onShowSizeChange:changePageSize */\n        onShowSizeChange={(current, size) => store.handlePageChange(current, size)}\n      />\n    </div>\n  );\n});"
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/PaginationArea/index.less",
+    "content": ""
+  },
+  {
+    "fileName": "pages/ScoreQueryPage/PaginationArea/index.less",
+    "content": ".paginationContainer {\n  position: relative;\n  width: 100%;\n  height: 56px;\n  background-color: #fff;\n  border-radius: 8px;\n  margin-top: 16px;\n  padding: 12px 24px;\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  flex-shrink: 0;\n}\n\n.pagination {\n  :global(.ant-pagination-options) {\n    margin-left: 16px;\n  }\n}"
+  },
+  {
+    "fileName": "store.js",
+    "content": ""
+  },
+  {
+    "fileName": "store.js",
+    "content": "export default class Store {\n  // 搜索条件\n  searchName = \"\";\n  searchStudentId = \"\";\n  searchClass = undefined;\n\n  // 班级选项\n  classOptions = [\n    { value: \"1\", label: \"一年级一班\" },\n    { value: \"2\", label: \"一年级二班\" },\n    { value: \"3\", label: \"二年级一班\" },\n    { value: \"4\", label: \"二年级二班\" },\n    { value: \"5\", label: \"三年级一班\" },\n    { value: \"6\", label: \"三年级二班\" },\n  ];\n\n  // 成绩列表数据\n  scoreList = [];\n\n  // 加载状态\n  loading = false;\n\n  // 分页信息\n  pagination = {\n    current: 1,\n    pageSize: 10,\n    total: 0,\n  };\n\n  constructor() {\n    // 初始化加载数据\n    this.fetchScoreList();\n  }\n\n  // 设置搜索姓名\n  setSearchName(name) {\n    this.searchName = name;\n  }\n\n  // 设置搜索学号\n  setSearchStudentId(studentId) {\n    this.searchStudentId = studentId;\n  }\n\n  // 设置搜索班级\n  setSearchClass(classValue) {\n    this.searchClass = classValue;\n  }\n\n  // 设置分页\n  setPagination(pagination) {\n    this.pagination = { ...this.pagination, ...pagination };\n  }\n\n  // 处理分页变化\n  handlePageChange(page, pageSize) {\n    this.setPagination({ current: page, pageSize });\n    this.fetchScoreList();\n  }\n\n  // 获取成绩列表\n  async fetchScoreList() {\n    this.loading = true;\n    \n    // 模拟异步请求\n    await new Promise((resolve) => setTimeout(resolve, 500));\n    \n    // 模拟数据\n    const mockData = this.generateMockData();\n    \n    // 筛选逻辑\n    let filteredData = mockData.filter((item) => {\n      const matchName = !this.searchName || item.name.includes(this.searchName);\n      const matchStudentId = !this.searchStudentId || item.studentId.includes(this.searchStudentId);\n      const matchClass = !this.searchClass || item.classId === this.searchClass;\n      return matchName && matchStudentId && matchClass;\n    });\n\n    // 排序（按总分降序）\n    filteredData.sort((a, b) => {\n      const totalA = a.chinese + a.math + a.english;\n      const totalB = b.chinese + b.math + b.english;\n      return totalB - totalA;\n    });\n\n    // 添加排名\n    filteredData = filteredData.map((item, index) => ({\n      ...item,\n      rank: index + 1,\n    }));\n\n    // 分页\n    const { current, pageSize } = this.pagination;\n    const start = (current - 1) * pageSize;\n    const end = start + pageSize;\n    this.scoreList = filteredData.slice(start, end);\n    this.pagination.total = filteredData.length;\n    \n    this.loading = false;\n  }\n\n  // 生成模拟数据\n  generateMockData() {\n    const names = [\"张三\", \"李四\", \"王五\", \"赵六\", \"钱七\", \"孙八\", \"周九\", \"吴十\", \"郑十一\", \"王十二\"];\n    const classMap = {\n      \"1\": \"一年级一班\",\n      \"2\": \"一年级二班\",\n      \"3\": \"二年级一班\",\n      \"4\": \"二年级二班\",\n      \"5\": \"三年级一班\",\n      \"6\": \"三年级二班\",\n    };\n    \n    const data = [];\n    for (let i = 1; i <= 86; i++) {\n      const classId = String(Math.floor(Math.random() * 6) + 1);\n      data.push({\n        id: i,\n        studentId: `2024${String(i).padStart(3, \"0\")}`,\n        name: names[Math.floor(Math.random() * names.length)] + (i > 10 ? i : \"\"),\n        classId: classId,\n        className: classMap[classId],\n        chinese: Math.floor(Math.random() * 40) + 60, // 60-100\n        math: Math.floor(Math.random() * 50) + 50, // 50-100\n        english: Math.floor(Math.random() * 45) + 55, // 55-100\n      });\n    }\n    return data;\n  }\n}"
+  }
+]

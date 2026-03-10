@@ -155,7 +155,7 @@ const PRIVATE_DEPENDENCIES = {
   }
 }
 
-export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', renderError, dependencies = {}, inMybricksGeoWebview, logger } : any) => {
+export const AIJsxRuntime2 = ({ id, env, styleCode, renderCode, data, inputs, outputs, errorInfo, placeholder = 'AI组件', renderError, dependencies = {}, inMybricksGeoWebview, logger } : any) => {
   const ref = useRef<any>(null);
   const appendCssApi = useMemo<CssApi>(() => {
     if (inMybricksGeoWebview && env.canvas?.css) {
@@ -315,9 +315,188 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
   return <ReactNode {...renderProps} />
 }
 
+const useCssApi = ({ id, env, inMybricksGeoWebview }) => {
+  return useMemo(() => {
+    if (inMybricksGeoWebview && env.canvas?.css) {
+      const cssAPI = env.canvas.css
+      return {
+        set(id: string, content: string) {
+          const myContent = content.replaceAll(STYLE_REPLACE_ID, id)//替换模版
+          cssAPI.set(id, myContent)
+        },
+        remove() {
+          return cssAPI.remove(id)
+        }
+      }
+    }
+
+    return {
+      set: (id: string, content: string) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.innerText = content.replaceAll(STYLE_REPLACE_ID, id)//替换模版
+          return
+        }
+        const styleEle = document.createElement('style')
+        styleEle.id = id;
+        const myContent = content.replaceAll(STYLE_REPLACE_ID, id)//替换模版
+        styleEle.innerText = myContent
+        document.head.appendChild(styleEle);
+      },
+      remove: (id: string) => {
+        const el = document.getElementById(id);
+        if (el && el.parentElement) {
+          el.parentElement.removeChild(el)
+        }
+      }
+    }
+  }, [])
+}
+
+export const AIJsxRuntime = ({
+  id,
+  data,
+  env,
+  logger,
+  dependencies,
+  placeholder,
+  inMybricksGeoWebview
+}) => {
+  const cssApi = useCssApi({ id, env, inMybricksGeoWebview });
+
+  useMemo(() => {
+    const lessFiles = data.files.filter((file) => file.fileName.endsWith('.less'));
+    const cssCode = lessFiles.map((file) => decodeURIComponent(file.compiled)).join('\n');
+    cssApi.set(`${id}`, cssCode)
+  }, [])
+
+  // 文件名到代码模块的映射
+  const filesModule: any = useMemo(() => {
+    class FilesModule {
+      filesMap: any = [];
+      dependencies: any = {};
+      cache = {};
+      constructor({ files, dependencies }) {
+        this.filesMap = files.reduce((pre, cur) => {
+          pre[cur.fileName] = cur;
+          return pre;
+        }, {});
+        this.dependencies = dependencies;
+
+        // 固定的文件名，可以直接获取
+        const Store = this.getModule('store.js');
+
+        this.dependencies.mybricks = createMybricks({
+          env,
+          logger,
+          store: genListenersStore(Store, { mode: env.runtime ? 'runtime' : 'design' }),
+          useSyncExternalStore,
+        })
+      }
+
+      getModule(fileName) {
+        const cacheFile = this.cache[fileName];
+        if (cacheFile) {
+          return cacheFile;
+        }
+
+        const candidates = [fileName, `${fileName}.jsx`, `${fileName}/index.jsx`];
+        let file;
+        let resolvedFileName = fileName;
+        for (const candidate of candidates) {
+          file = this.filesMap[candidate];
+          if (file) {
+            resolvedFileName = candidate;
+            break;
+          }
+        }
+
+        fileName = resolvedFileName;
+
+        const suffix = fileName.split('.').pop();
+        const that = this;
+
+        if (suffix === 'jsx') {
+          const compiledCode = decodeURIComponent(file.compiled);
+          const Com: any = runRender(compiledCode, new Proxy(this.dependencies, {
+            get(target, key: string) {
+              if (key in target) {
+                return target[key];
+              }
+      
+              const currentPath = fileName.split('/');
+              const targetPath = key.split('/');
+
+              targetPath.forEach((path) => {
+                if (path === ".") {
+                  currentPath.pop();
+                } else if (path === "..") {
+                  currentPath.pop();
+                  currentPath.pop();
+                } else {
+                  currentPath.push(path)
+                }
+              })
+
+              return {
+                __esModule: true,
+                default: that.getModule(currentPath.join('/')),
+              }
+            }
+          }));
+
+          return this.cache[fileName] = Com;
+        } else if (suffix === 'less') {
+          return this.cache[fileName] = new Proxy({}, {
+            get(_, key) {
+              return key;
+            }
+          });
+        } else if (suffix === 'js') {
+          return this.cache[fileName] = evalJSCompiled(decodeURIComponent(file ? (file.compiled || file.source) : ""), data);
+        }
+      }
+    }
+
+    const filesModule = new FilesModule({ 
+      files: data.files,
+      dependencies: {
+        'react': React,
+        'dayjs': dayjs,
+        ...PRIVATE_DEPENDENCIES,
+        ...dependencies,
+      }
+    });
+
+    return filesModule;
+  }, [])
+
+  // 入口文件固定写法，直接读取
+  const ReactComponent = useMemo(() => {
+    return filesModule.getModule('runtime.jsx')
+  }, []);
+
+  if (typeof ReactComponent !== 'function') {
+    const CustomView = typeof window !== 'undefined' && (window as any)._renderCompView_;
+    if (CustomView) {
+      if (typeof CustomView === 'function') {
+        return <CustomView />;
+      }
+      if (React.isValidElement(CustomView)) {
+        return CustomView;
+      }
+    }
+    return placeholder;
+  }
+
+  // [TODO] ErrorBoundary 包裹
+  return <ReactComponent />;
+}
+
 function runRender(code, dependencies) {
   const wrapCode = `
           (function(exports,require){
+            debugger
             ${code}
           })
         `

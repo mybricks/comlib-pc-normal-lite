@@ -1,0 +1,107 @@
+.treeView {
+  list-style: none;
+  padding: 0px;
+  margin: 0px;
+
+  &:hover {
+    .itemLevelLineContainer {
+      .itemLevelLine {
+        border-color: #d1d9e0b3;
+      }
+    }
+  }
+}
+
+.item {
+  &[aria-current='true'] > .itemContainer {
+    background-color: #818b9826;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: calc(50% - 12px);
+      left: -8px;
+      width: 4px;
+      height: 24px;
+      background-color: #0969da;
+      border-radius: 6px;
+    }
+  }
+
+  .itemContainer {
+    position: relative;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #1f2328;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    height: 32px;
+    &[data-hasnot-subTree] {
+      gap: 16px;
+    }
+    &:hover {
+      background-color: #818b981a;
+    }
+
+    .itemToggle {
+      border-top-left-radius: 6px;
+      border-bottom-left-radius: 6px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      width: 16px;
+      justify-content: center;
+  
+      &:hover {
+        background-color: #818b981a;
+      }
+    }
+
+    .itemContent {
+      display: flex;
+      gap: 8px;
+      padding: 0px 8px;
+      width: 100%;
+
+      .itemContentText {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        flex: 1 1 auto;
+        width: 0px;
+      }
+    }
+  }
+}
+
+.itemLevelLineContainer {
+  height: 100%;
+  display: flex;
+  width: calc(calc(var(--level) - 1) * 8px);
+  
+  .itemLevelLine {
+    border-right: 1px solid;
+    width: 100%;
+    height: 100%;
+    border-color: transparent;
+  }
+}
+
+.itemVisual {
+  display: flex;
+  align-items: center;
+}
+
+.directoryIcon {
+  display: flex;
+  align-items: center;
+  color: #54aeff;
+}
+
+.subTree {
+  list-style: none;
+  padding: 0px;
+  margin: 0px;
+}

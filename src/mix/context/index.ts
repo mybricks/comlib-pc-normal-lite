@@ -1,5 +1,18 @@
 import genVibeCodingAgent from "../agent/vibeCoding";
-import { updateRender, updateStyle } from "../../utils/ai-code/transform-umd";
+import { updateRender, updateStyle, transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
+
+const updateFileContent = ({ fileName, files, content }) => {
+  const file = files.find((f) => f.fileName === fileName);
+  if (file) {
+    // 更新
+    Object.entries(content).forEach(([key, value]) => {
+      file[key] = value;
+    });
+  } else {
+    // 新增
+    files.push({ fileName, ...content });
+  }
+}
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
@@ -73,7 +86,78 @@ class Context {
   };
 
   updateFile(id, { fileName, content }) {
+    // 现在只有 jsx、less、js 三种文件
     const aiComParams = this.getAiComParams(id);
+    const files = aiComParams.data.files;
+
+    const suffix = fileName.split('.').pop();
+
+    switch (suffix) {
+      case 'jsx':
+        transformTsx(content).then(({ transformCode, constituency}) => {          
+          // [TODO] 触发data的响应式更新
+          // [TODO] 更新error状态 fileName（文件名）, message（报错信息）, type: 'compile'（错误类型）
+
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+              compiled: encodeURIComponent(transformCode),
+              constituency
+            }
+          });
+        }).catch(e => {
+          console.log("[@jsx 编译错误]", e);
+        })
+        break;
+      case 'less':
+        transformLess(`.__mybricks_ai_module_id__ {${content}}`).then((css) => {
+          // [TODO] 触发data的响应式更新
+          // [TODO] 更新error状态 fileName（文件名）, message（报错信息）, type: 'compile'（错误类型）
+
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+              compiled: encodeURIComponent(css)
+            }
+          });
+        }).catch(e => {
+          console.log("[@less 编译错误]", e);
+        }) 
+        break;
+      case 'js':
+        if (fileName === 'store.js') {
+          // [TODO] 触发data的响应式更新
+          // [TODO] 更新error状态 fileName（文件名）, message（报错信息）, type: 'compile'（错误类型）
+          // [TODO] babel编译
+          // 先尝试编译验证（捕获语法错误）
+          try {
+            const evalStr = `
+              let result;
+              ${content.replace('export default', 'result =')};
+              result;
+            `;
+            // 只验证语法，不实际执行构造函数
+            new Function(evalStr);
+
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+              }
+            });
+          } catch (e) {
+            console.log("[@store.js 编译错误]", e);
+          }
+        }
+        break;
+      default:
+        break;
+    }
 
     switch (fileName) {
       case "model.json":

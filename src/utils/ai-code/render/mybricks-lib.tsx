@@ -113,6 +113,22 @@ function createReactiveStore(store: any) {
   });
 }
 
+/**
+ * 将 store 转为响应式并订阅快照，供组件使用。
+ * 封装 createReactiveStore + useSyncExternalStore 的重复逻辑。
+ */
+function useReactiveStore(store: any, useSyncExternalStore: typeof React.useSyncExternalStore) {
+  const autoStore = useRef<any>(null);
+  if (!autoStore.current) {
+    autoStore.current = createReactiveStore(store);
+  }
+  const state = useSyncExternalStore(
+    autoStore.current[SYMBOL_SUBSCRIBE],
+    autoStore.current[SYMBOL_GETSNAPSHOT]
+  );
+  return { store: autoStore.current, state };
+}
+
 // --- 路由匹配（参考 react-router v6 评分规则） ---
 
 type RouteElement = React.ReactElement<{ index?: boolean; path?: string; element: React.ReactNode }>;
@@ -337,15 +353,7 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
           return () => { setterRef.current = null; };
         }, []);
 
-        const autoStore = useRef<any>(null);
-        if (!autoStore.current) {
-          autoStore.current = createReactiveStore(store);
-        }
-        const state = useSyncExternalStore(
-          autoStore.current[SYMBOL_SUBSCRIBE],
-          autoStore.current[SYMBOL_GETSNAPSHOT]
-        );
-        // navigateImpl / _env 均为稳定闭包引用，加入依赖无副作用
+        const { store: autoStore, state } = useReactiveStore(store, useSyncExternalStore);
         const routerContextValue = useMemo<RouterContextValue>(
           () => ({
             currentPath,
@@ -355,16 +363,16 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
           [currentPath, navigateImpl, _env]
         );
 
-        // 设计态：直接渲染 pageRef 注册表里的所有页面，不走 App 组件 / Routes
-        if (_env.mode === 'design') {
-          return (
-            <RouterContext.Provider value={routerContextValue}>
-              {pageRefRegistry.map((Page, i) => (
-                <Page key={i} />
-              ))}
-            </RouterContext.Provider>
-          );
-        }
+        // // 设计态：直接渲染 pageRef 注册表里的所有页面，不走 App 组件 / Routes
+        // if (_env.mode === 'design') {
+        //   return (
+        //     <RouterContext.Provider value={routerContextValue}>
+        //       {pageRefRegistry.map((Page, i) => (
+        //         <Page key={i} />
+        //       ))}
+        //     </RouterContext.Provider>
+        //   );
+        // }
 
         return (
           <RouterContext.Provider value={routerContextValue}>
@@ -372,7 +380,7 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: 
               {...props}
               _env={_env}
               logger={logger}
-              store={autoStore.current}
+              store={autoStore}
               _state={state}
             />
           </RouterContext.Provider>
@@ -447,20 +455,13 @@ export function createMybricks(options: CreateMybricksOptions) {
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
-      const autoStore = useRef<any>(null);
-      if (!autoStore.current) {
-        autoStore.current = createReactiveStore(store);
-      }
-      const state = useSyncExternalStore(
-        autoStore.current[SYMBOL_SUBSCRIBE],
-        autoStore.current[SYMBOL_GETSNAPSHOT]
-      );
+      const { store: autoStore, state } = useReactiveStore(store, useSyncExternalStore);
       return (
         <Component
           {...props}
           _env={_env}
           logger={logger}
-          store={autoStore.current}
+          store={autoStore}
           _state={state}
         />
       );
@@ -468,22 +469,15 @@ export function createMybricks(options: CreateMybricksOptions) {
   };
 
   const wrapPageWithStore = (Component: any) => {
-    const wrapped = (props: any) => {
-      const autoStore = useRef<any>(null);
-      if (!autoStore.current) {
-        autoStore.current = createReactiveStore(store);
-      }
-      const state = useSyncExternalStore(
-        autoStore.current[SYMBOL_SUBSCRIBE],
-        autoStore.current[SYMBOL_GETSNAPSHOT]
-      );
+    return (props: any) => {
+      const { store: autoStore, state } = useReactiveStore(store, useSyncExternalStore);
       return (
         <div data-zone-type="page" style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)' }}>
           <Component
             {...props}
             _env={_env}
             logger={logger}
-            store={autoStore.current}
+            store={autoStore}
             _state={state}
           />
         </div>

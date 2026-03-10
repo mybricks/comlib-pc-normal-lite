@@ -214,8 +214,6 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
 
-    const hasCompiledCode = data.runtimeJsxCompiled && String(data.runtimeJsxCompiled).trim() !== ''
-
     // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
     if (data.generate) {
       return (
@@ -231,7 +229,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     }
 
     // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
-    if ((data.document && !data.runtimeJsxCompiled) || data.loading) {
+    if ((data.document && !data.files.length) || data.loading) {
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
           <div className={css.documentCard}>
@@ -256,7 +254,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     }
 
     // 4. runtime：编译成功，渲染组件
-    if (hasCompiledCode) {
+    if (data.files.length) {
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
           <AIJsxRuntime

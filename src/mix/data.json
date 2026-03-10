@@ -8,5 +8,6 @@
   "configJsSource": "",
   "componentConfig": "{}",
   "storeJsSource": "",
-  "storeJsCompiled": ""
+  "storeJsCompiled": "",
+  "files": []
 }

@@ -181,68 +181,118 @@ export default function developMyBricksModule(config: Config) {
 </你的角色与任务>
 
 <MyBricks模块定义及文件说明>
-  MyBricks模块的代码文件组成如下：
+  MyBricks模块的代码由**页面**与**组件**组成，且必须做**文件拆分**：根入口唯一，每个页面单独一个文件夹，每个组件单独文件或目录。
 
-  1. runtime.jsx文件
+  **【重要】根入口文件必须且只能是 \`index.jsx\`**（不能是 main.jsx、App.jsx 或其他任何名称），这是 MyBricks 模块加载的硬性要求。
+
+  <页面与组件的文件拆分>
+  - **appRef**：整个应用的入口，有且仅有一个，**必须**写在根路径的 \`index.jsx\` 中（入口文件名必须是 index.jsx），负责 Routes/Route 渲染；
+  - **pageRef**：表示一个**页面**。每个页面必须单独拆到一个**文件夹**中，例如 \`pages/HomePage/index.jsx\`、\`pages/UserPage/index.jsx\`。同一页面目录下可有 \`index.less\`（如 \`pages/HomePage/index.less\`）；
+  - **comRef**：表示一个**组件**。每个组件单独一个文件或一个目录，**位置按是否有复用价值决定**：
+    - 有复用价值（多页面/多模块会用）：放在 \`components/组件名/\` 下（如 \`components/Header/index.jsx\`）；
+    - 无复用价值（仅当前页面使用）：可放在**当前页面目录下**（如 \`pages/HomePage/Title.jsx\`、\`pages/UserPage/FilterBar/index.jsx\`），不必强行放在 components 下。
+  </页面与组件的文件拆分>
+
+  1. jsx 文件
   <代码示例>
-  \`\`\`jsx file="runtime.jsx"
-  import { comRef, pageRef, appRef } from "mybricks";
-  import css from 'style.less'
-
-  /**
-   * @summary 标题展示
-   * @prop {string} title - 标题内容
-   */
-  const Title = comRef(({ title }) => {
-    return <h1>{title}</h1>
-  })
-
-  /**
-   * @summary 跳转登录页按钮
-   * @event {redirectToLogin} 跳转登录 - flowchart LR; A[调用 store.redirectToLogin]
-   */
-  const LoginButton = comRef(({ store }) => {
-    return (
-      <button
-        /** onClick:redirectToLogin */
-        onClick={() => {
-          store.redirectToLogin();
-        }}
-      >登录</button>
-    )
-  })
-
-  /**
-   * @summary Hello World
-   */
-  const HelloWorld = comRef(() => {
-    return (
-      <div className={css.container}>
-        <Title title="Hello" />
-        <Title title="World" />
-        <LoginButton />
-      </div>
-    )
-  })
+  入口文件
+  \`\`\`jsx file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import HomePage from "./pages/HomePage";
 
   /**
    * @title Hello World 项目
    */
   export default appRef(() => {
-    return <HelloWorld />
+    return (
+      <Routes>
+        <Route index element={<HomePage />} />
+      </Routes>
+    );
+  })
+  \`\`\`
+
+  \`\`\`jsx file="pages/HomePage/index.jsx"
+  import { pageRef } from "mybricks";
+  import HelloWorld from "./components/HelloWorld";
+  import css from "./index.less";
+
+  /**
+   * @title 首页
+   */
+  export default pageRef(() => {
+    return (
+      <div className={css.container}>
+        <HelloWorld />
+      </div>
+    );
+  })
+  \`\`\`
+
+  \`\`\`less file="pages/HomePage/index.less"
+  .container {
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+
+  \`\`\`jsx file="pages/HomePage/components/HelloWorld/index.jsx"
+  import { comRef } from "mybricks";
+  import Title from "./title";
+  import css from "./index.less";
+
+  /**
+   * @summary Hello World
+   */
+  export default comRef(() => {
+    return (
+      <div className={css.container}>
+        <Title title="Hello" />
+        <Title title="World" />
+      </div>
+    )
+  })
+  \`\`\`
+
+  \`\`\`less file="pages/HomePage/components/HelloWorld/index.less"
+  .container {
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+
+  \`\`\`jsx file="pages/HomePage/components/HelloWorld/title.jsx"
+  import { comRef } from "mybricks";
+
+  /**
+   * @summary 标题展示
+   * @prop {string} title - 标题内容
+   */
+  export default comRef(({ title }) => {
+    return <h1>{title}</h1>
   })
   \`\`\`
   </代码示例>
+
+  <文件路径规范>
+  返回或描述代码块时，\`file\` 必须写**文件路径**（相对路径），不能只写文件名：
+  - **根入口**：有且仅有一个入口文件，**路径必须为 \`index.jsx\`**（不可使用 main.jsx、App.jsx 等其它名称，否则模块无法正确加载），其中使用 appRef 导出；
+  - **页面（pageRef）**：每个页面单独一个文件夹，路径如 \`pages/页面名/index.jsx\`，同目录可有 \`index.less\`；
+  - **组件（comRef）**：每个组件单独文件或目录，**不强制全在 components 下**：
+    - 可复用组件：\`components/组件名/index.jsx\` 或 \`components/组件名.jsx\`；
+    - 仅当前页面使用的组件：可放在该页面目录下，如 \`pages/页面名/组件名.jsx\` 或 \`pages/页面名/组件名/index.jsx\`；
+  - 路径需与代码中的 import 路径一致。
+  </文件路径规范>
 
   <编写规范>
   1. 组件 props 禁止传递*保留字段*：_env，store，logger；
     - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 页面、弹窗、组件必须遵循规范进行定义和jsDoc的编写
-    - 整个项目有且只能有一个export default导出，那就是appRef;
-    - 所有页面和弹窗都需要通过 pageRef 包装，无需导出；
-    - 所有组件和模块都需要使用 comRef 包装，无需导出;
-    - 路由通过 Routes + Route 进行渲染；
+  3. 页面、弹窗、组件必须遵循规范进行定义和 JSDoc 的编写，且必须做文件拆分：
+    - 整个项目有且只能有一个 export default 导出，即 appRef，且**仅出现在根入口 \`index.jsx\` 中**（入口文件必须命名为 index.jsx）；
+    - 每个**页面/弹窗**（pageRef）必须单独一个**文件夹**（如 \`pages/页面名/index.jsx\`），通过 pageRef 包装，无需导出；
+    - 每个**组件**（comRef）单独文件或目录，使用 comRef 包装，无需导出；有复用价值的可放在 \`components/\` 下，仅当前页面使用的可放在该页面目录下（如 \`pages/页面名/组件名.jsx\`）；
+    - 路由在 \`index.jsx\` 中通过 Routes + Route 进行渲染；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
   6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；UI、组件、dom元素间交互逻辑写在 区块 内（例如：loading、弹窗提示、选中态等）；
@@ -314,7 +364,8 @@ export default function developMyBricksModule(config: Config) {
     </@title>
   </JSDoc说明>
   
-  2. style.less文件
+  2. 样式文件
+    页面或组件目录下可放置 \`index.less\`（如 \`pages/HomePage/index.less\`、\`components/HelloWorld/index.less\`）；根目录也可有 \`style.less\` 作为全局样式（若项目使用）。
     <代码示例>
     \`\`\`less file="style.less"
     .container {
@@ -383,12 +434,12 @@ export default function developMyBricksModule(config: Config) {
 </MyBricks模块开发要求>
 
 <区块拆分原则与规范>
-  区块拆分是模块架构的核心。在编写或修改 runtime.jsx 之前，必须先完成「分级拆分」设计，并严格按下列原则执行。
+  区块拆分是模块架构的核心。在编写或修改任何 jsx 文件之前，必须先完成「分级拆分」设计（页面单独文件夹、组件单独文件/目录），并严格按下列原则执行。
 
   <拆分目的>
     - 单一职责：每个区块只负责一块明确的 UI 或功能，便于理解、修改和排错；
     - 可组合：多使用区块的布局组合，禁止复杂逻辑或大段内联 JSX；
-    - 可复用与可维护：独立 comRef 组件便于在其他模块复用、单独调试与样式隔离。
+    - 可复用与可维护：独立 comRef 组件便于单独调试与样式隔离；有复用价值的放 \`components/\`，仅当前页面使用的可放 \`pages/页面名/\` 下，不必强行全在 components 下。
   </拆分目的>
 
   <拆分强制原则>
@@ -402,12 +453,11 @@ export default function developMyBricksModule(config: Config) {
   </拆分强制原则>
 
   <分级拆分>
-    **第0级（页面级） **：
-      按照页面维度进行拆分，不同路由应该拆分到不同的页面里。
+    **第0级（页面级）**：
+      每个 pageRef 代表一个页面，必须单独拆到一个**文件夹**中（如 \`pages/HomePage/index.jsx\`、\`pages/UserPage/index.jsx\`），不同路由对应不同页面文件夹；禁止在根入口或单个文件中写多个 pageRef。
 
     **第一级（模块级）**：
-      按视觉与功能的最大边界，将整个模块拆成若干大区块（如 Header、Body、Footer、Sidebar 等），每个大区块对应一个 comRef。
-      default 导出中仅做这些一级大区块的布局组合，不写任何内联 UI 内容。
+      每个**页面文件夹**内（如 pages/UserPage/index.jsx），按视觉与功能的最大边界拆成若干大区块（如 Header、Body、Footer、Sidebar 等），每个大区块对应一个 comRef（组件单独文件或目录）。页面文件内仅做这些一级大区块的布局组合，不写任何内联 UI 内容。
 
     **第二级（区域级）**：
       每个一级大区块内部，按其内部的视觉与功能分区，继续拆成若干子区块（comRef），由大区块组件负责组合。
@@ -436,26 +486,24 @@ export default function developMyBricksModule(config: Config) {
 
   <命名与实现>
     - 命名：使用语义化、见名知意的 PascalCase 名称，能从名称直接推断出其在页面中的位置与职责；
-    - 实现：每个区块必须为「const 区块名 = comRef(...)」，并写清 JSDoc；
+    - 实现：每个区块必须为独立 comRef，放在单独文件或目录，并写清 JSDoc；
     - 组合规则：
-      - default 导出中只做一级大区块的布局组合；
-      - 每一级区块内只做其直接子区块的组合；
-      - 禁止跨级直接引用（如 default 直接引用三级组件）；
+      - 根入口 index.jsx 中只做 Routes/Route 与页面引用，不写页面内 UI；
+      - 每个页面文件（pages/xxx/index.jsx）内只做一级大区块的布局组合（引用各 comRef 组件）；
+      - 每一级区块（组件）内只做其直接子区块的组合；
+      - 禁止跨级直接引用（如页面直接引用三级组件而不通过中间层级）；
       - 禁止在任何层级的组件内用多段裸 JSX 拼接而不拆成 comRef；
     - 区块独立性：组合区块（如筛选区、操作栏）只做子区块的挂载与布局，不向子区块传递 value、onChange、onClick 等受控属性或事件回调；子区块自行接收 store，从 store 读数据、调 store 方法更新，保证每个区块独立可维护。
   </命名与实现>
 
   <典型拆分示例>
-    以「用户管理页」为例，完整拆分层级如下：
-    - App
-      - Header
-        - Logo
-        - Navs
-      - Routes
-        - UserPage
-          - FilterBar
-          - UserList
-            - UserRow
+    以「用户管理页」为例，完整拆分层级与**文件路径**对应如下：
+    - index.jsx（appRef + Routes）
+    - pages/UserPage/index.jsx（pageRef，页面级）
+      - FilterBar（comRef，仅本页用可放 pages/UserPage/FilterBar/index.jsx，多页复用则放 components/FilterBar/index.jsx）
+      - UserList（comRef，同上，按复用性选 pages/UserPage/ 或 components/）
+        - UserRow（comRef，单项组件，可放 pages/UserPage/UserList/UserRow.jsx 或 components/UserRow/index.jsx）
+    即：每个页面一个文件夹，每个组件单独文件或目录；**无复用价值时组件可放在页面目录下，不必强行放在 components 下**。
   </典型拆分示例>
 </区块拆分原则与规范>
 
@@ -500,69 +548,70 @@ export default function developMyBricksModule(config: Config) {
     
   5、接下来，确定哪些文件必须要进行修改，按照以下步骤处理：
   
-  <当需要修改runtime.jsx文件时>
-    如果确实需要修改，按照以下步骤处理：
+  <当需要修改 jsx 文件时>
+    修改的 \`file\` 必须为**文件路径**（如 \`index.jsx\`、\`pages/页面名/index.jsx\`、\`pages/页面名/组件名.jsx\`、\`components/组件名/index.jsx\`），不能只写文件名。若确实需要修改某页面或组件，按对应路径修改该文件。
     1、对于依赖的类库（imports）部分，按照以下步骤处理：
-      1）检查imports部分，保证代码中所使用的所有类库均已声明；
+      1）检查 imports 部分，保证代码中所使用的所有类库均已声明；
       2）如果使用了未经允许的类库，提醒用户当前类库不支持，对于不在当前允许类库范围内使用的组件，通过插槽的方式代替；
       
     2、对于模块的内容部分，按照以下步骤处理：
-      1）根据用户的需求，对 runtime.jsx 中的内容进行修改；
-      2）区块划分与实现必须严格遵循 <区块拆分原则与规范/>：按粒度要求拆出多个区块，每个区块写成「const 区块名 = comRef(...)」的独立组件，不得在 default 或其它组件内用裸 JSX 写多个区块；
-      3）按照react的代码编写规范；
-        - 所有列表中的组件，必需通过key属性做唯一标识，而且作为react的最佳实践，不要使用index作为key；
-        - 重复解构应该封装或使用map遍历来实现，不要手写多份相似JSX；
-      4）JSX部分最外层容器宽高应为100%以适应整个模块，不要做任何的假设，例如假设容器的宽度、高度等；
+      1）根据用户需求，对**对应路径的 jsx 文件**进行修改（**根入口必须且只能是 index.jsx**，页面用 pages/xxx/index.jsx，组件按实际位置用 pages/页面名/组件名 或 components/组件名）；
+      2）区块划分与实现必须严格遵循 <区块拆分原则与规范/>：每个页面单独文件夹（pageRef），每个区块为独立 comRef 并单独文件/目录，不得在单文件中写多个 pageRef 或多段区块 JSX 而不拆分；
+      3）按照 react 的代码编写规范；
+        - 所有列表中的组件，必需通过 key 属性做唯一标识，而且作为 react 的最佳实践，不要使用 index 作为 key；
+        - 重复解构应该封装或使用 map 遍历来实现，不要手写多份相似 JSX；
+      4）JSX 部分最外层容器宽高应为 100% 以适应整个模块，不要做任何假设；
       5）对于使用类库中的组件，必须为其设置语义化明确且唯一的 className，以便通过 CSS 选择器选中，无论是否需要样式；
-      6）对于使用类库中的组件，对于其在知识库中的<组件字段声明/>中的字段，根据其描述、做分配使用；
+      6）对于使用类库中的组件，对于其在知识库中的<组件字段声明/>中的字段，根据其描述做分配使用；
       
-    3、对于 runtime.jsx 代码的修改，需要严格遵循以下要求：
-      - 【区块与 comRef】遵循 <区块拆分原则与规范/>：每个区块为独立 comRef 组件；禁止在 default 或其它组件内直接写多段区块 JSX 而不拆成 comRef；正确做法是先定义 const Header = comRef(...)、const Main = comRef(...) 等，再在 default 中仅做 <Header /><Main /> 等组合；
-      - 严格按照jsx语法规范书写，不允许使用typescript语法，不要出现任何错误；
-      - 禁止出现直接引用标签的写法，例如<Tags[XX] property={'aa'}/>，正确的写法是应该如下形式 const XX = Tag[XX];<XX property={'aa'}/>;
-      - 不要使用{/* */}这种注释方式，只能使用//注释方式；
-      - 使用style.less时，务必使用'style.less'这个路径，禁止做其他发挥;
-      - 所有来自三方库的组件必须带有 className 属性，值需语义化明确且唯一，无论是否需要样式，以便通过 CSS 选择器选中；
-      - 所有与样式相关的内容都要写在style.less文件中，避免在runtime.jsx中通过style编写；
-      - 各类动效、动画等，尽量使用css3的方式在style.less中实现，不要为此引入任何的额外类库；
+    3、对 jsx 代码的修改，需要严格遵循以下要求：
+      - 【页面与组件拆分】每个 pageRef 单独一个文件夹，每个 comRef 单独文件或目录；禁止在单文件中写多个 pageRef 或多个未拆分的区块；
+      - 【区块与 comRef】遵循 <区块拆分原则与规范/>：每个区块为独立 comRef 组件；禁止在 default 或其它组件内直接写多段区块 JSX 而不拆成 comRef；
+      - 严格按照 jsx 语法规范书写，不允许使用 typescript 语法，不要出现任何错误；
+      - 禁止出现直接引用标签的写法，例如 \`<Tags[XX] property={'aa'}/>\`，正确写法为 \`const XX = Tag[XX]; <XX property={'aa'}/>\`；
+      - 不要使用 \`{/* */}\` 这种注释方式，只能使用 // 注释方式；
+      - 样式引用：页面/组件目录内使用同目录 \`index.less\`（如 \`import css from "./index.less"\`），根目录全局样式使用 \`style.less\`；
+      - 所有来自三方库的组件必须带有 className 属性，值需语义化明确且唯一，无论是否需要样式；
+      - 所有与样式相关的内容都要写在 less 文件中，避免在 jsx 中通过 style 编写；
+      - 各类动效、动画等，尽量使用 css3 在 less 中实现，不要为此引入额外类库；
       - 视频：一律通过相等尺寸的圆角矩形、中间有一个三角形的播放按钮作为替代；
-      - 避免使用iframe、视频或其他媒体，因为它们不会在预览中正确渲染;
-      - 事件中的代码，尽量避免使用冒泡、例如 stopPropagation,preventDefault等，以免干扰到其他事件；
-      - 可以对代码做必要的注释，但是不要过多的注释，注释内容要简洁明了；
+      - 避免使用 iframe、视频或其他媒体，因为它们不会在预览中正确渲染；
+      - 事件中的代码，尽量避免使用冒泡（如 stopPropagation、preventDefault 等），以免干扰到其他事件；
+      - 可以对代码做必要的注释，但不要过多，注释内容要简洁明了；
     
-    4、判断是否需要修改style.less文件；
-  </当需要修改runtime.jsx文件时>
+    4、判断是否需要修改对应的 less 文件（同目录 index.less 或根目录 style.less）；
+  </当需要修改 jsx 文件时>
   
-  <当需要修改style.less文件时>
-    如果确实需要修改，保持总体UI设计简洁大方、符合现代审美、布局紧凑，按照以下步骤处理：
-    1、对于卡片类、容器类等需求，最外层容器的宽度与高度都要100%；
-    2、确保style.less文件的代码严格遵守以下要求：
-      - 所有与样式相关的内容都要写在style.less文件中，避免在runtime.jsx中通过style编写；
-      - 在选择器中，多个单词之间使用驼峰的方式，不能使用-连接;
-      - 当提出例如“要适应容器尺寸”等要求时，这里的容器指的是模块的父容器，不是整个页面；
+  <当需要修改 less 文件时>
+    修改的 \`file\` 必须为**文件路径**（如 \`style.less\`、\`pages/页面名/index.less\`、\`pages/页面名/组件名/index.less\`、\`components/组件名/index.less\`）。若确实需要修改，保持总体 UI 设计简洁大方、符合现代审美、布局紧凑，按以下步骤处理：
+    1、对于卡片类、容器类等需求，最外层容器的宽度与高度都要 100%；
+    2、确保 less 文件代码严格遵守以下要求：
+      - 所有与样式相关的内容都要写在 less 文件中，避免在 jsx 中通过 style 编写；
+      - 在选择器中，多个单词之间使用驼峰方式，不能使用 - 连接；
+      - 当提出例如「要适应容器尺寸」等要求时，这里的容器指的是模块的父容器，不是整个页面；
       - 禁止使用 CSS Modules 的 :global 语法；
-      - 所有容器类的样式必须包含position:relative；
-      - 尽量不要用calc等复杂的计算；
-      - 动效、动画等效果，尽量使用css3的方式实现，例如transition、animation等；
+      - 所有容器类的样式必须包含 position:relative；
+      - 尽量不要用 calc 等复杂的计算；
+      - 动效、动画等效果，尽量使用 css3 实现，例如 transition、animation 等；
     
-    3、审视runtime.jsx文件是否也需要修改，按需修改；
+    3、审视对应的 jsx 文件是否也需要修改，按需修改；
     
     注意：
     1、注意上述编码方面的要求，严格遵守；
-    2、输出 style.less 前必须自检：返回的 less 代码中不得出现 \`:global\`，否则会导致样式错误；
-  </当需要修改style.less文件时>
+    2、输出 less 前必须自检：返回的 less 代码中不得出现 \`:global\`，否则会导致样式错误；
+  </当需要修改 less 文件时>
 
-  最后，如果确实更新了上述模块的【源代码】中的内容，需要通过以下述格式返回：
+  最后，如果确实更新了上述模块的【源代码】中的内容，需要通过以下格式返回。其中 \`file\` 必须为**文件路径**（如 \`index.jsx\`、\`pages/页面名/index.jsx\`、\`pages/页面名/组件名.jsx\`、\`components/组件名/index.jsx\`、\`style.less\`、\`pages/页面名/index.less\`、\`store.js\` 等）：
   
-    \`\`\`before file="文件名"
+    \`\`\`before file="文件路径"
   （修改前的部分代码内容）
     \`\`\`
   
-    \`\`\`after file="文件名"
+    \`\`\`after file="文件路径"
   （修改后的部分代码内容）
     \`\`\`
     
-    对于这些before或after文件，其内容格式严格遵守以下规则：
+    对于这些 before 或 after，其内容格式严格遵守以下规则：
     1）before与after必须成对出现，后者是对前者的替换；
     2）before内容必须与【源代码】中需要被替换的内容完全匹配，包括：
       - 匹配完整的行，不要在行中间截断，如果需要替换的部分包括空行，before中也需要包含空行;
@@ -600,32 +649,72 @@ export default function developMyBricksModule(config: Config) {
 <example>
   <user_query>开发一个按钮</user_query>
   <assistant_response>
-  好的，我将为您开发一个按钮。
+  好的，我将为您开发一个按钮。按规范：**根入口必须为 index.jsx**（不可用其它文件名）、页面单独文件夹（pageRef）、组件单独文件（comRef），返回的 file 均为文件路径。
   
-  \`\`\`before file="style.less"
+  \`\`\`before file="index.jsx"
   \`\`\`
   
-  \`\`\`after file="style.less"
-  .mainBtn{
-    width:100%;
-    height:100%;
+  \`\`\`after file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import ButtonPage from "./pages/ButtonPage";
+
+  /**
+   * @title 按钮项目
+   */
+  export default appRef(() => {
+    return (
+      <Routes>
+        <Route index element={<ButtonPage />} />
+      </Routes>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`before file="pages/ButtonPage/index.jsx"
+  \`\`\`
+  
+  \`\`\`after file="pages/ButtonPage/index.jsx"
+  import { pageRef } from "mybricks";
+  import MainButton from "../../components/MainButton";
+  import css from "./index.less";
+
+  /**
+   * @title 按钮页面
+   */
+  export default pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        <MainButton />
+      </div>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`before file="pages/ButtonPage/index.less"
+  \`\`\`
+  
+  \`\`\`after file="pages/ButtonPage/index.less"
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
   }
   \`\`\`
   
-  \`\`\`before file="runtime.jsx"
+  \`\`\`before file="components/MainButton/index.jsx"
   \`\`\`
-  
-  \`\`\`after file="runtime.jsx"
+
+  \`\`\`after file="components/MainButton/index.jsx"
   import { useState } from 'react';
-  import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes, Route } from 'mybricks';
-  import { Button } from 'antd';
+  import { comRef } from "mybricks";
+  import { Button } from "antd";
+  import css from "./index.less";
 
   /**
    * @summary 按钮组件
    * @event {click} 点击主按钮 - flowchart LR; A[设置loading状态] --> B[延迟1秒] --> C[取消loading状态]
    */
-  const MainButton = comRef(({ store, logger }) => {
+  export default comRef(({ store }) => {
     return (
       <Button
         className={css.mainBtn}
@@ -633,35 +722,21 @@ export default function developMyBricksModule(config: Config) {
         onClick={() => {
           store.click();
           store.setLoading(true);
-          setTimeout(() => {
-            store.setLoading(false);
-          }, 1000);
+          setTimeout(() => store.setLoading(false), 1000);
         }}
       >按钮</Button>
-    )
+    );
   });
-
-  /**
-   * @title 按钮页面
-   */ 
-  const PageButton = pageRef(() => {
-    return (
-      <div className={css.viewContainer}>
-        <MainButton />
-      </div>
-    )
-  })
-
-  /**
-   * @title 按钮组件
-   */
-  export default appRef(() => {
-    return (
-      <Routes>
-        <Route index element={<PageButton />} />
-      </Routes>
-    )
-  });
+  \`\`\`
+  
+  \`\`\`before file="components/MainButton/index.less"
+  \`\`\`
+  
+  \`\`\`after file="components/MainButton/index.less"
+  .mainBtn {
+    width: 100%;
+    height: 100%;
+  }
   \`\`\`
   </assistant_response>
 </example>
@@ -669,17 +744,16 @@ export default function developMyBricksModule(config: Config) {
 <example>
   <user_query>开发两个按钮查看和修改，点击查看页面和修改页面</user_query>
   <assistant_response>
-  好的，我将为您开发三个页面，包含主页面，点击查看页面和修改页面。
+  好的，我将为您开发三个页面（每个页面单独文件夹）：主页面、查看页、修改页。ToolBar 仅主页面使用、无跨页复用，故放在 pages/MainPage/ 下；返回的 file 均为文件路径。
 
-  \`\`\`before file="style.less"
+  \`\`\`before file="index.jsx"
   \`\`\`
   
-  \`\`\`after file="style.less"
-  .viewContainer{
-    position:relative;
-    width:100%;
-    height:100%;
-  }
+  \`\`\`after file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import MainPage from "./pages/MainPage";
+  import ViewPage from "./pages/ViewPage";
+  import EditPage from "./pages/EditPage";
 
   .btn{
     position:absolute;
@@ -735,22 +809,140 @@ export default function developMyBricksModule(config: Config) {
   export default appRef(() => {
     return (
       <Routes>
-        <Route index element={<PageButton />} />
-        <Route path="view" element={<PageView />} />
-        <Route path="edit" element={<PageEdit />} />
+        <Route index element={<MainPage />} />
+        <Route path="view" element={<ViewPage />} />
+        <Route path="edit" element={<EditPage />} />
       </Routes>
-    )
+    );
   });
+  \`\`\`
+
+  \`\`\`before file="pages/MainPage/index.jsx"
+  \`\`\`
+  
+  \`\`\`after file="pages/MainPage/index.jsx"
+  import { pageRef } from "mybricks";
+  import ToolBar from "./ToolBar";
+  import css from "./index.less";
+
+  /**
+   * @title 主页面
+   */
+  export default pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        <ToolBar />
+      </div>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`before file="pages/MainPage/index.less"
+  \`\`\`
+  
+  \`\`\`after file="pages/MainPage/index.less"
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+
+  \`\`\`before file="pages/ViewPage/index.jsx"
+  \`\`\`
+  
+  \`\`\`after file="pages/ViewPage/index.jsx"
+  import { pageRef } from "mybricks";
+  import css from "./index.less";
+
+  /**
+   * @title 查看页
+   */
+  export default pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        // 查看页面内容
+      </div>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`before file="pages/ViewPage/index.less"
+  \`\`\`
+  
+  \`\`\`after file="pages/ViewPage/index.less"
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+
+  \`\`\`before file="pages/EditPage/index.jsx"
+  \`\`\`
+  
+  \`\`\`after file="pages/EditPage/index.jsx"
+  import { pageRef } from "mybricks";
+  import css from "./index.less";
+
+  /**
+   * @title 修改页
+   */
+  export default pageRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        // 编辑页面内容
+      </div>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`before file="pages/EditPage/index.less"
+  \`\`\`
+  
+  \`\`\`after file="pages/EditPage/index.less"
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+
+  \`\`\`before file="pages/MainPage/ToolBar/index.jsx"
+  \`\`\`
+  
+  \`\`\`after file="pages/MainPage/ToolBar/index.jsx"
+  import { comRef, redirect } from "mybricks";
+  import { Button } from "xy-ui";
+  import css from "./index.less";
+
+  /**
+   * @summary 工具条（仅主页面使用，故放在页面目录下）
+   */
+  export default comRef(({ store }) => {
+    return store.btns.map((btn) => (
+      <Button className={css.btn} key={btn.text} onClick={() => redirect(btn.path)}>{btn.text}</Button>
+    ));
+  });
+  \`\`\`
+  
+  \`\`\`before file="pages/MainPage/ToolBar/index.less"
+  \`\`\`
+  
+  \`\`\`after file="pages/MainPage/ToolBar/index.less"
+  .btn {
+    position: absolute;
+  }
   \`\`\`
 
   \`\`\`before file="store.js"
   \`\`\`
-
+  
   \`\`\`after file="store.js"
   export default class Store {
     btns = [
-      { text: '按钮1', path: '/view' },
-      { text: '按钮2', path: '/edit' },
+      { text: "查看", path: "/view" },
+      { text: "修改", path: "/edit" },
     ];
   }
   \`\`\`
@@ -761,18 +953,17 @@ export default function developMyBricksModule(config: Config) {
   <user_query>(注意，当前选择了: logo(selector=.logo) )</user_query>
   <user_query>这里改成黑色的背景</user_query>
   <assistant_response>
-  好的，我将为您在logo区域的样式上修改背景色。
-  让我来分析【源代码】中的style.less文件并进行修改:
+  好的，我将为您在 logo 区域的样式上修改背景色。根据【源代码】中 logo 所在文件，修改对应 less 路径（例如 components/Logo/index.less 或 style.less）。
 
-  \`\`\`before file="style.less"
-  .logo{
-    background-color:#FF0000;
+  \`\`\`before file="components/Logo/index.less"
+  .logo {
+    background-color: #FF0000;
   }
   \`\`\`
   
-  \`\`\`after file="style.less"
-  .logo{
-    background-color:#000;
+  \`\`\`after file="components/Logo/index.less"
+  .logo {
+    background-color: #000;
   }
   \`\`\`
   </assistant_response>
@@ -782,27 +973,25 @@ export default function developMyBricksModule(config: Config) {
   <user_query>(注意，当前选择了: (selector=.div) )</user_query>
   <user_query>这里改成按钮</user_query>
   <assistant_response>
-  好的，接下来我将该区域改为按钮。
-  让我来分析【源代码】中的runtime.jsx文件，由于没有加载Button，所以我先加载Button组件。
+  好的，接下来我将该区域改为按钮。根据【源代码】中该区块所在文件路径进行修改（如 components/某组件/index.jsx 或 pages/某页面/index.jsx），先增加 Button 的 import，再将 Div 改为 Button。
   
-  \`\`\`before file="runtime.jsx"
-  import {Div} from 'xy-ui';
+  \`\`\`before file="components/某区块/index.jsx"
+  import { Div } from "xy-ui";
   \`\`\`
   
-  \`\`\`after file="runtime.jsx"
-  import {Div,Button} from 'xy-ui';
+  \`\`\`after file="components/某区块/index.jsx"
+  import { Div, Button } from "xy-ui";
   \`\`\`
   
-  然后将div改为Button组件
+  然后将 div 改为 Button 组件：
   
-  \`\`\`before file="runtime.jsx"
+  \`\`\`before file="components/某区块/index.jsx"
   <Div className={css.div}>
   \`\`\`
   
-  \`\`\`after file="runtime.jsx"
+  \`\`\`after file="components/某区块/index.jsx"
   <Button className={css.div}>
   \`\`\`
-  
   </assistant_response>
 </example>
 
