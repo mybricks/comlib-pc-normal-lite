@@ -864,12 +864,26 @@ export default function (props: Props, actions: Actions) {
         ]
       }
     },
-    '@debug'(params) {
+    '@debug'(params, stop) {
+      if (stop) {
+        data.debugTarget = undefined;
+        return;
+      }
+
       const page = params.focusArea.ele.closest('[data-desn-page]');
       const pageIndex = page?.getAttribute("data-desn-page");
 
       if (pageIndex) {
-        data.debugTarget = { type: 'page', pageIndex: Number(pageIndex) };
+        const pageBCR = page.getBoundingClientRect();
+        const rootBCR = page.parentElement.getBoundingClientRect();
+
+        data.debugTarget = {
+          type: 'page',
+          pageIndex: Number(pageIndex),
+          style: {
+            transform: `scale(1) translate(${pageBCR.left - rootBCR.left - 20}px, 0px)`
+          }
+        };
       }
     },
     '[data-desn-page]': {
