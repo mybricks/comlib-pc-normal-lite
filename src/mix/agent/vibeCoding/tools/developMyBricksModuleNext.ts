@@ -493,22 +493,12 @@ export default function developMyBricksModule(config: Config) {
     - 背景：区块的背景颜色、背景图片等，除非有必要，否则无需添加背景；
     - 字体：字体、字号（精确到像素）、字体颜色、是否加粗、是否斜体、行高等；
 
-  4、图标与图片分析：
-    - 对于图标：为了保证视觉的统一与专业性，我们的共识是统一使用图标组件。
-      - 如果没有图标组件，则使用 placehold.co，禁止使用 Emoji 或特殊字符，它们可能导致在不同设备上的显示差异。
-    - 对于图片：图片是传递信息与氛围的关键。我们建议根据其用途选择合适的来源：
-      - https://placehold.co/600x400/orange/ffffff?text=hello，可以配置一个橙色背景带白色hello文字的色块占位图片，请注意text需要使用英文字符；
-      - https://ai.mybricks.world/image-search?term=searchWord&w=20&h=20，可以配置一个高质量的摄影图片；
-      对于海报/写实图片：我们建议使用高质量的摄影图片；
-      对于品牌/Logo：我们建议使用色块占位图片；
-      对于插画/装饰性图形：我们优先推荐使用简单的svg来占位，避免使用图片过于跳脱；
-
-  5、详细分析各个区块的技术方案，按照以下要点展开：
+  4、详细分析各个区块的技术方案，按照以下要点展开：
     - 布局方案：区块如何实现布局，注意事项有哪些；
     - 关键属性分析：区块对于所采用组件的关键属性，要包含在知识库中的<组件字段声明/>，以及考虑例如尺寸（size）、风格等，结合上面对样式的分析、组件需要做哪些配置等，一一给出方案；
     - 状态方案：针对每个涉及状态的区块，对每个区块明确列出其状态项及选用 store 或 hooks 的理由；
     
-  6、接下来，确定哪些文件必须要进行修改，按照以下步骤处理：
+  5、接下来，确定哪些文件必须要进行修改，按照以下步骤处理：
   
   <当需要修改runtime.jsx文件时>
     如果确实需要修改，按照以下步骤处理：
@@ -628,7 +618,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`after file="runtime.jsx"
   import { useState } from 'react';
   import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes, Route, redirect } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route } from 'mybricks';
   import { Button } from 'antd';
 
   /**
@@ -700,16 +690,17 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
 
   \`\`\`after file="runtime.jsx"
-  import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes, Route, redirect } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, useNavigate } from 'mybricks';
   import { Button } from 'xy-ui';
+  import css from 'style.less';
 
   /**
    * @summary 工具条
    */
   const ToolBar = comRef(({ store }) => {
+    const navigate = useNavigate();
     return store.btns.map((btn, index)=>{
-      return <Button className={css.btn} key={btn.text} onClick={() => redirect(btn.path)}>{btn.text}</Button>
+      return <Button className={css.btn} key={btn.text} onClick={() => navigate(btn.path)}>{btn.text}</Button>
     })
   })
 
@@ -798,7 +789,7 @@ export default function developMyBricksModule(config: Config) {
   import {Div} from 'xy-ui';
   \`\`\`
   
-  \`\`\`after file="runtime$.jsx"
+  \`\`\`after file="runtime.jsx"
   import {Div,Button} from 'xy-ui';
   \`\`\`
   

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import css from './mybricks-lib.less';
 
 // --- Store 相关：符号与响应式封装 ---
@@ -203,27 +203,63 @@ function findBestRouteIndex(routes: RouteElement[], currentPath: string): number
   return bestIdx;
 }
 
-// --- 路由相关：RouterContext / Route / Routes / redirect / appRef ---
+/**
+ * 根据路由 pattern（含 :id 动态段）与实际 path 解析出 params。
+ * index 或空 pattern 返回 {}；段数不一致返回 {}。
+ */
+function parseParams(pattern: string, path: string): Record<string, string> {
+  const normPattern = normalizePath(pattern);
+  const normPath = normalizePath(path);
+  if (!normPattern || normPattern === '*') return {};
+  const patternSegs = normPattern.split('/');
+  const pathSegs = normPath.split('/');
+  // 去掉末尾 * 再比段数
+  const last = patternSegs[patternSegs.length - 1];
+  const prefixSegs = last === '*' ? patternSegs.slice(0, -1) : patternSegs;
+  const pathPrefixSegs = last === '*' ? pathSegs.slice(0, prefixSegs.length) : pathSegs;
+  if (prefixSegs.length !== pathPrefixSegs.length) return {};
+  const out: Record<string, string> = {};
+  for (let i = 0; i < prefixSegs.length; i++) {
+    const p = prefixSegs[i];
+    if (p.startsWith(':')) {
+      out[p.slice(1)] = pathPrefixSegs[i];
+    }
+  }
+  return out;
+}
 
-interface RouterContextValue {
+// --- 路由相关：RouterContext / Route / Routes / hooks / appRef ---
+
+export interface RouterContextValue {
   currentPath: string;
   _env: { mode: 'design' | 'runtime' };
+  /** 编程式跳转；字符串为路径；数字暂不支持历史栈，调用无效果 */
+  navigate?: (to: string | number, options?: { replace?: boolean }) => void;
+  /** 当前激活 Route 解析出的动态参数 */
+  params?: Record<string, string>;
 }
 
 /**
  * 创建当前 AIJsxRuntime 实例专属的路由 API。
  * 路由状态用 useState 管理，与业务 store 完全解耦。
  * 每次调用返回新的 RouterContext，作用域限定在一个 AIJsxRuntime 内。
+ * pageRefRegistry：由 createMybricks 注入，收集所有 pageRef 注册的组件，供设计态渲染。
  */
-function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
+function createRouterLib(_env: { mode: 'design' | 'runtime' }, pageRefRegistry: any[]) {
   const RouterContext = createContext<RouterContextValue | null>(null);
 
-  /** 保存当前 appRef 实例的 setCurrentPath，供 redirect 调用 */
-  let _setCurrentPath: ((p: string) => void) | null = null;
+  /** 稳定容器，持有 appRef 挂载后的 setCurrentPath，避免渲染期间副作用 */
+  const setterRef: { current: ((p: string) => void) | null } = { current: null };
 
   /** 跳转路由：runtime 下切换当前展示的 Route；design 下无效 */
   const redirect = (path: string) => {
-    _setCurrentPath?.(path);
+    setterRef.current?.(normalizePath(path));
+  };
+
+  const navigateImpl = (to: string | number, _options?: { replace?: boolean }) => {
+    if (typeof to === 'string') {
+      setterRef.current?.(normalizePath(to));
+    }
   };
 
   function Route(_props: { index?: boolean; path?: string; element: React.ReactNode }) {
@@ -243,53 +279,50 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
     if (routes.length === 0) return null;
 
     if (isDesign) {
-      // 兜底路由（path="*" 或 path="/*"）若与其他路由使用相同的 element 引用，则不重复展示
+      // 兜底路由（path="*"）若与其他路由使用相同的 element 类型，则不重复展示
       const seenElementTypes = new Set<any>();
       const visibleRoutes = routes.filter((r) => {
         const isCatchAll =
           !r.props.index &&
           (r.props.path === '*' || r.props.path === '/*' || r.props.path === undefined);
-        const elementType = r.props.element?.type ?? r.props.element;
+        const el = r.props.element;
+        const elementType = (React.isValidElement(el) ? el.type : el) ?? el;
         if (!isCatchAll) {
           seenElementTypes.add(elementType);
           return true;
         }
-        // 兜底路由：element 类型已被其他路由使用过则跳过
         return !seenElementTypes.has(elementType);
       });
 
       return (
         <>
           {visibleRoutes.map((r, i) => (
-            r.props.element
+            <React.Fragment key={i}>{r.props.element}</React.Fragment>
           ))}
         </>
-      )
-
-      // return (
-      //   <div className={css.routesDesign}>
-      //     {visibleRoutes.map((r, i) => (
-      //       <div key={i} className={css.routeDesignItem}>
-      //         {r.props.element}
-      //       </div>
-      //     ))}
-      //   </div>
-      // );
+      );
     }
 
-    const active = Math.max(0, findBestRouteIndex(routes, ctx?.currentPath ?? ''));
+    // runtime：只渲染当前激活的 Route，避免非活跃页面的副作用（如数据请求、定时器）执行
+    const currentPath = ctx?.currentPath ?? '';
+    const active = Math.max(0, findBestRouteIndex(routes, currentPath));
+    const activeRoute = routes[active];
+    if (!activeRoute) return null;
+
+    const routePath = activeRoute.props.index ? '' : (activeRoute.props.path ?? '');
+    const params = parseParams(routePath, currentPath);
+    const baseCtx = ctx ?? { currentPath: '', _env: { mode: 'runtime' as const } };
+    const branchCtx: RouterContextValue = {
+      ...baseCtx,
+      params,
+      navigate: ctx?.navigate ?? (() => {}),
+    };
 
     return (
       <div className={css.routesRuntime}>
-        {routes.map((r, i) => (
-          <div
-            key={i}
-            className={css.routeRuntimeItem}
-            style={{ display: i === active ? 'block' : 'none' }}
-          >
-            {r.props.element}
-          </div>
-        ))}
+        <RouterContext.Provider value={branchCtx}>
+          {activeRoute.props.element}
+        </RouterContext.Provider>
       </div>
     );
   }
@@ -298,7 +331,11 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
     return function appRef(Component: any) {
       return (props: any) => {
         const [currentPath, setCurrentPath] = useState('');
-        _setCurrentPath = setCurrentPath;
+
+        useLayoutEffect(() => {
+          setterRef.current = setCurrentPath;
+          return () => { setterRef.current = null; };
+        }, []);
 
         const autoStore = useRef<any>(null);
         if (!autoStore.current) {
@@ -308,10 +345,29 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
           autoStore.current[SYMBOL_SUBSCRIBE],
           autoStore.current[SYMBOL_GETSNAPSHOT]
         );
+        // navigateImpl / _env 均为稳定闭包引用，加入依赖无副作用
         const routerContextValue = useMemo<RouterContextValue>(
-          () => ({ currentPath, _env }),
-          [currentPath]
+          () => ({
+            currentPath,
+            _env,
+            navigate: _env.mode === 'runtime' ? navigateImpl : () => {},
+          }),
+          [currentPath, navigateImpl, _env]
         );
+
+        // 设计态：直接渲染 pageRef 注册表里的所有页面，不走 App 组件 / Routes
+        if (_env.mode === 'design') {
+          return (
+            <RouterContext.Provider value={routerContextValue}>
+              <div className={css.routesDesign}>
+                {pageRefRegistry.map((Page, i) => (
+                  <Page key={i} />
+                ))}
+              </div>
+            </RouterContext.Provider>
+          );
+        }
+
         return (
           <RouterContext.Provider value={routerContextValue}>
             <Component
@@ -327,7 +383,39 @@ function createRouterLib(_env: { mode: 'design' | 'runtime' }) {
     };
   }
 
-  return { Route, Routes, createAppRef, redirect };
+  function useNavigate() {
+    const ctx = useContext(RouterContext);
+    const navigate = ctx?.navigate;
+    return useMemo(
+      () => (to: string | number, options?: { replace?: boolean }) => {
+        navigate?.(to, options);
+      },
+      [navigate]
+    );
+  }
+
+  function useLocation(): { pathname: string; search: string; hash: string; state: any } {
+    const ctx = useContext(RouterContext);
+    const path = ctx?.currentPath ?? '';
+    // currentPath 写入时已 normalizePath，无需再次处理
+    const pathname = path === '' ? '/' : `/${path}`;
+    return useMemo(
+      () => ({
+        pathname,
+        search: '',
+        hash: '',
+        state: null,
+      }),
+      [pathname]
+    );
+  }
+
+  function useParams<T extends Record<string, string | undefined> = Record<string, string>>(): T {
+    const ctx = useContext(RouterContext);
+    return (ctx?.params ?? {}) as T;
+  }
+
+  return { Route, Routes, createAppRef, redirect, useNavigate, useLocation, useParams };
 }
 
 // --- mybricks 主入口 ---
@@ -348,7 +436,16 @@ export function createMybricks(options: CreateMybricksOptions) {
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
-  const routerLib = createRouterLib(_env);
+
+  /**
+   * pageRef 注册表：按声明顺序收集所有 pageRef 包装后的组件。
+   * 在模块 eval 阶段（pageRef 调用时）填充，在 appRef 设计态渲染时消费。
+   * 每次 createMybricks 调用时重新创建，天然隔离（无跨 eval 污染）。
+   */
+  const pageRefRegistry: any[] = [];
+  const pageRefOriginalsSet = new Set<any>();
+
+  const routerLib = createRouterLib(_env, pageRefRegistry);
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
@@ -373,7 +470,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   };
 
   const wrapPageWithStore = (Component: any) => {
-    return (props: any) => {
+    const wrapped = (props: any) => {
       const autoStore = useRef<any>(null);
       if (!autoStore.current) {
         autoStore.current = createReactiveStore(store);
@@ -383,7 +480,7 @@ export function createMybricks(options: CreateMybricksOptions) {
         autoStore.current[SYMBOL_GETSNAPSHOT]
       );
       return (
-        <div data-zone-type="page" style={{ width: 1200, minHeight: 600, display: 'inline-block' }}>
+        <div data-zone-type="page" style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)' }}>
           <Component
             {...props}
             _env={_env}
@@ -394,6 +491,12 @@ export function createMybricks(options: CreateMybricksOptions) {
         </div>
       );
     };
+    // 按原始 Component 去重后入注册表（防止同一组件多次 pageRef 调用）
+    if (!pageRefOriginalsSet.has(Component)) {
+      pageRefOriginalsSet.add(Component);
+      pageRefRegistry.push(wrapped);
+    }
+    return wrapped;
   };
 
   return {
@@ -402,6 +505,10 @@ export function createMybricks(options: CreateMybricksOptions) {
     appRef: routerLib.createAppRef(store, logger, useSyncExternalStore),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
+    /** @deprecated 建议使用 useNavigate */
     redirect: routerLib.redirect,
+    useNavigate: routerLib.useNavigate,
+    useLocation: routerLib.useLocation,
+    useParams: routerLib.useParams,
   };
 }

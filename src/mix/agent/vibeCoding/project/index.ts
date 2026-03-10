@@ -7,6 +7,8 @@
 import antdPrompt from '../../../prompts/antd-summary.md';
 import echartsPrompt from '../../../prompts/echarts-summary.md';
 import iconPrompt from '../../../prompts/icon-summary.md';
+import mybricksPrompt from '../../../prompts/mybricks.md';
+
 
 /** project.json 中单个节点的类型 */
 export interface ProjectNode {
@@ -277,9 +279,19 @@ export class Project {
     // 最佳实践：在此补充项目约定的开发习惯、推荐写法等，供 Agent 参考
     const bestPracticesContent = `
 - 总体规则
+  - 开发规范：参考下方mybricks类库的的最佳实践；
   - 功能：生产级别的功能性；
   - 细节：在每个细节都精心完善；
   - 响应式：保证合理统一的间距，以及支持宽度变化自适应的代码；
+- 静态资源：
+  - 对于图标：为了保证视觉的统一与专业性，我们的共识是统一使用图标组件。
+    - 如果没有图标组件，则使用 placehold.co，禁止使用 Emoji 或特殊字符，它们可能导致在不同设备上的显示差异。
+  - 对于图片：图片是传递信息与氛围的关键。我们建议根据其用途选择合适的来源：
+    - https://placehold.co/600x400/orange/ffffff?text=hello，可以配置一个橙色背景带白色hello文字的色块占位图片，请注意text需要使用英文字符；
+    - https://ai.mybricks.world/image-search?term=searchWord&w=20&h=20，可以配置一个高质量的摄影图片；
+    对于海报/写实图片：我们建议使用高质量的摄影图片；
+    对于品牌/Logo：我们建议使用色块占位图片；
+    对于插画/装饰性图形：我们优先推荐使用简单的svg来占位，避免使用图片过于跳脱；
 - 美学指南：
   - 在浅色和深色主题、不同字体、美学之间变化；
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
@@ -287,7 +299,7 @@ export class Project {
 
     const archMd = buildArchitectureMd(this.root);
 
-    const libraryDocsContent = [antdPrompt, echartsPrompt, iconPrompt].join('\n\n');
+    const libraryDocsContent = [mybricksPrompt, antdPrompt, echartsPrompt, iconPrompt].join('\n\n');
 
     const fileSectionParts: string[] = [];
     fileSectionParts.push('\n## 源代码\n');

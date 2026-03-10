@@ -171,7 +171,9 @@ export default function ({ constituency }) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({events: dataZoneDocsEvents}));
               }
   
-              pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
+              if (zoneType !== "page") {
+                pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
+              }
               pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
             } catch {}
           },

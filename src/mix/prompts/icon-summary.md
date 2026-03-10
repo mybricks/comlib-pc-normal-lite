@@ -2,15 +2,7 @@
 提供开发中所需要的图标
 
 注意：
-- 在需要使用该类库时，在require.json中无需引入，直接使用即可
-
-### 属性及说明
-| Property | Description | Type | Default | Version |
-| --- | --- | --- | --- | --- |
-| component | The component used for the root node | ComponentType&lt;CustomIconComponentProps> | - |  |
-| rotate | Rotate degrees (not working in IE9) | number | - |  |
-| spin | Rotate icon with animation | boolean | false |  |
-| style | The style properties of icon, like `fontSize` and `color` | CSSProperties | - |  |
+- 在需要使用该类库时，直接使用即可
 
 ### 能够使用的图标列表
 ccountBookFilled, AccountBookOutlined, AccountBookTwoTone, AimOutlined,
