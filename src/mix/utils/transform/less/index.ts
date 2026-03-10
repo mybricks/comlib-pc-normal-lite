@@ -251,8 +251,14 @@ const COMBINATOR_ONLY = /^[>+~]+$/;
 /**
  * 按「选择器片段」分割：空格分割后，将单独的 > + ~ 与下一段合并，
  * 避免 ".btnContainer > div" 被错误拆成 .btnContainer / > / div 导致反解析为 "> { div {} }"
+ *
+ * @keyframes、@media 等 at-rule key 整体不可拆分，直接作为单段返回，
+ * 否则 "@keyframes scrollLeft" 会被拆成 ["@keyframes", "scrollLeft"]，
+ * 导致 formatCSSString 输出 "@keyframes {" 缺少 identifier，Less 编译报错。
  */
 const splitSelectorKeys = (selector: string): string[] => {
+  if (selector.trimStart().startsWith("@")) return [selector];
+
   const parts = selector.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return parts;
 
