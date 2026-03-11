@@ -74,7 +74,7 @@ export default function ({ constituency }) {
               if (pageRef) {
                 const pageTitle = pageRef.jsdoc?.summary ?? pageRef.name ?? lastSelector;
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", pageTitle);
-                pushDataAttr(node.openingElement.attributes, "title", pageTitle);
+                // pushDataAttr(node.openingElement.attributes, "title", pageTitle);
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
               }

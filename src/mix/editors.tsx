@@ -303,7 +303,7 @@ export default function (props: Props, actions: Actions, ...args) {
   const { data, isLowCodeMode } = props;
   const focusAreaConfigs: any = {};
 
-  console.log('props', props, actions, ...args);
+  //console.log('props', props, actions, ...args);
 
   // try {
   //   const configs = evalConfigJsCompiled(decodeURIComponent(data.configJsCompiled));
@@ -837,8 +837,17 @@ export default function (props: Props, actions: Actions, ...args) {
     '[data-desn-page]': {
       title: "页面",
       items: (pageProps, cate1) => {
-        const { focusArea } = pageProps;
+        const { focusArea, data } = pageProps;
         const comId = props.id;
+        // focusArea 是被点选的 [data-desn-page] DOM 元素
+        // data-desn-page={N} → dataset.desnPage === "N"
+        const pageIndex = Number(focusArea?.dataset?.desnPage ?? 0);
+        const isDebugging =
+          data.debugTarget?.type === 'page' &&
+          data.debugTarget?.pageIndex === pageIndex;
+
+        // console.log('data', data);
+        // console.log('focusArea', focusArea);
 
         cate1.title = "页面";
         cate1.items = [
