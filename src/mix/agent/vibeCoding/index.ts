@@ -45,6 +45,7 @@ function updateComponentFiles(
     { fileName: 'style.less', dataKey: 'styleSource' },
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
     { fileName: 'store.js', dataKey: 'storeJsSource' },
+    { fileName: 'services.js', dataKey: 'servicesJsSource' },
   ];
 
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
@@ -494,10 +495,10 @@ ${text}
             const toolNames = tools.map((t: any) => t[1]);
             const resultTools = [...tools];
 
-            // 规则1: 如果 信息获取类 在最后一个，则添加一个 answer
+            // 规则1: 如果 读取代码 在最后一个，则添加一个 develope
             const infoToolNames = [READ_RELATED_NAME];
             if (toolNames.length > 0 && infoToolNames.includes(toolNames[toolNames.length - 1])) {
-              resultTools.push(['node', ANSWER_NAME]);
+              resultTools.push(['node', DEVELOP_MODULE_NAME]);
               return resultTools;
             }
 

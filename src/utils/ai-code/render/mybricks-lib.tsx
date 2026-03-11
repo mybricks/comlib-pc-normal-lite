@@ -564,5 +564,76 @@ export function createMybricks(options: CreateMybricksOptions) {
     useNavigate: routerLib.useNavigate,
     useLocation: routerLib.useLocation,
     useParams: routerLib.useParams,
+    createEnvs,
+    createAPI,
+  };
+}
+
+// --- 接口相关：createEnvs / createAPI ---
+
+type EnvConfig = { title?: string; baseUrl: string; [key: string]: any };
+
+/** 当前激活的 axios 实例，由 createEnvs 注册，由 createAPI 消费 */
+const envInstances: Record<string, any> = {};
+let currentEnvKey: string | null = null;
+
+function getCurrentInstance() {
+  if (currentEnvKey && envInstances[currentEnvKey]) {
+    return envInstances[currentEnvKey];
+  }
+  const keys = Object.keys(envInstances);
+  if (keys.length > 0) {
+    return envInstances[keys[0]];
+  }
+  // 未注册任何环境时降级：直接用 fetch 包一层，保持接口可用
+  return (config: any) => {
+    const { method = 'GET', url, params, data: body, headers } = config;
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return fetch(`${url}${query}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: body != null ? JSON.stringify(body) : undefined,
+    }).then((r) => r.json());
+  };
+}
+
+/**
+ * 注册多套环境实例（本质是 axios.create）。
+ * 在 services.js 顶层调用，不在 store 中调用。
+ */
+export function createEnvs(envConfigs: Record<string, EnvConfig>) {
+  const axiosLib = typeof window !== 'undefined' ? (window as any).axios ?? null : null;
+  Object.entries(envConfigs).forEach(([key, { title: _title, baseUrl, ...rest }]) => {
+    if (axiosLib) {
+      envInstances[key] = axiosLib.create({ baseURL: baseUrl, ...rest });
+    } else {
+      // window.axios 不存在时的轻量 fetch 适配器
+      envInstances[key] = (config: any) => {
+        const { method = 'GET', url: path = '', params, data: reqBody, headers: reqHeaders } = config;
+        const fullUrl = baseUrl.replace(/\/$/, '') + path;
+        const query = params ? '?' + new URLSearchParams(params).toString() : '';
+        return fetch(`${fullUrl}${query}`, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...(rest.headers ?? {}), ...reqHeaders },
+          body: reqBody != null ? JSON.stringify(reqBody) : undefined,
+        }).then((r) => r.json());
+      };
+    }
+    if (currentEnvKey === null) currentEnvKey = key;
+  });
+}
+
+/**
+ * 定义一个接口函数，调用时合并配置并用当前环境实例发请求。
+ * defaultConfig 中 method、url、summary 为必填。
+ * 在 services.js 中调用，不在 store 中调用。
+ */
+export function createAPI(
+  defaultConfig: { method: string; url: string; summary: string; [key: string]: any },
+  paramsMapper?: (params: any) => any
+) {
+  return (params?: any) => {
+    const runtimeConfig = paramsMapper ? paramsMapper(params) : {};
+    return getCurrentInstance()({ ...defaultConfig, ...runtimeConfig });
   };
 }

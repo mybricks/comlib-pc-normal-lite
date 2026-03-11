@@ -1,5 +1,5 @@
 import genVibeCodingAgent from "../agent/vibeCoding";
-import { updateRender, updateStyle } from "../../utils/ai-code/transform-umd";
+import { updateRender, updateStyle, updateServices, updateStore } from "../../utils/ai-code/transform-umd";
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
@@ -103,37 +103,20 @@ class Context {
         aiComParams.data.configJsSource = encodeURIComponent(content);
         break;
       case "store.js":
-        // store.js 更新时，先验证编译
-        if (!aiComParams.data._errors) aiComParams.data._errors = [];
-        aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== 'store.js');
-        
-        // 先尝试编译验证（捕获语法错误）
-        try {
-          const evalStr = `
-            let result;
-            ${content.replace('export default', 'result =')};
-            result;
-          `;
-          // 只验证语法，不实际执行构造函数
-          new Function(evalStr);
-          
-          // 编译成功，保存
-          aiComParams.data.storeJsCompiled = encodeURIComponent(content);
-          aiComParams.data.storeJsSource = encodeURIComponent(content);
-        } catch (error) {
-          // 编译失败，记录错误但仍保存源码
-          const message = error?.message ?? error?.toString?.() ?? '未知错误';
-          aiComParams.data._errors.push({
-            file: 'store.js',
-            message: `Store 编译失败: ${message}`,
-            type: 'compile'
-          });
-          aiComParams.data.storeJsSource = encodeURIComponent(content);
-          // 编译失败时不更新 storeJsCompiled，保留旧的或置空
-        }
-        
-        // 通知更新
-        this.getAiCom(id)?.actions?.notifyChanged?.();
+        updateStore({
+          data: aiComParams.data,
+          success: () => {
+            this.getAiCom(id)?.actions?.notifyChanged?.();
+          },
+        }, content);
+        break;
+      case "services.js":
+        updateServices({
+          data: aiComParams.data,
+          success: () => {
+            this.getAiCom(id)?.actions?.notifyChanged?.();
+          },
+        }, content);
         break;
       case "com.json":
         aiComParams.data.componentConfig = encodeURIComponent(content);

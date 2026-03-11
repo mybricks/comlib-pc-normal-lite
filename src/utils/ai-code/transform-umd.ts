@@ -129,6 +129,54 @@ export function updateRender({ data, success }, renderCode) {
   });
 }
 
+export function updateStore({ data, success }, storeCode) {
+  const writeSource = () => {
+    data.storeJsSource = encodeURIComponent(storeCode);
+  };
+  transformTsx(storeCode).then(({ transformCode }) => {
+    data.storeJsCompiled = encodeURIComponent(transformCode);
+    writeSource();
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'store.js');
+    success?.();
+  }).catch(e => {
+    console.error("[@updateStore error]", e);
+    writeSource();
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'store.js');
+    data._errors.push({
+      file: 'store.js',
+      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+      type: 'compile'
+    });
+    success?.();
+  });
+}
+
+export function updateServices({ data, success }, servicesCode) {
+  const writeSource = () => {
+    data.servicesJsSource = encodeURIComponent(servicesCode);
+  };
+  transformTsx(servicesCode).then(({ transformCode }) => {
+    data.servicesJsCompiled = encodeURIComponent(transformCode);
+    writeSource();
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'services.js');
+    success?.();
+  }).catch(e => {
+    console.error("[@updateServices error]", e);
+    writeSource();
+    if (!data._errors) data._errors = [];
+    data._errors = data._errors.filter(err => err.file !== 'services.js');
+    data._errors.push({
+      file: 'services.js',
+      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+      type: 'compile'
+    });
+    success?.();
+  });
+}
+
 export function updateStyle({ id, data, success }, styleCode) {
   const writeSource = () => {
     data.styleSource = encodeURIComponent(styleCode);
