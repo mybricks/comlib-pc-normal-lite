@@ -813,7 +813,7 @@ export default function (props: Props, actions: Actions, ...args) {
           type: 'page',
           pageIndex: Number(pageIndex),
           style: {
-            transform: `scale(1) translate(${pageBCR.left - rootBCR.left - 20}px, 0px)`
+            transform: `scale(1) translate(${pageBCR.left - rootBCR.left - parseFloat(window.getComputedStyle(page.parentElement).paddingLeft || "0")}px, 0px)`
           }
         };
       }
