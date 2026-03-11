@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
 import context from "../context";
 import lazyCss from "./index.lazy.less";
+import { Events } from "../../utils";
 
 const css = lazyCss.locals;
 
@@ -31,6 +32,10 @@ const FILES_MAP: Record<string, string> = {
   "store.js": "storeJsSource",
   "services.js": "servicesJsSource",
 };
+
+export const lowcodeViewEvents = new Events<{
+  'viewCode': [number, number];
+}>();
 
 export default function LowcodeView(params: Params) {
   const [selectedFileName, setSelectedFileName] = useState<FileName>(FILES[0]);
@@ -78,6 +83,64 @@ export default function LowcodeView(params: Params) {
   }, [selectedFileName, modifiedContent, params.data]);
 
   const codeIns = useRef<HandlerType>(null);
+
+  useEffect(() => {
+    let decorationsCollection;
+    let timeOut;
+
+    const off = lowcodeViewEvents.on('viewCode', async ([start, end]) => {
+      // [TODO] 闪烁问题
+      // 切到runtime代码
+      setSelectedFileName("runtime.jsx");
+
+      // 等待编辑器就绪
+      let editor = codeIns.current?.editor;
+      while (!editor) {
+        await new Promise(res => setTimeout(res, 100))
+        editor = codeIns.current?.editor
+      }
+      clearTimeout(timeOut);
+      let isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
+
+      while (!isRuntime) {
+        await new Promise(res => setTimeout(res, 100))
+        isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
+      }
+
+      const currentDeltaDecoration = {
+        range: {
+          startLineNumber: start,
+          startColumn: 1,
+          endLineNumber: end,
+          endColumn: 1,
+        },
+        options: {
+          isWholeLine: true,
+          className: 'highlighted-line',
+          linesDecorationsClassName: 'highlighted-line-decoration',
+        }
+      }
+
+      if (!decorationsCollection) {
+        decorationsCollection = editor.createDecorationsCollection([currentDeltaDecoration]);
+      } else {
+        decorationsCollection.clear();
+        decorationsCollection.append([currentDeltaDecoration])
+      }
+
+      editor.revealLineInCenter(start)
+      editor.setPosition({ lineNumber: start, column: 1 })
+      editor.focus()
+
+      timeOut = setTimeout(() => {
+        decorationsCollection.clear();
+      }, 3000)
+    }, true)
+
+    return () => {
+      off();
+    }
+  }, [])
 
   const handleEditorChange = useCallback((value: string) => {
     setModifiedContent((prev) => ({
