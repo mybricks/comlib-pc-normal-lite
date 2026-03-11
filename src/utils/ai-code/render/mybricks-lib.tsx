@@ -81,7 +81,7 @@ export function genListenersStore(
  * 响应式 Store 封装：对 genListenersStore 返回的 store 做 subscribe/getSnapshot，供 useSyncExternalStore 使用。
  */
 function createReactiveStore(store: any) {
-  const state: Record<string, any> = {};
+  let state: Record<string, any> = {};
   const collectionsListener = new Map<string, () => void>();
   const listeners = new Set<() => void>();
   const subscribe = (callback: () => void) => {
@@ -100,7 +100,10 @@ function createReactiveStore(store: any) {
       const value = store[key];
       if (!collectionsListener.has(key as string)) {
         const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
-          state[k] = v;
+          state = {
+            ...state,
+            [k]: v
+          }
           listeners.forEach((listener) => listener());
         };
         collectionsListener.set(
@@ -605,7 +608,10 @@ export function createEnvs(envConfigs: Record<string, EnvConfig>) {
   const axiosLib = typeof window !== 'undefined' ? (window as any).axios ?? null : null;
   Object.entries(envConfigs).forEach(([key, { title: _title, baseUrl, ...rest }]) => {
     if (axiosLib) {
-      envInstances[key] = axiosLib.create({ baseURL: baseUrl, ...rest });
+      const axiosInstance = axiosLib.create({ baseURL: baseUrl, ...rest });
+      // axios 返回的是 { data, status, headers... }，统一解析出 data 返回
+      envInstances[key] = (config: any) =>
+        axiosInstance(config).then((res: any) => res?.data ?? res);
     } else {
       // window.axios 不存在时的轻量 fetch 适配器
       envInstances[key] = (config: any) => {
