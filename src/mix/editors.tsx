@@ -1,5 +1,5 @@
 import React from 'react';
-import LowcodeView from "./lowcodeView";
+import LowcodeView, { lowcodeViewEvents } from "./lowcodeView";
 import lowcodeViewCss from "./lowcodeView/index.lazy.less";
 import context from "./context";
 import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from "./knowledges";
@@ -901,6 +901,22 @@ export default function (props: Props, actions: Actions, ...args) {
             transform: `scale(1) translate(${pageBCR.left - rootBCR.left - 20}px, 0px)`
           }
         };
+      }
+    },
+    '@viewCode'(params) {
+      const dataLoc = params.focusArea.ele.closest('[data-loc]')?.getAttribute('data-loc');
+
+      if (dataLoc) {
+        const loc = JSON.parse(dataLoc);
+        const { codeLine } = loc;
+        if (codeLine) {
+          const { start, end } = codeLine;
+          lowcodeViewEvents.emit('viewCode', [start, end]);
+        } else {
+          console.error('[@viewCode] 请重新编译jsx，支持codeLine', params);
+        }
+      } else {
+        console.error('[@viewCode] 未找到 data-loc', params);
       }
     },
     '[data-desn-page]': {

@@ -52,6 +52,10 @@ export default function ({ constituency }) {
               const dataLocValueObject: any = {
                 jsx: { start: node.start, end: node.end },
                 tag: { end: node.openingElement.end },
+                codeLine: {
+                  start: node.loc.start.line,
+                  end: node.loc.end.line
+                }
               };
               const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
               const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
