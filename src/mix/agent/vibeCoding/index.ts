@@ -45,7 +45,7 @@ function updateComponentFiles(
     { fileName: 'style.less', dataKey: 'styleSource' },
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
     { fileName: 'store.js', dataKey: 'storeJsSource' },
-    { fileName: 'services.js', dataKey: 'servicesJsSource' },
+    { fileName: 'service.js', dataKey: 'serviceJsSource' },
   ];
 
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
@@ -371,12 +371,20 @@ export default function ({ context }) {
           return '';
         }
       })();
+      const serviceContent = (() => {
+        try {
+          return decodeURIComponent(aiComParams?.data?.serviceJsSource ?? '');
+        } catch {
+          return '';
+        }
+      })();
       const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
         projectJson,
         getRuntimeContent: () => runtimeContent,
         getStyleContent: () => styleContent,
         getStoreContent: () => storeContent,
+        getServiceContent: () => serviceContent,
       });
 
       // project.read('DataCard')

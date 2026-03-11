@@ -16,7 +16,7 @@ const FILES = [
   "runtime.jsx",
   "style.less",
   "store.js",
-  "services.js",
+  "service.js",
   // "config.js",
   // "com.json"
 ] as const;
@@ -30,7 +30,7 @@ const FILES_MAP: Record<string, string> = {
   "config.js": "configJsSource",
   "com.json": "componentConfig",
   "store.js": "storeJsSource",
-  "services.js": "servicesJsSource",
+  "service.js": "serviceJsSource",
 };
 
 export const lowcodeViewEvents = new Events<{
@@ -43,7 +43,7 @@ export default function LowcodeView(params: Params) {
 
   const coderOptions = useMemo(() => {
     const path = `file:///${"组件id"}/${selectedFileName}`;
-    if (selectedFileName === "runtime.jsx" || selectedFileName === "store.js" || selectedFileName === "services.js") {
+    if (selectedFileName === "runtime.jsx" || selectedFileName === "store.js" || selectedFileName === "service.js") {
       return {
         path,
         language: 'typescript',
@@ -213,8 +213,8 @@ export default function LowcodeView(params: Params) {
   }, [params.data?.storeJsSource]);
 
   useEffect(() => {
-    clearFileIfDataChanged("services.js");
-  }, [params.data?.servicesJsSource]);
+    clearFileIfDataChanged("service.js");
+  }, [params.data?.serviceJsSource]);
 
   useEffect(() => {
     return ()=>{

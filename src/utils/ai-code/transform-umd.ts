@@ -153,23 +153,23 @@ export function updateStore({ data, success }, storeCode) {
   });
 }
 
-export function updateServices({ data, success }, servicesCode) {
+export function updateService({ data, success }, serviceCode) {
   const writeSource = () => {
-    data.servicesJsSource = encodeURIComponent(servicesCode);
+    data.serviceJsSource = encodeURIComponent(serviceCode);
   };
-  transformTsx(servicesCode).then(({ transformCode }) => {
-    data.servicesJsCompiled = encodeURIComponent(transformCode);
+  transformTsx(serviceCode).then(({ transformCode }) => {
+    data.serviceJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'services.js');
+    data._errors = data._errors.filter(err => err.file !== 'service.js');
     success?.();
   }).catch(e => {
-    console.error("[@updateServices error]", e);
+    console.error("[@updateService error]", e);
     writeSource();
     if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'services.js');
+    data._errors = data._errors.filter(err => err.file !== 'service.js');
     data._errors.push({
-      file: 'services.js',
+      file: 'service.js',
       message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
       type: 'compile'
     });

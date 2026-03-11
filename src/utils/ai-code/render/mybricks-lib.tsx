@@ -349,11 +349,11 @@ function createRouterLib(
     };
 
     return (
-      <div className={css.routesRuntime}>
+      // <div className={css.routesRuntime}>
         <RouterContext.Provider value={branchCtx}>
           {activeRoute.props.element}
         </RouterContext.Provider>
-      </div>
+      // </div>
     );
   }
 
@@ -415,15 +415,17 @@ function createRouterLib(
         }
 
         return (
-          <RouterContext.Provider value={routerContextValue}>
-            <Component
-              {...props}
-              _env={_env}
-              logger={logger}
-              store={autoStore.current}
-              _state={state}
-            />
-          </RouterContext.Provider>
+          <div className={css.routesRuntime}>
+            <RouterContext.Provider value={routerContextValue}>
+              <Component
+                {...props}
+                _env={_env}
+                logger={logger}
+                store={autoStore.current}
+                _state={state}
+              />
+            </RouterContext.Provider>
+          </div>
         );
       };
     };
@@ -602,7 +604,7 @@ function getCurrentInstance() {
 
 /**
  * 注册多套环境实例（本质是 axios.create）。
- * 在 services.js 顶层调用，不在 store 中调用。
+ * 在 service.js 顶层调用，不在 store 中调用。
  */
 export function createEnvs(envConfigs: Record<string, EnvConfig>) {
   const axiosLib = typeof window !== 'undefined' ? (window as any).axios ?? null : null;
@@ -632,7 +634,7 @@ export function createEnvs(envConfigs: Record<string, EnvConfig>) {
 /**
  * 定义一个接口函数，调用时合并配置并用当前环境实例发请求。
  * defaultConfig 中 method、url、summary 为必填。
- * 在 services.js 中调用，不在 store 中调用。
+ * 在 service.js 中调用，不在 store 中调用。
  */
 export function createAPI(
   defaultConfig: { method: string; url: string; summary: string; [key: string]: any },

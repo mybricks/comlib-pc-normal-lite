@@ -37,11 +37,14 @@ export interface ProjectConfig {
   getStyleContent: () => string;
   /** 获取 store.js 全文 */
   getStoreContent: () => string;
+  /** 获取 service.js 全文 */
+  getServiceContent: () => string;
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
 const STYLE_PATH = '/style.less';
 const STORE_PATH = '/store.js';
+const SERVICE_PATH = '/service.js';
 /** 折叠占位提示（不耦合具体工具名） */
 const FOLD_HINT = '// ... 这部分代码已折叠，如需要可通过读取工具打开 ...';
 
@@ -268,10 +271,11 @@ export class Project {
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent, getStoreContent } = this.config;
+    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent } = this.config;
     const runtimeContent = getRuntimeContent();
     const styleContent = getStyleContent();
     const storeContent = getStoreContent();
+    const serviceContent = getServiceContent();
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
@@ -308,6 +312,7 @@ export class Project {
     const runtimeLines = runtimeContent.split(/\r?\n/);
     const styleLines = styleContent.split(/\r?\n/);
     const storeLines = storeContent.split(/\r?\n/);
+    const serviceLines = serviceContent.split(/\r?\n/);
     const isFullFile = this.expandedNames.has(ROOT_NAME);
     const defaultImportRanges =
       this.root.commonImports
@@ -326,6 +331,9 @@ export class Project {
     const storeRanges = isFullFile
       ? [{ start: 1, end: storeLines.length }]
       : getExpandedRangesForFile(this.root, this.expandedNames, STORE_PATH);
+    const serviceRanges = isFullFile
+      ? [{ start: 1, end: serviceLines.length }]
+      : getExpandedRangesForFile(this.root, this.expandedNames, SERVICE_PATH);
 
     if (runtimeRanges.length > 0) {
       fileSectionParts.push(
@@ -347,6 +355,13 @@ export class Project {
       );
     } else {
       fileSectionParts.push(buildFileSection('store.js', storeContent, [], 'js'));
+    }
+    if (serviceRanges.length > 0) {
+      fileSectionParts.push(
+        buildFileSection('service.js', serviceContent, serviceRanges, 'js')
+      );
+    } else {
+      fileSectionParts.push(buildFileSection('service.js', serviceContent, [], 'js'));
     }
 
     return [

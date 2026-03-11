@@ -1,5 +1,5 @@
 import genVibeCodingAgent from "../agent/vibeCoding";
-import { updateRender, updateStyle, updateServices, updateStore } from "../../utils/ai-code/transform-umd";
+import { updateRender, updateStyle, updateService, updateStore } from "../../utils/ai-code/transform-umd";
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
@@ -110,8 +110,8 @@ class Context {
           },
         }, content);
         break;
-      case "services.js":
-        updateServices({
+      case "service.js":
+        updateService({
           data: aiComParams.data,
           success: () => {
             this.getAiCom(id)?.actions?.notifyChanged?.();

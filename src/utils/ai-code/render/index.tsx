@@ -247,32 +247,32 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
       try {
         const oriCode = decodeURIComponent(renderCode);
 
-        // 1. 先 eval services.js（用临时 mybricksLib 注入 createEnvs/createAPI）
-        // services 不依赖 store，可以最先执行
+        // 1. 先 eval service.js（用临时 mybricksLib 注入 createEnvs/createAPI）
+        // service 不依赖 store，可以最先执行
         const tempMybricksLib = createMybricks({
           env,
           logger,
           store: genListenersStore(null, { mode: env.runtime ? 'runtime' : 'design' }),
           useSyncExternalStore,
         });
-        const servicesCompiledCode = decodeURIComponent(data.servicesJsCompiled ?? '');
-        const servicesIsCommonJS = servicesCompiledCode && !/\bexport\b/.test(servicesCompiledCode);
-        const servicesExports = servicesIsCommonJS
-          ? runRender(servicesCompiledCode, { 'mybricks': tempMybricksLib })
+        const serviceCompiledCode = decodeURIComponent(data.serviceJsCompiled ?? '');
+        const serviceIsCommonJS = serviceCompiledCode && !/\bexport\b/.test(serviceCompiledCode);
+        const serviceExports = serviceIsCommonJS
+          ? runRender(serviceCompiledCode, { 'mybricks': tempMybricksLib })
           : null;
 
-        const servicesDeps = {
-          'services': servicesExports ?? {},
-          './services': servicesExports ?? {},
+        const serviceDeps = {
+          'service': serviceExports ?? {},
+          './service': serviceExports ?? {},
         };
 
-        // 2. eval store.js，注入 services，store 可以 import services
+        // 2. eval store.js，注入 service，store 可以 import service
         // 兜底1：编译产物为空时降级用旧的 evalJSCompiled（保留，不删除）
         // 兜底2：旧组件 storeJsCompiled 存的是未编译源码（含 export 关键字），同样降级 evalJSCompiled
         const storeCompiledCode = decodeURIComponent(data.storeJsCompiled ?? '');
         const storeIsCommonJS = storeCompiledCode && !/\bexport\b/.test(storeCompiledCode);
         const StoreClass = storeIsCommonJS
-          ? runRender(storeCompiledCode, { ...servicesDeps })
+          ? runRender(storeCompiledCode, { ...serviceDeps })
           : evalJSCompiled(storeCompiledCode, data);
 
         // 3. 用真实 StoreClass 创建最终 mybricksLib
@@ -287,8 +287,8 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
           'react': React,
           'mybricks': mybricksLib,
           'dayjs': dayjs,
-          'services': servicesExports ?? {},
-          './services': servicesExports ?? {},
+          'service': serviceExports ?? {},
+          './service': serviceExports ?? {},
           ...PRIVATE_DEPENDENCIES,
           ...dependencies,
         })
@@ -328,7 +328,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
     } else {
       return
     }
-  }, [renderCode, errorInfo, data.modelConfig, data.storeJsCompiled, data.servicesJsCompiled])
+  }, [renderCode, errorInfo, data.modelConfig, data.storeJsCompiled, data.serviceJsCompiled])
 
 
   if (typeof ReactNode !== 'function') {
