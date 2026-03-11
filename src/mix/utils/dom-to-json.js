@@ -459,6 +459,212 @@ function findArtboardIdFromElement(el) {
 }
 
 /**
+ * 从指定 DOM 元素直接导出，不需要通过 comId 查找 Shadow DOM。
+ * 样式表通过 styleTagId（组件 ID）在 Shadow DOM 内查找 <style id="styleTagId">。
+ * @param {Element} el - 要导出的 DOM 元素（如 focusArea.ele）
+ * @param {string} [styleTagId] - 可选，<style> 的 id，用于获取组件样式表（通常为组件 id）
+ * @returns {{ page: { name?: string, "component-def"?: any[], content: any[] } }}
+ */
+function elementToMybricksJson(el, styleTagId) {
+  if (!el) return emptyRoot();
+
+  var host = getShadowHost();
+  var shadowRoot = host && host.shadowRoot ? host.shadowRoot : null;
+
+  var cssRuleMap = styleTagId ? getCssRulesBySelector(styleTagId, shadowRoot || document) : null;
+
+  var geo = getGeoviewScaleAndOrigin(shadowRoot || document);
+  var rootComputed = window.getComputedStyle(el);
+  var globalFont = getGlobalFont(el, rootComputed, cssRuleMap);
+
+  function walk(node, parentRect) {
+    var rect = getDesignRect(node, geo);
+    var computed = window.getComputedStyle(node);
+    var tag = (node.tagName || '').toLowerCase();
+
+    var isDisplayContents = computed.display === 'contents';
+    if (!isDisplayContents && rect.width <= 0 && rect.height <= 0 && tag !== 'svg') return null;
+    if (computed.display === 'none' || computed.visibility === 'hidden') return null;
+
+    if (hasClassPrefix(node, 'selection-')) return null;
+    if (hasClassPrefix(node, 'append-')) return null;
+    if (hasClassPrefix(node, 'boardTitle-')) return null;
+
+    if (isDisplayContents) {
+      var childNodes = [];
+      for (var i = 0; i < node.childNodes.length; i++) {
+        var child = node.childNodes[i];
+        if (child.nodeType === 1) {
+          var elChild = child;
+          var skipTag = (elChild.tagName || '').toLowerCase();
+          if (skipTag === 'script' || skipTag === 'style' || skipTag === 'link') continue;
+          if (hasClassPrefix(elChild, 'selection-')) continue;
+          if (hasClassPrefix(elChild, 'append-')) continue;
+          if (hasClassPrefix(elChild, 'boardTitle-')) continue;
+          var childNode = walk(elChild, parentRect);
+          if (childNode) childNodes.push(childNode);
+        }
+      }
+      if (childNodes.length === 0) return null;
+      if (childNodes.length === 1) return childNodes[0];
+      return { type: 'group', name: 'contents-wrapper', style: undefined, children: childNodes };
+    }
+
+    var nodeType = inferNodeType(node, computed, tag);
+    var style = buildStyleJSON(node, computed, rect, parentRect, cssRuleMap, globalFont);
+
+    var nodeJson = {
+      type: nodeType,
+      name: node.getAttribute('aria-label') || (node.className && typeof node.className === 'string' ? node.className.trim().split(/\s+/)[0] : null) || tag,
+      className: node.className && typeof node.className === 'string' ? node.className.trim().split(/\s+/)[0] || undefined : undefined,
+      style: style && Object.keys(style).length ? style : undefined,
+      content: undefined,
+      children: undefined,
+    };
+
+    var matchedSelectors = cssRuleMap ? getMatchedSelectorsForElement(node, cssRuleMap) : [];
+    if (matchedSelectors.length) nodeJson.selectors = matchedSelectors;
+
+    if (nodeType === 'text') {
+      nodeJson.content = getTextContent(node);
+      if (nodeJson.content === '' && !node.querySelector('img, svg')) return null;
+    }
+
+    if (nodeType === 'image') {
+      var src = (node.tagName || '').toLowerCase() === 'img' ? (node.currentSrc || node.src || node.getAttribute('src')) : null;
+      if (!src) return null;
+      nodeJson.content = src;
+    }
+
+    var childNodesList = [];
+    var isLibrarySource = !!(node.getAttribute && node.getAttribute('data-library-source') != null);
+    if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg') && !isLibrarySource) {
+      for (var ci = 0; ci < node.childNodes.length; ci++) {
+        var cchild = node.childNodes[ci];
+        if (cchild.nodeType === 1) {
+          var celChild = cchild;
+          var cskip = (celChild.tagName || '').toLowerCase() === 'script' ||
+            (celChild.tagName || '').toLowerCase() === 'style' ||
+            (celChild.tagName || '').toLowerCase() === 'link';
+          if (cskip) continue;
+          if (hasClassPrefix(celChild, 'selection-')) continue;
+          if (hasClassPrefix(celChild, 'append-')) continue;
+          if (hasClassPrefix(celChild, 'boardTitle-')) continue;
+          var cn = walk(celChild, rect);
+          if (cn) childNodesList.push(cn);
+        } else if (cchild.nodeType === 3) {
+          var textContent = (cchild.textContent || '').trim();
+          if (textContent) {
+            var textRectViewport = getTextNodeRect(cchild);
+            var textRect = textRectViewport ? getDesignRect(textRectViewport, geo) : null;
+            var inlineStyle = buildInlineTextStyle(node, window.getComputedStyle(node), textRect, rect, cssRuleMap, globalFont);
+            var textNodeJson = {
+              type: 'text',
+              name: 'Text',
+              content: textContent.replace(/\s+/g, ' '),
+              style: inlineStyle && Object.keys(inlineStyle).length ? inlineStyle : undefined,
+            };
+            if (nodeJson.selectors && nodeJson.selectors.length) textNodeJson.selectors = nodeJson.selectors.slice();
+            if (nodeJson.className) textNodeJson.className = nodeJson.className;
+            childNodesList.push(textNodeJson);
+          }
+        }
+      }
+      if (childNodesList.length) {
+        var layoutMode = nodeJson.style && (nodeJson.style.layoutMode === 'VERTICAL' || nodeJson.style.layoutMode === 'HORIZONTAL') ? nodeJson.style.layoutMode : null;
+        if (layoutMode) {
+          if (childrenHaveUniformMargin(childNodesList, layoutMode)) {
+            applyUniformMarginAsGap(nodeJson, childNodesList, layoutMode);
+          }
+          ensureItemSpacingFromPositions(nodeJson, childNodesList, layoutMode);
+          var finalSpacing = (nodeJson.style && nodeJson.style.itemSpacing != null) ? nodeJson.style.itemSpacing : null;
+          if (finalSpacing == null || finalSpacing < 0) {
+            var s = nodeJson.style || {};
+            var hasAlignment = (s.primaryAxisAlignItems && s.primaryAxisAlignItems !== 'MIN') ||
+                               (s.counterAxisAlignItems && s.counterAxisAlignItems !== 'MIN');
+            var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
+            if (hasAlignment || hasPadding) {
+              nodeJson.style.itemSpacing = 0;
+            } else {
+              delete nodeJson.style.layoutMode;
+              delete nodeJson.style.itemSpacing;
+            }
+          } else {
+            for (var si = 0; si < childNodesList.length; si++) {
+              var ss = childNodesList[si].style || {};
+              if (ss.marginTop != null) delete ss.marginTop;
+              if (ss.marginRight != null) delete ss.marginRight;
+              if (ss.marginBottom != null) delete ss.marginBottom;
+              if (ss.marginLeft != null) delete ss.marginLeft;
+            }
+          }
+        }
+        nodeJson.children = childNodesList;
+      }
+    }
+
+    if (nodeType === 'frame') {
+      var frameTitle = getFrameTitleFromElement(node);
+      if (frameTitle) nodeJson.name = frameTitle;
+    }
+
+    if (nodeType === 'component' && tag === 'svg') {
+      nodeJson.ref = 'svg-placeholder';
+      nodeJson.children = undefined;
+    }
+    if (nodeType === 'component' && isLibrarySource) {
+      nodeJson.ref = 'library-source-placeholder';
+      nodeJson.children = undefined;
+    }
+
+    return nodeJson;
+  }
+
+  var rootRect = getDesignRect(el, geo);
+  var contentChildren = [];
+  for (var i = 0; i < el.children.length; i++) {
+    var child = el.children[i];
+    if (hasClassPrefix(child, 'selection-')) continue;
+    if (hasClassPrefix(child, 'append-')) continue;
+    if (hasClassPrefix(child, 'boardTitle-')) continue;
+    var ctag = (child.tagName || '').toLowerCase();
+    if (ctag === 'script' || ctag === 'style' || ctag === 'link') continue;
+    var childNode = walk(child, rootRect);
+    if (childNode) contentChildren.push(childNode);
+  }
+
+  var rootStyle = buildStyleJSON(el, rootComputed, rootRect, null, cssRuleMap, globalFont);
+  var pageName = el.id || (typeof el.className === 'string' && el.className.trim() ? el.className.trim().split(/\s+/)[0] : undefined) || undefined;
+  var rootSelectors = cssRuleMap ? getMatchedSelectorsForElement(el, cssRuleMap) : [];
+  var content = [
+    {
+      type: 'frame',
+      name: pageName || 'Frame',
+      className: (typeof el.className === 'string' && el.className.trim()) ? el.className.trim().split(/\s+/)[0] : undefined,
+      style: rootStyle && Object.keys(rootStyle).length ? rootStyle : undefined,
+      children: contentChildren.length ? contentChildren : undefined,
+    },
+  ];
+  if (rootSelectors.length) content[0].selectors = rootSelectors;
+
+  var componentDef = [];
+  componentDef.push({ type: 'svg-placeholder', name: 'SVG Placeholder', style: { fills: ['#e5e5e5'] }, children: [] });
+  componentDef.push({ type: 'library-source-placeholder', name: 'Library Source Placeholder', style: { fills: ['#e5e5e5'] }, children: [] });
+
+  var pagePayload = { name: pageName, 'component-def': componentDef, content: content };
+  if (globalFont && globalFont.fontFamily) {
+    var defaultStack = (rootComputed && rootComputed.fontFamily) ? parseFontFamilyStack(String(rootComputed.fontFamily)) : [];
+    pagePayload.defaultFont = {
+      fontFamily: globalFont.fontFamily,
+      fontWeight: globalFont.fontWeight,
+      fontStyle: globalFont.fontStyle,
+      fontFamilyStack: defaultStack.length ? defaultStack : undefined
+    };
+  }
+  return { page: pagePayload };
+}
+
+/**
  * 按组件 id 导出：从 #comId 向上找到 class 以 "artboard-" 开头的祖先，取其 id 作为 frameId，再调用 domToMybricksJson。
  * @param {string} comId - 组件根元素 id，同时作为 styleTagId 传入 domToMybricksJson
  * @returns {{ page: { name?: string, "component-def"?: any[], content: any[] } }}
@@ -1414,6 +1620,7 @@ if (typeof window !== 'undefined') {
   window.domToMybricksJsonWithInlineImages = domToMybricksJsonWithInlineImages;
   window.comToMybricksJsonWithInlineImages = comToMybricksJsonWithInlineImages;
   window.comToMybricksJson = comToMybricksJson;
+  window.elementToMybricksJson = elementToMybricksJson;
   window.getCssRulesBySelector = getCssRulesBySelector;
   window.getShadowHost = getShadowHost;
   window.resolveFrameRoot = resolveFrameRoot;
@@ -1421,5 +1628,5 @@ if (typeof window !== 'undefined') {
 
 // ES module export if supported
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SHADOW_HOST_ID, domToMybricksJson, comToMybricksJson, domToMybricksJsonWithInlineImages, comToMybricksJsonWithInlineImages, getCssRulesBySelector, getShadowHost, resolveFrameRoot };
+  module.exports = { SHADOW_HOST_ID, domToMybricksJson, comToMybricksJson, elementToMybricksJson, domToMybricksJsonWithInlineImages, comToMybricksJsonWithInlineImages, getCssRulesBySelector, getShadowHost, resolveFrameRoot };
 }

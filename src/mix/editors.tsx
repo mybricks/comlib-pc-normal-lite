@@ -636,143 +636,6 @@ export default function (props: Props, actions: Actions, ...args) {
   //   })
   // }
 
-  const exportCategoryConfig = {
-    title: "导出",
-    items: [
-      {
-        title: "导出到 Figma",
-        type: "Button",
-        value: {
-          set(params: { id?: string; focusArea?: any; data?: any }, value: any) {
-            const comId = params?.id;
-            const fn = (window as any).comToMybricksJson;
-            if (typeof fn !== 'function') {
-              console.warn("[导出] window.comToMybricksJson 未定义");
-              return;
-            }
-            const result = fn(comId);
-            const jsonStr = typeof result === 'object' && result !== null
-              ? JSON.stringify(result, null, 2)
-              : String(result);
-              // console.log('[导出] 导出结果', jsonStr);
-            navigator.clipboard.writeText(jsonStr).then(
-              () => console.log("[导出] 复制成功"),
-              (err) => console.error("[导出] 复制失败", err)
-            );
-          }
-        }
-      },
-      {
-        title: "导出为代码",
-        type: "Button",
-        value: {
-          async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
-            const comId = params?.id;
-            if (!comId) {
-              console.warn("[导出为代码] 无组件 ID");
-              return;
-            }
-
-            try {
-              const aiComParams = context.getAiComParams(comId);
-              if (!aiComParams?.data) {
-                console.error("[导出为代码] 组件数据不存在");
-                return;
-              }
-
-              // 生成文件结构（只包含 runtime.jsx, style.less, store.js）
-              const files = generateCodeStructure(aiComParams.data);
-
-              // 检查是否支持导出
-              if (!isExportSupported()) {
-                console.error('[导出为代码] 当前环境不支持导出');
-                alert('当前环境不支持导出，请使用 Chrome、Edge 或在 VSCode 中打开');
-                return;
-              }
-
-              // 显示导出中提示
-              const message = (window as any).antd?.message;
-              let hideLoading: any = null;
-              if (message) {
-                hideLoading = message.loading('正在导出代码...', 0);
-              }
-
-              // 导出代码（自动检测 VSCode 或浏览器）
-              await exportCode(files, {
-                folderName: 'mybricks-component',
-                onProgress: (progress) => {
-                  console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
-                },
-              });
-
-              // 关闭 loading，显示成功
-              if (hideLoading) hideLoading();
-              if (message) {
-                message.success('导出代码成功！');
-              } else {
-                alert('导出代码成功！');
-              }
-              console.log('[导出为代码] 导出成功');
-            } catch (error) {
-              // 关闭 loading
-              const message = (window as any).antd?.message;
-              
-              if ((error as any)?.message?.includes('取消')) {
-                console.log('[导出为代码] 用户取消导出');
-              } else {
-                if (message) {
-                  message.error(`导出失败: ${(error as any)?.message || '未知错误'}`);
-                } else {
-                  alert(`导出失败: ${(error as any)?.message || '未知错误'}`);
-                }
-                console.error('[导出为代码] 导出失败', error);
-              }
-            }
-          }
-        }
-      }
-    ]
-  };
-
-  const importCategoryConfig = {
-    title: "导入",
-    items: [
-      {
-        title: "从 Figma 同步",
-        type: "Button",
-        value: {
-          set(params: { id?: string; focusArea?: any; data?: any }, value: any) {
-            const comId = params?.id;
-            if (!comId) {
-              console.warn("[从 Figma 同步] 无组件 ID");
-              return;
-            }
-            navigator.clipboard.readText().then(
-              (text) => {
-                if (!text || String(text).trim() === '') {
-                  alert('剪切板无内容，请先从 Figma 复制后再同步');
-                  return;
-                }
-                try {
-                  const parsed = JSON.parse(text);
-                  const figmaItems: FigmaImportItem[] = Array.isArray(parsed) ? parsed : [parsed];
-                  syncStylesFromFigmaJson(comId, figmaItems);
-                } catch (e) {
-                  console.error("[从 Figma 同步] 剪切板内容不是合法 JSON", e);
-                  alert('剪切板内容不是合法 JSON，请确认已从 Figma 正确复制');
-                }
-              },
-              (err) => {
-                console.error("[从 Figma 同步] 读取剪切板失败", err);
-                alert('读取剪切板失败，请检查浏览器权限或剪切板是否有内容');
-              }
-            );
-          }
-        }
-      }
-    ]
-  };
-
   /** Figma 导入项：selectors 与 parseLess 的 key 一致，value 为样式键值 */
   type FigmaImportItem = { selectors: string[]; value: Record<string, string> };
 
@@ -835,12 +698,64 @@ export default function (props: Props, actions: Actions, ...args) {
     }
   };
 
+  const exportCodeConfig = {
+    title: "导出",
+    items: [
+      {
+        title: "导出为代码",
+        type: "Button",
+        value: {
+          async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
+            const comId = params?.id;
+            if (!comId) {
+              console.warn("[导出为代码] 无组件 ID");
+              return;
+            }
+            try {
+              const aiComParams = context.getAiComParams(comId);
+              if (!aiComParams?.data) {
+                console.error("[导出为代码] 组件数据不存在");
+                return;
+              }
+              const files = generateCodeStructure(aiComParams.data);
+              if (!isExportSupported()) {
+                alert('当前环境不支持导出，请使用 Chrome、Edge 或在 VSCode 中打开');
+                return;
+              }
+              const message = (window as any).antd?.message;
+              let hideLoading: any = null;
+              if (message) hideLoading = message.loading('正在导出代码...', 0);
+              await exportCode(files, {
+                folderName: 'mybricks-component',
+                onProgress: (progress) => {
+                  console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
+                },
+              });
+              if (hideLoading) hideLoading();
+              if (message) message.success('导出代码成功！');
+              else alert('导出代码成功！');
+            } catch (error) {
+              const message = (window as any).antd?.message;
+              if ((error as any)?.message?.includes('取消')) {
+                console.log('[导出为代码] 用户取消导出');
+              } else {
+                if (message) message.error(`导出失败: ${(error as any)?.message || '未知错误'}`);
+                else alert(`导出失败: ${(error as any)?.message || '未知错误'}`);
+                console.error('[导出为代码] 导出失败', error);
+              }
+            }
+          }
+        }
+      }
+    ]
+  };
+
   if (!focusAreaConfigs[':root']) {
     focusAreaConfigs[':root'] = {
-      items: [exportCategoryConfig, importCategoryConfig]
+      items: [exportCodeConfig]
     };
   } else {
-    focusAreaConfigs[':root'].items.push(exportCategoryConfig, importCategoryConfig);
+    focusAreaConfigs[':root'].items.push(exportCodeConfig);
   }
 
   context.setAiCom(props.id, { params: props, actions });
@@ -921,34 +836,70 @@ export default function (props: Props, actions: Actions, ...args) {
     },
     '[data-desn-page]': {
       title: "页面",
-      items: (props, cate1) => {
-        const { focusArea, data } = props;
-        // focusArea 是被点选的 [data-desn-page] DOM 元素
-        // data-desn-page={N} → dataset.desnPage === "N"
-        const pageIndex = Number(focusArea?.dataset?.desnPage ?? 0);
-        const isDebugging =
-          data.debugTarget?.type === 'page' &&
-          data.debugTarget?.pageIndex === pageIndex;
-
-        console.log('data', data);
-        console.log('focusArea', focusArea);
+      items: (pageProps, cate1) => {
+        const { focusArea } = pageProps;
+        const comId = props.id;
 
         cate1.title = "页面";
         cate1.items = [
           {
-            title: isDebugging ? '取消调试' : '调试此页面',
-            type: 'Button',
-            value: {
-              set() {
-                if (isDebugging) {
-                  // 取消调试，恢复组件编辑态
-                  data.debugTarget = null;
-                } else {
-                  // 以此页面为入口进入调试
-                  data.debugTarget = { type: 'page', pageIndex };
+            title: "Figma",
+            items: [
+              {
+                title: "导出此页面到 Figma",
+                type: 'Button',
+                value: {
+                  set() {
+                    const fn = (window as any).elementToMybricksJson;
+                    if (typeof fn !== 'function') {
+                      console.warn("[导出页面] window.elementToMybricksJson 未定义");
+                      return;
+                    }
+                    const ele = focusArea?.ele;
+                    if (!ele) {
+                      console.warn("[导出页面] focusArea.ele 不存在");
+                      return;
+                    }
+                    const result = fn(ele, comId);
+                    const jsonStr = typeof result === 'object' && result !== null
+                      ? JSON.stringify(result, null, 2)
+                      : String(result);
+                    navigator.clipboard.writeText(jsonStr).then(
+                      () => console.log("[导出页面] 复制成功"),
+                      (err) => console.error("[导出页面] 复制失败", err)
+                    );
+                  }
+                }
+              },
+              {
+                title: "从 Figma 同步此页面样式",
+                type: 'Button',
+                value: {
+                  set() {
+                    navigator.clipboard.readText().then(
+                      (text) => {
+                        if (!text || String(text).trim() === '') {
+                          alert('剪切板无内容，请先从 Figma 复制后再同步');
+                          return;
+                        }
+                        try {
+                          const parsed = JSON.parse(text);
+                          const figmaItems: FigmaImportItem[] = Array.isArray(parsed) ? parsed : [parsed];
+                          syncStylesFromFigmaJson(comId, figmaItems);
+                        } catch (e) {
+                          console.error("[从 Figma 同步页面] 剪切板内容不是合法 JSON", e);
+                          alert('剪切板内容不是合法 JSON，请确认已从 Figma 正确复制');
+                        }
+                      },
+                      (err) => {
+                        console.error("[从 Figma 同步页面] 读取剪切板失败", err);
+                        alert('读取剪切板失败，请检查浏览器权限或剪切板是否有内容');
+                      }
+                    );
+                  }
                 }
               }
-            }
+            ]
           }
         ];
         return;
