@@ -303,7 +303,7 @@ export default function (props: Props, actions: Actions, ...args) {
   const { data, isLowCodeMode } = props;
   const focusAreaConfigs: any = {};
 
-  console.log('props', props, actions, ...args);
+  //console.log('props', props, actions, ...args);
 
   // try {
   //   const configs = evalConfigJsCompiled(decodeURIComponent(data.configJsCompiled));
@@ -930,8 +930,8 @@ export default function (props: Props, actions: Actions, ...args) {
           data.debugTarget?.type === 'page' &&
           data.debugTarget?.pageIndex === pageIndex;
 
-        console.log('data', data);
-        console.log('focusArea', focusArea);
+        // console.log('data', data);
+        // console.log('focusArea', focusArea);
 
         cate1.title = "页面";
         cate1.items = [
