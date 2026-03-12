@@ -181,6 +181,46 @@ function whitespaceNormalizedReplacer(content: string, find: string): string[] {
   return out;
 }
 
+/** 将中文双引号 " " 归一化为英文双引号 " */
+function normalizeChineseQuotes(text: string): string {
+  return text.replace(/[\u201C\u201D]/g, '"');
+}
+
+/**
+ * 对 content 做归一化预处理后，用现有策略链在归一化文本上查找 find，
+ * 将命中位置映射回原始 content 的 substring 并返回。
+ *
+ * 用于"content 含中文引号、find 含英文引号"的情况：
+ * 策略链无法直接匹配时，通过归一化消除引号类型差异。
+ *
+ * @param content 原始文件内容
+ * @param find    待匹配片段（来自 AI 生成，可能含英文引号）
+ * @param replacers 要复用的策略列表
+ */
+function runReplacersOnNormalizedContent(
+  content: string,
+  find: string,
+  replacers: Array<{ name: string; fn: Replacer }>
+): Array<{ name: string; match: string }> {
+  const normalizedContent = normalizeChineseQuotes(content);
+  const normalizedFind = normalizeChineseQuotes(find);
+
+  // 归一化后与原文相同，说明 content 没有中文引号，不需要这条路径
+  if (normalizedContent === content) return [];
+
+  const results: Array<{ name: string; match: string }> = [];
+  for (const { name, fn } of replacers) {
+    const matches = fn(normalizedContent, normalizedFind);
+    for (const normalizedMatch of matches) {
+      const idx = normalizedContent.indexOf(normalizedMatch);
+      if (idx === -1) continue;
+      // 归一化前后每个字符均为单个 code unit（"" 与 " 都是 BMP），长度不变
+      results.push({ name, match: content.substring(idx, idx + normalizedMatch.length) });
+    }
+  }
+  return results;
+}
+
 const BUILTIN_REPLACERS: Array<{ name: string; fn: Replacer }> = [
   { name: 'exact', fn: simpleReplacer },
   { name: 'lineTrimmed', fn: lineTrimmedReplacer },
@@ -249,10 +289,9 @@ export function replaceFile(content: string, before: string, after: string): Rep
 
   // 删除 / 替换：在 content 中查找 before，替换为 after（after 空即删除）
   let foundMultiple = false;
-  for (const { name, fn } of getAllReplacers()) {
-    const matches = fn(content, before);
-    for (let i = 0; i < matches.length; i++) {
-      const search = matches[i];
+
+  const tryMatches = (candidates: Array<{ name: string; match: string }>) => {
+    for (const { name, match: search } of candidates) {
       const index = content.indexOf(search);
       if (index === -1) continue;
       const lastIndex = content.lastIndexOf(search);
@@ -262,9 +301,25 @@ export function replaceFile(content: string, before: string, after: string): Rep
       }
       const newContent =
         content.substring(0, index) + after + content.substring(index + search.length);
-      return { ok: true, newContent, strategy: name };
+      return { ok: true as const, newContent, strategy: name };
     }
-  }
+    return null;
+  };
+
+  // 常规策略链
+  const regularCandidates = getAllReplacers().flatMap(({ name, fn }) =>
+    fn(content, before).map((match) => ({ name, match }))
+  );
+  const regularResult = tryMatches(regularCandidates);
+  if (regularResult) return regularResult;
+
+  // 额外尝试：对 content 做中文引号归一化后再走策略链
+  // 适用于 content 含中文引号、before/after 含英文引号的场景（如 AI 生成代码时引号类型不一致）
+  // 注意：修改场景下替换结果中的中文引号会被 after 中的英文引号覆盖，调用方需自行承担
+  const normalizedCandidates = runReplacersOnNormalizedContent(content, before, getAllReplacers())
+    .map(({ name, match }) => ({ name: `chineseQuoteNormalized(${name})`, match }));
+  const normalizedResult = tryMatches(normalizedCandidates);
+  if (normalizedResult) return normalizedResult;
 
   if (foundMultiple) {
     return {
