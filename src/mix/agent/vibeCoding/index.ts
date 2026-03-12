@@ -495,12 +495,12 @@ ${text}
             const toolNames = tools.map((t: any) => t[1]);
             const resultTools = [...tools];
 
-            // 规则1: 如果 读取代码 在最后一个，则添加一个 develope
-            const infoToolNames = [READ_RELATED_NAME];
-            if (toolNames.length > 0 && infoToolNames.includes(toolNames[toolNames.length - 1])) {
-              resultTools.push(['node', DEVELOP_MODULE_NAME]);
-              return resultTools;
-            }
+            // // 规则1: 如果 读取代码 在最后一个，则添加一个 develope
+            // const infoToolNames = [READ_RELATED_NAME];
+            // if (toolNames.length > 0 && infoToolNames.includes(toolNames[toolNames.length - 1])) {
+            //   resultTools.push(['node', DEVELOP_MODULE_NAME]);
+            //   return resultTools;
+            // }
 
             // 规则2: 开发代码前必须调用 readRelated
             const developIndex = toolNames.indexOf(DEVELOP_MODULE_NAME);

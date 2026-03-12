@@ -200,6 +200,28 @@ function getAllReplacers(): Array<{ name: string; fn: Replacer }> {
   return [...BUILTIN_REPLACERS, ...EXTRA_REPLACERS];
 }
 
+/**
+ * 检测字符串中包含的中文符号
+ * @param text 要检测的文本
+ * @returns 包含的中文符号列表（去重）
+ */
+function detectChinesePunctuation(text: string): string[] {
+  // 常见的中文符号及其对应的英文符号
+  const chinesePunctuationMap: Record<string, string> = {
+    '“': '"',
+    '”': '"',
+  };
+
+  const found = new Set<string>();
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (chinesePunctuationMap[char]) {
+      found.add(char);
+    }
+  }
+  return Array.from(found);
+}
+
 /** 单次替换结果；strategy 为命中的匹配策略名，便于调试与上层展示。 */
 export interface ReplaceResult {
   ok: boolean;
@@ -251,6 +273,18 @@ export function replaceFile(content: string, before: string, after: string): Rep
       message: '原始片段在文件中出现多次，请提供更多上下文使匹配唯一',
     };
   }
+
+  // 检测源文件中是否包含中文符号
+  const chinesePunctuation = detectChinesePunctuation(content);
+  if (chinesePunctuation.length > 0) {
+    const punctuationList = chinesePunctuation.join(' ');
+    return {
+      ok: false,
+      error: 'NOT_FOUND',
+      message: `未在文件中找到原始片段。检测到 源文件中包含中文全角符号：${punctuationList}，特别关注下这些符号使用是否正确`,
+    };
+  }
+
   return {
     ok: false,
     error: 'NOT_FOUND',

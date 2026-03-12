@@ -36,11 +36,22 @@ export default function readRelated(config: ReadRelatedConfig): any {
 
 > !IMPORTANT: 在需要阅读或修改开发前，必须先调用本工具获取相关组件的信息。
 `,
-    execute({ params }: { params?: { names?: string; ids?: string } }) {
+    execute({ params }: { params?: { names?: string; ids?: string } }, excuteContext: any) {
+      let needsContinue = false;
+      if (excuteContext.currentIndex !== undefined) {
+        const { currentIndex, commands } = excuteContext ?? {};
+        const isLastTool = currentIndex === commands.length - 1;
+
+        if (isLastTool) {
+          needsContinue = true
+        }
+      }
+
       project.read('root');
       return {
         llmContent: `已展开整个项目所有代码文件全文。后续上下文中「文件系统」将包含完整代码。`,
         displayContent: '已获取相关信息',
+        needsContinue,
       }
 
       let raw = params?.names ?? params?.ids;
