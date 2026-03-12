@@ -9,7 +9,7 @@
   "componentConfig": "{}",
   "storeJsSource": "",
   "storeJsCompiled": "",
-  "servicesJsSource": "",
-  "servicesJsCompiled": "",
+  "serviceJsSource": "",
+  "serviceJsCompiled": "",
   "debugTarget": null
 }

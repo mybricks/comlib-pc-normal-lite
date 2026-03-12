@@ -363,12 +363,13 @@ export default function developMyBricksModule(config: Config) {
     <注意>
       - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要更新字段A时，必须修改A的值；
       - 禁止使用 getter 方法（例如：get count() {...}）;
+      - 使用service.js时，务必使用'service'这个路径，禁止做其他发挥，禁止动态引用；
     </注意>
 
-  4. services.js文件
-    services.js文件用于管理所有接口定义，必须使用 mybricks 提供的 \`createEnvs\` 和 \`createAPI\` 来定义环境与接口，详细用法参考 mybricks 的接口使用说明。
+  4. service.js文件
+    service.js文件用于管理所有接口定义，必须使用 mybricks 提供的 \`createEnvs\` 和 \`createAPI\` 来定义环境与接口，详细用法参考 mybricks 的接口使用说明。
     <代码示例>
-    \`\`\`js file="services.js"
+    \`\`\`js file="service.js"
     import { createEnvs, createAPI } from 'mybricks'
 
     createEnvs({
@@ -393,7 +394,7 @@ export default function developMyBricksModule(config: Config) {
     </代码示例>
 
     <使用原则>
-      - 所有接口必须统一维护在 services.js 中，不得在 runtime.jsx 或 store.js 中直接发起 HTTP 请求；
+      - 所有接口必须统一维护在 service.js 中，不得在 runtime.jsx 或 store.js 中直接发起 HTTP 请求；
     </使用原则>
 
 </MyBricks模块定义及文件说明>
@@ -778,7 +779,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
 
   \`\`\`after file="store.js"
-  import services from './services';
+  import service from 'service';
   export default class Store {
     btns = [
       { text: '按钮1', path: '/view' },
@@ -904,7 +905,7 @@ export default function developMyBricksModule(config: Config) {
             .replace(/runtime\.jsx/g, '')
             .replace(/style\.less/g, '')
             .replace(/store\.js/g, '')
-            .replace(/services\.js/g, '') + '\n' + msg;
+            .replace(/service\.js/g, '') + '\n' + msg;
         }
       }
 
@@ -913,7 +914,7 @@ export default function developMyBricksModule(config: Config) {
         .replace(/runtime\.jsx/g, '尝试修改内容...')
         .replace(/style\.less/g, '尝试调整样式...')
         .replace(/store\.js/g, '尝试修改逻辑...')
-        .replace(/services\.js/g, '尝试修改接口...');
+        .replace(/service\.js/g, '尝试修改接口...');
     },
     aiRole: ({ params, hasAttachments }) => {
       const mode = params?.mode ?? 'generate';

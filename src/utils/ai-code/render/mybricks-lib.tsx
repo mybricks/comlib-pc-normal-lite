@@ -81,7 +81,7 @@ export function genListenersStore(
  * 响应式 Store 封装：对 genListenersStore 返回的 store 做 subscribe/getSnapshot，供 useSyncExternalStore 使用。
  */
 function createReactiveStore(store: any) {
-  const state: Record<string, any> = {};
+  let state: Record<string, any> = {};
   const collectionsListener = new Map<string, () => void>();
   const listeners = new Set<() => void>();
   const subscribe = (callback: () => void) => {
@@ -100,7 +100,10 @@ function createReactiveStore(store: any) {
       const value = store[key];
       if (!collectionsListener.has(key as string)) {
         const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
-          state[k] = v;
+          state = {
+            ...state,
+            [k]: v
+          }
           listeners.forEach((listener) => listener());
         };
         collectionsListener.set(
@@ -248,8 +251,9 @@ export interface RouterContextValue {
 function createRouterLib(
   _env: { mode: 'design' | 'runtime' },
   pageRefRegistry: any[],
-  debugPageIndex?: number
+  debugTarget?: any
 ) {
+  const debugPageIndex = debugTarget?.pageIndex;
   const RouterContext = createContext<RouterContextValue | null>(null);
 
   /** 稳定容器，持有 appRef 挂载后的 setCurrentPath，避免渲染期间副作用 */
@@ -346,11 +350,11 @@ function createRouterLib(
     };
 
     return (
-      <div className={css.routesRuntime}>
+      // <div className={css.routesRuntime}>
         <RouterContext.Provider value={branchCtx}>
           {activeRoute.props.element}
         </RouterContext.Provider>
-      </div>
+      // </div>
     );
   }
 
@@ -410,17 +414,20 @@ function createRouterLib(
             </RouterContext.Provider>
           );
         }
+        const rootStyle = debugTarget?.rootStyle;
 
         return (
-          <RouterContext.Provider value={routerContextValue}>
-            <Component
-              {...props}
-              _env={_env}
-              logger={logger}
-              store={autoStore.current}
-              _state={state}
-            />
-          </RouterContext.Provider>
+          <div className={css.routesRuntime} style={{...rootStyle}}>
+            <RouterContext.Provider value={routerContextValue}>
+              <Component
+                {...props}
+                _env={_env}
+                logger={logger}
+                store={autoStore.current}
+                _state={state}
+              />
+            </RouterContext.Provider>
+          </div>
         );
       };
     };
@@ -484,8 +491,8 @@ export function createMybricks(options: CreateMybricksOptions) {
    * 页面调试模式：指定要单独渲染的页面索引（仅在 runtime 态生效）。
    * undefined 表示不限制（正常渲染所有页面或走 appRef 路由）。
    */
-  const debugPageIndex: number | undefined =
-    env.runtime && env._debugTarget !== undefined ? env._debugTarget.pageIndex : undefined;
+  const debugTarget: any =
+    env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
 
   /**
    * pageRef 注册表：按声明顺序收集所有 pageRef 包装后的组件。
@@ -495,7 +502,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   const pageRefRegistry: any[] = [];
   const pageRefOriginalsSet = new Set<any>();
 
-  const routerLib = createRouterLib(_env, pageRefRegistry, debugPageIndex);
+  const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget);
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
@@ -534,7 +541,7 @@ export function createMybricks(options: CreateMybricksOptions) {
       );
 
       return (
-        <div data-zone-type="page" data-desn-page={pageIndex} style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)', ...env._debugTarget?.style }}>
+        <div data-zone-type="page" data-desn-page={pageIndex} style={{ minWidth: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)', ...env._debugTarget?.style }}>
           <Component
             {...props}
             _env={_env}
@@ -599,13 +606,16 @@ function getCurrentInstance() {
 
 /**
  * 注册多套环境实例（本质是 axios.create）。
- * 在 services.js 顶层调用，不在 store 中调用。
+ * 在 service.js 顶层调用，不在 store 中调用。
  */
 export function createEnvs(envConfigs: Record<string, EnvConfig>) {
   const axiosLib = typeof window !== 'undefined' ? (window as any).axios ?? null : null;
   Object.entries(envConfigs).forEach(([key, { title: _title, baseUrl, ...rest }]) => {
     if (axiosLib) {
-      envInstances[key] = axiosLib.create({ baseURL: baseUrl, ...rest });
+      const axiosInstance = axiosLib.create({ baseURL: baseUrl, ...rest });
+      // axios 返回的是 { data, status, headers... }，统一解析出 data 返回
+      envInstances[key] = (config: any) =>
+        axiosInstance(config).then((res: any) => res?.data ?? res);
     } else {
       // window.axios 不存在时的轻量 fetch 适配器
       envInstances[key] = (config: any) => {
@@ -626,7 +636,7 @@ export function createEnvs(envConfigs: Record<string, EnvConfig>) {
 /**
  * 定义一个接口函数，调用时合并配置并用当前环境实例发请求。
  * defaultConfig 中 method、url、summary 为必填。
- * 在 services.js 中调用，不在 store 中调用。
+ * 在 service.js 中调用，不在 store 中调用。
  */
 export function createAPI(
   defaultConfig: { method: string; url: string; summary: string; [key: string]: any },
