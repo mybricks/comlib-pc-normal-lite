@@ -47,7 +47,7 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
             ))}
           </details>
         )}
-        <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+        <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
       </div>
     </div>
   );
@@ -77,7 +77,7 @@ const GenerateLoadingView = ({
             <span className={css.generateErrorIcon}>!</span>
             <div className={css.generateErrorTitle}>生成失败</div>
             <pre className={css.generateErrorDesc}>{errorMessage || '未知错误'}</pre>
-            <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+            <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
           </div>
         ) : (
           <>
