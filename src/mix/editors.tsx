@@ -765,9 +765,9 @@ export default function (props: Props, actions: Actions, ...args) {
   return {
     ...focusAreaConfigs,
     /** 可调整宽高 */
-    '@resize': {
-      options: ['width', 'height'],
-    },
+    // '@resize': {
+    //   options: ['width', 'height'],
+    // },
     '@error': (err) => {
       const aiComParams = context.getAiComParams(props.id);
       if (aiComParams?.data) {
