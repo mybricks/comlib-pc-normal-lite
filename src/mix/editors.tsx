@@ -806,14 +806,36 @@ export default function (props: Props, actions: Actions, ...args) {
       const pageIndex = page?.getAttribute("data-desn-page");
 
       if (pageIndex) {
+        // 当前页在视口中的矩形（相对视口左上角）
         const pageBCR = page.getBoundingClientRect();
-        const rootBCR = page.parentElement.getBoundingClientRect();
+        const rootEl = page.parentElement;
+        // 根容器的视口矩形
+        const rootBCR = rootEl.getBoundingClientRect();
+        const rootComputedStyle = window.getComputedStyle(rootEl);
 
+        // 根容器的内边距和左边框，用于把「视口坐标」换算成「内容区坐标」
+        const paddingLeft = parseFloat(rootComputedStyle.paddingLeft || "0");
+        const paddingRight = parseFloat(rootComputedStyle.paddingRight || "0");
+        const paddingTop = parseFloat(rootComputedStyle.paddingTop || "0");
+        const paddingBottom = parseFloat(rootComputedStyle.paddingBottom || "0");
+        const borderLeft = parseFloat(rootComputedStyle.borderLeftWidth || "0");
+
+        // 根容器的布局尺寸（含 padding + border，不含 margin）
+        const layoutWidth = rootEl.offsetWidth;
+        const layoutHeight = rootEl.offsetHeight;
+
+        // 写入调试目标：供预览/调试时定位当前页、同步根容器尺寸
         data.debugTarget = {
           type: 'page',
           pageIndex: Number(pageIndex),
           style: {
-            transform: `scale(1) translate(${pageBCR.left - rootBCR.left - parseFloat(window.getComputedStyle(page.parentElement).paddingLeft || "0")}px, 0px)`
+            // 水平位移：把「页相对根容器」的视口距离，按根容器缩放比换算成布局坐标，再减去左边框和内边距
+            transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`
+          },
+          rootStyle: {
+            // 根容器内容区宽高（去掉 padding 后的可排版区域）
+            width: layoutWidth - paddingLeft - paddingRight,
+            height: layoutHeight - paddingTop - paddingBottom,
           }
         };
       }
