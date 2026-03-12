@@ -539,7 +539,7 @@ export function createMybricks(options: CreateMybricksOptions) {
       );
 
       return (
-        <div data-zone-type="page" data-desn-page={pageIndex} style={{ width: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)', ...env._debugTarget?.style }}>
+        <div data-zone-type="page" data-desn-page={pageIndex} style={{ minWidth: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)', ...env._debugTarget?.style }}>
           <Component
             {...props}
             _env={_env}
