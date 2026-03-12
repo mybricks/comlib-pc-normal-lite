@@ -251,8 +251,9 @@ export interface RouterContextValue {
 function createRouterLib(
   _env: { mode: 'design' | 'runtime' },
   pageRefRegistry: any[],
-  debugPageIndex?: number
+  debugTarget?: any
 ) {
+  const debugPageIndex = debugTarget?.pageIndex;
   const RouterContext = createContext<RouterContextValue | null>(null);
 
   /** 稳定容器，持有 appRef 挂载后的 setCurrentPath，避免渲染期间副作用 */
@@ -413,9 +414,10 @@ function createRouterLib(
             </RouterContext.Provider>
           );
         }
+        const rootStyle = debugTarget?.rootStyle;
 
         return (
-          <div className={css.routesRuntime}>
+          <div className={css.routesRuntime} style={{...rootStyle}}>
             <RouterContext.Provider value={routerContextValue}>
               <Component
                 {...props}
@@ -489,8 +491,8 @@ export function createMybricks(options: CreateMybricksOptions) {
    * 页面调试模式：指定要单独渲染的页面索引（仅在 runtime 态生效）。
    * undefined 表示不限制（正常渲染所有页面或走 appRef 路由）。
    */
-  const debugPageIndex: number | undefined =
-    env.runtime && env._debugTarget !== undefined ? env._debugTarget.pageIndex : undefined;
+  const debugTarget: any =
+    env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
 
   /**
    * pageRef 注册表：按声明顺序收集所有 pageRef 包装后的组件。
@@ -500,7 +502,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   const pageRefRegistry: any[] = [];
   const pageRefOriginalsSet = new Set<any>();
 
-  const routerLib = createRouterLib(_env, pageRefRegistry, debugPageIndex);
+  const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget);
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
