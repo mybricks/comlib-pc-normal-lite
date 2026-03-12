@@ -911,10 +911,10 @@ export default function developMyBricksModule(config: Config) {
 
       return raw
         .replace(/action\.json/g, actionReason)
-        .replace(/runtime\.jsx/g, '尝试修改内容...')
-        .replace(/style\.less/g, '尝试调整样式...')
-        .replace(/store\.js/g, '尝试修改逻辑...')
-        .replace(/service\.js/g, '尝试修改接口...');
+        .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
+        .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
+        .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
+        .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '');
     },
     aiRole: ({ params, hasAttachments }) => {
       const mode = params?.mode ?? 'generate';
