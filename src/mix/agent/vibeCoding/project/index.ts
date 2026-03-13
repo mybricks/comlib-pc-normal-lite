@@ -30,7 +30,7 @@ export const ROOT_NAME = 'root';
 /** 项目配置 */
 export interface ProjectConfig {
   /** project.json 根数组（仅取第一个根节点） */
-  projectJson: ProjectNode[];
+  // projectJson: ProjectNode[];
   /** 获取 runtime.jsx 全文 */
   getRuntimeContent: () => string;
   /** 获取 style.less 全文 */
@@ -217,17 +217,17 @@ function buildFileSection(
  */
 export class Project {
   private config: ProjectConfig;
-  private root: ProjectNode;
+  // private root: ProjectNode;
   /** 通过 read(name) 展开的组件名集合 */
   private expandedNames = new Set<string>();
 
   constructor(config: ProjectConfig) {
     this.config = config;
-    const rootNode = config.projectJson?.[0];
-    if (!rootNode) {
-      throw new Error('[Project] projectJson 需至少包含一个根节点');
-    }
-    this.root = rootNode;
+    // const rootNode = config.projectJson?.[0];
+    // if (!rootNode) {
+    //   throw new Error('[Project] projectJson 需至少包含一个根节点');
+    // }
+    // this.root = rootNode;
   }
 
   /**
@@ -236,14 +236,14 @@ export class Project {
    * 传入 "root" 时直接返回全量文件（所有代码文件全文）。
    */
   read(componentName: string): void {
-    if (!componentName || typeof componentName !== 'string') return;
-    const name = componentName.trim();
-    const node = getNodeByName(this.root, name);
-    if (node) {
-      collectNodeAndDescendantNames(node).forEach((n) => this.expandedNames.add(n));
-    } else {
-      this.expandedNames.add(name);
-    }
+    // if (!componentName || typeof componentName !== 'string') return;
+    // const name = componentName.trim();
+    // const node = getNodeByName(this.root, name);
+    // if (node) {
+    //   collectNodeAndDescendantNames(node).forEach((n) => this.expandedNames.add(n));
+    // } else {
+    //   this.expandedNames.add(name);
+    // }
   }
 
   /**
@@ -263,9 +263,9 @@ export class Project {
   /**
    * 获取项目架构中所有组件 name（含 root）
    */
-  getComponentNames(): string[] {
-    return collectNodeAndDescendantNames(this.root);
-  }
+  // getComponentNames(): string[] {
+  //   return collectNodeAndDescendantNames(this.root);
+  // }
 
   /**
    * 生成实时 message（Markdown）
@@ -301,7 +301,7 @@ export class Project {
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
 `;
 
-    const archMd = buildArchitectureMd(this.root);
+    // const archMd = buildArchitectureMd(this.root);
 
     const libraryDocsContent = [mybricksPrompt, antdPrompt, echartsPrompt, iconPrompt].join('\n\n');
 
@@ -314,26 +314,31 @@ export class Project {
     const storeLines = storeContent.split(/\r?\n/);
     const serviceLines = serviceContent.split(/\r?\n/);
     const isFullFile = this.expandedNames.has(ROOT_NAME);
-    const defaultImportRanges =
-      this.root.commonImports
-        ?.filter((c) => c.path === RUNTIME_PATH)
-        .flatMap((c) => (c.locs ?? []).map(([start, end]) => ({ start, end }))) ?? [];
-    const runtimeRanges = isFullFile
-      ? [{ start: 1, end: runtimeLines.length }]
-      : mergeRanges([
-          ...defaultImportRanges,
-          ...getInitialComponentRangesForRuntime(this.root),
-          ...getExpandedRangesForFile(this.root, this.expandedNames, RUNTIME_PATH),
-        ]);
-    const styleRanges = isFullFile
-      ? [{ start: 1, end: styleLines.length }]
-      : getExpandedRangesForFile(this.root, this.expandedNames, STYLE_PATH);
-    const storeRanges = isFullFile
-      ? [{ start: 1, end: storeLines.length }]
-      : getExpandedRangesForFile(this.root, this.expandedNames, STORE_PATH);
-    const serviceRanges = isFullFile
-      ? [{ start: 1, end: serviceLines.length }]
-      : getExpandedRangesForFile(this.root, this.expandedNames, SERVICE_PATH);
+    // const defaultImportRanges =
+    //   this.root.commonImports
+    //     ?.filter((c) => c.path === RUNTIME_PATH)
+    //     .flatMap((c) => (c.locs ?? []).map(([start, end]) => ({ start, end }))) ?? [];
+    // const runtimeRanges = isFullFile
+    //   ? [{ start: 1, end: runtimeLines.length }]
+    //   : mergeRanges([
+    //       ...defaultImportRanges,
+    //       ...getInitialComponentRangesForRuntime(this.root),
+    //       ...getExpandedRangesForFile(this.root, this.expandedNames, RUNTIME_PATH),
+    //     ]);
+    // const styleRanges = isFullFile
+    //   ? [{ start: 1, end: styleLines.length }]
+    //   : getExpandedRangesForFile(this.root, this.expandedNames, STYLE_PATH);
+    // const storeRanges = isFullFile
+    //   ? [{ start: 1, end: storeLines.length }]
+    //   : getExpandedRangesForFile(this.root, this.expandedNames, STORE_PATH);
+    // const serviceRanges = isFullFile
+    //   ? [{ start: 1, end: serviceLines.length }]
+    //   : getExpandedRangesForFile(this.root, this.expandedNames, SERVICE_PATH);
+
+    const runtimeRanges = [{ start: 1, end: runtimeLines.length }]
+    const styleRanges = [{ start: 1, end: styleLines.length }]
+    const storeRanges = [{ start: 1, end: storeLines.length }]
+    const serviceRanges = [{ start: 1, end: storeLines.length }]
 
     if (runtimeRanges.length > 0) {
       fileSectionParts.push(
@@ -374,10 +379,10 @@ export class Project {
       '\n---\n\n',
       libraryDocsContent,
       '\n\n---\n\n',
-      '## 组件架构\n',
-      '\n组件树结构与层级关系有助于理解组件间关系；代码按组件层级展开，父组件包含所有子组件代码，子组件不包含父组件代码。\n',
-      '根组件 → 组件（树状结构）：\n\n',
-      archMd,
+      // '## 组件架构\n',
+      // '\n组件树结构与层级关系有助于理解组件间关系；代码按组件层级展开，父组件包含所有子组件代码，子组件不包含父组件代码。\n',
+      // '根组件 → 组件（树状结构）：\n\n',
+      // archMd,
       '\n',
       ...fileSectionParts,
     ].join('');

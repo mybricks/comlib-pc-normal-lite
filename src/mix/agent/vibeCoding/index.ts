@@ -378,9 +378,9 @@ export default function ({ context }) {
           return '';
         }
       })();
-      const projectJson = buildProjectJson(runtimeContent, styleContent);
+      // const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
-        projectJson,
+        // projectJson,
         getRuntimeContent: () => runtimeContent,
         getStyleContent: () => styleContent,
         getStoreContent: () => storeContent,
