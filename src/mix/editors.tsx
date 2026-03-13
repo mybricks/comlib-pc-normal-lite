@@ -841,7 +841,7 @@ export default function (props: Props, actions: Actions, ...args) {
         console.error("[@getDocs error]", e);
       }
 
-      console.log("[@getDocs result]", {...result, events: [...result.events]});
+      console.log("[@getDocs result]", {...result, events: Array.isArray(result.events) ? [...result.events] : []});
 
       return result;
     },
