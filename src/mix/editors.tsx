@@ -895,9 +895,21 @@ export default function (props: Props, actions: Actions, ...args) {
                     const jsonStr = typeof result === 'object' && result !== null
                       ? JSON.stringify(result, null, 2)
                       : String(result);
+                    const message = (window as any).antd?.message;
+                    // let hideLoading: any = null;
+                    // if (message) hideLoading = message.loading('正在导出到 Figma...', 0);
                     navigator.clipboard.writeText(jsonStr).then(
-                      () => console.log("[导出页面] 复制成功"),
-                      (err) => console.error("[导出页面] 复制失败", err)
+                      () => {
+                        // if (hideLoading) hideLoading();
+                        if (message) message.success('导出成功！');
+                        else alert('导出成功！');
+                      },
+                      (err) => {
+                        // if (hideLoading) hideLoading();
+                        if (message) message.error('导出失败，请检查剪切板权限');
+                        else alert('导出失败，请检查剪切板权限');
+                        console.error("[导出页面] 复制失败", err);
+                      }
                     );
                   }
                 }
