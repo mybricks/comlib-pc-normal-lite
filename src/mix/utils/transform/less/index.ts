@@ -103,7 +103,11 @@ class Parse {
   constructor(private _ruleSet: RuleSet) {
     const res = this.handleRuleSet(this._ruleSet);
     res.forEach(({key, value}) => {
-      this.cssObj[key] = value
+      if (this.cssObj[key] && typeof this.cssObj[key] === 'object' && typeof value === 'object') {
+        this.cssObj[key] = { ...this.cssObj[key], ...value }
+      } else {
+        this.cssObj[key] = value
+      }
     })
   }
 
