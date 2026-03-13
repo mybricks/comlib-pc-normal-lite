@@ -529,6 +529,11 @@ function elementToMybricksJson(el, styleTagId) {
     var nodeType = inferNodeType(node, computed, tag);
     var style = buildStyleJSON(node, computed, rect, parentRect, cssRuleMap, globalFont);
 
+    // [debug] elementToMybricksJson walk - 追踪 input
+    if (tag === 'input') {
+      console.log('[elem-walk:input] placeholder:', node.placeholder, '| value:', node.value, '| nodeType:', nodeType, '| style?:', !!style, '| styleKeys:', style ? Object.keys(style).join(',') : 'none');
+    }
+
     var nodeJson = {
       type: nodeType,
       name: node.getAttribute('aria-label') || (node.className && typeof node.className === 'string' ? node.className.trim().split(/\s+/)[0] : null) || tag,
@@ -544,12 +549,29 @@ function elementToMybricksJson(el, styleTagId) {
     if (nodeType === 'text') {
       nodeJson.content = getTextContent(node);
       if (nodeJson.content === '' && !node.querySelector('img, svg')) return null;
+      // input/textarea 正在显示 placeholder 时，用 ::placeholder 伪类的颜色替换文字颜色
+      if (isShowingPlaceholder(node) && nodeJson.style) {
+        try {
+          var placeholderColor = window.getComputedStyle(node, '::placeholder').color;
+          if (placeholderColor && placeholderColor !== 'rgba(0, 0, 0, 0)') {
+            nodeJson.style.color = placeholderColor;
+          }
+        } catch (e) {}
+      }
       // 文本节点不需要 frame 专属的布局属性，清除避免消费端误处理
       if (nodeJson.style) {
         delete nodeJson.style.layoutMode;
         delete nodeJson.style.layoutWrap;
         delete nodeJson.style.itemSpacing;
         delete nodeJson.style.counterAxisSpacing;
+        // input/textarea：paddingLeft/Right 影响文字可见区域，转成 x 偏移和宽度收窄，而非直接删除
+        var _itag2pre = (node.tagName || '').toLowerCase();
+        if (_itag2pre === 'input' || _itag2pre === 'textarea') {
+          var _pl = nodeJson.style.paddingLeft || 0;
+          var _pr = nodeJson.style.paddingRight || 0;
+          if (nodeJson.style.x != null) nodeJson.style.x = nodeJson.style.x + _pl;
+          if (nodeJson.style.width != null) nodeJson.style.width = Math.max(1, nodeJson.style.width - _pl - _pr);
+        }
         delete nodeJson.style.paddingTop;
         delete nodeJson.style.paddingRight;
         delete nodeJson.style.paddingBottom;
@@ -559,11 +581,31 @@ function elementToMybricksJson(el, styleTagId) {
         delete nodeJson.style.layoutSizingHorizontal;
         delete nodeJson.style.layoutSizingVertical;
         delete nodeJson.style.layoutGridColumns;
-        // 判断 DOM 里是否单行：实测高度 < 字号 * 2，则认为是单行文本
+        // 判断 DOM 里是否单行：用 lineHeight 判断（单行高度约等于一个 lineHeight），fallback 到 height < fontSize * 2
         var _h = nodeJson.style.height;
         var _fs = nodeJson.style.fontSize;
         if (_h != null && _fs != null && _fs > 0) {
-          nodeJson.style.singleLine = _h < _fs * 2;
+          var _lhRaw = computed && computed.lineHeight;
+          var _lh = (_lhRaw && _lhRaw !== 'normal') ? parseFloat(_lhRaw) : null;
+          if (_lh != null && !Number.isNaN(_lh) && _lh > 0) {
+            // 高度在一个行高范围内（允许 20% 误差）→ 单行
+            nodeJson.style.singleLine = _h <= _lh * 1.2;
+          } else {
+            nodeJson.style.singleLine = _h < _fs * 2;
+          }
+        }
+      }
+      // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
+      var _itag2 = (node.tagName || '').toLowerCase();
+      if (_itag2 === 'input' || _itag2 === 'textarea') {
+        if (nodeJson.style) {
+          nodeJson.style.textAlignVertical = 'CENTER';
+          if (!nodeJson.style.textAlignHorizontal) {
+            var _taRaw2 = computed && computed.textAlign;
+            var _taMap2 = { left: 'LEFT', right: 'RIGHT', center: 'CENTER', justify: 'JUSTIFIED', start: 'LEFT', end: 'RIGHT' };
+            nodeJson.style.textAlignHorizontal = _taMap2[String(_taRaw2 || 'left').toLowerCase()] || 'LEFT';
+          }
+          console.log('[elementToMybricksJson:input:align] content:', nodeJson.content, '| textAlignVertical:', nodeJson.style.textAlignVertical, '| textAlignHorizontal:', nodeJson.style.textAlignHorizontal, '| color:', nodeJson.style.color);
         }
       }
     }
@@ -769,6 +811,11 @@ function domToMybricksJson(frameId, styleTagId) {
     const computed = window.getComputedStyle(el);
     const tag = (el.tagName || '').toLowerCase();
 
+    // [debug] input 节点全流程追踪（最早入口）
+    if (tag === 'input') {
+      console.log('[walk:input:ENTRY] placeholder:', el.placeholder, '| value:', el.value, '| type:', el.type, '| disabled:', el.disabled, '| display:', computed.display, '| visibility:', computed.visibility, '| rect:', JSON.stringify(rect));
+    }
+
     var _tc = (el.textContent || '').trim();
     if (_tc.indexOf('快手本地生活 · 商家中心') !== -1) {
       console.log('[walk] 命中快手本地生活 · 商家中心', { tag, className: el.className, textContent: _tc.slice(0, 50), display: computed.display, visibility: computed.visibility, w: rect && rect.width, h: rect && rect.height });
@@ -811,6 +858,11 @@ function domToMybricksJson(frameId, styleTagId) {
     const nodeType = inferNodeType(el, computed, tag);
     const style = buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont);
 
+    // [debug] 追踪 input 节点处理路径
+    if (tag === 'input') {
+      console.log('[walk:input] tag:', tag, '| type attr:', el.type, '| placeholder:', el.placeholder, '| value:', el.value, '| nodeType:', nodeType, '| className:', el.className, '| rect:', JSON.stringify(rect), '| style keys:', style ? Object.keys(style) : null, '| style.textAlignVertical:', style && style.textAlignVertical, '| style.textAlignHorizontal:', style && style.textAlignHorizontal);
+    }
+
     const node = {
       type: nodeType,
       name: el.getAttribute('aria-label') || (el.className && typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : null) || tag,
@@ -826,12 +878,29 @@ function domToMybricksJson(frameId, styleTagId) {
     if (nodeType === 'text') {
       node.content = getTextContent(el);
       if (node.content === '' && !el.querySelector('img, svg')) return null;
+      // input/textarea 正在显示 placeholder 时，用 ::placeholder 伪类的颜色替换文字颜色
+      if (isShowingPlaceholder(el) && node.style) {
+        try {
+          var placeholderColor = window.getComputedStyle(el, '::placeholder').color;
+          if (placeholderColor && placeholderColor !== 'rgba(0, 0, 0, 0)') {
+            node.style.color = placeholderColor;
+          }
+        } catch (e) {}
+      }
       // 文本节点不需要 frame 专属的布局属性，清除避免消费端误处理
       if (node.style) {
         delete node.style.layoutMode;
         delete node.style.layoutWrap;
         delete node.style.itemSpacing;
         delete node.style.counterAxisSpacing;
+        // input/textarea：paddingLeft/Right 影响文字可见区域，转成 x 偏移和宽度收窄，而非直接删除
+        var _itagPre = (el.tagName || '').toLowerCase();
+        if (_itagPre === 'input' || _itagPre === 'textarea') {
+          var _pl2 = node.style.paddingLeft || 0;
+          var _pr2 = node.style.paddingRight || 0;
+          if (node.style.x != null) node.style.x = node.style.x + _pl2;
+          if (node.style.width != null) node.style.width = Math.max(1, node.style.width - _pl2 - _pr2);
+        }
         delete node.style.paddingTop;
         delete node.style.paddingRight;
         delete node.style.paddingBottom;
@@ -841,11 +910,32 @@ function domToMybricksJson(frameId, styleTagId) {
         delete node.style.layoutSizingHorizontal;
         delete node.style.layoutSizingVertical;
         delete node.style.layoutGridColumns;
-        // 判断 DOM 里是否单行：实测高度 < 字号 * 2，则认为是单行文本
+        // 判断 DOM 里是否单行：用 lineHeight 判断（单行高度约等于一个 lineHeight），fallback 到 height < fontSize * 2
         var _h = node.style.height;
         var _fs = node.style.fontSize;
         if (_h != null && _fs != null && _fs > 0) {
-          node.style.singleLine = _h < _fs * 2;
+          var _lhRaw = computed && computed.lineHeight;
+          var _lh = (_lhRaw && _lhRaw !== 'normal') ? parseFloat(_lhRaw) : null;
+          if (_lh != null && !Number.isNaN(_lh) && _lh > 0) {
+            node.style.singleLine = _h <= _lh * 1.2;
+          } else {
+            node.style.singleLine = _h < _fs * 2;
+          }
+        }
+      }
+      // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
+      var _itag = (el.tagName || '').toLowerCase();
+      if (_itag === 'input' || _itag === 'textarea') {
+        if (node.style) {
+          node.style.textAlignVertical = 'CENTER';
+          if (!node.style.textAlignHorizontal) {
+            var _taRaw = computed && computed.textAlign;
+            var _taMap = { left: 'LEFT', right: 'RIGHT', center: 'CENTER', justify: 'JUSTIFIED', start: 'LEFT', end: 'RIGHT' };
+            node.style.textAlignHorizontal = _taMap[String(_taRaw || 'left').toLowerCase()] || 'LEFT';
+          }
+          console.log('[walk:input:align] content:', node.content, '| textAlignVertical:', node.style.textAlignVertical, '| textAlignHorizontal:', node.style.textAlignHorizontal, '| color:', node.style.color, '| fontSize:', node.style.fontSize, '| width:', node.style.width, '| height:', node.style.height);
+        } else {
+          console.warn('[walk:input:align] node.style is undefined! content:', node.content, '| placeholder:', el.placeholder);
         }
       }
     }
@@ -1089,6 +1179,12 @@ function domToMybricksJsonWithInlineImages(frameId, styleTagId) {
 function inferNodeType(el, computed, tag) {
   if (tag === 'img') return 'image';
   if (tag === 'svg') return 'component';
+  // input/textarea 必须最优先识别为 text，不能因 padding/background 被误判为 frame
+  if (tag === 'input' && (el.type === 'text' || el.type === 'number' || el.type === 'password' || el.type === 'search' || el.type === 'email' || el.type === 'tel' || el.type === 'url' || !el.type || el.type === '')) {
+    console.log('[inferNodeType:input→text] type:', el.type, '| placeholder:', el.placeholder, '| value:', el.value, '| className:', el.className);
+    return 'text';
+  }
+  if (tag === 'textarea') return 'text';
   if (tag === 'picture' || (el.querySelector && el.querySelector('img'))) return 'frame'; // wrap or container
   const display = computed.display;
   const isFlex = display === 'flex' || display === 'inline-flex';
@@ -1120,8 +1216,6 @@ function inferNodeType(el, computed, tag) {
     if ((el.textContent || '').trim()) return 'text';
   }
   // 既有子元素又有文本时当作容器，子列表里会包含文本节点
-  if (tag === 'input' && (el.type === 'text' || el.type === 'password' || !el.type)) return 'text';
-  if (tag === 'textarea') return 'text';
   if (isFlex || isBlock) return 'frame';
   return 'group';
 }
@@ -1240,6 +1334,18 @@ function buildInlineTextStyle(parentEl, computed, textRect, parentRect, cssRuleM
     var alignMap = { left: 'LEFT', right: 'RIGHT', center: 'CENTER', justify: 'JUSTIFIED', start: 'LEFT', end: 'RIGHT' };
     var mapped = alignMap[textAlign];
     if (mapped) style.textAlignHorizontal = mapped;
+  }
+  // 内联文本节点的单行判断：用 lineHeight 判断，fallback 到 height < fontSize * 2
+  var _itH = style.height;
+  var _itFs = style.fontSize;
+  if (_itH != null && _itFs != null && _itFs > 0) {
+    var _itLhRaw = computed && computed.lineHeight;
+    var _itLh = (_itLhRaw && _itLhRaw !== 'normal') ? parseFloat(_itLhRaw) : null;
+    if (_itLh != null && !Number.isNaN(_itLh) && _itLh > 0) {
+      style.singleLine = _itH <= _itLh * 1.2;
+    } else {
+      style.singleLine = _itH < _itFs * 2;
+    }
   }
   return style;
 }
@@ -1365,6 +1471,15 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     style.layoutMode = dir === 'column' || dir === 'column-reverse' ? 'VERTICAL' : 'HORIZONTAL';
     var gap = px(d(['gap']) || computed.gap);
     if (gap != null && gap > 0) style.itemSpacing = gap;
+    // flex-wrap: wrap → Figma layoutWrap=WRAP；同时读 row-gap 作为换行后的行间距(counterAxisSpacing)
+    var flexWrapVal = (d(['flex-wrap', 'flexWrap']) || computed.flexWrap || '').toString().toLowerCase();
+    if (flexWrapVal === 'wrap' || flexWrapVal === 'wrap-reverse') {
+      if (style.layoutMode === 'HORIZONTAL') {
+        style.layoutWrap = 'WRAP';
+        var rowGap = px(d(['row-gap', 'rowGap']) || computed.rowGap);
+        if (rowGap != null && rowGap > 0) style.counterAxisSpacing = rowGap;
+      }
+    }
     style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
     style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
     style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
@@ -1378,14 +1493,25 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     // 架构级修复：不再依赖 blockTextTags 白名单。
     // 如果一个 block/inline 元素没有子元素（只有文本），但因为有背景/padding被升级为 frame，
     // 我们为其开启 HORIZONTAL 自动布局，以完美模拟 CSS 的 padding 包裹效果。
+    // 同理，若唯一子元素是内联文字标签（label/span/b/em 等），语义上等同于纯文本容器，也开启 Auto Layout 以支持垂直居中。
     const hasElementChildren = el.children && el.children.length > 0;
-    if (!hasElementChildren) {
+    var INLINE_TEXT_TAGS = ['label', 'span', 'b', 'em', 'strong', 'i', 'a', 'small', 'mark'];
+    var hasSingleInlineTextChild = el.children &&
+      el.children.length === 1 &&
+      INLINE_TEXT_TAGS.indexOf((el.children[0].tagName || '').toLowerCase()) !== -1;
+    if (!hasElementChildren || hasSingleInlineTextChild) {
       style.layoutMode = 'HORIZONTAL';
       // 动态读取 text-align，而不是无脑居中，兼容 div 的左对齐和 button 的居中
       var textAlign = (d(['text-align', 'textAlign']) || computed.textAlign || '').toString().toLowerCase();
       var alignMap = { left: 'MIN', right: 'MAX', center: 'CENTER', justify: 'MIN', start: 'MIN', end: 'MAX' };
       style.primaryAxisAlignItems = alignMap[textAlign] || 'MIN';
-      style.counterAxisAlignItems = 'CENTER'; // 单行文本垂直方向默认居中
+      // 垂直对齐：用容器与唯一子元素的 viewport 高度比值判断。
+      // 两者同为 viewport 坐标，比值等价于设计稿坐标比值，无需 scale 转换。
+      // 当容器高度 > 子元素高度 * 1.5，说明右侧内容是多行布局，label 应顶对齐(MIN)；否则居中(CENTER)。
+      var _childEl = hasSingleInlineTextChild ? el.children[0] : null;
+      var _childVpH = _childEl ? _childEl.getBoundingClientRect().height : null;
+      var _containerVpH = el.getBoundingClientRect().height;
+      style.counterAxisAlignItems = (_childVpH != null && _containerVpH > _childVpH * 1.5) ? 'MIN' : 'CENTER';
       style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
       style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
       style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
@@ -1544,9 +1670,15 @@ function ensureItemSpacingFromPositions(parentNode, childNodes, layoutMode) {
 
 function getTextContent(el) {
   const tag = (el.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'textarea') return el.value || '';
+  if (tag === 'input' || tag === 'textarea') return el.value || el.placeholder || '';
   // 保留换行符，只折叠同行内的多余空白（空格/tab），避免换行被压缩成空格
   return (el.textContent || '').trim().replace(/[^\S\n]+/g, ' ');
+}
+
+function isShowingPlaceholder(el) {
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag !== 'input' && tag !== 'textarea') return false;
+  return !el.value && !!el.placeholder;
 }
 
 function parseTransformRotation(transform) {

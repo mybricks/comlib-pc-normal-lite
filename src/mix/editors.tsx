@@ -905,8 +905,8 @@ export default function (props: Props, actions: Actions, ...args) {
                     navigator.clipboard.writeText(jsonStr).then(
                       () => {
                         // if (hideLoading) hideLoading();
-                        if (message) message.success('导出成功！');
-                        else alert('导出成功！');
+                        if (message) message.success('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
+                        else alert('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
                       },
                       (err) => {
                         // if (hideLoading) hideLoading();
