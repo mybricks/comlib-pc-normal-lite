@@ -930,9 +930,9 @@ export default function (props: Props, actions: Actions, ...args) {
                 type: 'Button',
                 value: {
                   set() {
-                    const fn = (window as any).elementToMybricksJson;
+                    const fn = (window as any).elementToMybricksJsonWithInlineImages;
                     if (typeof fn !== 'function') {
-                      console.warn("[导出页面] window.elementToMybricksJson 未定义");
+                      console.warn("[导出页面] window.elementToMybricksJsonWithInlineImages 未定义");
                       return;
                     }
                     const ele = focusArea?.ele;
@@ -940,21 +940,16 @@ export default function (props: Props, actions: Actions, ...args) {
                       console.warn("[导出页面] focusArea.ele 不存在");
                       return;
                     }
-                    const result = fn(ele, comId);
-                    const jsonStr = typeof result === 'object' && result !== null
-                      ? JSON.stringify(result, null, 2)
-                      : String(result);
                     const message = (window as any).antd?.message;
-                    // let hideLoading: any = null;
-                    // if (message) hideLoading = message.loading('正在导出到 Figma...', 0);
-                    navigator.clipboard.writeText(jsonStr).then(
+                    fn(ele, comId).then((result: any) => {
+                      const jsonStr = JSON.stringify(result, null, 2);
+                      return navigator.clipboard.writeText(jsonStr);
+                    }).then(
                       () => {
-                        // if (hideLoading) hideLoading();
                         if (message) message.success('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
                         else alert('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
                       },
-                      (err) => {
-                        // if (hideLoading) hideLoading();
+                      (err: any) => {
                         if (message) message.error('导出失败，请检查剪切板权限');
                         else alert('导出失败，请检查剪切板权限');
                         console.error("[导出页面] 复制失败", err);

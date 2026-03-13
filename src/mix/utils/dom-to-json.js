@@ -1176,6 +1176,13 @@ function domToMybricksJsonWithInlineImages(frameId, styleTagId) {
   return domToMybricksJsonAsync(frameId, styleTagId);
 }
 
+function elementToMybricksJsonWithInlineImages(el, styleTagId) {
+  var syncPayload = elementToMybricksJson(el, styleTagId);
+  var content = syncPayload.page && syncPayload.page.content;
+  if (!content || !content.length) return Promise.resolve(syncPayload);
+  return inlineImageFillsInTree(content[0]).then(function () { return syncPayload; });
+}
+
 function inferNodeType(el, computed, tag) {
   if (tag === 'img') return 'image';
   if (tag === 'svg') return 'component';
@@ -1827,6 +1834,7 @@ if (typeof window !== 'undefined') {
   window.comToMybricksJsonWithInlineImages = comToMybricksJsonWithInlineImages;
   window.comToMybricksJson = comToMybricksJson;
   window.elementToMybricksJson = elementToMybricksJson;
+  window.elementToMybricksJsonWithInlineImages = elementToMybricksJsonWithInlineImages;
   window.getCssRulesBySelector = getCssRulesBySelector;
   window.getShadowHost = getShadowHost;
   window.resolveFrameRoot = resolveFrameRoot;
@@ -1834,5 +1842,5 @@ if (typeof window !== 'undefined') {
 
 // ES module export if supported
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SHADOW_HOST_ID, domToMybricksJson, comToMybricksJson, elementToMybricksJson, domToMybricksJsonWithInlineImages, comToMybricksJsonWithInlineImages, getCssRulesBySelector, getShadowHost, resolveFrameRoot };
+  module.exports = { SHADOW_HOST_ID, domToMybricksJson, comToMybricksJson, elementToMybricksJson, elementToMybricksJsonWithInlineImages, domToMybricksJsonWithInlineImages, comToMybricksJsonWithInlineImages, getCssRulesBySelector, getShadowHost, resolveFrameRoot };
 }
