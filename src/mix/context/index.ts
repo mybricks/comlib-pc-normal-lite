@@ -1,6 +1,7 @@
 import genVibeCodingAgent from "../agent/vibeCoding";
 import { updateRender, updateStyle, updateService, updateStore } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
+import { parsemd } from "../../utils/ai-code/md"
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
@@ -196,6 +197,14 @@ class Context {
 
         if (title) {
           aiComParams?.setTitle?.(title);
+        }
+        break;
+      case 'runtime.md':
+        aiComParams.data.runtimeMdSource = encodeURIComponent(content);
+        try {
+          aiComParams.data.runtimeMdCompiled = parsemd(content);
+        } catch (e) {
+          console.log("[@parsemd error]", e);
         }
         break;
       default:

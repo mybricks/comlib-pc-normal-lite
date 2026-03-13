@@ -16,6 +16,7 @@ import {
   type FileUpdateResult,
   type UpdateComponentFilesResult,
 } from "./tools/developMyBricksModuleNext";
+import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
 
 /** 单文件项：fileName + content */
 export type { ComponentFileItem };
@@ -46,6 +47,7 @@ function updateComponentFiles(
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
     { fileName: 'store.js', dataKey: 'storeJsSource' },
     { fileName: 'service.js', dataKey: 'serviceJsSource' },
+    { fileName: 'runtime.md', dataKey: 'runtimeMdSource' },
   ];
 
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
@@ -378,6 +380,13 @@ export default function ({ context }) {
           return '';
         }
       })();
+      const runtimeMdContent = (() => {
+        try {
+          return decodeURIComponent(aiComParams?.data?.runtimeMdSource ?? '');
+        } catch {
+          return '';
+        }
+      })();
       // const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
         // projectJson,
@@ -385,6 +394,7 @@ export default function ({ context }) {
         getStyleContent: () => styleContent,
         getStoreContent: () => storeContent,
         getServiceContent: () => serviceContent,
+        getRuntimeMdContent: () => runtimeMdContent,
       });
 
       // project.read('DataCard')
@@ -497,7 +507,12 @@ ${text}
                 return updateComponentFiles(p.files ?? [], focus.comId, context);
               },
             }),
-            answer()
+            answer(),
+            syncMarkdownformybricksModule({
+              execute(p) {
+                return updateComponentFiles(p.files ?? [], focus.comId, context);
+              },
+            })
           ],
           planningCheck: (tools: any[]) => {
             const toolNames = tools.map((t: any) => t[1]);

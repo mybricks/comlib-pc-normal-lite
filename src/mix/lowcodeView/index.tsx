@@ -17,6 +17,7 @@ const FILES = [
   "style.less",
   "store.js",
   "service.js",
+  "runtime.md",
   // "config.js",
   // "com.json"
 ] as const;
@@ -31,6 +32,7 @@ const FILES_MAP: Record<string, string> = {
   "com.json": "componentConfig",
   "store.js": "storeJsSource",
   "service.js": "serviceJsSource",
+  "runtime.md": "runtimeMdSource",
 };
 
 export const lowcodeViewEvents = new Events<{
@@ -64,6 +66,14 @@ export default function LowcodeView(params: Params) {
     //     language: 'javascript',
     //   };
     // }
+    // .md 文件需用 Monaco 的 language id: 'markdown'（不能用 'md'）
+    if (selectedFileName === "runtime.md") {
+      return {
+        path,
+        language: "markdown",
+        minimap: { enabled: false },
+      };
+    }
     if (FILES.includes(selectedFileName)) {
       return {
         path,
@@ -199,6 +209,10 @@ export default function LowcodeView(params: Params) {
   useEffect(() => {
     clearFileIfDataChanged("runtime.jsx");
   }, [params.data?.runtimeJsxSource]);
+
+  useEffect(() => {
+    clearFileIfDataChanged("runtime.md");
+  }, [params.data?.runtimeMdSource]);
 
   // useEffect(() => {
   //   clearFileIfDataChanged("config.js");

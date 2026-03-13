@@ -75,6 +75,7 @@ export default function ({ constituency }) {
                 const pageTitle = pageRef.jsdoc?.summary ?? pageRef.name ?? lastSelector;
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", pageTitle);
                 // pushDataAttr(node.openingElement.attributes, "title", pageTitle);
+                pushDataAttr(node.openingElement.attributes, "data-widget-name", pageRef.name);
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
               }
@@ -145,6 +146,7 @@ export default function ({ constituency }) {
                 // pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
                 pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
 
+                pushDataAttr(node.openingElement.attributes, "data-widget-name", comRef.name);
 
   
                 // const events = comRef.jsdoc?.events;
@@ -170,6 +172,7 @@ export default function ({ constituency }) {
               })
 
               if (dataZoneDocsEvents.length > 0) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
                 pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(dataZoneDocsEvents.length));
               }
 

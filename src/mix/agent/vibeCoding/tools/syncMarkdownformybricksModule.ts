@@ -1,13 +1,17 @@
+import { normalizeFiles, formatUpdateResult } from "./utils";
+
 const NAME = 'syncMarkdownformybricksModule';
 
 syncMarkdownformybricksModule.toolName = NAME;
 
 export default function syncMarkdownformybricksModule(config) {
 
+  let excuteMessage = '';
+
   return {
     name: NAME,
-    displayName: '根据 runtime.jsx 生成 runtime.md 说明文档',
-    description: `将 MyBricks 模块的 runtime.jsx 源码整理成结构化的 runtime.md 文档
+    displayName: '更新说明文档',
+    description: `更新说明文档，将 MyBricks 模块的 runtime.jsx 源码整理成结构化的 runtime.md 文档
 如果调用了「developMyBricksModule」工具更新了runtime.jsx，则必须使用本工具来更新文档
     `,
     getPrompts: () => {
@@ -55,44 +59,9 @@ export default function syncMarkdownformybricksModule(config) {
   </节点说明>
 </文档编写规范>
 
-<如何更新文档>
-\`\`\`before file="文件名"
-（修改前的部分代码内容）
-\`\`\`
+<基于runtime.jsx的runtime.md示例>
+（以下仅说明 runtime.md 的文档结构与字段含义；实际更新文档时请勿照抄此格式，必须按下方「如何更新文档」用 before/after 块返回修改。）
 
-\`\`\`after file="文件名"
-（修改后的部分代码内容）
-\`\`\`
-
-对于这些before或after文件，其内容格式严格遵守以下规则：
-1）before与after必须成对出现，后者是对前者的替换；
-2）before内容必须与【源代码】中需要被替换的内容完全匹配，包括：
-  - 匹配完整的行，不要在行中间截断，如果需要替换的部分包括空行，before中也需要包含空行;
-  - 包括原代码行中所有的空格、缩进、注释、换行符、文档字符串等一切内容;
-  - 不允许出现内容省略;
-3）after内容必须遵守以下规则：
-  - 给出完整的行内容，不要在行中间截断;
-  - 注意对应before结尾处的情况，例如有,或;等符号作为代码的一部分，after中也需要包含;
-  - 不允许出现内容省略;
-4）注意before,after的分配原则：
-  - 每个before仅匹配【源代码】中的一段连续的代码行，禁止将多个不连续的代码行放在同一个before中；
-  - 如果需要对文件中相同的内容进行多次更改，请使用多个before,after;
-  - 在每个before部分中，仅包含足够的行以唯一匹配需要更改的内容即可;
-  - 按代码中出现的顺序列出多个before,after。
-5）保持before,after的简洁唯一：
-  - 将大型before,after做必要拆分，每次只更改代码的一小部分;
-  - 只包含需要更改的行，出于唯一性的考虑，需要包含一些周围的必要的行，避免出现误操作;
-6）操作遵守以下规则：
-  - before 非空 且after 非空 -> 内容替换，如果是替换 before 必须非空；
-  - before 非空 且after 为空 -> 内容删除；
-  - before 为空 且after 非空 -> 空文件写入 / 整文件替换；
-
-  <更新示例>
-
-  </更新示例>
-</如何更新文档>
-
-<示例>
 \`\`\`jsx file="runtime.jsx"
 import { comRef, pageRef, appRef, Routes, Route } from 'mybricks'
 
@@ -180,17 +149,189 @@ export default appRef(() => {
 - events:
   - signUp 注册 - flowchart LR; A["调用 store.signUp"];
 
+\`\`\`
+<基于runtime.jsx的runtime.md示例>
+
+
+<工作流程>
+  <如何判断需要更新 runtime.md>
+  在以下任一情况成立时，应当更新 runtime.md；否则可仅阅读源码与现有文档，不做修改。
+
+  1）必须更新（强约束）
+  - 当前模块目录下不存在 runtime.md：需要根据 runtime.jsx 首次生成完整的 runtime.md。
+
+  2）结构或内容变化（建议更新）
+  - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/pageRef/comRef 节点（即文档中的「# default」及各级 ##、### 标题对应的节点）。
+  - 根节点或层级变化：export default 的根节点类型或子节点类型组合发生变化，导致标题层级规则需要调整（如从「仅 page + com」变为「app + page + com」）。
+  - 事件增删改：在 JSX 中新增、删除或修改了带 /** onXXX:事件名 */ 注释的事件；或某节点下事件列表与 runtime.md 中该节点的 events 不一致。
+  - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 runtime.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
+
+  3）无需更新
+  - runtime.jsx 未被修改，且现有 runtime.md 已正确反映当前源码的节点结构、事件与说明时，无需对 runtime.md 做变更。
+  - 仅修改了与 runtime 无关的其他文件（如 store.js、style.less、service.js）时，通常不需要仅为此而更新 runtime.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
+
+  判断时请对照当前【源代码】中的 runtime.jsx 与已有的 runtime.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
+  </如何判断需要更新 runtime.md>
+
+  如果确实更新了runtime.md，则需要通过以下述格式返回：
+    \`\`\`before file="文件名"
+  （修改前的部分代码内容）
+    \`\`\`
+  
+    \`\`\`after file="文件名"
+  （修改后的部分代码内容）
+    \`\`\`
+    
+    对于这些before或after文件，其内容格式严格遵守以下规则：
+    1）before与after必须成对出现，后者是对前者的替换；
+    2）before内容必须与【源代码】中需要被替换的内容完全匹配，包括：
+      - 匹配完整的行，不要在行中间截断，如果需要替换的部分包括空行，before中也需要包含空行;
+      - 包括原代码行中所有的空格、缩进、注释、换行符、文档字符串等一切内容;
+      - 不允许出现内容省略;
+    3）after内容必须遵守以下规则：
+      - 给出完整的行内容，不要在行中间截断;
+      - 注意对应before结尾处的情况，例如有,或;等符号作为代码的一部分，after中也需要包含;
+      - 不允许出现内容省略;
+    4）注意before,after的分配原则：
+      - 每个before仅匹配【源代码】中的一段连续的代码行，禁止将多个不连续的代码行放在同一个before中；
+      - 如果需要对文件中相同的内容进行多次更改，请使用多个before,after;
+      - 在每个before部分中，仅包含足够的行以唯一匹配需要更改的内容即可;
+      - 按代码中出现的顺序列出多个before,after。
+    5）保持before,after的简洁唯一：
+      - 将大型before,after做必要拆分，每次只更改代码的一小部分;
+      - 只包含需要更改的行，出于唯一性的考虑，需要包含一些周围的必要的行，避免出现误操作;
+    6）操作遵守以下规则：
+      - before 非空 且after 非空 -> 内容替换，如果是替换 before 必须非空；
+      - before 非空 且after 为空 -> 内容删除；
+      - before 为空 且after 非空 -> 空文件写入 / 整文件替换；
+
+  整个过程中要注意：
+  - 如果模块【源代码】内容有修改，务必通过before/after返回；
+  - 确保所有文件内容中禁止使用emoji、特殊字符、表情符号等；
+  - 回答问题请确保结果合理严谨、言简意赅，不要出现任何错误;
+  - 回答语气要谦和、慎用叹号等表达较强烈语气的符号等，尽量不要用“代码”、“逻辑”等技术术语；
+  - 返回的结果中可以使用适当的html标签（可以使用<b/><i/>）以增强良好的阅读体验，不要使用markdown；
+</工作流程>
+
+<examples>
+【修改】只改某一段：用 before 匹配现有文档中的一段，after 为替换后的内容。
+
+\`\`\`before file="runtime.md"
+## SignIn
+
+- title: 登录页
+- summary: 用户登录入口页，提供登录按钮。
+- type: page
+\`\`\`
+
+\`\`\`after file="runtime.md"
+## SignIn
+
+- title: 登录页
+- summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
+- type: page
+- events:
+  - signIn 登录 - flowchart LR; A["调用 store.signIn"];
+\`\`\`
+
+【整文件替换】仅当需要重写整个 runtime.md 时使用：before 为空，after 为完整的 runtime.md 全文（不是追加，会覆盖整个文件）。
+
+\`\`\`before file="runtime.md"
 
 \`\`\`
-</示例>
+
+\`\`\`after file="runtime.md"
+# default
+
+- title: 登录/注册应用入口
+- summary: 应用根节点，通过路由提供登录页与注册页的切换与展示。
+- type: app
+
+---
+
+## SignIn
+...
+\`\`\`
+
+【错误】禁止用 \`\`\`md file="runtime.md" 输出整份文档，必须用 before/after 块。
+</examples>
 `;
     },
-    execute({ params }: { params?: { pattern?: string } }) {
-      console.log("[params]", params)
-      return {
-        llmContent: '完成',
-        displayContent: '完成',
-      };
+    execute(params, context) {
+      // const files = normalizeFiles(params?.files);
+      // const actionsFile = files.find((f) => f.fileName === 'action.json');
+      // let actionReason = '';
+      // let actionType: string | undefined;
+      // if (actionsFile) {
+      //   try {
+      //     const obj = JSON.parse(actionsFile.content);
+      //     actionReason = (obj.reason as string) ?? '';
+      //     actionType = obj.action;
+      //   } catch { }
+      // }
+
+      // if (actionsFile && actionType === 'read') {
+      //   return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: readRelated.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
+      // }
+      // if (actionsFile && actionType === 'abort') {
+      //   return { displayContent: actionReason, llmContent: actionReason };
+      // }
+      // 这个才是会被记录到数据库的，stream只是展示作用，execute在 stream 执行之后执行，所以可以获取到
+      return `${params.content}\n\n${excuteMessage}`;
+    },
+    stream(params: any, context) {
+      const { status, replaceContent } = params;
+      const { ToolRetryError } = context ?? {};
+      const files = normalizeFiles(params?.files);
+      const raw = replaceContent ?? '';
+      // const actionsFile = files.find((f) => f.fileName === 'action.json');
+
+      let actionReason = '';
+      let actionType: string | undefined;
+      // if (actionsFile) {
+      //   try {
+      //     const obj = JSON.parse(actionsFile.content);
+      //     actionReason = (obj.reason as string) ?? '';
+      //     actionType = obj.action;
+      //   } catch { }
+      // }
+
+      if (status === 'complete') {
+        if (actionType) {
+          return raw
+            .replace(/action\.json/g, actionReason)
+        } else {
+          const result = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const msg = result ? formatUpdateResult(result) : '';
+
+          if (result && !result.success && ToolRetryError) {
+            const errMsg = msg || '执行失败';
+            throw new ToolRetryError({
+              llmContent:  errMsg + '\n\n 下面是上一轮你的输出 \n\n' + params.content, // 报错过程目前没有代码，需要添加下，后续可以看看
+              displayContent: '执行失败，当前操作已回滚，请重试',
+              autoRetry: true,
+              maxRetries: 1
+            });
+          }
+          if (msg) {
+            excuteMessage = msg;
+          }
+          return raw
+            .replace(/runtime\.jsx/g, '')
+            .replace(/style\.less/g, '')
+            .replace(/store\.js/g, '')
+            .replace(/runtime\.md/g, '')
+            .replace(/service\.js/g, '') + '\n' + msg;
+        }
+      }
+
+      return raw
+        .replace(/action\.json/g, actionReason)
+        .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
+        .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
+        .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
+        .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
+        .replace(/runtime\.md/, '尝试修改说明文档...').replace(/runtime\.md/g, '');
     },
   };
 }

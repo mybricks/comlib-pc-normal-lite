@@ -805,7 +805,45 @@ export default function (props: Props, actions: Actions, ...args) {
       }
     },
     '@getDocs'(params) {
-      console.log("[@getDocs - params]", params);
+      let result: any = {};
+      
+      try {
+        const { runtimeMdCompiled } = params.data;
+        if (runtimeMdCompiled) {
+          const focusElement = params.focusArea.ele;
+          // [TODO] 需要一个新的属性，组件名
+          const parentElement = focusElement.closest('[data-widget-name]');
+          if (parentElement) {
+            const widgetName = parentElement.getAttribute('data-widget-name');
+            const docs = runtimeMdCompiled[widgetName];
+            if (docs) {
+              result['title'] = docs.title;
+              result['summary'] = docs.summary;
+              result['type'] = focusElement.getAttribute('data-zone-type');
+              const events = focusElement.getAttribute('data-zone-events');
+
+              if (events) {
+                let resultEvents: any = [];
+                const eventsArray = JSON.parse(events);
+                eventsArray.forEach((eventId) => {
+                  const findEvent = docs.events.find((event) => event.id === eventId);
+                  if (findEvent) {
+                    console.log("推送， ", findEvent)
+                    resultEvents.push(findEvent)
+                  }
+                });
+                result['events'] = resultEvents;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[@getDocs error]", e);
+      }
+
+      console.log("[@getDocs result]", {...result, events: [...result.events]});
+
+      return result;
     },
     '@debug'(params, stop) {
       const events = context.getAiComEvents(params.id);

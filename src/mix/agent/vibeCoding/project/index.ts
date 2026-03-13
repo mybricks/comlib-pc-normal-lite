@@ -39,6 +39,8 @@ export interface ProjectConfig {
   getStoreContent: () => string;
   /** 获取 service.js 全文 */
   getServiceContent: () => string;
+  /** 获取 runtime.md 全文 */
+  getRuntimeMdContent: () => string;
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
@@ -271,11 +273,12 @@ export class Project {
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent } = this.config;
+    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent, getRuntimeMdContent } = this.config;
     const runtimeContent = getRuntimeContent();
     const styleContent = getStyleContent();
     const storeContent = getStoreContent();
     const serviceContent = getServiceContent();
+    const runtimeMdContent = getRuntimeMdContent();
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
@@ -313,6 +316,7 @@ export class Project {
     const styleLines = styleContent.split(/\r?\n/);
     const storeLines = storeContent.split(/\r?\n/);
     const serviceLines = serviceContent.split(/\r?\n/);
+    const runtimeMdLines = runtimeMdContent.split(/\r?\n/);
     const isFullFile = this.expandedNames.has(ROOT_NAME);
     // const defaultImportRanges =
     //   this.root.commonImports
@@ -338,7 +342,8 @@ export class Project {
     const runtimeRanges = [{ start: 1, end: runtimeLines.length }]
     const styleRanges = [{ start: 1, end: styleLines.length }]
     const storeRanges = [{ start: 1, end: storeLines.length }]
-    const serviceRanges = [{ start: 1, end: storeLines.length }]
+    const serviceRanges = [{ start: 1, end: serviceLines.length }]
+    const runtimeMdRanges = [{ start: 1, end: runtimeMdLines.length }]
 
     if (runtimeRanges.length > 0) {
       fileSectionParts.push(
@@ -368,6 +373,16 @@ export class Project {
     } else {
       fileSectionParts.push(buildFileSection('service.js', serviceContent, [], 'js'));
     }
+    if (runtimeMdRanges.length > 0) {
+      fileSectionParts.push(
+        buildFileSection('runtime.md', runtimeMdContent, runtimeMdRanges, 'md')
+      );
+    } else {
+      fileSectionParts.push(buildFileSection('runtime.md', runtimeMdContent, [], 'md'));
+    }
+
+
+    
 
     return [
       '# 项目空间\n',
