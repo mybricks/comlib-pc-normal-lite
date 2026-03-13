@@ -796,6 +796,9 @@ export default function (props: Props, actions: Actions, ...args) {
         ]
       }
     },
+    '@getDocs'(params) {
+      console.log("[@getDocs - params]", params);
+    },
     '@debug'(params, stop) {
       if (stop) {
         data.debugTarget = undefined;
@@ -959,6 +962,13 @@ export default function (props: Props, actions: Actions, ...args) {
             },
             genResizer()
           ]
+        }
+      ]
+    },
+    '[data-zone-noselector]': {
+      style: [
+        {
+          items: []
         }
       ]
     },

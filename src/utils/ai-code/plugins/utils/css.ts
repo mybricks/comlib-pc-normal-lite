@@ -103,18 +103,20 @@ export function getSelectorSegment(node: any, importRelyMap: any): string[] {
     return result;
   }
 
-  const tagName = getJSXElementNameString(node.openingElement.name);
-
-  if (!tagName) {
-    return [];
-  }
-
-  const { relyName, source } = findRelyAndSource(tagName.split(".")[0], importRelyMap);
-
-  if (source === "html") {
-    return [relyName]
-  }
   return [];
+
+  // const tagName = getJSXElementNameString(node.openingElement.name);
+
+  // if (!tagName) {
+  //   return [];
+  // }
+
+  // const { relyName, source } = findRelyAndSource(tagName.split(".")[0], importRelyMap);
+
+  // if (source === "html") {
+  //   return [relyName]
+  // }
+  // return [];
 }
 
 /**

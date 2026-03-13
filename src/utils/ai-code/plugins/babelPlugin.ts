@@ -82,7 +82,11 @@ export default function ({ constituency }) {
               const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
   
               if (source === "html") {
-                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+                if (cnList.length > 0) {
+                  pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+                } else {
+                  pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
+                }
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-library-source", source);
               }

@@ -38,6 +38,29 @@ export function genListenersStore(
     };
   };
 
+  // 共用一个 Proxy 作为方法调用的 this，避免每次 get 方法时都 new Proxy
+  const boundContext =
+    mode === 'runtime'
+      ? new Proxy(
+          {},
+          {
+            get(_, k) {
+              return store[k];
+            },
+            set(_, k, v) {
+              store[k] = v;
+              const list = listenersMap.get(k);
+              if (list) {
+                list.forEach((fn: (arg: { key: string; value: any }) => void) =>
+                  fn({ key: k as string, value: v })
+                );
+              }
+              return true;
+            },
+          }
+        )
+      : null;
+
   return new Proxy(
     {},
     {
@@ -50,26 +73,7 @@ export function genListenersStore(
           if (mode === 'design') {
             return () => {};
           }
-          return value.bind(
-            new Proxy(
-              {},
-              {
-                get(_, k) {
-                  return store[k];
-                },
-                set(_, k, v) {
-                  store[k] = v;
-                  const list = listenersMap.get(k);
-                  if (list) {
-                    list.forEach((fn: (arg: { key: string; value: any }) => void) =>
-                      fn({ key: k as string, value: v })
-                    );
-                  }
-                  return true;
-                },
-              }
-            )
-          );
+          return value.bind(boundContext);
         }
         return store[key];
       },
@@ -81,9 +85,12 @@ export function genListenersStore(
  * 响应式 Store 封装：对 genListenersStore 返回的 store 做 subscribe/getSnapshot，供 useSyncExternalStore 使用。
  */
 function createReactiveStore(store: any) {
-  let state: Record<string, any> = {};
+  const state: Record<string, any> = {};
+  let snapshot: Record<string, any> = {};
+  let dirty = false;
   const collectionsListener = new Map<string, () => void>();
   const listeners = new Set<() => void>();
+
   const subscribe = (callback: () => void) => {
     listeners.add(callback);
     return () => {
@@ -91,7 +98,15 @@ function createReactiveStore(store: any) {
       listeners.delete(callback);
     };
   };
-  const getSnapshot = () => state;
+
+  // 仅在 getSnapshot 被调用时做一次浅拷贝，避免每次 set 都全量展开 state；同帧多次 set 只触发一次拷贝
+  const getSnapshot = () => {
+    if (dirty) {
+      snapshot = Object.assign({}, state);
+      dirty = false;
+    }
+    return snapshot;
+  };
 
   return new Proxy({} as any, {
     get(_target, key) {
@@ -100,10 +115,8 @@ function createReactiveStore(store: any) {
       const value = store[key];
       if (!collectionsListener.has(key as string)) {
         const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
-          state = {
-            ...state,
-            [k]: v
-          }
+          state[k] = v;
+          dirty = true;
           listeners.forEach((listener) => listener());
         };
         collectionsListener.set(
