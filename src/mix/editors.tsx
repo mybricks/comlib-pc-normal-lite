@@ -905,7 +905,7 @@ export default function (props: Props, actions: Actions, ...args) {
         console.error('[@viewCode] 未找到 data-loc', params);
       }
     },
-    '[data-desn-page]': {
+    '[data-zone-type=page]': {
       title: "页面",
       items: (pageProps, cate1) => {
         const { focusArea, data } = pageProps;
