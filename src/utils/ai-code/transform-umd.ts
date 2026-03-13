@@ -69,36 +69,57 @@ export function transformTsx(code): Promise<{ transformCode: string, constituenc
   })
 }
 
-export function transformLess(code): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let res = ''
-    try {
-      if (window?.less) {
+// export function transformLess(code): Promise<string> {
+//   return new Promise((resolve, reject) => {
+//     let res = ''
+//     try {
+//       if (window?.less) {
 
-        if (!code || code.length === 0) {
-          return resolve('')
-        }
+//         if (!code || code.length === 0) {
+//           return resolve('')
+//         }
 
-        window.less.render(code, {}, (error, result) => {
-          if (error) {
-            console.error(error)
-            res = ''
+//         window.less.render(code, {}, (error, result) => {
+//           if (error) {
+//             console.error(error)
+//             res = ''
 
-            reject(`Less 代码编译失败: ${error.message}`)
-          } else {
-            res = result?.css
-          }
-        })
-      } else {
-        loadLess() // 重试
-        reject('当前环境无 Less 编译器，请联系应用负责人')
-      }
-    } catch (error) {
-      reject(error)
+//             reject(`Less 代码编译失败: ${error.message}`)
+//           } else {
+//             res = result?.css
+//           }
+//         })
+//       } else {
+//         loadLess() // 重试
+//         reject('当前环境无 Less 编译器，请联系应用负责人')
+//       }
+//     } catch (error) {
+//       reject(error)
+//     }
+
+//     return resolve(res)
+//   }) as any
+// }
+
+export function transformLess(code) {
+  let res = '';
+
+  if (!code || code.length === 0) {
+    return ''
+  }
+
+  window.less.render(code, {}, (error, result) => {
+    if (error) {
+      console.error(error)
+      res = ''
+
+      throw new Error(`Less 代码编译失败: ${error.message}`)
+    } else {
+      res = result?.css
     }
+  })
 
-    return resolve(res)
-  }) as any
+  return res;
 }
 
 export function updateRender({ data, success }, renderCode) {
@@ -177,18 +198,46 @@ export function updateService({ data, success }, serviceCode) {
   });
 }
 
+// export function updateStyle({ id, data, success }, styleCode) {
+//   const writeSource = () => {
+//     data.styleSource = encodeURIComponent(styleCode);
+//   };
+//   transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`).then(css => {
+//     data.styleCompiled = encodeURIComponent(css);
+//     writeSource();
+//     // 清除 style.less 相关错误
+//     if (!data._errors) data._errors = [];
+//     data._errors = data._errors.filter(err => err.file !== 'style.less');
+//     success?.();
+//   }).catch(e => {
+//     console.error("[@transformLess error]", e);
+//     writeSource();
+//     // 添加编译错误到统一错误列表
+//     if (!data._errors) data._errors = [];
+//     data._errors = data._errors.filter(err => err.file !== 'style.less');
+//     data._errors.push({
+//       file: 'style.less',
+//       message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+//       type: 'compile'
+//     });
+//     success?.();
+//   });
+// }
+
 export function updateStyle({ id, data, success }, styleCode) {
   const writeSource = () => {
     data.styleSource = encodeURIComponent(styleCode);
   };
-  transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`).then(css => {
+
+  try {
+    const css = transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`)
     data.styleCompiled = encodeURIComponent(css);
     writeSource();
     // 清除 style.less 相关错误
     if (!data._errors) data._errors = [];
     data._errors = data._errors.filter(err => err.file !== 'style.less');
     success?.();
-  }).catch(e => {
+  } catch (e: any) {
     console.error("[@transformLess error]", e);
     writeSource();
     // 添加编译错误到统一错误列表
@@ -200,7 +249,7 @@ export function updateStyle({ id, data, success }, styleCode) {
       type: 'compile'
     });
     success?.();
-  });
+  }
 }
 
 
