@@ -153,9 +153,11 @@ function normalizeSvgPathForFigma(d) {
   if (!d || typeof d !== 'string') return '';
   return d
     .replace(/,/g, ' ')
-    .replace(/([MLCQZ])([-\d.])/g, '$1 $2')
-    .replace(/(\d)([MLCQZ])/g, '$1 $2')
-    .replace(/(\d)([-\d.])/g, '$1 $2')
+    // 命令字母（大写和小写）与数字之间加空格
+    .replace(/([MmLlCcQqSsAaZzHhVvTt])([-\d.])/g, '$1 $2')
+    .replace(/([\d.])([MmLlCcQqSsAaZzHhVvTt])/g, '$1 $2')
+    // 数字紧跟负号（如 10-5 → 10 -5）
+    .replace(/(\d)(-)/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -410,24 +412,38 @@ function parseGridTemplateColumnsCount(str) {
   return null;
 }
 
-/** 从 SVG 元素提取 path 的 d 与 fill-rule，供 vectorPaths 使用 */
-function getSvgPathData(svgEl) {
-  if (!svgEl || (svgEl.tagName || '').toLowerCase() !== 'svg') return [];
-  var paths = svgEl.querySelectorAll('path');
-  var out = [];
-  for (var i = 0; i < paths.length; i++) {
-    var p = paths[i];
-    var d = p.getAttribute('d');
-    if (!d) continue;
-    d = normalizeSvgPathForFigma(d);
-    if (!d) continue;
-    var fillRule = (p.getAttribute('fill-rule') || (window.getComputedStyle && window.getComputedStyle(p).fillRule) || '').toLowerCase();
-    out.push({
-      data: d,
-      windingRule: fillRule === 'evenodd' ? 'EVENODD' : 'NONZERO',
-    });
+/**
+ * 序列化 SVG 元素为字符串，供 Figma createNodeFromSVG() 使用。
+ * - 把 currentColor 替换为实际 computed color
+ * - 把 width/height 替换为 DOM 实测像素值（避免 1em 等相对单位）
+ * @param {SVGElement} svgEl
+ * @param {number} domWidth  - DOM 实测宽度（设计稿坐标）
+ * @param {number} domHeight - DOM 实测高度（设计稿坐标）
+ * @returns {string|null}
+ */
+function serializeSvgElement(svgEl, domWidth, domHeight) {
+  if (!svgEl) return null;
+  var html = svgEl.outerHTML;
+  if (!html) return null;
+  // 取实际渲染颜色，用于替换 currentColor
+  var comp = window.getComputedStyle && window.getComputedStyle(svgEl);
+  var color = (comp && comp.color) || '#000000';
+  // currentColor → 实际颜色
+  html = html.replace(/currentColor/gi, color);
+  // 替换/补充 width、height 为 DOM 实测像素值
+  var w = Math.ceil(domWidth) || 16;
+  var h = Math.ceil(domHeight) || 16;
+  if (/width="[^"]*"/.test(html)) {
+    html = html.replace(/width="[^"]*"/, 'width="' + w + '"');
+  } else {
+    html = html.replace(/^<svg/, '<svg width="' + w + '"');
   }
-  return out;
+  if (/height="[^"]*"/.test(html)) {
+    html = html.replace(/height="[^"]*"/, 'height="' + h + '"');
+  } else {
+    html = html.replace(/^<svg/, '<svg height="' + h + '"');
+  }
+  return html;
 }
 
 /**
@@ -528,6 +544,28 @@ function elementToMybricksJson(el, styleTagId) {
     if (nodeType === 'text') {
       nodeJson.content = getTextContent(node);
       if (nodeJson.content === '' && !node.querySelector('img, svg')) return null;
+      // 文本节点不需要 frame 专属的布局属性，清除避免消费端误处理
+      if (nodeJson.style) {
+        delete nodeJson.style.layoutMode;
+        delete nodeJson.style.layoutWrap;
+        delete nodeJson.style.itemSpacing;
+        delete nodeJson.style.counterAxisSpacing;
+        delete nodeJson.style.paddingTop;
+        delete nodeJson.style.paddingRight;
+        delete nodeJson.style.paddingBottom;
+        delete nodeJson.style.paddingLeft;
+        delete nodeJson.style.primaryAxisAlignItems;
+        delete nodeJson.style.counterAxisAlignItems;
+        delete nodeJson.style.layoutSizingHorizontal;
+        delete nodeJson.style.layoutSizingVertical;
+        delete nodeJson.style.layoutGridColumns;
+        // 判断 DOM 里是否单行：实测高度 < 字号 * 2，则认为是单行文本
+        var _h = nodeJson.style.height;
+        var _fs = nodeJson.style.fontSize;
+        if (_h != null && _fs != null && _fs > 0) {
+          nodeJson.style.singleLine = _h < _fs * 2;
+        }
+      }
     }
 
     if (nodeType === 'image') {
@@ -538,7 +576,7 @@ function elementToMybricksJson(el, styleTagId) {
 
     var childNodesList = [];
     var isLibrarySource = !!(node.getAttribute && node.getAttribute('data-library-source') != null);
-    if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg') && !isLibrarySource) {
+    if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg')) {
       for (var ci = 0; ci < node.childNodes.length; ci++) {
         var cchild = node.childNodes[ci];
         if (cchild.nodeType === 1) {
@@ -609,14 +647,18 @@ function elementToMybricksJson(el, styleTagId) {
     }
 
     if (nodeType === 'component' && tag === 'svg') {
-      nodeJson.ref = 'svg-placeholder';
-      nodeJson.children = undefined;
+      var svgContent = serializeSvgElement(node, rect.width, rect.height);
+      if (svgContent) {
+        nodeJson.type = 'svg';
+        nodeJson.ref = undefined;
+        nodeJson.children = undefined;
+        if (!nodeJson.style) nodeJson.style = {};
+        nodeJson.style.svgContent = svgContent;
+      } else {
+        nodeJson.ref = 'svg-placeholder';
+        nodeJson.children = undefined;
+      }
     }
-    if (nodeType === 'component' && isLibrarySource) {
-      nodeJson.ref = 'library-source-placeholder';
-      nodeJson.children = undefined;
-    }
-
     return nodeJson;
   }
 
@@ -727,6 +769,11 @@ function domToMybricksJson(frameId, styleTagId) {
     const computed = window.getComputedStyle(el);
     const tag = (el.tagName || '').toLowerCase();
 
+    var _tc = (el.textContent || '').trim();
+    if (_tc.indexOf('快手本地生活 · 商家中心') !== -1) {
+      console.log('[walk] 命中快手本地生活 · 商家中心', { tag, className: el.className, textContent: _tc.slice(0, 50), display: computed.display, visibility: computed.visibility, w: rect && rect.width, h: rect && rect.height });
+    }
+
     // Skip invisible or zero-size
     // display:contents 元素自身无盒模型（width/height 均为 0），但其子节点参与布局，需透传遍历
     const isDisplayContents = computed.display === 'contents';
@@ -779,6 +826,28 @@ function domToMybricksJson(frameId, styleTagId) {
     if (nodeType === 'text') {
       node.content = getTextContent(el);
       if (node.content === '' && !el.querySelector('img, svg')) return null;
+      // 文本节点不需要 frame 专属的布局属性，清除避免消费端误处理
+      if (node.style) {
+        delete node.style.layoutMode;
+        delete node.style.layoutWrap;
+        delete node.style.itemSpacing;
+        delete node.style.counterAxisSpacing;
+        delete node.style.paddingTop;
+        delete node.style.paddingRight;
+        delete node.style.paddingBottom;
+        delete node.style.paddingLeft;
+        delete node.style.primaryAxisAlignItems;
+        delete node.style.counterAxisAlignItems;
+        delete node.style.layoutSizingHorizontal;
+        delete node.style.layoutSizingVertical;
+        delete node.style.layoutGridColumns;
+        // 判断 DOM 里是否单行：实测高度 < 字号 * 2，则认为是单行文本
+        var _h = node.style.height;
+        var _fs = node.style.fontSize;
+        if (_h != null && _fs != null && _fs > 0) {
+          node.style.singleLine = _h < _fs * 2;
+        }
+      }
     }
 
     if (nodeType === 'image') {
@@ -789,8 +858,8 @@ function domToMybricksJson(frameId, styleTagId) {
 
     const childNodes = [];
     var isLibrarySource = !!(el.getAttribute && el.getAttribute('data-library-source') != null);
-    if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg') && !isLibrarySource) {
-      // 支持 div 内同时有文本和 DOM：按 childNodes 顺序，元素走 walk，文本节点单独成 text 节点；SVG 与 data-library-source 用占位组件不遍历子节点
+    if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg')) {
+      // 支持 div 内同时有文本和 DOM：按 childNodes 顺序，元素走 walk，文本节点单独成 text 节点；SVG 用占位组件不遍历子节点
       for (let i = 0; i < el.childNodes.length; i++) {
         const child = el.childNodes[i];
         if (child.nodeType === 1) {
@@ -813,7 +882,7 @@ function domToMybricksJson(frameId, styleTagId) {
             var textNodeJson = {
               type: 'text',
               name: 'Text',
-              content: textContent.replace(/\s+/g, ' '),
+              content: textContent.replace(/[^\S\n]+/g, ' '),
               style: inlineStyle && Object.keys(inlineStyle).length ? inlineStyle : undefined,
             };
             if (node.selectors && node.selectors.length) textNodeJson.selectors = node.selectors.slice();
@@ -865,17 +934,20 @@ function domToMybricksJson(frameId, styleTagId) {
       if (frameTitle) node.name = frameTitle;
     }
 
-    // SVG 使用占位组件，不导出 path 数据
+    // SVG：序列化为字符串，消费端用 figma.createNodeFromSVG 直接创建，保留所有 fill/stroke
     if (nodeType === 'component' && tag === 'svg') {
-      node.ref = 'svg-placeholder';
-      node.children = undefined;
+      var svgContent = serializeSvgElement(el, rect.width, rect.height);
+      if (svgContent) {
+        node.type = 'svg';
+        node.ref = undefined;
+        node.children = undefined;
+        if (!node.style) node.style = {};
+        node.style.svgContent = svgContent;
+      } else {
+        node.ref = 'svg-placeholder';
+        node.children = undefined;
+      }
     }
-    // 带 data-library-source 的节点作为灰色占位，不往下遍历
-    if (nodeType === 'component' && isLibrarySource) {
-      node.ref = 'library-source-placeholder';
-      node.children = undefined;
-    }
-
     return node;
   }
   var rootDesignRect = getDesignRect(dom, geo);
@@ -1017,7 +1089,6 @@ function domToMybricksJsonWithInlineImages(frameId, styleTagId) {
 function inferNodeType(el, computed, tag) {
   if (tag === 'img') return 'image';
   if (tag === 'svg') return 'component';
-  if (el.getAttribute && el.getAttribute('data-library-source') != null) return 'component';
   if (tag === 'picture' || (el.querySelector && el.querySelector('img'))) return 'frame'; // wrap or container
   const display = computed.display;
   const isFlex = display === 'flex' || display === 'inline-flex';
@@ -1042,6 +1113,8 @@ function inferNodeType(el, computed, tag) {
                     (elPaddingBottom && elPaddingBottom !== '0px') ||
                     (elPaddingLeft && elPaddingLeft !== '0px');
     if (hasVisualBg || hasRadius || hasPadding) {
+      var tc = (el.textContent || '').trim().slice(0, 30);
+      console.log('[inferNodeType] text→frame reason:', { text: tc, hasVisualBg, hasRadius, hasPadding, bg: elBg, radius: elRadius, pt: elPaddingTop, pr: elPaddingRight, pb: elPaddingBottom, pl: elPaddingLeft });
       return 'frame';
     }
     if ((el.textContent || '').trim()) return 'text';
@@ -1472,7 +1545,8 @@ function ensureItemSpacingFromPositions(parentNode, childNodes, layoutMode) {
 function getTextContent(el) {
   const tag = (el.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea') return el.value || '';
-  return (el.textContent || '').trim().replace(/\s+/g, ' ');
+  // 保留换行符，只折叠同行内的多余空白（空格/tab），避免换行被压缩成空格
+  return (el.textContent || '').trim().replace(/[^\S\n]+/g, ' ');
 }
 
 function parseTransformRotation(transform) {
