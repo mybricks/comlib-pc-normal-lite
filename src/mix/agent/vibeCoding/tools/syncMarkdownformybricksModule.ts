@@ -52,9 +52,12 @@ export default function syncMarkdownformybricksModule(config) {
         - 条件判断节点用 {} 包裹，分支标注用 |标注内容| 格式，行尾不加分号；
         - 生成后先自检：检查是否有多余分号、引号是否统一、节点连接是否闭环；
         - 流程图逻辑要贴合需求，节点命名简洁易懂，避免冗余步骤；
-        - 仅描述该事件处理函数本身的直接调用/操作，不展开 store 的内部流程，例如代码中调用 store 内的 xxx 方法，那么该步骤应该为「"调用 store.xxx"」
+        - 流程图需描述完整流程：包含事件处理函数内的直接调用，以及 store.xxx() 等调用的内部流程；若调用了 store 的某方法，需展开该方法内部的步骤（如参数校验、状态更新、请求发送、分支判断等），使流程图能反映从事件触发到完成的全链路；
         - 流程图节点用动作描述，不写具体取值：例如用「设置loading状态」「取消loading状态」，禁止「设置loading为true」「设置loading为false」等；
         - 禁止出现用户动作类流程节点（如「点击按钮」）、空洞节点（如「开始」「结束」「执行业务操作」）；
+        - 流程图需要反应真实的业务流程，基于 runtime.jsx 中的事件函数以及 store.js 内方法的内部实现，禁止捏造业务流程；
+        - 流程图须真实完整：严格依据事件处理函数内的代码逻辑，以及所调用的 store 方法内部实现来绘制，不省略、不捏造。
+        - 分支流程必须完整表达：代码中的 if/else、三元判断、early return、请求成功/失败等所有分支，都必须在流程图中用条件节点 {} 和 |分支标注| 画出；每个分支（如「通过」「不通过」「成功」「失败」）及其后续步骤都要单独成链，不能只写一条主流程而省略条件分支。
     3. 无事件可省略 events
   </节点说明>
 </文档编写规范>
@@ -129,7 +132,7 @@ export default appRef(() => {
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["调用 store.signIn"];
+  - signIn 登录 - flowchart LR; A["调用 store.signIn"] --> B["校验登录参数"] --> C{"参数是否有效"} -->|有效| D["设置loading状态"] --> E["请求登录接口"] --> F{"请求是否成功"} -->|成功| G["更新用户状态"] --> H["取消loading状态"]; F -->|失败| I["提示错误信息"] --> H; C -->|无效| J["提示参数错误"]
 
 ---
 
@@ -147,7 +150,7 @@ export default appRef(() => {
 - summary: 注册表单容器，包含表单与注册按钮，提交时触发 signUp。
 - type: com
 - events:
-  - signUp 注册 - flowchart LR; A["调用 store.signUp"];
+  - signUp 注册 - flowchart LR; A["调用 store.signUp"] --> B["校验表单参数"] --> C{"参数是否有效"} -->|有效| D["设置loading状态"] --> E["请求注册接口"] --> F{"请求是否成功"} -->|成功| G["跳转登录页"] --> H["取消loading状态"]; F -->|失败| I["提示错误信息"] --> H; C -->|无效| J["提示参数错误"]
 
 \`\`\`
 <基于runtime.jsx的runtime.md示例>
@@ -159,6 +162,7 @@ export default appRef(() => {
 
   1）必须更新（强约束）
   - 当前模块目录下不存在 runtime.md：需要根据 runtime.jsx 首次生成完整的 runtime.md。
+  - 需求直接要求更新文档。
 
   2）结构或内容变化（建议更新）
   - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/pageRef/comRef 节点（即文档中的「# default」及各级 ##、### 标题对应的节点）。
@@ -231,7 +235,7 @@ export default appRef(() => {
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["调用 store.signIn"];
+  - signIn 登录 - flowchart LR; A["调用 store.signIn"] --> B["校验登录参数"] --> C{"参数是否有效"} -->|有效| D["设置loading状态"] --> E["请求登录接口"] --> F{"请求是否成功"} -->|成功| G["更新用户状态"] --> H["取消loading状态"]; F -->|失败| I["提示错误信息"] --> H; C -->|无效| J["提示参数错误"]
 \`\`\`
 
 【整文件替换】仅当需要重写整个 runtime.md 时使用：before 为空，after 为完整的 runtime.md 全文（不是追加，会覆盖整个文件）。
