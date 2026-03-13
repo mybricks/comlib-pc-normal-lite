@@ -735,8 +735,10 @@ export default function developMyBricksModule(config: Config) {
       const commands: any = []
 
       if (files.find((f) => f.fileName === 'runtime.jsx')) {
-        // 修改jsx才需要同步runtime.md
-        commands.push({ toolName: syncMarkdownformybricksModule.name });
+        if (!context.commands?.find((command) => command.name === syncMarkdownformybricksModule.name)) {
+          // 修改jsx才需要同步runtime.md
+          commands.push({ toolName: syncMarkdownformybricksModule.name });
+        }
       }
 
       return {
