@@ -734,7 +734,7 @@ export default function (props: Props, actions: Actions, ...args) {
               let hideLoading: any = null;
               if (message) hideLoading = message.loading('正在导出代码...', 0);
               await exportCode(files, {
-                folderName: 'mybricks-component',
+                folderName: 'App',
                 onProgress: (progress) => {
                   console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
                 },

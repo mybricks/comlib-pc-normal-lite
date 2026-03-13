@@ -1,3 +1,6 @@
+import codeTransform from './codeTransform';
+import utilsFiles from './utilsFiles';
+
 /**
  * 代码结构生成器
  * 负责将组件数据按照代码结构生成并组织文件
@@ -28,31 +31,58 @@ export interface ComponentData {
 export function generateCodeStructure(data: ComponentData): FileItem[] {
   const files: FileItem[] = [];
 
-  // 1. 生成 runtime.jsx
-  if (data.runtimeJsxSource) {
-    files.push({
-      fileName: 'runtime.jsx',
-      content: decodeURIComponent(data.runtimeJsxSource),
-    });
-  }
+    const { runtimeJsxSource, storeJsSource, serviceJsSource, styleSource } = data;
 
-  // 2. 生成 style.less
-  if (data.styleSource) {
-    files.push({
-      fileName: 'style.less',
-      content: decodeURIComponent(data.styleSource),
-    });
-  }
+    const codeFiles = codeTransform({
+      runtime: decodeURIComponent(runtimeJsxSource || ""),
+      store: decodeURIComponent(storeJsSource || ""),
+      service: decodeURIComponent(serviceJsSource || ""),
+      style: decodeURIComponent(styleSource || ""),
+    }).map((file) => {
+      return {
+        fileName: `${file.path}`,
+        content: file.content,
+      }
+    })
 
-  // 3. 生成 store.js
-  if (data.storeJsSource) {
-    files.push({
-      fileName: 'store.js',
-      content: decodeURIComponent(data.storeJsSource),
-    });
-  }
+    files.push(...codeFiles);
 
-  return files;
+    files.push(...utilsFiles.map((file) => {
+      return {
+        fileName: `utils/${file.path}`,
+        content: file.content,
+      }
+    }))
+
+    return files;
+
+  // const files: FileItem[] = [];
+
+  // // 1. 生成 runtime.jsx
+  // if (data.runtimeJsxSource) {
+  //   files.push({
+  //     fileName: 'runtime.jsx',
+  //     content: decodeURIComponent(data.runtimeJsxSource),
+  //   });
+  // }
+
+  // // 2. 生成 style.less
+  // if (data.styleSource) {
+  //   files.push({
+  //     fileName: 'style.less',
+  //     content: decodeURIComponent(data.styleSource),
+  //   });
+  // }
+
+  // // 3. 生成 store.js
+  // if (data.storeJsSource) {
+  //   files.push({
+  //     fileName: 'store.js',
+  //     content: decodeURIComponent(data.storeJsSource),
+  //   });
+  // }
+
+  // return files;
 }
 
 /**
