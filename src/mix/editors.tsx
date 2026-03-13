@@ -800,8 +800,9 @@ export default function (props: Props, actions: Actions, ...args) {
       console.log("[@getDocs - params]", params);
     },
     '@debug'(params, stop) {
+      const events = context.getAiComEvents(params.id);
       if (stop) {
-        data.debugTarget = undefined;
+        events.emit('debugTarget', undefined);
         return;
       }
 
@@ -828,7 +829,7 @@ export default function (props: Props, actions: Actions, ...args) {
         const layoutHeight = rootEl.offsetHeight;
 
         // 写入调试目标：供预览/调试时定位当前页、同步根容器尺寸
-        data.debugTarget = {
+        events.emit('debugTarget', {
           type: 'page',
           pageIndex: Number(pageIndex),
           style: {
@@ -840,7 +841,7 @@ export default function (props: Props, actions: Actions, ...args) {
             width: layoutWidth - paddingLeft - paddingRight,
             height: layoutHeight - paddingTop - paddingBottom,
           }
-        };
+        });
       }
     },
     '@viewCode'(params) {

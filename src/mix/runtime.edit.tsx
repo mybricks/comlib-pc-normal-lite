@@ -1,9 +1,22 @@
-import React, { useMemo } from 'react';
+import React, { useLayoutEffect, useMemo, useState } from 'react';
 import Runtime from './runtime';
+import context from './context';
 
 export default (props: any) => {
   const { env, data } = props;
-  const debugTarget = data?.debugTarget;
+
+  const [debugTarget, setDebugTarget] = useState<any>(null);
+
+  useLayoutEffect(() => {
+    const events = context.getAiComEvents(props.id);
+    const cancelListen = events.on('debugTarget', setDebugTarget);
+
+    return () => {
+      cancelListen();
+    }
+  }, [])
+
+  // const debugTarget = data?.debugTarget;
   const isPageDebug = debugTarget?.type === 'page';
 
   // 页面调试模式：覆盖 env，让整个组件树以完整 runtime 态运行

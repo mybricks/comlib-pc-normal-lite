@@ -1,8 +1,20 @@
 import genVibeCodingAgent from "../agent/vibeCoding";
 import { updateRender, updateStyle, updateService, updateStore } from "../../utils/ai-code/transform-umd";
+import { Events } from "../../utils/events";
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
+  aiComEvents: Record<string, Events<{
+    'debugTarget': any;
+  }>> = {};
+
+  getAiComEvents(id: string) {
+    let events = this.aiComEvents[id];
+    if (!events) {
+      events = this.aiComEvents[id] = new Events();
+    }
+    return events;
+  }
 
   setAiCom(id: string, { params, actions }) {
     if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
