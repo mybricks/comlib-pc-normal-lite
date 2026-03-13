@@ -828,7 +828,6 @@ export default function (props: Props, actions: Actions, ...args) {
                 eventsArray.forEach((eventId) => {
                   const findEvent = docs.events.find((event) => event.id === eventId);
                   if (findEvent) {
-                    console.log("推送， ", findEvent)
                     resultEvents.push(findEvent)
                   }
                 });
@@ -841,7 +840,7 @@ export default function (props: Props, actions: Actions, ...args) {
         console.error("[@getDocs error]", e);
       }
 
-      console.log("[@getDocs result]", {...result, events: Array.isArray(result.events) ? [...result.events] : []});
+      // console.log("[@getDocs result]", {...result, events: Array.isArray(result.events) ? [...result.events] : []});
 
       return result;
     },
