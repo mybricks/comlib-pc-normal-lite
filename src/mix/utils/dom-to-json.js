@@ -113,11 +113,24 @@ function getMatchedSelectorsForElement(el, cssRuleMap) {
   return out;
 }
 
-/** 从 style 标签规则里收集匹配当前元素的所有声明（后匹配的覆盖前面的） */
+/** 从 style 标签规则里收集匹配当前元素的所有声明（后匹配的覆盖前面的）
+ *
+ * 修复：优先用 el.matches(selector)（支持后代/多类等所有 CSS 选择器）；
+ * 仅在 el.matches 不可用时降级到 simpleSelectorMatches。
+ * 原先只用 simpleSelectorMatches 无法处理 .a.b、.parent .child 等复合选择器，
+ * 导致 ant-pagination 等多类节点的 align-items: center 读不到。
+ */
 function getDeclaredStyleForElement(el, cssRuleMap) {
   var declared = {};
+  var canUseMatches = el && typeof el.matches === 'function';
   for (var selector in cssRuleMap) {
-    if (!simpleSelectorMatches(el, selector)) continue;
+    var matched = false;
+    if (canUseMatches) {
+      try { matched = el.matches(selector); } catch (_) { matched = simpleSelectorMatches(el, selector); }
+    } else {
+      matched = simpleSelectorMatches(el, selector);
+    }
+    if (!matched) continue;
     var cssText = cssRuleMap[selector];
     if (!cssText) continue;
     var parts = cssText.split(';');
@@ -1493,9 +1506,82 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
     var justifyContent = d(['justify-content', 'justifyContent']) || computed.justifyContent;
     var alignItems = d(['align-items', 'alignItems']) || computed.alignItems;
-    var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER' };
-    style.primaryAxisAlignItems = alignMap[justifyContent] || 'MIN';
-    style.counterAxisAlignItems = alignMap[alignItems] || 'MIN';
+    // 当 computed 返回浏览器默认值 "normal" 时，主动扫描 cssRuleMap 用 el.matches() 寻找声明值
+    // 场景：Shadow DOM 内 getComputedStyle 未能拿到 antd CSS cascade 的值，但 style 标签里有规则
+    if ((!alignItems || alignItems === 'normal') && cssRuleMap && typeof el.matches === 'function') {
+      for (var _sel in cssRuleMap) {
+        var _cssText = cssRuleMap[_sel] || '';
+        if (_cssText.indexOf('align-items') === -1) continue;
+        var _matched = false;
+        try { _matched = el.matches(_sel); } catch (_e) {}
+        if (!_matched) continue;
+        var _parts = _cssText.split(';');
+        for (var _pi = 0; _pi < _parts.length; _pi++) {
+          var _part = _parts[_pi].trim();
+          var _col = _part.indexOf(':');
+          if (_col <= 0) continue;
+          var _key = _part.slice(0, _col).trim();
+          var _val = _part.slice(_col + 1).trim();
+          if (_key === 'align-items' && _val) { alignItems = _val; break; }
+        }
+        if (alignItems && alignItems !== 'normal') break;
+      }
+    }
+    // 终极 fallback：cssRuleMap 里没有规则（如 antd 全局 CSS 不在 style 标签内），
+    // 且 computed 也是 "normal"（Shadow DOM cascade 丢失），改用子元素实际位置反推。
+    // HORIZONTAL flex 时：取第一个子元素的 getBoundingClientRect()，
+    // 若子元素中心点与容器中心点对齐（误差 <3px）→ CENTER；否则 MIN。
+    // 注意：SVG 在 Shadow DOM 里 getBoundingClientRect().height 可能为 0，需特殊处理。
+    var _elClassForDebug = (el.className && typeof el.className === 'string') ? el.className : '';
+    if ((!alignItems || alignItems === 'normal') && style.layoutMode === 'HORIZONTAL' && el.children && el.children.length > 0) {
+      var _containerRect = el.getBoundingClientRect();
+      var _containerH = _containerRect.height;
+      var _containerTop = _containerRect.top;
+      var _sampleChild = null;
+      // 优先取有实际高度的子元素，其次取任意子元素（含 SVG）
+      for (var _ci = 0; _ci < el.children.length; _ci++) {
+        var _ch = el.children[_ci];
+        var _chH = _ch.getBoundingClientRect().height;
+        if (_chH > 0) { _sampleChild = _ch; break; }
+        if (!_sampleChild) _sampleChild = _ch; // 备用：height=0 的 SVG 等
+      }
+      if (_sampleChild && _containerH > 0) {
+        var _childRect = _sampleChild.getBoundingClientRect();
+        if (_childRect.height > 0) {
+          var _childCenterY = _childRect.top - _containerTop + _childRect.height / 2;
+          var _containerCenterY = _containerH / 2;
+          alignItems = Math.abs(_childCenterY - _containerCenterY) < 3 ? 'center' : 'flex-start';
+        } else {
+          var _childOffsetY = _childRect.top - _containerTop;
+          alignItems = (_childOffsetY > _containerH * 0.2 && _childOffsetY < _containerH * 0.8) ? 'center' : 'flex-start';
+        }
+      }
+    }
+    if ((!justifyContent || justifyContent === 'normal') && cssRuleMap && typeof el.matches === 'function') {
+      for (var _selJ in cssRuleMap) {
+        var _cssTextJ = cssRuleMap[_selJ] || '';
+        if (_cssTextJ.indexOf('justify-content') === -1) continue;
+        var _matchedJ = false;
+        try { _matchedJ = el.matches(_selJ); } catch (_eJ) {}
+        if (!_matchedJ) continue;
+        var _partsJ = _cssTextJ.split(';');
+        for (var _pj = 0; _pj < _partsJ.length; _pj++) {
+          var _partJ = _partsJ[_pj].trim();
+          var _colJ = _partJ.indexOf(':');
+          if (_colJ <= 0) continue;
+          var _keyJ = _partJ.slice(0, _colJ).trim();
+          var _valJ = _partJ.slice(_colJ + 1).trim();
+          if (_keyJ === 'justify-content' && _valJ) { justifyContent = _valJ; break; }
+        }
+        if (justifyContent && justifyContent !== 'normal') break;
+      }
+    }
+    // 统一转 lowercase 再查表，避免大写/空格导致 map miss（如 "Center"、" center"）
+    var alignItemsNorm = alignItems ? String(alignItems).trim().toLowerCase() : undefined;
+    var justifyContentNorm = justifyContent ? String(justifyContent).trim().toLowerCase() : undefined;
+    var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER', normal: 'MIN', stretch: 'MIN', baseline: 'MIN', start: 'MIN', end: 'MAX' };
+    style.primaryAxisAlignItems = alignMap[justifyContentNorm] || 'MIN';
+    style.counterAxisAlignItems = alignMap[alignItemsNorm] || 'MIN';
   } else if (display === 'block' || display === 'inline-block' || display === 'inline') {
     // 架构级修复：不再依赖 blockTextTags 白名单。
     // 如果一个 block/inline 元素没有子元素（只有文本），但因为有背景/padding被升级为 frame，
@@ -1512,17 +1598,31 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
       var textAlign = (d(['text-align', 'textAlign']) || computed.textAlign || '').toString().toLowerCase();
       var alignMap = { left: 'MIN', right: 'MAX', center: 'CENTER', justify: 'MIN', start: 'MIN', end: 'MAX' };
       style.primaryAxisAlignItems = alignMap[textAlign] || 'MIN';
-      // 垂直对齐：用容器与唯一子元素的 viewport 高度比值判断。
-      // 两者同为 viewport 坐标，比值等价于设计稿坐标比值，无需 scale 转换。
-      // 当容器高度 > 子元素高度 * 1.5，说明右侧内容是多行布局，label 应顶对齐(MIN)；否则居中(CENTER)。
-      var _childEl = hasSingleInlineTextChild ? el.children[0] : null;
-      var _childVpH = _childEl ? _childEl.getBoundingClientRect().height : null;
-      var _containerVpH = el.getBoundingClientRect().height;
-      style.counterAxisAlignItems = (_childVpH != null && _containerVpH > _childVpH * 1.5) ? 'MIN' : 'CENTER';
+      // 垂直对齐：优先用几何位置反推（子元素中心 vs 容器中心，误差 <3px → CENTER）。
+      // 原先用"容器高 > 子高 * 1.5"判断的方案会把图标按钮（容器22px/图标8px）误判为顶对齐。
       style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
       style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
       style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
       style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
+      // 垂直对齐：优先用几何位置反推（子元素中心 vs 容器中心，误差 <3px → CENTER）。
+      // 原先用"容器高 > 子高 * 1.5"判断的方案会把图标按钮（容器22px/图标8px）误判为顶对齐。
+      var _blockChildEl = hasSingleInlineTextChild ? el.children[0] : null;
+      var _blockContainerRect = el.getBoundingClientRect();
+      var _blockContainerH = _blockContainerRect.height;
+      if (_blockChildEl && _blockContainerH > 0) {
+        var _blockChildRect = _blockChildEl.getBoundingClientRect();
+        var _blockChildH = _blockChildRect.height;
+        if (_blockChildH > 0) {
+          var _blockChildCenterY = _blockChildRect.top - _blockContainerRect.top + _blockChildH / 2;
+          style.counterAxisAlignItems = Math.abs(_blockChildCenterY - _blockContainerH / 2) < 3 ? 'CENTER' : 'MIN';
+        } else {
+          // 子元素高度为 0（SVG 等）：看 top 偏移是否在容器中间区域
+          var _blockChildOffsetY = _blockChildRect.top - _blockContainerRect.top;
+          style.counterAxisAlignItems = (_blockChildOffsetY > _blockContainerH * 0.2 && _blockChildOffsetY < _blockContainerH * 0.8) ? 'CENTER' : 'MIN';
+        }
+      } else {
+        style.counterAxisAlignItems = 'CENTER';
+      }
     }
   } else if (display === 'grid' || display === 'inline-grid') {
     // grid-auto-flow: row = 按行排（横向多列）→ HORIZONTAL；column = 按列排（纵向多行）→ VERTICAL
