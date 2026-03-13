@@ -215,10 +215,18 @@ const genStyleValue = (params) => {
 
       const compoundMatchKey = eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined;
 
+      // 逗号分隔选择器兼容：如 ".fileCard,.statsCard" 这类多选择器共享同一规则块时，
+      // 检查 cssObj 中是否有某个 key 的逗号分隔片段包含 fullSelector（精确或后缀匹配）。
+      const commaMatchKey = Object.keys(cssObj).find(k => {
+        if (!k.includes(',')) return false;
+        return k.split(',').map(s => s.trim()).some(s => s === fullSelector || s.endsWith(' ' + fullSelector));
+      });
+
       const targetKey: string =
         suffixMatchKey
         ?? shrinkMatchKey
         ?? compoundMatchKey
+        ?? commaMatchKey
         ?? fullSelector;
 
       // Step 3.5：将路径中间节点的孤立根层级 key 并入嵌套结构，避免输出多余的根层级块

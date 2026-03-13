@@ -55,6 +55,7 @@ interface Declaration extends Rule {
   type: "Declaration";
   name: Keyword[] | string;
   value: Anonymous | Value;
+  important: string;
 }
 
 interface Media extends Rule {
@@ -161,7 +162,7 @@ class Parse {
     } else {
       key = declaration.name[0].toCSS();
     }
-    const value = declaration.value.toCSS();
+    const value = declaration.value.toCSS() + (declaration.important || "");
 
     return {
       key: convertHyphenToCamel(key),
@@ -258,6 +259,8 @@ const COMBINATOR_ONLY = /^[>+~]+$/;
  */
 const splitSelectorKeys = (selector: string): string[] => {
   if (selector.trimStart().startsWith("@")) return [selector];
+  // 含逗号的多选择器整体不可拆分，避免 ".a, .b" 被拆成 [".a,", ".b"] 后重建为非法嵌套
+  if (selector.includes(",")) return [selector];
 
   const parts = selector.trim().split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return parts;
