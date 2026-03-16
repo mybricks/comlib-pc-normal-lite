@@ -49,6 +49,7 @@ function updateComponentFiles(
     { fileName: 'store.js', dataKey: 'storeJsSource' },
     { fileName: 'service.js', dataKey: 'serviceJsSource' },
     { fileName: 'runtime.md', dataKey: 'runtimeMdSource' },
+    { fileName: 'mock.json', dataKey: 'mockJsonSource' },
   ];
 
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
@@ -320,19 +321,20 @@ export default function ({ context }) {
 
       let comName = "root";
 
-      console.log("[@request - params]", params);
-      console.log("[@request - focus]", focus);
-      console.log("[aiCom]", aiCom);
-      console.log("[aiComParams]", aiComParams);
+      // console.log("[@request - params]", params);
+      // console.log("[@request - focus]", focus);
+      // console.log("[aiCom]", aiCom);
+      // console.log("[aiComParams]", aiComParams);
 
       // 判断是否作为工具被调用（被上级agent调用）
       const asSubAgentTool = !!params.asTool;
 
+      const lockId = uuid() + "_" + comName;
+
       const onProgress = (status) => {
-        const lockId = uuid() + "_" + comName;
-        console.log("[@comName]", comName);
-        console.log("[@status]", status);
-        console.log("[@lockId]", lockId);
+        // console.log("[@comName]", comName);
+        // console.log("[@status]", status);
+        // console.log("[@lockId]", lockId);
         if (comName === "root") {
           params?.onProgress?.(status);
         } else {
@@ -390,6 +392,13 @@ export default function ({ context }) {
           return '';
         }
       })();
+      const mockJsonContent = (() => {
+        try {
+          return decodeURIComponent(aiComParams?.data?.mockJsonSource ?? '');
+        } catch {
+          return '';
+        }
+      })();
       // const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
         // projectJson,
@@ -398,6 +407,7 @@ export default function ({ context }) {
         getStoreContent: () => storeContent,
         getServiceContent: () => serviceContent,
         getRuntimeMdContent: () => runtimeMdContent,
+        getMockJsonContent: () => mockJsonContent,
       });
 
       // project.read('DataCard')
