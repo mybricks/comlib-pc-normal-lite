@@ -607,6 +607,22 @@ function elementToMybricksJson(el, styleTagId) {
             nodeJson.style.singleLine = _h < _fs * 2;
           }
         }
+        // 判断是否容器约束宽度：用 Range 测量文字内容的自然渲染宽度，若内容宽度 < 元素宽度 × 0.9
+        // 则说明容器 CSS 约束了宽度（文字未撑满），固定宽度不会导致 Figma 换行
+        if (nodeJson.style.singleLine && nodeJson.style.width != null) {
+          var _contentW2 = 0;
+          var _geoScale2 = geo.scale || 1;
+          for (var _ci2 = 0; _ci2 < node.childNodes.length; _ci2++) {
+            var _cn2 = node.childNodes[_ci2];
+            if (_cn2.nodeType === 3 && (_cn2.textContent || '').trim()) {
+              var _tr2 = getTextNodeRect(_cn2);
+              if (_tr2 && _tr2.width > 0) _contentW2 += _tr2.width / _geoScale2;
+            }
+          }
+          if (_contentW2 > 0 && _contentW2 < nodeJson.style.width * 0.9) {
+            nodeJson.style.widthConstrained = true;
+          }
+        }
       }
       // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
       var _itag2 = (node.tagName || '').toLowerCase();
@@ -935,6 +951,22 @@ function domToMybricksJson(frameId, styleTagId) {
             node.style.singleLine = _h < _fs * 2;
           }
         }
+        // 判断是否容器约束宽度：用 Range 测量文字内容的自然渲染宽度，若内容宽度 < 元素宽度 × 0.9
+        // 则说明容器 CSS 约束了宽度（文字未撑满），固定宽度不会导致 Figma 换行
+        if (node.style.singleLine && node.style.width != null) {
+          var _contentW = 0;
+          var _geoScale = geo.scale || 1;
+          for (var _ci = 0; _ci < el.childNodes.length; _ci++) {
+            var _cn = el.childNodes[_ci];
+            if (_cn.nodeType === 3 && (_cn.textContent || '').trim()) {
+              var _tr = getTextNodeRect(_cn);
+              if (_tr && _tr.width > 0) _contentW += _tr.width / _geoScale;
+            }
+          }
+          if (_contentW > 0 && _contentW < node.style.width * 0.9) {
+            node.style.widthConstrained = true;
+          }
+        }
       }
       // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
       var _itag = (el.tagName || '').toLowerCase();
@@ -1233,7 +1265,9 @@ function inferNodeType(el, computed, tag) {
       console.log('[inferNodeType] text→frame reason:', { text: tc, hasVisualBg, hasRadius, hasPadding, bg: elBg, radius: elRadius, pt: elPaddingTop, pr: elPaddingRight, pb: elPaddingBottom, pl: elPaddingLeft });
       return 'frame';
     }
-    if ((el.textContent || '').trim()) return 'text';
+    if ((el.textContent || '').trim()) {
+      return 'text';
+    }
   }
   // 既有子元素又有文本时当作容器，子列表里会包含文本节点
   if (isFlex || isBlock) return 'frame';
