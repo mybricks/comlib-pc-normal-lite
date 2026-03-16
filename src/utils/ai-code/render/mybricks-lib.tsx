@@ -17,7 +17,8 @@ export function genListenersStore(
   StoreClass: any,
   options: { mode: 'design' | 'runtime' }
 ) {
-  const { mode } = options;
+  // const { mode } = options;
+  const mode = 'runtime';
   const listenersMap = new Map();
   let store: any;
   try {
