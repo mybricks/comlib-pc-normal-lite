@@ -17,6 +17,7 @@ import {
   type UpdateComponentFilesResult,
 } from "./tools/developMyBricksModuleNext";
 import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
+import { uuid } from "../../../utils";
 
 /** 单文件项：fileName + content */
 export type { ComponentFileItem };
@@ -328,17 +329,19 @@ export default function ({ context }) {
       const asSubAgentTool = !!params.asTool;
 
       const onProgress = (status) => {
+        const lockId = uuid() + "_" + comName;
         console.log("[@comName]", comName);
         console.log("[@status]", status);
+        console.log("[@lockId]", lockId);
         if (comName === "root") {
           params?.onProgress?.(status);
         } else {
           if (status === "start") {
-            actions.lock(comName);
+            actions.lock(lockId, comName);
           } else if (status === "complete") {
-            actions.unlock(comName);
+            actions.unlock(lockId, comName);
           } else if (status === "error") {
-            actions.unlock(comName);
+            actions.unlock(lockId, comName);
           }
         }
       }
