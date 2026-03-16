@@ -9,7 +9,6 @@ developMyBricksModule.toolName = NAME
 export type ExecuteResult = void | UpdateComponentFilesResult;
 
 interface Config {
-  hasAttachments?: boolean;
   /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles；直接返回结果，本工具统一格式化与抛错 */
   execute?: (params: { files: Array<{ fileName: string; content: string }> }) => ExecuteResult;
   focusComId?: string;
@@ -780,7 +779,7 @@ export default function developMyBricksModule(config: Config) {
               llmContent:  errMsg + '\n\n 下面是上一轮你的输出 \n\n' + params.content, // 报错过程目前没有代码，需要添加下，后续可以看看
               displayContent: '执行失败，当前操作已回滚，请重试',
               autoRetry: true,
-              maxRetries: 1
+              maxRetries: 2
             });
           }
           if (msg) {
@@ -801,9 +800,12 @@ export default function developMyBricksModule(config: Config) {
         .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
         .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '');
     },
-    aiRole: ({ params, hasAttachments }) => {
+    aiRole: ({ params }, execCtx) => {
       const mode = params?.mode ?? 'generate';
-      return (mode === 'generate' && !hasAttachments) ? 'junior' : 'architect'
+      const retryCount = execCtx?.retryCount ?? 0;
+      const hasImageAttachment = execCtx?.attachments?.some((a) => a?.type === 'image') ?? false;
+      if (retryCount >= 1) return 'architect';
+      return (mode === 'generate' && !hasImageAttachment) ? 'junior' : 'architect';
     },
   };
 }
