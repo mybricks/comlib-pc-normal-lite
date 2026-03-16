@@ -776,7 +776,7 @@ export default function developMyBricksModule(config: Config) {
           if (result && !result.success && ToolRetryError) {
             const errMsg = msg || '执行失败';
             throw new ToolRetryError({
-              llmContent:  errMsg + '\n\n 下面是上一轮你的输出 \n\n' + params.content, // 报错过程目前没有代码，需要添加下，后续可以看看
+              llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg, // 报错过程目前没有代码，需要添加下，后续可以看看
               displayContent: '执行失败，当前操作已回滚，请重试',
               autoRetry: true,
               maxRetries: 2
