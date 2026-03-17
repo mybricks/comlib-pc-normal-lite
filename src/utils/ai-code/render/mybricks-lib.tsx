@@ -17,8 +17,7 @@ export function genListenersStore(
   StoreClass: any,
   options: { mode: 'design' | 'runtime' }
 ) {
-  // const { mode } = options;
-  const mode = 'runtime';
+  const { mode } = options;
   const listenersMap = new Map();
   let store: any;
   try {
@@ -40,27 +39,46 @@ export function genListenersStore(
   };
 
   // 共用一个 Proxy 作为方法调用的 this，避免每次 get 方法时都 new Proxy
-  const boundContext =
-    mode === 'runtime'
-      ? new Proxy(
-          {},
-          {
-            get(_, k) {
-              return store[k];
-            },
-            set(_, k, v) {
-              store[k] = v;
-              const list = listenersMap.get(k);
-              if (list) {
-                list.forEach((fn: (arg: { key: string; value: any }) => void) =>
-                  fn({ key: k as string, value: v })
-                );
-              }
-              return true;
-            },
-          }
-        )
-      : null;
+  // const boundContext =
+  //   mode === 'runtime'
+  //     ? new Proxy(
+  //         {},
+  //         {
+  //           get(_, k) {
+  //             return store[k];
+  //           },
+  //           set(_, k, v) {
+  //             store[k] = v;
+  //             const list = listenersMap.get(k);
+  //             if (list) {
+  //               list.forEach((fn: (arg: { key: string; value: any }) => void) =>
+  //                 fn({ key: k as string, value: v })
+  //               );
+  //             }
+  //             return true;
+  //           },
+  //         }
+  //       )
+  //     : null;
+
+  const boundContext = new Proxy(
+    {},
+    {
+      get(_, k) {
+        return store[k];
+      },
+      set(_, k, v) {
+        store[k] = v;
+        const list = listenersMap.get(k);
+        if (list) {
+          list.forEach((fn: (arg: { key: string; value: any }) => void) =>
+            fn({ key: k as string, value: v })
+          );
+        }
+        return true;
+      },
+    }
+  )
 
   return new Proxy(
     {},
@@ -71,9 +89,9 @@ export function genListenersStore(
         }
         const value = store[key];
         if (typeof value === 'function') {
-          if (mode === 'design') {
-            return () => {};
-          }
+          // if (mode === 'design') {
+          //   return () => {};
+          // }
           return value.bind(boundContext);
         }
         return store[key];
@@ -489,6 +507,7 @@ export interface CreateMybricksOptions {
   logger: any;
   store: any;
   useSyncExternalStore: typeof React.useSyncExternalStore;
+  mockData?: Record<string, any>;
 }
 
 /**
@@ -496,7 +515,7 @@ export interface CreateMybricksOptions {
  * 作用域限定在单个 AIJsxRuntime 内（含 RouterContext）。
  */
 export function createMybricks(options: CreateMybricksOptions) {
-  const { env, logger, store, useSyncExternalStore } = options;
+  const { env, logger, store, mockData, useSyncExternalStore } = options;
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
@@ -586,7 +605,11 @@ export function createMybricks(options: CreateMybricksOptions) {
     useLocation: routerLib.useLocation,
     useParams: routerLib.useParams,
     createEnvs,
-    createAPI,
+    createAPI: mockData ? (config) => {
+      return () => {
+        return Promise.resolve(mockData[config.url]);
+      }
+    } : createAPI,
   };
 }
 

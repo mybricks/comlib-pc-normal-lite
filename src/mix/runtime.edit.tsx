@@ -2,8 +2,16 @@ import React, { useLayoutEffect, useMemo, useState } from 'react';
 import Runtime from './runtime';
 import context from './context';
 
+const dataCompatible = (data) => {
+  if (!data._errors) {
+    data._errors = [];
+  }
+}
+
 export default (props: any) => {
   const { env, data } = props;
+
+  dataCompatible(data);
 
   const [debugTarget, setDebugTarget] = useState<any>(null);
 

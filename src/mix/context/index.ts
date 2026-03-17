@@ -207,6 +207,20 @@ class Context {
           console.log("[@parsemd error]", e);
         }
         break;
+      case 'mock.json':
+        aiComParams.data.mockJsonSource = encodeURIComponent(content);
+        try {
+          JSON.parse(content);
+          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== 'mock.json');
+        } catch (e: any) {
+          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== 'mock.json');
+          aiComParams.data._errors.push({
+            file: 'mock.json',
+            message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+            type: 'compile'
+          });
+        }
+        break;
       default:
         break;
     }

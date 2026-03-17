@@ -41,6 +41,8 @@ export interface ProjectConfig {
   getServiceContent: () => string;
   /** 获取 runtime.md 全文 */
   getRuntimeMdContent: () => string;
+  /** 获取 mock.json 全文（设计态 mock 数据） */
+  getMockJsonContent: () => string;
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
@@ -273,12 +275,13 @@ export class Project {
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent, getRuntimeMdContent } = this.config;
+    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent, getRuntimeMdContent, getMockJsonContent } = this.config;
     const runtimeContent = getRuntimeContent();
     const styleContent = getStyleContent();
     const storeContent = getStoreContent();
     const serviceContent = getServiceContent();
     const runtimeMdContent = getRuntimeMdContent();
+    const mockJsonContent = getMockJsonContent();
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
@@ -317,6 +320,7 @@ export class Project {
     const storeLines = storeContent.split(/\r?\n/);
     const serviceLines = serviceContent.split(/\r?\n/);
     const runtimeMdLines = runtimeMdContent.split(/\r?\n/);
+    const mockJsonLines = mockJsonContent.split(/\r?\n/);
     const isFullFile = this.expandedNames.has(ROOT_NAME);
     // const defaultImportRanges =
     //   this.root.commonImports
@@ -344,6 +348,7 @@ export class Project {
     const storeRanges = [{ start: 1, end: storeLines.length }]
     const serviceRanges = [{ start: 1, end: serviceLines.length }]
     const runtimeMdRanges = [{ start: 1, end: runtimeMdLines.length }]
+    const mockJsonRanges = [{ start: 1, end: mockJsonLines.length }]
 
     if (runtimeRanges.length > 0) {
       fileSectionParts.push(
@@ -380,9 +385,13 @@ export class Project {
     } else {
       fileSectionParts.push(buildFileSection('runtime.md', runtimeMdContent, [], 'md'));
     }
-
-
-    
+    if (mockJsonRanges.length > 0) {
+      fileSectionParts.push(
+        buildFileSection('mock.json', mockJsonContent, mockJsonRanges, 'json')
+      );
+    } else {
+      fileSectionParts.push(buildFileSection('mock.json', mockJsonContent, [], 'json'));
+    }
 
     return [
       '# 项目空间\n',
