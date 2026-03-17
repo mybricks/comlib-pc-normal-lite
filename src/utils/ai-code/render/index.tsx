@@ -247,6 +247,16 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
       try {
         const oriCode = decodeURIComponent(renderCode);
 
+        // 设计态：解析 mock.json 注入 service，便于不依赖真实接口即可预览
+        const isDesign = !env.runtime;
+        let mockData: Record<string, any> | undefined;
+        if (isDesign && data.mockJsonSource) {
+          try {
+            const raw = decodeURIComponent(data.mockJsonSource);
+            if (raw && raw.trim()) mockData = JSON.parse(raw);
+          } catch (_) {}
+        }
+
         // 1. 先 eval service.js（用临时 mybricksLib 注入 createEnvs/createAPI）
         // service 不依赖 store，可以最先执行
         const tempMybricksLib = createMybricks({
@@ -254,6 +264,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
           logger,
           store: genListenersStore(null, { mode: env.runtime ? 'runtime' : 'design' }),
           useSyncExternalStore,
+          mockData
         });
         const serviceCompiledCode = decodeURIComponent(data.serviceJsCompiled ?? '');
         const serviceIsCommonJS = serviceCompiledCode && !/\bexport\b/.test(serviceCompiledCode);
@@ -279,7 +290,9 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
         const mybricksLib = createMybricks({
           env,
           logger,
-          store: genListenersStore(StoreClass, { mode: env.runtime ? 'runtime' : 'design' }),
+          store: genListenersStore(StoreClass, {
+            mode: isDesign ? 'design' : 'runtime',
+          }),
           useSyncExternalStore,
         });
 
@@ -328,7 +341,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
     } else {
       return
     }
-  }, [renderCode, errorInfo, data.modelConfig, data.storeJsCompiled, data.serviceJsCompiled])
+  }, [renderCode, errorInfo, data.modelConfig, data.storeJsCompiled, data.serviceJsCompiled, data.mockJsonSource])
 
 
   if (typeof ReactNode !== 'function') {

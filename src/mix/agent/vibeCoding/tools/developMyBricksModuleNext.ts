@@ -164,12 +164,15 @@ export default function developMyBricksModule(config: Config) {
       - 当需要更新嵌套对象内容时，必须使用扩展运算符更新整个对象
         - 正确：\`this.user = {...this.user, name: "名称"};\`
         - 错误：\`this.user.name = "名称";\`
+      - 若有 service 配置，store 必须优先通过 service 调用接口获取数据，不得在 store 内再声明或使用 mock 数据；
+      - store 是正式代码，禁止在 store 内出现任何 mock 相关代码或 mock 数据；mock 仅在设计态由 mock.json 提供，与 store 无关。
     </使用原则>
 
     <注意>
       - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要更新字段A时，必须修改A的值；
       - 禁止使用 getter 方法（例如：get count() {...}）;
       - 使用service.js时，务必使用'service'这个路径，禁止做其他发挥，禁止动态引用；
+      - 任何数据初始化动作都不允许写在 constructor 内；
     </注意>
 
   4. service.js文件
@@ -201,6 +204,27 @@ export default function developMyBricksModule(config: Config) {
 
     <使用原则>
       - 所有接口必须统一维护在 service.js 中，不得在 runtime.jsx 或 store.js 中直接发起 HTTP 请求；
+    </使用原则>
+
+  5. mock.json文件
+    mock.json文件用于在设计态 mock 接口数据，其内容表示的是真实接口返回的数据结构，供设计态预览使用。
+    <代码示例>
+    \`\`\`json file="mock.json"
+    {
+      "/getUserById": {
+        "name": "张三",
+        "age": 18,
+        "gender": "男"
+      }
+    }
+    \`\`\`
+    </代码示例>
+
+    <使用原则>
+      - mock 反映的是真实接口返回的数据结构，与 service 中对应 API 的响应结构一致；
+      - mock 仅在设计态用于 mock 接口数据并展示内容，与 store、runtime 等正式代码无关；
+      - 字段与 service 中的 url 一一对应；
+      - store 内禁止再声明 mock，也不得依赖 mock 数据；有 service 时 store 应优先走 service 调用。
     </使用原则>
 
 </MyBricks模块定义及文件说明>
@@ -721,7 +745,8 @@ export default function developMyBricksModule(config: Config) {
             .replace(/runtime\.jsx/g, '')
             .replace(/style\.less/g, '')
             .replace(/store\.js/g, '')
-            .replace(/service\.js/g, '') + '\n' + msg;
+            .replace(/service\.js/g, '')
+            .replace(/mock\.json/g, '') + '\n' + msg;
         }
       }
 
@@ -730,7 +755,8 @@ export default function developMyBricksModule(config: Config) {
         .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
         .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
         .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
-        .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '');
+        .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
+        .replace(/mock\.json/, '尝试修改mock数据...').replace(/mock\.json/g, '');
     },
     aiRole: ({ params }, execCtx) => {
       const mode = params?.mode ?? 'generate';

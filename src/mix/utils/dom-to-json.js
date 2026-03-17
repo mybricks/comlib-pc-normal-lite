@@ -544,7 +544,6 @@ function elementToMybricksJson(el, styleTagId) {
 
     // [debug] elementToMybricksJson walk - 追踪 input
     if (tag === 'input') {
-      console.log('[elem-walk:input] placeholder:', node.placeholder, '| value:', node.value, '| nodeType:', nodeType, '| style?:', !!style, '| styleKeys:', style ? Object.keys(style).join(',') : 'none');
     }
 
     var nodeJson = {
@@ -609,18 +608,26 @@ function elementToMybricksJson(el, styleTagId) {
         }
         // 判断是否容器约束宽度：用 Range 测量文字内容的自然渲染宽度，若内容宽度 < 元素宽度 × 0.9
         // 则说明容器 CSS 约束了宽度（文字未撑满），固定宽度不会导致 Figma 换行
+        // 也检测 text-overflow: ellipsis，文字超出被截断同样需要固定容器宽度
         if (nodeJson.style.singleLine && nodeJson.style.width != null) {
-          var _contentW2 = 0;
-          var _geoScale2 = geo.scale || 1;
-          for (var _ci2 = 0; _ci2 < node.childNodes.length; _ci2++) {
-            var _cn2 = node.childNodes[_ci2];
-            if (_cn2.nodeType === 3 && (_cn2.textContent || '').trim()) {
-              var _tr2 = getTextNodeRect(_cn2);
-              if (_tr2 && _tr2.width > 0) _contentW2 += _tr2.width / _geoScale2;
-            }
-          }
-          if (_contentW2 > 0 && _contentW2 < nodeJson.style.width * 0.9) {
+          var _textOverflowVal2 = (computed && computed.textOverflow) || '';
+          var _overflowXVal2 = (computed && (computed.overflowX || computed.overflow)) || '';
+          if (_textOverflowVal2 === 'ellipsis' && _overflowXVal2 !== 'visible') {
             nodeJson.style.widthConstrained = true;
+            nodeJson.style.textOverflow = 'ellipsis';
+          } else {
+            var _contentW2 = 0;
+            var _geoScale2 = geo.scale || 1;
+            for (var _ci2 = 0; _ci2 < node.childNodes.length; _ci2++) {
+              var _cn2 = node.childNodes[_ci2];
+              if (_cn2.nodeType === 3 && (_cn2.textContent || '').trim()) {
+                var _tr2 = getTextNodeRect(_cn2);
+                if (_tr2 && _tr2.width > 0) _contentW2 += _tr2.width / _geoScale2;
+              }
+            }
+            if (_contentW2 > 0 && _contentW2 < nodeJson.style.width * 0.9) {
+              nodeJson.style.widthConstrained = true;
+            }
           }
         }
       }
@@ -634,8 +641,27 @@ function elementToMybricksJson(el, styleTagId) {
             var _taMap2 = { left: 'LEFT', right: 'RIGHT', center: 'CENTER', justify: 'JUSTIFIED', start: 'LEFT', end: 'RIGHT' };
             nodeJson.style.textAlignHorizontal = _taMap2[String(_taRaw2 || 'left').toLowerCase()] || 'LEFT';
           }
-          console.log('[elementToMybricksJson:input:align] content:', nodeJson.content, '| textAlignVertical:', nodeJson.style.textAlignVertical, '| textAlignHorizontal:', nodeJson.style.textAlignHorizontal, '| color:', nodeJson.style.color);
         }
+      }
+      // 对 text 节点检测伪元素：若 ::before/::after 有内容，升级为 frame，原文本 + 伪元素作为子节点
+      var _pseudoBefore2 = getPseudoTextNode(node, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
+      var _pseudoAfter2 = getPseudoTextNode(node, '::after', geo, parentRect, rect, cssRuleMap, globalFont);
+      if (_pseudoBefore2 || _pseudoAfter2) {
+        // 浅拷贝 style，避免直接修改原始对象（可能被冻结导致 object is not extensible）
+        var _textStyle2 = nodeJson.style ? Object.assign({}, nodeJson.style) : {};
+        delete _textStyle2.x; delete _textStyle2.y;
+        delete _textStyle2.width; delete _textStyle2.height;
+        var _textChild2 = { type: 'text', name: nodeJson.name, content: nodeJson.content, style: _textStyle2, className: nodeJson.className };
+        if (_pseudoBefore2) _pseudoBefore2 = { type: _pseudoBefore2.type, name: _pseudoBefore2.name, content: _pseudoBefore2.content, style: Object.assign({}, _pseudoBefore2.style, { x: undefined, y: undefined }) };
+        if (_pseudoAfter2) _pseudoAfter2 = { type: _pseudoAfter2.type, name: _pseudoAfter2.name, content: _pseudoAfter2.content, style: Object.assign({}, _pseudoAfter2.style, { x: undefined, y: undefined }) };
+        var _pseudoChildren2 = [];
+        if (_pseudoBefore2) _pseudoChildren2.push(_pseudoBefore2);
+        _pseudoChildren2.push(_textChild2);
+        if (_pseudoAfter2) _pseudoChildren2.push(_pseudoAfter2);
+        nodeJson.type = 'frame';
+        nodeJson.content = undefined;
+        nodeJson.children = _pseudoChildren2;
+        nodeJson.style = { x: nodeJson.style && nodeJson.style.x, y: nodeJson.style && nodeJson.style.y, width: nodeJson.style && nodeJson.style.width, layoutMode: 'HORIZONTAL', itemSpacing: 0, counterAxisAlignItems: 'CENTER', layoutSizingVertical: 'HUG' };
       }
     }
 
@@ -679,32 +705,60 @@ function elementToMybricksJson(el, styleTagId) {
           }
         }
       }
+      // 伪元素处理：::before 插到最前，::after 追加到最后
+      var pseudoBefore = getPseudoTextNode(node, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
+      if (pseudoBefore) childNodesList.unshift(pseudoBefore);
+      var pseudoAfter = getPseudoTextNode(node, '::after', geo, parentRect, rect, cssRuleMap, globalFont);
+      if (pseudoAfter) childNodesList.push(pseudoAfter);
       if (childNodesList.length) {
         var layoutMode = nodeJson.style && (nodeJson.style.layoutMode === 'VERTICAL' || nodeJson.style.layoutMode === 'HORIZONTAL') ? nodeJson.style.layoutMode : null;
         if (layoutMode) {
-          if (childrenHaveUniformMargin(childNodesList, layoutMode)) {
-            applyUniformMarginAsGap(nodeJson, childNodesList, layoutMode);
-          }
-          ensureItemSpacingFromPositions(nodeJson, childNodesList, layoutMode);
-          var finalSpacing = (nodeJson.style && nodeJson.style.itemSpacing != null) ? nodeJson.style.itemSpacing : null;
-          if (finalSpacing == null || finalSpacing < 0) {
-            var s = nodeJson.style || {};
-            var hasAlignment = (s.primaryAxisAlignItems && s.primaryAxisAlignItems !== 'MIN') ||
-                               (s.counterAxisAlignItems && s.counterAxisAlignItems !== 'MIN');
-            var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
-            if (hasAlignment || hasPadding) {
-              nodeJson.style.itemSpacing = 0;
-            } else {
-              delete nodeJson.style.layoutMode;
-              delete nodeJson.style.itemSpacing;
-            }
-          } else {
+          // 任意子节点有负值 margin 说明间距不均匀，无法用 Auto Layout 还原，直接降级为绝对定位
+          if (anyChildHasMargin(childNodesList)) {
+            delete nodeJson.style.layoutMode;
+            delete nodeJson.style.itemSpacing;
             for (var si = 0; si < childNodesList.length; si++) {
               var ss = childNodesList[si].style || {};
               if (ss.marginTop != null) delete ss.marginTop;
               if (ss.marginRight != null) delete ss.marginRight;
               if (ss.marginBottom != null) delete ss.marginBottom;
               if (ss.marginLeft != null) delete ss.marginLeft;
+            }
+          } else {
+            if (childrenHaveUniformMargin(childNodesList, layoutMode)) {
+              applyUniformMarginAsGap(nodeJson, childNodesList, layoutMode);
+            }
+            ensureItemSpacingFromPositions(nodeJson, childNodesList, layoutMode);
+            var finalSpacing = (nodeJson.style && nodeJson.style.itemSpacing != null) ? nodeJson.style.itemSpacing : null;
+            var _isRadioWrapperNode = nodeJson.className && nodeJson.className.indexOf('radio-button-wrapper') !== -1;
+            var _isMenuNode = nodeJson.className && nodeJson.className.indexOf('ant-menu') !== -1;
+            if (_isRadioWrapperNode) {
+            }
+            if (finalSpacing == null || finalSpacing < 0) {
+              var s = nodeJson.style || {};
+              var hasAlignment = (s.primaryAxisAlignItems && s.primaryAxisAlignItems !== 'MIN') ||
+                                 (s.counterAxisAlignItems && s.counterAxisAlignItems !== 'MIN');
+              var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
+              // 若子节点中有绝对定位节点，其 x/y 不参与流式排布，不应影响间距计算结论，保留 layoutMode
+              var hasAbsoluteChild = childNodesList.some(function(c) { return c.style && c.style.positionType === 'absolute'; });
+              if (_isMenuNode) {
+              }
+              if (_isRadioWrapperNode) {
+              }
+              if (hasAlignment || hasPadding || hasAbsoluteChild) {
+                nodeJson.style.itemSpacing = 0;
+              } else {
+                delete nodeJson.style.layoutMode;
+                delete nodeJson.style.itemSpacing;
+              }
+            } else {
+              for (var si = 0; si < childNodesList.length; si++) {
+                var ss = childNodesList[si].style || {};
+                if (ss.marginTop != null) delete ss.marginTop;
+                if (ss.marginRight != null) delete ss.marginRight;
+                if (ss.marginBottom != null) delete ss.marginBottom;
+                if (ss.marginLeft != null) delete ss.marginLeft;
+              }
             }
           }
         }
@@ -792,13 +846,11 @@ function comToMybricksJson(comId) {
   if (!comEl) {
     return emptyRoot();
   }
-  console.log("comEl",comEl)
   var frameId = findArtboardIdFromElement(comEl);
   if (!frameId) {
     return emptyRoot();
   }
 
-  console.log("domToMybricksJson",domToMybricksJson(frameId, comId))
   return domToMybricksJson(frameId, comId);
 }
 
@@ -842,12 +894,10 @@ function domToMybricksJson(frameId, styleTagId) {
 
     // [debug] input 节点全流程追踪（最早入口）
     if (tag === 'input') {
-      console.log('[walk:input:ENTRY] placeholder:', el.placeholder, '| value:', el.value, '| type:', el.type, '| disabled:', el.disabled, '| display:', computed.display, '| visibility:', computed.visibility, '| rect:', JSON.stringify(rect));
     }
 
     var _tc = (el.textContent || '').trim();
     if (_tc.indexOf('快手本地生活 · 商家中心') !== -1) {
-      console.log('[walk] 命中快手本地生活 · 商家中心', { tag, className: el.className, textContent: _tc.slice(0, 50), display: computed.display, visibility: computed.visibility, w: rect && rect.width, h: rect && rect.height });
     }
 
     // Skip invisible or zero-size
@@ -889,7 +939,6 @@ function domToMybricksJson(frameId, styleTagId) {
 
     // [debug] 追踪 input 节点处理路径
     if (tag === 'input') {
-      console.log('[walk:input] tag:', tag, '| type attr:', el.type, '| placeholder:', el.placeholder, '| value:', el.value, '| nodeType:', nodeType, '| className:', el.className, '| rect:', JSON.stringify(rect), '| style keys:', style ? Object.keys(style) : null, '| style.textAlignVertical:', style && style.textAlignVertical, '| style.textAlignHorizontal:', style && style.textAlignHorizontal);
     }
 
     const node = {
@@ -953,18 +1002,26 @@ function domToMybricksJson(frameId, styleTagId) {
         }
         // 判断是否容器约束宽度：用 Range 测量文字内容的自然渲染宽度，若内容宽度 < 元素宽度 × 0.9
         // 则说明容器 CSS 约束了宽度（文字未撑满），固定宽度不会导致 Figma 换行
+        // 也检测 text-overflow: ellipsis，文字超出被截断同样需要固定容器宽度
         if (node.style.singleLine && node.style.width != null) {
-          var _contentW = 0;
-          var _geoScale = geo.scale || 1;
-          for (var _ci = 0; _ci < el.childNodes.length; _ci++) {
-            var _cn = el.childNodes[_ci];
-            if (_cn.nodeType === 3 && (_cn.textContent || '').trim()) {
-              var _tr = getTextNodeRect(_cn);
-              if (_tr && _tr.width > 0) _contentW += _tr.width / _geoScale;
-            }
-          }
-          if (_contentW > 0 && _contentW < node.style.width * 0.9) {
+          var _textOverflowVal = (computed && computed.textOverflow) || '';
+          var _overflowXVal = (computed && (computed.overflowX || computed.overflow)) || '';
+          if (_textOverflowVal === 'ellipsis' && _overflowXVal !== 'visible') {
             node.style.widthConstrained = true;
+            node.style.textOverflow = 'ellipsis';
+          } else {
+            var _contentW = 0;
+            var _geoScale = geo.scale || 1;
+            for (var _ci = 0; _ci < el.childNodes.length; _ci++) {
+              var _cn = el.childNodes[_ci];
+              if (_cn.nodeType === 3 && (_cn.textContent || '').trim()) {
+                var _tr = getTextNodeRect(_cn);
+                if (_tr && _tr.width > 0) _contentW += _tr.width / _geoScale;
+              }
+            }
+            if (_contentW > 0 && _contentW < node.style.width * 0.9) {
+              node.style.widthConstrained = true;
+            }
           }
         }
       }
@@ -978,10 +1035,29 @@ function domToMybricksJson(frameId, styleTagId) {
             var _taMap = { left: 'LEFT', right: 'RIGHT', center: 'CENTER', justify: 'JUSTIFIED', start: 'LEFT', end: 'RIGHT' };
             node.style.textAlignHorizontal = _taMap[String(_taRaw || 'left').toLowerCase()] || 'LEFT';
           }
-          console.log('[walk:input:align] content:', node.content, '| textAlignVertical:', node.style.textAlignVertical, '| textAlignHorizontal:', node.style.textAlignHorizontal, '| color:', node.style.color, '| fontSize:', node.style.fontSize, '| width:', node.style.width, '| height:', node.style.height);
         } else {
           console.warn('[walk:input:align] node.style is undefined! content:', node.content, '| placeholder:', el.placeholder);
         }
+      }
+      // 对 text 节点检测伪元素：若 ::before/::after 有内容，升级为 frame，原文本 + 伪元素作为子节点
+      var _pseudoBefore = getPseudoTextNode(el, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
+      var _pseudoAfter = getPseudoTextNode(el, '::after', geo, parentRect, rect, cssRuleMap, globalFont);
+      if (_pseudoBefore || _pseudoAfter) {
+        // 浅拷贝 style，避免直接修改原始对象（可能被冻结导致 object is not extensible）
+        var _textStyle = node.style ? Object.assign({}, node.style) : {};
+        delete _textStyle.x; delete _textStyle.y;
+        delete _textStyle.width; delete _textStyle.height;
+        var _textChild = { type: 'text', name: node.name, content: node.content, style: _textStyle, className: node.className };
+        if (_pseudoBefore) _pseudoBefore = { type: _pseudoBefore.type, name: _pseudoBefore.name, content: _pseudoBefore.content, style: Object.assign({}, _pseudoBefore.style, { x: undefined, y: undefined }) };
+        if (_pseudoAfter) _pseudoAfter = { type: _pseudoAfter.type, name: _pseudoAfter.name, content: _pseudoAfter.content, style: Object.assign({}, _pseudoAfter.style, { x: undefined, y: undefined }) };
+        var _pseudoChildren = [];
+        if (_pseudoBefore) _pseudoChildren.push(_pseudoBefore);
+        _pseudoChildren.push(_textChild);
+        if (_pseudoAfter) _pseudoChildren.push(_pseudoAfter);
+        node.type = 'frame';
+        node.content = undefined;
+        node.children = _pseudoChildren;
+        node.style = { x: node.style && node.style.x, y: node.style && node.style.y, width: node.style && node.style.width, layoutMode: 'HORIZONTAL', itemSpacing: 0, counterAxisAlignItems: 'CENTER', layoutSizingVertical: 'HUG' };
       }
     }
 
@@ -1026,36 +1102,63 @@ function domToMybricksJson(frameId, styleTagId) {
           }
         }
       }
+      // 伪元素处理：::before 插到最前，::after 追加到最后
+      var pseudoBefore = getPseudoTextNode(el, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
+      if (pseudoBefore) childNodes.unshift(pseudoBefore);
+      var pseudoAfter = getPseudoTextNode(el, '::after', geo, parentRect, rect, cssRuleMap, globalFont);
+      if (pseudoAfter) childNodes.push(pseudoAfter);
       if (childNodes.length) {
         var layoutMode = node.style && (node.style.layoutMode === 'VERTICAL' || node.style.layoutMode === 'HORIZONTAL') ? node.style.layoutMode : null;
         if (layoutMode) {
-          if (childrenHaveUniformMargin(childNodes, layoutMode)) {
-            applyUniformMarginAsGap(node, childNodes, layoutMode);
-          }
-          ensureItemSpacingFromPositions(node, childNodes, layoutMode);
-          var finalSpacing = (node.style && node.style.itemSpacing != null) ? node.style.itemSpacing : null;
-          if (finalSpacing == null || finalSpacing < 0) {
-            // 架构级修复：不再依赖标签名白名单。
-            // 只要节点配置了对齐方式（非默认的 MIN）或存在内边距，说明它在视觉上依赖 AutoLayout 
-            // 来维持内部排版（如居中、Padding包裹）。此时即使算不出间距（如单节点），也不能删除 layoutMode。
-            var s = node.style || {};
-            var hasAlignment = (s.primaryAxisAlignItems && s.primaryAxisAlignItems !== 'MIN') ||
-                               (s.counterAxisAlignItems && s.counterAxisAlignItems !== 'MIN');
-            var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
-            
-            if (hasAlignment || hasPadding) {
-              node.style.itemSpacing = 0;
-            } else {
-              delete node.style.layoutMode;
-              delete node.style.itemSpacing;
-            }
-          } else {
+          // 任意子节点有负值 margin 说明间距不均匀，无法用 Auto Layout 还原，直接降级为绝对定位
+          if (anyChildHasMargin(childNodes)) {
+            delete node.style.layoutMode;
+            delete node.style.itemSpacing;
             for (var i = 0; i < childNodes.length; i++) {
               var s = childNodes[i].style || {};
               if (s.marginTop != null) delete s.marginTop;
               if (s.marginRight != null) delete s.marginRight;
               if (s.marginBottom != null) delete s.marginBottom;
               if (s.marginLeft != null) delete s.marginLeft;
+            }
+          } else {
+            if (childrenHaveUniformMargin(childNodes, layoutMode)) {
+              applyUniformMarginAsGap(node, childNodes, layoutMode);
+            }
+            ensureItemSpacingFromPositions(node, childNodes, layoutMode);
+            var finalSpacing = (node.style && node.style.itemSpacing != null) ? node.style.itemSpacing : null;
+            var _isRadioWrapperNode2 = node.className && node.className.indexOf('radio-button-wrapper') !== -1;
+            var _isMenuNode2 = node.className && node.className.indexOf('ant-menu') !== -1;
+            if (_isRadioWrapperNode2) {
+            }
+            if (finalSpacing == null || finalSpacing < 0) {
+              // 架构级修复：不再依赖标签名白名单。
+              // 只要节点配置了对齐方式（非默认的 MIN）或存在内边距，说明它在视觉上依赖 AutoLayout 
+              // 来维持内部排版（如居中、Padding包裹）。此时即使算不出间距（如单节点），也不能删除 layoutMode。
+              var s = node.style || {};
+              var hasAlignment = (s.primaryAxisAlignItems && s.primaryAxisAlignItems !== 'MIN') ||
+                                 (s.counterAxisAlignItems && s.counterAxisAlignItems !== 'MIN');
+              var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
+              // 若子节点中有绝对定位节点，其 x/y 不参与流式排布，不应影响间距计算结论，保留 layoutMode
+              var hasAbsoluteChild = childNodes.some(function(c) { return c.style && c.style.positionType === 'absolute'; });
+              if (_isMenuNode2) {
+              }
+              if (_isRadioWrapperNode2) {
+              }
+              if (hasAlignment || hasPadding || hasAbsoluteChild) {
+                node.style.itemSpacing = 0;
+              } else {
+                delete node.style.layoutMode;
+                delete node.style.itemSpacing;
+              }
+            } else {
+              for (var i = 0; i < childNodes.length; i++) {
+                var s = childNodes[i].style || {};
+                if (s.marginTop != null) delete s.marginTop;
+                if (s.marginRight != null) delete s.marginRight;
+                if (s.marginBottom != null) delete s.marginBottom;
+                if (s.marginLeft != null) delete s.marginLeft;
+              }
             }
           }
         }
@@ -1183,31 +1286,41 @@ function fetchImageAsBase64DataUrl(url) {
 /** 递归将树中 style.fills 里 type===IMAGE 且仅有 url 的项，请求图片并写入 content（base64 data URL）。 */
 function inlineImageFillsInTree(obj) {
   if (!obj) return Promise.resolve();
+  var promises = [];
+
+  // 处理 style.fills 里的 IMAGE fill
   var style = obj.style;
   if (style && style.fills && Array.isArray(style.fills)) {
-    var promises = style.fills.map(function (fill, i) {
+    style.fills.forEach(function (fill, i) {
       if (fill && fill.type === 'IMAGE' && fill.url && !fill.content) {
-        return fetchImageAsBase64DataUrl(fill.url).then(function (dataUrl) {
-          style.fills[i] = { type: 'IMAGE', content: dataUrl };
-          console.log('[image fill] 内联成功', fill.url, 'contentLen=', (dataUrl && dataUrl.length) || 0);
-        }).catch(function (err) {
-          console.warn('[image fill] 内联失败', fill.url, err && err.message);
-        });
-      }
-      return Promise.resolve();
-    });
-    return Promise.all(promises).then(function () {
-      var children = obj.children;
-      if (children && children.length) {
-        return Promise.all(children.map(inlineImageFillsInTree));
+        promises.push(
+          fetchImageAsBase64DataUrl(fill.url).then(function (dataUrl) {
+            style.fills[i] = { type: 'IMAGE', content: dataUrl };
+          }).catch(function (err) {
+            console.warn('[image fill] 内联失败', fill.url, err && err.message);
+          })
+        );
       }
     });
   }
-  var children = obj.children;
-  if (children && children.length) {
-    return Promise.all(children.map(inlineImageFillsInTree));
+
+  // 处理 type==='image' 节点的 content 字段（img 标签 src），将 URL 内联为 base64
+  if (obj.type === 'image' && obj.content && typeof obj.content === 'string' && !obj.content.startsWith('data:')) {
+    promises.push(
+      fetchImageAsBase64DataUrl(obj.content).then(function (dataUrl) {
+        obj.content = dataUrl;
+      }).catch(function (err) {
+        console.warn('[image node] 内联失败', obj.content, err && err.message);
+      })
+    );
   }
-  return Promise.resolve();
+
+  return Promise.all(promises).then(function () {
+    var children = obj.children;
+    if (children && children.length) {
+      return Promise.all(children.map(inlineImageFillsInTree));
+    }
+  });
 }
 
 function domToMybricksJsonAsync(frameId, styleTagId) {
@@ -1233,7 +1346,6 @@ function inferNodeType(el, computed, tag) {
   if (tag === 'svg') return 'component';
   // input/textarea 必须最优先识别为 text，不能因 padding/background 被误判为 frame
   if (tag === 'input' && (el.type === 'text' || el.type === 'number' || el.type === 'password' || el.type === 'search' || el.type === 'email' || el.type === 'tel' || el.type === 'url' || !el.type || el.type === '')) {
-    console.log('[inferNodeType:input→text] type:', el.type, '| placeholder:', el.placeholder, '| value:', el.value, '| className:', el.className);
     return 'text';
   }
   if (tag === 'textarea') return 'text';
@@ -1262,7 +1374,6 @@ function inferNodeType(el, computed, tag) {
                     (elPaddingLeft && elPaddingLeft !== '0px');
     if (hasVisualBg || hasRadius || hasPadding) {
       var tc = (el.textContent || '').trim().slice(0, 30);
-      console.log('[inferNodeType] text→frame reason:', { text: tc, hasVisualBg, hasRadius, hasPadding, bg: elBg, radius: elRadius, pt: elPaddingTop, pr: elPaddingRight, pb: elPaddingBottom, pl: elPaddingLeft });
       return 'frame';
     }
     if ((el.textContent || '').trim()) {
@@ -1469,7 +1580,6 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     style.fills = [gradientFill];
   } else if (imageUrl) {
     style.fills = [{ type: 'IMAGE', url: imageUrl }];
-    console.log('[image fill] 导出 url', imageUrl);
   } else {
     var bg = d(['background-color', 'backgroundColor', 'background']) || computed.backgroundColor;
     if (bg) {
@@ -1478,23 +1588,57 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     }
   }
 
-  // Border：支持 border 简写（如 "1px solid transparent"），宽高样式和颜色（含透明）均生效
-  var borderShorthand = d(['border']);
-  var borderW, borderStyle, borderColor;
-  if (borderShorthand) {
-    var parsed = parseBorderShorthand(borderShorthand);
-    if (parsed) {
-      borderW = parsed.width;
-      borderStyle = parsed.style;
-      borderColor = parsed.color;
+  // Border：先尝试四边独立检测（border-top/right/bottom/left），不一致时输出各自的 strokeXxxWeight；
+  // 四边完全相同时退化为统一的 strokeWeight，以保持对旧版消费端的兼容。
+  var _btW = px(d(['border-top-width']) || computed.borderTopWidth) || 0;
+  var _brW = px(d(['border-right-width']) || computed.borderRightWidth) || 0;
+  var _bbW = px(d(['border-bottom-width']) || computed.borderBottomWidth) || 0;
+  var _blW = px(d(['border-left-width']) || computed.borderLeftWidth) || 0;
+  var _btStyle = (d(['border-top-style']) || computed.borderTopStyle || 'none').toString().toLowerCase();
+  var _brStyle = (d(['border-right-style']) || computed.borderRightStyle || 'none').toString().toLowerCase();
+  var _bbStyle = (d(['border-bottom-style']) || computed.borderBottomStyle || 'none').toString().toLowerCase();
+  var _blStyle = (d(['border-left-style']) || computed.borderLeftStyle || 'none').toString().toLowerCase();
+  var _btColor = d(['border-top-color']) || computed.borderTopColor;
+  var _brColor = d(['border-right-color']) || computed.borderRightColor;
+  var _bbColor = d(['border-bottom-color']) || computed.borderBottomColor;
+  var _blColor = d(['border-left-color']) || computed.borderLeftColor;
+  // border 简写兜底：若四边均未读到有效值，尝试 border 简写
+  var _borderShorthand = d(['border']);
+  if (_borderShorthand && (_btW === 0 && _brW === 0 && _bbW === 0 && _blW === 0)) {
+    var _parsedB = parseBorderShorthand(_borderShorthand);
+    if (_parsedB && _parsedB.width > 0) {
+      _btW = _brW = _bbW = _blW = _parsedB.width;
+      _btStyle = _brStyle = _bbStyle = _blStyle = _parsedB.style || 'solid';
+      _btColor = _brColor = _bbColor = _blColor = _parsedB.color;
     }
   }
-  if (borderW == null) borderW = px(d(['border-width', 'borderWidth', 'border-top-width']) || computed.borderTopWidth) || 0;
-  if (borderStyle == null) borderStyle = d(['border-style', 'borderTopStyle']) || computed.borderTopStyle;
-  if (borderColor == null) borderColor = d(['border-color', 'borderTopColor']) || computed.borderTopColor;
-  if (borderW > 0 && borderStyle !== 'none') {
-    style.strokeWeight = borderW;
-    style.strokeColor = cssColorToRgba(borderColor) || borderColor || 'rgba(0, 0, 0, 0)';
+  // 过滤掉 style=none 的边（视为无边框）
+  if (_btStyle === 'none') _btW = 0;
+  if (_brStyle === 'none') _brW = 0;
+  if (_bbStyle === 'none') _bbW = 0;
+  if (_blStyle === 'none') _blW = 0;
+  var _hasBorder = _btW > 0 || _brW > 0 || _bbW > 0 || _blW > 0;
+  if (_hasBorder) {
+    var _allSameW = (_btW === _brW && _brW === _bbW && _bbW === _blW);
+    var _btColorN = cssColorToRgba(_btColor) || _btColor || 'rgba(0, 0, 0, 0)';
+    var _brColorN = cssColorToRgba(_brColor) || _brColor || 'rgba(0, 0, 0, 0)';
+    var _bbColorN = cssColorToRgba(_bbColor) || _bbColor || 'rgba(0, 0, 0, 0)';
+    var _blColorN = cssColorToRgba(_blColor) || _blColor || 'rgba(0, 0, 0, 0)';
+    var _allSameColor = (_btColorN === _brColorN && _brColorN === _bbColorN && _bbColorN === _blColorN);
+    if (_allSameW && _allSameColor) {
+      // 四边统一，用简单的 strokeWeight（兼容旧格式）
+      style.strokeWeight = _btW;
+      style.strokeColor = _btColorN;
+    } else {
+      // 四边不同，分别输出各自宽度和颜色
+      // strokeColor/strokeWeight 用有效边中第一个的颜色（Figma strokes 颜色统一），宽度用 individualStrokeWeights
+      var _firstColor = _btW > 0 ? _btColorN : (_brW > 0 ? _brColorN : (_bbW > 0 ? _bbColorN : _blColorN));
+      style.strokeColor = _firstColor;
+      style.strokeTopWeight = _btW;
+      style.strokeRightWeight = _brW;
+      style.strokeBottomWeight = _bbW;
+      style.strokeLeftWeight = _blW;
+    }
   }
 
   // Border radius
@@ -1520,6 +1664,10 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
 
   // Flex / Grid -> Auto layout（gap 等同 itemSpacing）；padding 仅来自声明或 computed，不再与 margin 混合
   var display = d(['display']) || computed.display;
+  // [debug:layout] 追踪 radio-button-wrapper / label 的 display 和布局判断
+  var _isRadioWrapper = (el.className && typeof el.className === 'string' && el.className.indexOf('radio-button-wrapper') !== -1);
+  if (_isRadioWrapper) {
+  }
   if (display === 'flex' || display === 'inline-flex') {
     var dir = d(['flex-direction', 'flexDirection']) || computed.flexDirection;
     style.layoutMode = dir === 'column' || dir === 'column-reverse' ? 'VERTICAL' : 'HORIZONTAL';
@@ -1616,6 +1764,8 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER', normal: 'MIN', stretch: 'MIN', baseline: 'MIN', start: 'MIN', end: 'MAX' };
     style.primaryAxisAlignItems = alignMap[justifyContentNorm] || 'MIN';
     style.counterAxisAlignItems = alignMap[alignItemsNorm] || 'MIN';
+    if (_isRadioWrapper) {
+    }
   } else if (display === 'block' || display === 'inline-block' || display === 'inline') {
     // 架构级修复：不再依赖 blockTextTags 白名单。
     // 如果一个 block/inline 元素没有子元素（只有文本），但因为有背景/padding被升级为 frame，
@@ -1656,6 +1806,45 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
         }
       } else {
         style.counterAxisAlignItems = 'CENTER';
+      }
+    } else {
+      // 有多个子元素（如 ant-radio-button-wrapper）：computed display 在 Shadow DOM 中可能降级为 block/inline-block，
+      // 但实际上是 flex 容器（antd 外部 CSS 未 cascade 进 Shadow DOM）。
+      // 用几何反推：遍历子元素，取有实际高度的一个，判断其中心是否与容器中心对齐，以此推断是否垂直居中。
+      var _multiContainerRect = el.getBoundingClientRect();
+      var _multiContainerH = _multiContainerRect.height;
+      if (_multiContainerH > 0) {
+        var _multiSampleChild = null;
+        for (var _mci = 0; _mci < el.children.length; _mci++) {
+          var _mch = el.children[_mci];
+          var _mchH = _mch.getBoundingClientRect().height;
+          // 跳过高度等于容器高度的子元素（如 position:absolute 撑满容器的），优先取比容器矮的
+          if (_mchH > 0 && _mchH < _multiContainerH * 0.95) { _multiSampleChild = _mch; break; }
+        }
+        if (!_multiSampleChild) {
+          // 降级：取任意有高度的子元素
+          for (var _mci2 = 0; _mci2 < el.children.length; _mci2++) {
+            if (el.children[_mci2].getBoundingClientRect().height > 0) { _multiSampleChild = el.children[_mci2]; break; }
+          }
+        }
+        if (_multiSampleChild) {
+          var _multiChildRect = _multiSampleChild.getBoundingClientRect();
+          var _multiChildCenterY = _multiChildRect.top - _multiContainerRect.top + _multiChildRect.height / 2;
+          var _isCentered = Math.abs(_multiChildCenterY - _multiContainerH / 2) < 3;
+          if (_isRadioWrapper) {
+          }
+          if (_isCentered) {
+            style.layoutMode = 'HORIZONTAL';
+            style.counterAxisAlignItems = 'CENTER';
+            var _textAlignMulti = (d(['text-align', 'textAlign']) || computed.textAlign || '').toString().toLowerCase();
+            var _alignMapMulti = { left: 'MIN', right: 'MAX', center: 'CENTER', justify: 'MIN', start: 'MIN', end: 'MAX' };
+            style.primaryAxisAlignItems = _alignMapMulti[_textAlignMulti] || 'MIN';
+            style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
+            style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
+            style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
+            style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
+          }
+        }
       }
     }
   } else if (display === 'grid' || display === 'inline-grid') {
@@ -1733,6 +1922,10 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   if (mR != null) style.marginRight = mR;
   if (mB != null) style.marginBottom = mB;
   if (mL != null) style.marginLeft = mL;
+  // 打印：仅当任意 margin 非零时输出，用于排查负 margin 采集
+  if (mT || mR || mB || mL) {
+    var _elClass = (el && el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0, 3).join('.') : '';
+  }
 
   // position: absolute/fixed → 消费端需让该节点脱离 Auto Layout 流式排布，统一标记为 'absolute'
   // 用 getPropertyValue 而非 .position 直接访问，Shadow DOM 环境下后者可能返回空字符串
@@ -1752,6 +1945,17 @@ function getM(node, side) {
   if (side === 'R') return s.marginRight ?? 0;
   if (side === 'B') return s.marginBottom ?? 0;
   return s.marginLeft ?? 0;
+}
+
+/** 任意 flex 流中的子节点存在负值 margin，说明 flex 间距不均匀，不能用 Auto Layout */
+function anyChildHasMargin(childNodes) {
+  for (var i = 0; i < childNodes.length; i++) {
+    var s = childNodes[i].style || {};
+    // 绝对定位子节点不参与 flex 流，其 margin 不影响布局，跳过
+    if (s.positionType === 'absolute') continue;
+    if (s.marginTop < 0 || s.marginRight < 0 || s.marginBottom < 0 || s.marginLeft < 0) return true;
+  }
+  return false;
 }
 
 /** 兄弟之间间距是否均匀（相邻间距 = prev.marginB + curr.marginT 都相同），可合并成 itemSpacing */
@@ -1820,6 +2024,100 @@ function isShowingPlaceholder(el) {
   const tag = (el.tagName || '').toLowerCase();
   if (tag !== 'input' && tag !== 'textarea') return false;
   return !el.value && !!el.placeholder;
+}
+
+/**
+ * 获取元素的 ::before 或 ::after 伪元素文本节点 JSON。
+ * 伪元素不是真实 DOM，无法用 getBoundingClientRect 精确定位，
+ * 位置基于父元素矩形 + margin 偏移估算。
+ * @param {Element} el 宿主元素
+ * @param {string} pseudo '::before' 或 '::after'
+ * @param {object} geo getGeoviewScaleAndOrigin 返回值
+ * @param {object} parentRect 父节点设计稿矩形 {x,y,width,height}
+ * @param {object} elRect 宿主元素设计稿矩形 {x,y,width,height}
+ * @param {object|null} cssRuleMap
+ * @param {object|null} globalFont
+ * @returns {object|null}
+ */
+function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, globalFont) {
+  try {
+    // elRect 无效时无法估算位置，直接跳过（getDesignRect 返回的是 left/top/width/height，不是 x/y）
+    if (!elRect || typeof elRect.left !== 'number' || typeof elRect.top !== 'number' ||
+        isNaN(elRect.left) || isNaN(elRect.top) || isNaN(elRect.width) || isNaN(elRect.height)) {
+      return null;
+    }
+
+    var ps = window.getComputedStyle(el, pseudo);
+    var content = ps.content;
+    // content 为 none / normal / "" 时无内容
+    if (!content || content === 'none' || content === 'normal' || content === '""') return null;
+    // 去掉首尾引号，如 "\":\"" → ":"，再 trim 过滤空白（如 Ant Design button ::after 的 content: " "）
+    var text = content.replace(/^["']|["']$/g, '').trim();
+    if (!text) return null;
+    // 过滤纯装饰性伪元素：只保留含可见字符的内容，排除仅含不可见字符（空格/控制符等）
+    if (!/\S/.test(text)) return null;
+    // 过滤 display:none 或 visibility:hidden 的伪元素（如 Ant Design 波纹效果）
+    if (ps.display === 'none' || ps.visibility === 'hidden') return null;
+
+    var fontSize = parseFloat(ps.fontSize) || 14;
+    var color = ps.color;
+    var marginLeft = parseFloat(ps.marginInlineStart || ps.marginLeft) || 0;
+    var marginRight = parseFloat(ps.marginInlineEnd || ps.marginRight) || 0;
+
+    var estWidth = Math.ceil(fontSize * text.length * 0.65);
+    var estHeight = Math.ceil(fontSize * 1.4);
+
+    var pxOff = parentRect && typeof parentRect.left === 'number' && !isNaN(parentRect.left) ? parentRect.left : 0;
+    var pyOff = parentRect && typeof parentRect.top === 'number' && !isNaN(parentRect.top) ? parentRect.top : 0;
+
+    var relX, relY;
+    if (pseudo === '::before') {
+      relX = (elRect.left - pxOff) - estWidth - marginRight + marginLeft;
+    } else {
+      relX = (elRect.left - pxOff) + elRect.width + marginLeft;
+    }
+    relY = elRect.top - pyOff;
+
+    // 最终保护：确保 x/y/width/height 均为有限数值
+    var safeX = isFinite(relX) ? Math.round(relX) : 0;
+    var safeY = isFinite(relY) ? Math.round(relY) : 0;
+    var safeW = isFinite(estWidth) && estWidth > 0 ? estWidth : 10;
+    var safeH = isFinite(estHeight) && estHeight > 0 ? estHeight : 20;
+
+    var pseudoStyle = {
+      x: safeX,
+      y: safeY,
+      width: safeW,
+      height: safeH,
+      fontSize: Math.round(fontSize),
+      singleLine: true,
+    };
+    // 还原 margin-inline-start/end，用于 Auto Layout 子节点间距
+    if (marginLeft > 0) pseudoStyle.marginLeft = Math.round(marginLeft);
+    if (marginRight > 0) pseudoStyle.marginRight = Math.round(marginRight);
+
+    if (color) {
+      var rgba = cssColorToRgba(color);
+      if (rgba) pseudoStyle.color = rgba;
+    }
+
+    if (globalFont) {
+      var fw = parseFloat(ps.fontWeight) || 400;
+      var ff = ps.fontFamily ? resolveFontFamilyFromStack(ps.fontFamily) : '';
+      if (ff && ff !== globalFont.fontFamily) pseudoStyle.fontFamily = ff;
+      if (fw !== globalFont.fontWeight) pseudoStyle.fontWeight = fw;
+    }
+
+    return {
+      type: 'text',
+      name: pseudo === '::before' ? 'pseudo-before' : 'pseudo-after',
+      content: text,
+      style: pseudoStyle,
+    };
+  } catch (e) {
+    console.warn('[pseudo] catch error', { pseudo, tag: el && el.tagName, error: String(e) });
+    return null;
+  }
 }
 
 function parseTransformRotation(transform) {

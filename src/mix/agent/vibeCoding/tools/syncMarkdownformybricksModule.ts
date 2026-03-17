@@ -54,7 +54,8 @@ export default function syncMarkdownformybricksModule(config) {
         - 多条 Mermaid 语句之间用分号分隔；同一行内最后一个语句后不加分号；
         - 生成后先自检：检查是否有多余分号、引号是否统一、节点连接是否闭环、每个判断分支是否都从判断节点单独引出；
         - 流程图逻辑要贴合需求，节点命名简洁易懂，避免冗余步骤；
-        - 流程图需描述完整流程：包含事件处理函数内的直接调用，以及 store.xxx() 等调用的内部流程；若调用了 store 的某方法，需展开该方法内部的步骤（如参数校验、状态更新、请求发送、分支判断等），使流程图能反映从事件触发到完成的全链路；
+        - 流程图需覆盖全链路：事件处理与 store 方法内部均需展开，从触发到完成完整呈现；
+        - 禁止出现「调用 store.xxx」节点：若事件调用了 store API，直接从该方法内部第一步画起；
         - 流程图节点用动作描述，不写具体取值：例如用「设置loading状态」「取消loading状态」，禁止「设置loading为true」「设置loading为false」等；
         - 禁止出现用户动作类流程节点（如「点击按钮」）、空洞节点（如「开始」「结束」「执行业务操作」）；
         - 流程图须真实完整：严格依据事件处理函数内的代码逻辑，以及所调用的 store 方法内部实现来绘制，不省略、不捏造。
@@ -133,7 +134,7 @@ export default appRef(() => {
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["调用 store.signIn"] --> B["校验登录参数"] --> C{"参数是否有效"} -->|有效| D["设置loading状态"] --> E["请求登录接口"] --> F{"请求是否成功"} -->|成功| G["更新用户状态"] --> H["取消loading状态"]; F -->|失败| I["提示错误信息"] --> H; C -->|无效| J["提示参数错误"]
+  - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 ---
 
@@ -151,7 +152,7 @@ export default appRef(() => {
 - summary: 注册表单容器，包含表单与注册按钮，提交时触发 signUp。
 - type: com
 - events:
-  - signUp 注册 - flowchart LR; A["调用 store.signUp"] --> B["校验表单参数"] --> C{"参数是否有效"} -->|有效| D["设置loading状态"] --> E["请求注册接口"] --> F{"请求是否成功"} -->|成功| G["跳转登录页"] --> H["取消loading状态"]; F -->|失败| I["提示错误信息"] --> H; C -->|无效| J["提示参数错误"]
+  - signUp 注册 - flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 \`\`\`
 <基于runtime.jsx的runtime.md示例>
@@ -172,8 +173,8 @@ export default appRef(() => {
   - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 runtime.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
 
   3）无需更新
-  - runtime.jsx 未被修改，且现有 runtime.md 已正确反映当前源码的节点结构、事件与说明时，无需对 runtime.md 做变更。
-  - 仅修改了与 runtime 无关的其他文件（如 store.js、style.less、service.js）时，通常不需要仅为此而更新 runtime.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
+  - runtime.jsx、store.js 未被修改，且现有 runtime.md 已正确反映当前源码的节点结构、事件与说明时，无需对 runtime.md 做变更。
+  - 仅修改了与 runtime、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 runtime.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
 
   判断时请对照当前【源代码】中的 runtime.jsx 与已有的 runtime.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
   </如何判断需要更新 runtime.md>
@@ -236,7 +237,7 @@ export default appRef(() => {
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["调用 store.signIn"] --> B["校验登录参数"] --> C{"参数是否有效"} -->|有效| D["设置loading状态"] --> E["请求登录接口"] --> F{"请求是否成功"} -->|成功| G["更新用户状态"] --> H["取消loading状态"]; F -->|失败| I["提示错误信息"] --> H; C -->|无效| J["提示参数错误"]
+  - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 \`\`\`
 
 【整文件替换】仅当需要重写整个 runtime.md 时使用：before 为空，after 为完整的 runtime.md 全文（不是追加，会覆盖整个文件）。

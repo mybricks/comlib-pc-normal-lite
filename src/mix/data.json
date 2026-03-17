@@ -11,5 +11,6 @@
   "storeJsCompiled": "",
   "serviceJsSource": "",
   "serviceJsCompiled": "",
-  "debugTarget": null
+  "debugTarget": null,
+  "mockJsonSource": ""
 }

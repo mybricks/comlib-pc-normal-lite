@@ -844,6 +844,24 @@ export default function (props: Props, actions: Actions, ...args) {
 
       return result;
     },
+    '@getThemes'(params) {
+      console.log("[@getThemes params]", params);
+      return [
+        {
+          varName: "primary",
+          varTitle: "主色调",
+          value:{
+            get: (params) => {
+              console.log("[@getThemes get primary]", params);
+              return "red";
+            },
+            set: (params, value) => {
+              console.log("[@getThemes set primary]", params, value);
+            }
+          }
+        }
+      ] 
+    },
     '@debug'(params, stop) {
       const events = context.getAiComEvents(params.id);
       if (stop) {
@@ -923,10 +941,10 @@ export default function (props: Props, actions: Actions, ...args) {
         cate1.title = "页面";
         cate1.items = [
           {
-            title: "Figma",
+            title: "UI设计",
             items: [
               {
-                title: "导出此页面到 Figma",
+                title: "导出到 Figma",
                 type: 'Button',
                 value: {
                   set() {
@@ -959,7 +977,7 @@ export default function (props: Props, actions: Actions, ...args) {
                 }
               },
               {
-                title: "从 Figma 同步此页面样式",
+                title: "从 Figma 同步样式",
                 type: 'Button',
                 value: {
                   set() {
@@ -985,6 +1003,9 @@ export default function (props: Props, actions: Actions, ...args) {
                     );
                   }
                 }
+              },
+              {
+                type:"themes"
               }
             ]
           }

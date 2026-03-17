@@ -17,6 +17,7 @@ const FILES = [
   "style.less",
   "store.js",
   "service.js",
+  "mock.json",
   "runtime.md",
   // "config.js",
   // "com.json"
@@ -33,6 +34,7 @@ const FILES_MAP: Record<string, string> = {
   "store.js": "storeJsSource",
   "service.js": "serviceJsSource",
   "runtime.md": "runtimeMdSource",
+  "mock.json": "mockJsonSource",
 };
 
 export const lowcodeViewEvents = new Events<{
@@ -231,10 +233,8 @@ export default function LowcodeView(params: Params) {
   }, [params.data?.serviceJsSource]);
 
   useEffect(() => {
-    return ()=>{
-      debugger
-    }
-  }, []);
+    clearFileIfDataChanged("mock.json");
+  }, [params.data?.mockJsonSource]);
 
   return (
     <>
