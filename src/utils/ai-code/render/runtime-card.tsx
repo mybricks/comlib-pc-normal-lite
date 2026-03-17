@@ -111,6 +111,14 @@ const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = 
     )
   }, [])
 
+  if (window._render_comp_start_view_) {
+    return (
+      <div className={css.tip}>
+        {window._render_comp_start_view_()}
+      </div>
+    )
+  }
+
   return (
     <div className={css.tip}>
       {/*<div className={css.title}>{title}</div>*/}
