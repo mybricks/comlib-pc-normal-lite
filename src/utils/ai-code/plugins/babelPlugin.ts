@@ -172,7 +172,7 @@ export default function ({ constituency }) {
               // })
 
               if (events.length > 0) {
-                // pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
+                pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
                 // 用于展示事件小黄点
                 pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
               }
