@@ -1286,30 +1286,41 @@ function fetchImageAsBase64DataUrl(url) {
 /** 递归将树中 style.fills 里 type===IMAGE 且仅有 url 的项，请求图片并写入 content（base64 data URL）。 */
 function inlineImageFillsInTree(obj) {
   if (!obj) return Promise.resolve();
+  var promises = [];
+
+  // 处理 style.fills 里的 IMAGE fill
   var style = obj.style;
   if (style && style.fills && Array.isArray(style.fills)) {
-    var promises = style.fills.map(function (fill, i) {
+    style.fills.forEach(function (fill, i) {
       if (fill && fill.type === 'IMAGE' && fill.url && !fill.content) {
-        return fetchImageAsBase64DataUrl(fill.url).then(function (dataUrl) {
-          style.fills[i] = { type: 'IMAGE', content: dataUrl };
-        }).catch(function (err) {
-          console.warn('[image fill] 内联失败', fill.url, err && err.message);
-        });
-      }
-      return Promise.resolve();
-    });
-    return Promise.all(promises).then(function () {
-      var children = obj.children;
-      if (children && children.length) {
-        return Promise.all(children.map(inlineImageFillsInTree));
+        promises.push(
+          fetchImageAsBase64DataUrl(fill.url).then(function (dataUrl) {
+            style.fills[i] = { type: 'IMAGE', content: dataUrl };
+          }).catch(function (err) {
+            console.warn('[image fill] 内联失败', fill.url, err && err.message);
+          })
+        );
       }
     });
   }
-  var children = obj.children;
-  if (children && children.length) {
-    return Promise.all(children.map(inlineImageFillsInTree));
+
+  // 处理 type==='image' 节点的 content 字段（img 标签 src），将 URL 内联为 base64
+  if (obj.type === 'image' && obj.content && typeof obj.content === 'string' && !obj.content.startsWith('data:')) {
+    promises.push(
+      fetchImageAsBase64DataUrl(obj.content).then(function (dataUrl) {
+        obj.content = dataUrl;
+      }).catch(function (err) {
+        console.warn('[image node] 内联失败', obj.content, err && err.message);
+      })
+    );
   }
-  return Promise.resolve();
+
+  return Promise.all(promises).then(function () {
+    var children = obj.children;
+    if (children && children.length) {
+      return Promise.all(children.map(inlineImageFillsInTree));
+    }
+  });
 }
 
 function domToMybricksJsonAsync(frameId, styleTagId) {
