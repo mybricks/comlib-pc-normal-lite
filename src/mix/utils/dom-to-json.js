@@ -2049,15 +2049,16 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
 
     var ps = window.getComputedStyle(el, pseudo);
     var content = ps.content;
-    // content 为 none / normal / "" 时无内容
-    if (!content || content === 'none' || content === 'normal' || content === '""') return null;
+    // content 为 none / normal 时完全无渲染内容，直接跳过
+    if (!content || content === 'none' || content === 'normal') return null;
+    // 过滤 display:none 或 visibility:hidden 或 opacity:0 的伪元素（如 Ant Design 动画层）
+    if (ps.display === 'none' || ps.visibility === 'hidden') return null;
+    if (parseFloat(ps.opacity) === 0) return null;
+    // content: '""' 或去引号 trim 后为空 / 无可见字符 → 尝试图形型伪元素（border/background 分割线等）
+    if (content === '""') return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
     // 去掉首尾引号，如 "\":\"" → ":"，再 trim 过滤空白（如 Ant Design button ::after 的 content: " "）
     var text = content.replace(/^["']|["']$/g, '').trim();
-    if (!text) return null;
-    // 过滤纯装饰性伪元素：只保留含可见字符的内容，排除仅含不可见字符（空格/控制符等）
-    if (!/\S/.test(text)) return null;
-    // 过滤 display:none 或 visibility:hidden 的伪元素（如 Ant Design 波纹效果）
-    if (ps.display === 'none' || ps.visibility === 'hidden') return null;
+    if (!text || !/\S/.test(text)) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
 
     var fontSize = parseFloat(ps.fontSize) || 14;
     var color = ps.color;
@@ -2116,6 +2117,158 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
     };
   } catch (e) {
     console.warn('[pseudo] catch error', { pseudo, tag: el && el.tagName, error: String(e) });
+    return null;
+  }
+}
+
+/**
+ * 处理"图形型"伪元素（content 为空但有 border/background 可见样式，如 Tabs 分割线）。
+ * 伪元素通常是 position:absolute，位置基于宿主元素矩形 + top/right/bottom/left 偏移估算。
+ * @param {Element} el 宿主元素
+ * @param {string} pseudo '::before' 或 '::after'
+ * @param {CSSStyleDeclaration} ps getComputedStyle(el, pseudo) 的结果（已由调用方计算好）
+ * @param {object} geo getGeoviewScaleAndOrigin 返回值
+ * @param {object} parentRect 父节点设计稿矩形 {left,top,width,height}
+ * @param {object} elRect 宿主元素设计稿矩形 {left,top,width,height}
+ * @returns {object|null}
+ */
+function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
+  try {
+    // display:none 或 visibility:hidden 或 opacity:0 → 不可见，跳过（如 checkbox 勾选动画层）
+    if (ps.display === 'none' || ps.visibility === 'hidden') return null;
+    if (parseFloat(ps.opacity) === 0) return null;
+
+    // TODO: checkbox/radio 勾形伪元素（ant-checkbox-inner::after、ant-radio-inner::after 等）暂不支持。
+    // 特征：宿主 class 含 "checkbox-inner" 或 "radio-inner"，且有 border 构成勾形/圆形选中标记。
+    var elClass = (el && el.className) ? String(el.className) : '';
+    if (/checkbox-inner|radio-inner/i.test(elClass)) return null;
+
+    // 只还原边框类伪元素（border-*），background-color / background-image 类暂不支持
+    var bBottom = parseFloat(ps.borderBottomWidth) || 0;
+    var bTop    = parseFloat(ps.borderTopWidth)    || 0;
+    var bLeft   = parseFloat(ps.borderLeftWidth)   || 0;
+    var bRight  = parseFloat(ps.borderRightWidth)  || 0;
+    var hasBorder = bBottom > 0 || bTop > 0 || bLeft > 0 || bRight > 0;
+
+    if (!hasBorder) return null;
+
+    var bgNotEmpty = false; // 仅 border 类导出，bg 相关置 false
+
+    // --- 坐标估算 ---
+    // 伪元素是 position:absolute，解析 top/right/bottom/left 值（px 值才可用，auto 则忽略）
+    var psTop    = ps.top    !== 'auto' ? parseFloat(ps.top)    : null;
+    var psBottom = ps.bottom !== 'auto' ? parseFloat(ps.bottom) : null;
+    var psLeft   = ps.left   !== 'auto' ? parseFloat(ps.left)   : null;
+    var psRight  = ps.right  !== 'auto' ? parseFloat(ps.right)  : null;
+
+    // 直接读取 getComputedStyle 计算后的 width/height（已将 100%/auto 转为实际像素值）
+    var psWidth  = parseFloat(ps.width);
+    var psHeight = parseFloat(ps.height);
+    var hasPsWidth  = psWidth  > 0 && isFinite(psWidth);
+    var hasPsHeight = psHeight > 0 && isFinite(psHeight);
+
+    // 设计稿坐标系的宿主偏移量（相对父节点）
+    var pxOff = parentRect && typeof parentRect.left === 'number' && !isNaN(parentRect.left) ? parentRect.left : 0;
+    var pyOff = parentRect && typeof parentRect.top  === 'number' && !isNaN(parentRect.top)  ? parentRect.top  : 0;
+    var elRelX = elRect.left - pxOff;
+    var elRelY = elRect.top  - pyOff;
+
+    // 宽度：优先直接读取计算宽度（如 width:1px / width:100%），left/right 反推降级为 fallback
+    var w;
+    if (hasPsWidth) {
+      w = psWidth;
+    } else if (psLeft !== null && psRight !== null) {
+      w = elRect.width - psLeft - psRight;
+    } else if (psLeft !== null) {
+      w = elRect.width - psLeft;
+    } else if (psRight !== null) {
+      w = elRect.width - psRight;
+    } else {
+      w = elRect.width;
+    }
+    // 高度：优先直接读取计算高度（如 height:100%），top/bottom 反推和 border 推算降级为 fallback
+    var h;
+    if (hasPsHeight) {
+      h = psHeight;
+    } else if (psTop !== null && psBottom !== null) {
+      h = elRect.height - psTop - psBottom;
+    } else if (hasBorder) {
+      h = Math.max(bTop, bBottom, bLeft, bRight);
+      if (h < 1) h = 1;
+    } else {
+      h = 2;
+    }
+
+    // x 坐标
+    var x;
+    if (psLeft !== null) {
+      x = elRelX + psLeft;
+    } else if (psRight !== null) {
+      x = elRelX + elRect.width - psRight - w;
+    } else {
+      x = elRelX;
+    }
+
+    // y 坐标：bottom:0 最常见（分割线贴底）
+    var y;
+    if (psTop !== null) {
+      y = elRelY + psTop;
+    } else if (psBottom !== null) {
+      y = elRelY + elRect.height - psBottom - h;
+    } else {
+      y = elRelY;
+    }
+
+    // 确保数值有效
+    var safeX = isFinite(x) ? Math.round(x) : 0;
+    var safeY = isFinite(y) ? Math.round(y) : 0;
+    var safeW = isFinite(w) && w > 0 ? Math.round(w) : 1;
+    var safeH = isFinite(h) && h > 0 ? Math.round(h) : 1;
+
+    var shapeStyle = {
+      x: safeX,
+      y: safeY,
+      width: safeW,
+      height: safeH,
+      positionType: 'absolute',
+    };
+
+    // background-color → fills
+    if (bgNotEmpty) {
+      var bgRgba = cssColorToRgba(bg);
+      if (bgRgba) shapeStyle.fills = [bgRgba];
+    } else {
+      shapeStyle.fills = [];
+    }
+
+    // border → strokeColor + 四边独立描边
+    if (hasBorder) {
+      // 取各边颜色（通常相同，取第一个非透明边的颜色）
+      var borderColor = ps.borderBottomColor || ps.borderTopColor || ps.borderLeftColor || ps.borderRightColor;
+      if (!borderColor || borderColor === 'transparent' || borderColor === 'rgba(0, 0, 0, 0)') {
+        // 尝试 border shorthand
+        var borderShort = ps.border || ps.borderBottom || ps.borderTop;
+        var parsed = parseBorderShorthand(borderShort);
+        if (parsed) borderColor = parsed.color;
+      }
+      var borderRgba = borderColor ? cssColorToRgba(borderColor) : null;
+      if (borderRgba && borderRgba !== 'rgba(0, 0, 0, 0)') {
+        shapeStyle.strokeColor = borderRgba;
+        shapeStyle.strokeAlign = 'INSIDE';
+        if (bTop    > 0) shapeStyle.strokeTopWeight    = bTop;
+        if (bRight  > 0) shapeStyle.strokeRightWeight  = bRight;
+        if (bBottom > 0) shapeStyle.strokeBottomWeight = bBottom;
+        if (bLeft   > 0) shapeStyle.strokeLeftWeight   = bLeft;
+      }
+    }
+
+    return {
+      type: 'rectangle',
+      name: pseudo === '::before' ? 'pseudo-before' : 'pseudo-after',
+      style: shapeStyle,
+    };
+  } catch (e) {
+    console.warn('[pseudo-shape] catch error', { pseudo, tag: el && el.tagName, error: String(e) });
     return null;
   }
 }

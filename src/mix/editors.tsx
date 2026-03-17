@@ -1005,7 +1005,11 @@ export default function (props: Props, actions: Actions, ...args) {
                 }
               },
               {
-                type:"themes"
+                type:"themes",
+                value:{
+                  get(){},
+                  set(){}
+                }
               }
             ]
           }
