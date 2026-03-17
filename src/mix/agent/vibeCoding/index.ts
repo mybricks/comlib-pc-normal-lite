@@ -416,7 +416,7 @@ export default function ({ context }) {
           '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' + 
           themes.reduce((pre, cur) => {
             return pre + `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}`
-          }, "")
+          }, "") || "\n  当前项目没有主题变量，根据需求自由发挥即可。"
         } catch {
           return '';
         }
