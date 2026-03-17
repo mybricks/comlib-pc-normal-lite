@@ -21,7 +21,7 @@ export default function ({ constituency }) {
     const pageRefCache = new Map<any, any>();
 
     /** 遍历时 comRef 的 jsdoc 栈，子元素通过栈顶读到当前组件的 jsdoc */
-    const jsdocStack: any[] = [];
+    // const jsdocStack: any[] = [];
 
     return {
       visitor: {
@@ -140,7 +140,7 @@ export default function ({ constituency }) {
               }
 
               if (comRef) {
-                jsdocStack.push(comRef.jsdoc);
+                // jsdocStack.push(comRef.jsdoc);
 
                 zoneType = "com";
                 // pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
@@ -156,31 +156,32 @@ export default function ({ constituency }) {
               }
 
               const events = getEvents(node);
-              const jsdoc = jsdocStack[jsdocStack.length - 1];
+              // const jsdoc = jsdocStack[jsdocStack.length - 1];);
 
-              const eventsMap = (jsdoc?.events || []).reduce((pre, cur) => {
-                pre[cur.key] = cur;
-                return pre;
-              }, {});
+              // const eventsMap = (jsdoc?.events || []).reduce((pre, cur) => {
+              //   pre[cur.key] = cur;
+              //   return pre;
+              // }, {});
 
-              const dataZoneDocsEvents = events.map((event) => {
-                return eventsMap[event] || {
-                  key: event,
-                  name: event,
-                  description: ""
-                }
-              })
+              // const dataZoneDocsEvents = events.map((event) => {
+              //   return eventsMap[event] || {
+              //     key: event,
+              //     name: event,
+              //     description: ""
+              //   }
+              // })
 
-              if (dataZoneDocsEvents.length > 0) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(dataZoneDocsEvents.length));
+              if (events.length > 0) {
+                // pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
+                // 用于展示事件小黄点
+                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
               }
 
-              if (comRef) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({...comRef.jsdoc, events: dataZoneDocsEvents}));
-              } else {
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({events: dataZoneDocsEvents}));
-              }
+              // if (comRef) {
+              //   pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({...comRef.jsdoc, events: dataZoneDocsEvents}));
+              // } else {
+              //   pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({events: dataZoneDocsEvents}));
+              // }
   
               if (zoneType !== "page") {
                 pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
@@ -189,12 +190,12 @@ export default function ({ constituency }) {
             } catch {}
           },
           exit(path) {
-            try {
-              const comRef = getComRefForJSXPath(path, componentJsdocCache);
-              if (comRef) {
-                jsdocStack.pop();
-              }
-            } catch {}
+            // try {
+            //   const comRef = getComRefForJSXPath(path, componentJsdocCache);
+            //   if (comRef) {
+            //     jsdocStack.pop();
+            //   }
+            // } catch {}
           }
         },
         Program: {
