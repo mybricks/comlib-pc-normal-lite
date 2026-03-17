@@ -268,7 +268,8 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
           logger,
           store: genListenersStore(null, { mode: env.runtime ? 'runtime' : 'design' }),
           useSyncExternalStore,
-          mockData
+          mockData,
+          data,
         });
         const serviceCompiledCode = decodeURIComponent(data.serviceJsCompiled ?? '');
         const serviceIsCommonJS = serviceCompiledCode && !/\bexport\b/.test(serviceCompiledCode);
@@ -298,6 +299,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
             mode: isDesign ? 'design' : 'runtime',
           }),
           useSyncExternalStore,
+          data,
         });
 
         const Com: any = runRender(oriCode, {

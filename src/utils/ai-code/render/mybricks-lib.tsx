@@ -508,6 +508,7 @@ export interface CreateMybricksOptions {
   store: any;
   useSyncExternalStore: typeof React.useSyncExternalStore;
   mockData?: Record<string, any>;
+  data: any
 }
 
 /**
@@ -515,7 +516,7 @@ export interface CreateMybricksOptions {
  * 作用域限定在单个 AIJsxRuntime 内（含 RouterContext）。
  */
 export function createMybricks(options: CreateMybricksOptions) {
-  const { env, logger, store, mockData, useSyncExternalStore } = options;
+  const { env, logger, store, mockData, data, useSyncExternalStore } = options;
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
@@ -573,8 +574,23 @@ export function createMybricks(options: CreateMybricksOptions) {
         autoStore.current[SYMBOL_GETSNAPSHOT]
       );
 
+      const themes = data.themes;
+
       return (
-        <div data-zone-type="page" data-desn-page={pageIndex} style={{ minWidth: 1200, minHeight: 600, display: 'inline-block', transform: 'scale(1)', ...env._debugTarget?.style }}>
+        <div
+          data-zone-type="page"
+          data-desn-page={pageIndex}
+          style={{
+            minWidth: 1200,
+            minHeight: 600,
+            display: 'inline-block',
+            transform: 'scale(1)',
+            ...env._debugTarget?.style,
+            ...themes.reduce((pre, cur) => {
+              pre[cur.propertyName] = cur.value;
+              return pre;
+            }, {})
+          }}>
           <Component
             {...props}
             _env={_env}

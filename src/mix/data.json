@@ -12,5 +12,6 @@
   "serviceJsSource": "",
   "serviceJsCompiled": "",
   "debugTarget": null,
-  "mockJsonSource": ""
+  "mockJsonSource": "",
+  "themes": []
 }

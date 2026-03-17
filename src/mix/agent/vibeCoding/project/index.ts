@@ -39,6 +39,8 @@ export interface ProjectConfig {
   getRuntimeMdContent: () => string;
   /** 获取 mock.json 全文（设计态 mock 数据） */
   getMockJsonContent: () => string;
+  /** 获取主题配置全文 */
+  getThemesContent: () => string;
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
@@ -271,13 +273,14 @@ export class Project {
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent, getRuntimeMdContent, getMockJsonContent } = this.config;
+    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent, getRuntimeMdContent, getMockJsonContent, getThemesContent } = this.config;
     const runtimeContent = getRuntimeContent();
     const styleContent = getStyleContent();
     const storeContent = getStoreContent();
     const serviceContent = getServiceContent();
     const runtimeMdContent = getRuntimeMdContent();
     const mockJsonContent = getMockJsonContent();
+    const themesContent = getThemesContent();
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
@@ -301,6 +304,7 @@ export class Project {
     对于插画/装饰性图形：我们优先推荐使用简单的svg来占位，避免使用图片过于跳脱；
 - 美学指南：
   - 在浅色和深色主题、不同字体、美学之间变化；
+${themesContent}
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
 `;
 

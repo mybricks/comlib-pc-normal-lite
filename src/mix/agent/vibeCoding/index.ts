@@ -408,6 +408,19 @@ export default function ({ context }) {
           return '';
         }
       })();
+
+      const themesContent = (() => {
+        try {
+          const themes = aiComParams?.data?.themes ?? [];
+          return '- 设计风格：' + (themes?.length ? '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' + 
+          themes.reduce((pre, cur) => {
+            return pre + `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}`
+          }, "") : '\n  当前项目没有定义主题变量，禁止创造变量，风格根据需求自由发挥即可')
+        } catch {
+          return '';
+        }
+      })()
+
       // const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
         // projectJson,
@@ -417,6 +430,7 @@ export default function ({ context }) {
         getServiceContent: () => serviceContent,
         getRuntimeMdContent: () => runtimeMdContent,
         getMockJsonContent: () => mockJsonContent,
+        getThemesContent: () => themesContent,
       });
 
       // project.read('DataCard')
