@@ -1,3 +1,5 @@
+export { default as validator } from './validator'
+
 export default {
   name: 'dayjs',
   version: '1.11.19',

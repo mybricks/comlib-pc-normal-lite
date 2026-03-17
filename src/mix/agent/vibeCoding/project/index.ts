@@ -3,11 +3,7 @@
  * 根据 project.json 生成实时更新的 message：项目架构树 + 文件系统（按组件 name 展开代码）
  */
 
-/** 允许使用的三方库提示词（antd / echarts / icon） */
-import antdPrompt from '../../../prompts/antd-summary.md';
-import echartsPrompt from '../../../prompts/echarts-summary.md';
-import iconPrompt from '../../../prompts/icon-summary.md';
-import mybricksPrompt from '../../../prompts/mybricks.md';
+import { getAllLibraryDocs } from '../../../avaliableLibraries';
 
 
 /** project.json 中单个节点的类型 */
@@ -293,6 +289,7 @@ export class Project {
   - 功能：生产级别的功能性；
   - 细节：在每个细节都精心完善；
   - 响应式：保证合理统一的间距，以及支持宽度变化自适应的代码；
+  - 当前单页面宽度为1200，注意效果；
 - 静态资源：
   - 对于图标：为了保证视觉的统一与专业性，我们的共识是统一使用图标组件。
     - 如果没有图标组件，则使用 placehold.co，禁止使用 Emoji 或特殊字符，它们可能导致在不同设备上的显示差异。
@@ -309,7 +306,7 @@ export class Project {
 
     // const archMd = buildArchitectureMd(this.root);
 
-    const libraryDocsContent = [mybricksPrompt, antdPrompt, echartsPrompt, iconPrompt].join('\n\n');
+    const libraryDocsContent = getAllLibraryDocs();
 
     const fileSectionParts: string[] = [];
     fileSectionParts.push('\n## 源代码\n');

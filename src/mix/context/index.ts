@@ -2,6 +2,7 @@ import genVibeCodingAgent from "../agent/vibeCoding";
 import { updateRender, updateStyle, updateService, updateStore } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { parsemd } from "../../utils/ai-code/md"
+import { validateCode } from "../avaliableLibraries"
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
@@ -213,12 +214,14 @@ class Context {
           JSON.parse(content);
           aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== 'mock.json');
         } catch (e: any) {
-          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== 'mock.json');
-          aiComParams.data._errors.push({
-            file: 'mock.json',
-            message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-            type: 'compile'
-          });
+          aiComParams.data._errors = [
+            ...aiComParams.data._errors.filter(err => err.file !== 'mock.json'),
+            {
+              file: 'mock.json',
+              message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+              type: 'compile'
+            }
+          ];
         }
         break;
       default:

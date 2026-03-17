@@ -781,8 +781,10 @@ export default function (props: Props, actions: Actions, ...args) {
       if (aiComParams?.data) {
         const data = aiComParams.data;
         if (!data._errors) data._errors = [];
-        data._errors = data._errors.filter((e: any) => e.file);
-        data._errors.push({ message: err.message, type: 'runtime' });
+        data._errors = [
+          ...data._errors.filter((e: any) => e.file),
+          { message: err.message, type: 'runtime' }
+        ];
         context.getAiCom(props.id)?.actions?.notifyChanged?.();
       }
     },

@@ -5,7 +5,7 @@
 - 在需要使用该类库时，直接使用即可
 
 ### 能够使用的图标列表
-ccountBookFilled, AccountBookOutlined, AccountBookTwoTone, AimOutlined,
+AccountBookFilled, AccountBookOutlined, AccountBookTwoTone, AimOutlined,
 AlertFilled, AlertOutlined, AlertTwoTone, AlibabaOutlined,
 AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined,
 AlipayCircleFilled, AlipayCircleOutlined, AlipayOutlined,

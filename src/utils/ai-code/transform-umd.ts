@@ -1,5 +1,6 @@
 import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
+import { getValidatorPlugins } from '../../mix/avaliableLibraries'
 
 export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies = {}): Promise<Function> {
   return new Promise((resolve, reject) => {
@@ -24,12 +25,14 @@ export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies
   })
 }
 
-export function transformTsx(code): Promise<{ transformCode: string, constituency: any }> {
+export function transformTsx(code, ctx?: import('../../mix/avaliableLibraries/types').ValidateContext): Promise<{ transformCode: string, constituency: any }> {
   return new Promise((resolve, reject) => {
     let transformCode
     const constituency: any = [];
 
     try {
+      const validatorPlugins = getValidatorPlugins(ctx ?? { fileName: 'runtime.jsx' })
+
       const options = {
         presets: [
           [
@@ -49,7 +52,8 @@ export function transformTsx(code): Promise<{ transformCode: string, constituenc
               isTSX: true
             }
           ],
-          babelPlugin({ constituency })
+          babelPlugin({ constituency }),
+          ...validatorPlugins,
         ]
       }
 
@@ -126,7 +130,18 @@ export function updateRender({ data, success }, renderCode) {
   const writeSource = () => {
     data.runtimeJsxSource = encodeURIComponent(renderCode);
   };
-  transformTsx(renderCode).then(({ transformCode, constituency }) => {
+  // 构建多文件上下文，供 AST validator plugin 做跨文件关联分析
+  const relatedFiles: Record<string, string> = {};
+  if (data.storeJsSource) {
+    try { relatedFiles['store.js'] = decodeURIComponent(data.storeJsSource); } catch {}
+  }
+  if (data.modelConfig) {
+    try { relatedFiles['model.json'] = decodeURIComponent(data.modelConfig); } catch {}
+  }
+  if (data.serviceJsSource) {
+    try { relatedFiles['service.js'] = decodeURIComponent(data.serviceJsSource); } catch {}
+  }
+  transformTsx(renderCode, { fileName: 'runtime.jsx', relatedFiles }).then(({ transformCode, constituency }) => {
     data.runtimeJsxCompiled = encodeURIComponent(transformCode);
     writeSource();
     data.runtimeJsxConstituency = constituency;
@@ -140,12 +155,14 @@ export function updateRender({ data, success }, renderCode) {
     writeSource();
     // 添加编译错误到统一错误列表
     if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
-    data._errors.push({
-      file: 'runtime.jsx',
-      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-      type: 'compile'
-    });
+    data._errors = [
+      ...data._errors.filter(err => err.file !== 'runtime.jsx'),
+      {
+        file: 'runtime.jsx',
+        message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+        type: 'compile'
+      }
+    ];
     success?.();
   });
 }
@@ -154,7 +171,7 @@ export function updateStore({ data, success }, storeCode) {
   const writeSource = () => {
     data.storeJsSource = encodeURIComponent(storeCode);
   };
-  transformTsx(storeCode).then(({ transformCode }) => {
+  transformTsx(storeCode, { fileName: 'store.js' }).then(({ transformCode }) => {
     data.storeJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
@@ -164,12 +181,14 @@ export function updateStore({ data, success }, storeCode) {
     console.error("[@updateStore error]", e);
     writeSource();
     if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'store.js');
-    data._errors.push({
-      file: 'store.js',
-      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-      type: 'compile'
-    });
+    data._errors = [
+      ...data._errors.filter(err => err.file !== 'store.js'),
+      {
+        file: 'store.js',
+        message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+        type: 'compile'
+      }
+    ];
     success?.();
   });
 }
@@ -178,7 +197,7 @@ export function updateService({ data, success }, serviceCode) {
   const writeSource = () => {
     data.serviceJsSource = encodeURIComponent(serviceCode);
   };
-  transformTsx(serviceCode).then(({ transformCode }) => {
+  transformTsx(serviceCode, { fileName: 'service.js' }).then(({ transformCode }) => {
     data.serviceJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
@@ -188,12 +207,14 @@ export function updateService({ data, success }, serviceCode) {
     console.error("[@updateService error]", e);
     writeSource();
     if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'service.js');
-    data._errors.push({
-      file: 'service.js',
-      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-      type: 'compile'
-    });
+    data._errors = [
+      ...data._errors.filter(err => err.file !== 'service.js'),
+      {
+        file: 'service.js',
+        message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+        type: 'compile'
+      }
+    ];
     success?.();
   });
 }
@@ -242,12 +263,14 @@ export function updateStyle({ id, data, success }, styleCode) {
     writeSource();
     // 添加编译错误到统一错误列表
     if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'style.less');
-    data._errors.push({
-      file: 'style.less',
-      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-      type: 'compile'
-    });
+    data._errors = [
+      ...data._errors.filter(err => err.file !== 'style.less'),
+      {
+        file: 'style.less',
+        message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+        type: 'compile'
+      }
+    ];
     success?.();
   }
 }

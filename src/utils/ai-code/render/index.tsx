@@ -41,13 +41,15 @@ class ErrorBoundary extends Component {
     const { data } = this.props as any;
     if (data) {
       if (!data._errors) data._errors = [];
-      // 移除旧的运行时错误（没有 file 字段的）
-      data._errors = data._errors.filter(err => err.file);
       const errorMessage = error?.toString ? error.toString() : (errorInfo ? errorInfo.componentStack : '未知运行时错误');
-      data._errors.push({
-        message: errorMessage,
-        type: 'runtime'
-      });
+      // 移除旧的运行时错误（没有 file 字段的），替换引用触发 useMemo 重新计算
+      data._errors = [
+        ...data._errors.filter(err => err.file),
+        {
+          message: errorMessage,
+          type: 'runtime'
+        }
+      ];
     }
   }
 
@@ -132,12 +134,14 @@ function evalJSCompiled(code: string, data: any) {
     // 编译错误应该在保存时就被 context/index.ts 捕获了
     if (!data._errors) data._errors = [];
     // 移除旧的 store.js 运行时错误（保留编译错误）
-    data._errors = data._errors.filter(err => !(err.file === 'store.js' && err.type === 'runtime'));
-    data._errors.push({
-      file: 'store.js',
-      message: `Store 执行失败: ${message}`,
-      type: 'runtime'  // 这是运行时错误，不是编译错误
-    });
+    data._errors = [
+      ...data._errors.filter(err => !(err.file === 'store.js' && err.type === 'runtime')),
+      {
+        file: 'store.js',
+        message: `Store 执行失败: ${message}`,
+        type: 'runtime'  // 这是运行时错误，不是编译错误
+      }
+    ];
     return null;
   }
 }
@@ -331,11 +335,13 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
       } catch (error) {
         // 捕获组件定义获取失败的错误
         if (!data._errors) data._errors = [];
-        data._errors = data._errors.filter(err => err.type !== 'runtime' || err.file);
-        data._errors.push({
-          message: `获取组件定义失败: ${error?.toString?.() ?? '未知错误'}`,
-          type: 'runtime'
-        });
+        data._errors = [
+          ...data._errors.filter(err => err.type !== 'runtime' || err.file),
+          {
+            message: `获取组件定义失败: ${error?.toString?.() ?? '未知错误'}`,
+            type: 'runtime'
+          }
+        ];
         return () => <ErrorTip title={'获取组件定义失败'} desc={error?.toString?.()} />;
       }
     } else {
