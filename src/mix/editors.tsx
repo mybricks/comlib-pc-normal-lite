@@ -706,7 +706,7 @@ export default function (props: Props, actions: Actions, ...args) {
     }
   };
 
-  const exportCodeConfig = {
+  const exportCodeConfig = [{
     title: "导出",
     items: [
       {
@@ -756,14 +756,24 @@ export default function (props: Props, actions: Actions, ...args) {
         }
       }
     ]
-  };
+  }, {
+    type: "themes",
+    value: {
+      get(params) {
+        return params.data.themes;
+      },
+      set(params, themes) {
+        params.data.themes = themes;
+      }
+    }
+  }];
 
   if (!focusAreaConfigs[':root']) {
     focusAreaConfigs[':root'] = {
-      items: [exportCodeConfig]
+      items: [...exportCodeConfig]
     };
   } else {
-    focusAreaConfigs[':root'].items.push(exportCodeConfig);
+    focusAreaConfigs[':root'].items.push(...exportCodeConfig);
   }
 
   context.setAiCom(props.id, { params: props, actions });
@@ -1005,10 +1015,14 @@ export default function (props: Props, actions: Actions, ...args) {
                 }
               },
               {
-                type:"themes",
-                value:{
-                  get(){},
-                  set(){}
+                type: "themes",
+                value: {
+                  get(params) {
+                    return params.data.themes;
+                  },
+                  set(params, themes) {
+                    params.data.themes = themes;
+                  }
                 }
               }
             ]

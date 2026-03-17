@@ -6,6 +6,15 @@ const dataCompatible = (data) => {
   if (!data._errors) {
     data._errors = [];
   }
+  if (!data.themes) {
+    data.themes = [];
+    type Themes = {
+      propertyName: string;
+      title: string;
+      value: string;
+      type: string;
+    }[];
+  }
 }
 
 export default (props: any) => {
