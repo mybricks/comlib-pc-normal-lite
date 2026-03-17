@@ -844,6 +844,24 @@ export default function (props: Props, actions: Actions, ...args) {
 
       return result;
     },
+    '@getThemes'(params) {
+      console.log("[@getThemes params]", params);
+      return [
+        {
+          varName: "primary",
+          varTitle: "主色调",
+          value:{
+            get: (params) => {
+              console.log("[@getThemes get primary]", params);
+              return "red";
+            },
+            set: (params, value) => {
+              console.log("[@getThemes set primary]", params, value);
+            }
+          }
+        }
+      ] 
+    },
     '@debug'(params, stop) {
       const events = context.getAiComEvents(params.id);
       if (stop) {
