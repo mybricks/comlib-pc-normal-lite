@@ -111,14 +111,6 @@ const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = 
     )
   }, [])
 
-  if (window._render_comp_start_view_) {
-    return (
-      <div className={css.tip}>
-        {window._render_comp_start_view_()}
-      </div>
-    )
-  }
-
   return (
     <div className={css.tip}>
       {/*<div className={css.title}>{title}</div>*/}
@@ -227,6 +219,18 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
 
     const hasCompiledCode = data.runtimeJsxCompiled && String(data.runtimeJsxCompiled).trim() !== ''
 
+    const shouldRenderSender = !!window._render_comp_start_view_;
+    
+    const renderSender = useMemo(() => {
+      if (window._render_comp_start_view_) {
+        return (
+          <div className={css.tip}>
+            {window._render_comp_start_view_({ comId: id })}
+          </div>
+        )
+      }
+    }, [shouldRenderSender])
+
     // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
     if (data.generate) {
       return (
@@ -280,7 +284,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
             data={data}
             inputs={inputs}
             outputs={outputs}
-            placeholder={<IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
+            placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
             renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} comId={id} />}
             dependencies={{
               ...(dependencies ?? {}),
@@ -296,7 +300,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     // 5. placeholder：等待中，展示提示词
     return (
       <Wrapper env={env} canvasContainer={canvasContainer}>
-        <IdlePlaceholder title={title} orgName={orgName} examples={examples} />
+        { shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} /> }
       </Wrapper>
     );
   }
