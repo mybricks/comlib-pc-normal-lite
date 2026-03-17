@@ -56,18 +56,10 @@ export default function developMyBricksModule(config: Config) {
   import { comRef, pageRef, appRef } from "mybricks";
   import css from 'style.less'
 
-  /**
-   * @summary 标题展示
-   * @prop {string} title - 标题内容
-   */
   const Title = comRef(({ title }) => {
     return <h1>{title}</h1>
   })
 
-  /**
-   * @summary 跳转登录页按钮
-   * @event {redirectToLogin} 跳转登录 - flowchart LR; A[调用 store.redirectToLogin]
-   */
   const LoginButton = comRef(({ store }) => {
     return (
       <button
@@ -79,9 +71,6 @@ export default function developMyBricksModule(config: Config) {
     )
   })
 
-  /**
-   * @summary Hello World
-   */
   const HelloWorld = comRef(() => {
     return (
       <div className={css.container}>
@@ -92,9 +81,6 @@ export default function developMyBricksModule(config: Config) {
     )
   })
 
-  /**
-   * @title Hello World 项目
-   */
   export default appRef(() => {
     return <HelloWorld />
   })
@@ -106,7 +92,7 @@ export default function developMyBricksModule(config: Config) {
     - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 页面、弹窗、组件必须遵循规范进行定义和jsDoc的编写
+  3. 页面、弹窗、组件必须遵循规范进行定义
     - 整个项目有且只能有一个export default导出，那就是appRef;
     - 所有页面和弹窗都需要通过 pageRef 包装，无需导出；
     - 所有组件和模块都需要使用 comRef 包装，无需导出;
@@ -115,8 +101,7 @@ export default function developMyBricksModule(config: Config) {
   5. 禁止编写未实现的事件函数；
   6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
   7. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
-  8. 包含事件的标签内必须包含注释「/** 事件名:事件key */」，且事件key必须与 @event 的 事件key 一致；
-  9. 事件与 JSDoc 一一对应：组件内只要写了事件注释（如 \`/** onChange:updateSearchClass */\`），该组件的 JSDoc 中就必须有对应的 \`@event {updateSearchClass} 描述 - 流程图\` 条目，不得遗漏；反之 JSDoc 中声明的 @event 也必须在代码中有对应的事件注释；
+  8. 包含事件（例如onClick、onChange、onBlur等）的标签内必须包含注释「/** 事件名:事件key */」；
   </编写规范>
 
   <comRef说明>
@@ -136,52 +121,6 @@ export default function developMyBricksModule(config: Config) {
       2. store，全局状态管理
     2. 该页面或弹窗是一个响应式页面或弹窗，页面或弹窗内使用store中的数据时，数据变更会自动刷新页面或弹窗；
   </pageRef说明>
-
-  <JSDoc说明>
-    所有comRef创建的组件必须提供JSDoc。
-    <代码示例>
-    \`\`\`jsdoc
-    /**
-     * @summary 组件详细摘要
-     * @prop {类型} 接收参数的属性名 - 属性描述
-     * @event {事件key（与触发元素上的注释一致）} 事件名 - Mermaid语法流程图
-     */
-    \`\`\`
-    </代码示例>
-
-    <@summary>
-      必填项，根据组件内容分析得出组件的内容摘要；
-    </@summary>
-
-    <@prop>
-      根据组件接收的参数分析得出；
-      例如：当组件接收字符类型的参数「title」,需提供 \`@prop {string} title - 标题\`；
-      注意：忽略*保留字段*：_env，store，logger；
-    </@prop>
-
-    <@event>
-      根据组件dom元素或三方组件的函数事件分析得出；有事件则必写，不得遗漏。
-      例如：当组件内有个按钮有「onClick」事件且标签内包含注释\`/** onClick:onSearch */\`，需提供 \`@event {onSearch} 查询数据 - flowchart LR; A[调用 store.searchData]\`；
-      强制要求：组件内每出现一处事件注释（如 \`/** onChange:updateSearchClass */\`），JSDoc 中必须有且仅有一条与之事件key 相同的 \`@event {updateSearchClass} 描述 - 流程图\`；Select/Input 等组件的 onChange、onClick 等均算事件，均需同时写注释和 @event。
-      注意：
-        - 仅描述该事件处理函数本身的直接调用/操作，不展开 store 的内部流程，例如（若代码中调用 store 内的 xxx 方法，那么该步骤应该为「调用 store.xxx」）；
-        - 流程图节点用动作描述，不写具体取值：例如用「设置loading状态」「取消loading状态」，禁止「设置loading为true」「设置loading为false」；
-        - 禁止：用户动作类描述（如「点击按钮」）、空洞节点（如「开始」「结束」「执行业务操作」）；
-    </@event>
-
-    所有pageRef创建的组件必须提供JSDoc。
-    <代码示例>
-    \`\`\`jsdoc
-    /**
-     * @title 页面名称
-     */
-    \`\`\`
-    </代码示例>
-
-    <@title>
-      必填项，页面名称，字数在3-20字之间，不允许重复；
-    </@title>
-  </JSDoc说明>
   
   2. style.less文件
     <代码示例>
@@ -336,7 +275,7 @@ export default function developMyBricksModule(config: Config) {
 
   <命名与实现>
     - 命名：使用语义化、见名知意的 PascalCase 名称，能从名称直接推断出其在页面中的位置与职责；
-    - 实现：每个区块必须为「const 区块名 = comRef(...)」，并写清 JSDoc；
+    - 实现：每个区块必须为「const 区块名 = comRef(...)」；
     - 组合规则：
       - default 导出中只做一级大区块的布局组合；
       - 每一级区块内只做其直接子区块的组合；
@@ -520,10 +459,6 @@ export default function developMyBricksModule(config: Config) {
   import { comRef, pageRef, appRef, Routes, Route } from 'mybricks';
   import { Button } from 'antd';
 
-  /**
-   * @summary 按钮组件
-   * @event {click} 点击主按钮 - flowchart LR; A[设置loading状态] --> B[延迟1秒] --> C[取消loading状态]
-   */
   const MainButton = comRef(({ store, logger }) => {
     return (
       <Button
@@ -540,9 +475,6 @@ export default function developMyBricksModule(config: Config) {
     )
   });
 
-  /**
-   * @title 按钮页面
-   */ 
   const PageButton = pageRef(() => {
     return (
       <div className={css.viewContainer}>
@@ -551,9 +483,6 @@ export default function developMyBricksModule(config: Config) {
     )
   })
 
-  /**
-   * @title 按钮组件
-   */
   export default appRef(() => {
     return (
       <Routes>
@@ -593,13 +522,19 @@ export default function developMyBricksModule(config: Config) {
   import { Button } from 'xy-ui';
   import css from 'style.less';
 
-  /**
-   * @summary 工具条
-   */
   const ToolBar = comRef(({ store }) => {
     const navigate = useNavigate();
     return store.btns.map((btn, index)=>{
-      return <Button className={css.btn} key={btn.text} onClick={() => navigate(btn.path)}>{btn.text}</Button>
+      return (
+        <Button
+          className={css.btn}
+          key={btn.text}
+          /** onClick:navigateToPath */
+          onClick={() => navigate(btn.path)}
+        >
+          {btn.text}
+        </Button>
+      )
     })
   })
 
@@ -627,10 +562,7 @@ export default function developMyBricksModule(config: Config) {
       </div>
     )
   })
-    
-  /**
-   * @title 双按钮项目
-   */
+
   export default appRef(() => {
     return (
       <Routes>
