@@ -333,6 +333,18 @@ export default function ({ context }) {
       let lockId = uuid();
 
       const onProgress = (status) => {
+        const { focusArea } = focus;
+        if (!focusArea) {
+          params?.onProgress?.(status);
+        } else {
+        if (status === "start") {
+          actions.lock(lockId, focusArea);
+        } else if (status === "complete") {
+          actions.unlock(lockId, focusArea);
+        } else if (status === "error") {
+          actions.unlock(lockId, focusArea);
+        }
+        }
         // console.log("[@comName]", comName);
         // console.log("[@status]", status);
         // console.log("[@lockId]", lockId);
@@ -347,14 +359,6 @@ export default function ({ context }) {
         //     actions.unlock(lockId, comName);
         //   }
         // }
-
-        if (status === "start") {
-          actions.lock(lockId, focus.focusArea);
-        } else if (status === "complete") {
-          actions.unlock(lockId, focus.focusArea);
-        } else if (status === "error") {
-          actions.unlock(lockId, focus.focusArea);
-        }
       }
 
       const focusArea = actions?.getFocusArea?.();

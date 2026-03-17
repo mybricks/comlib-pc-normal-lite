@@ -136,6 +136,10 @@ export default function developMyBricksModule(config: Config) {
     \`\`\`
     </代码示例>
 
+    <编写规范>
+    1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式，优先使用项目提供的主题变量；
+    </编写规范>
+
   3. store.js文件
     store.js文件用于管理模块的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
     <代码示例>
@@ -173,6 +177,7 @@ export default function developMyBricksModule(config: Config) {
       - 禁止使用 getter 方法（例如：get count() {...}）;
       - 使用service.js时，务必使用'service'这个路径，禁止做其他发挥，禁止动态引用；
       - 任何数据初始化动作都不允许写在 constructor 内；
+      - store.js 是纯 JavaScript 文件，禁止出现任何 JSX 语法（例如 <Icon />、<div> 等标签），也禁止从任何 UI 组件库引入 JSX 组件并作为字段值存储；
     </注意>
 
   4. service.js文件
@@ -221,9 +226,11 @@ export default function developMyBricksModule(config: Config) {
     </代码示例>
 
     <使用原则>
-      - mock 反映的是真实接口返回的数据结构，与 service 中对应 API 的响应结构一致；
+      - mock 反映的是真实接口返回的数据结构，与 service 中对应 API 的响应结构保持一致；
+      - mock.json 中的 key 必须与 service.js 中各 \`createAPI\` 定义的 \`url\` 字段一一对应，不得遗漏、不得多余；
+      - 每新增或修改一个 service.js 接口，必须同步在 mock.json 中添加或更新对应的 mock 数据；
+      - mock 数据应尽量贴近真实业务场景，字段完整、有意义，便于设计态预览时呈现真实效果；
       - mock 仅在设计态用于 mock 接口数据并展示内容，与 store、runtime 等正式代码无关；
-      - 字段与 service 中的 url 一一对应；
       - store 内禁止再声明 mock，也不得依赖 mock 数据；有 service 时 store 应优先走 service 调用。
     </使用原则>
 
@@ -247,7 +254,14 @@ export default function developMyBricksModule(config: Config) {
     3. 主题变量的使用方式：直接以 CSS 变量形式引用，例如 \`color: var(--primary-color)\`；
     4. 若某属性在主题变量中找不到对应项，方可使用具体数值，但需保持与主题整体风格一致；
     5. 所有新增或修改的样式，应与当前主题风格保持协调统一，不得出现与主题风格明显违和的配色、圆角或间距；
-    6. 三方类库组件自带的默认样式不会自动使用项目主题变量。当三方组件的默认样式（如主色、圆角等）与项目主题风格不一致时，需在 style.less 中通过覆写其样式来适配主题变量，仅在视觉不协调时按需覆写，无需对所有三方组件进行全量覆盖。
+    6. 三方类库组件自带的默认样式不会自动使用项目主题变量。当三方组件的默认样式（如主色、圆角等）与项目主题风格不一致时，需在 style.less 中通过覆写其样式来适配主题变量，仅在视觉不协调时按需覆写；
+      - 对于三方类库，重点关注各类主题风格色值的配置，例如color、border-color、background-color等
+    7. 【主动更新风格】当用户需求中出现以下任一情形时，必须主动检查并更新 style.less 及相关代码，使其与主题变量对齐：
+      - 用户明确提及「主题」「风格」「配色」「品牌色」「设计规范」「换肤」等关键词；
+      - 用户要求整体视觉调整，如「统一风格」「让界面更协调」「按照设计稿来」等；
+      - 用户提供了新的风格变量，要求还原或对齐；
+      - 用户调整了项目主题变量配置，要求同步更新界面效果；
+      此时不得仅修改用户明确指出的单一属性，而应同步审视并更新所有存在硬编码色值、不符合主题变量规范的样式，确保整体视觉风格统一协调。
   </设计风格与主题变量使用说明>
 
   注意：
@@ -413,7 +427,7 @@ export default function developMyBricksModule(config: Config) {
     1、对于卡片类、容器类等需求，最外层容器的宽度与高度都要100%；
     2、确保style.less文件的代码严格遵守以下要求：
       - 所有与样式相关的内容都要写在style.less文件中，避免在runtime.jsx中通过style编写；
-      - 严格遵守 <设计风格与主题变量使用说明/>；
+      - 要严格参考 <设计风格与主题变量使用说明/> 来编写样式，优先使用项目提供的主题变量；
       - 在选择器中，多个单词之间使用驼峰的方式，不能使用-连接;
       - 当提出例如“要适应容器尺寸”等要求时，这里的容器指的是模块的父容器，不是整个页面；
       - 禁止使用 CSS Modules 的 :global 语法；
