@@ -3,6 +3,7 @@ import antDesignIcons, { validator as antDesignIconsValidator } from './ant-desi
 import echarts, { validator as echartsValidator } from './echarts-for-react'
 import dayjs, { validator as dayjsValidator } from './dayjs'
 import mybricks from './mybricks'
+import publicValidator from './public/validator'
 
 export type { ValidationError, LibraryValidator, CodeValidationResult, ValidateContext } from './types'
 
@@ -11,6 +12,7 @@ export type { ValidationError, LibraryValidator, CodeValidationResult, ValidateC
  * 新增库时在此追加
  */
 const VALIDATORS = [
+  publicValidator,
   antDesignIconsValidator,
   antdValidator,
   echartsValidator,
