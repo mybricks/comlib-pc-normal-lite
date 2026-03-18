@@ -110,6 +110,9 @@ export default function developMyBricksModule(config: Config) {
       1. _env，环境变量
         - _env.mode: 运行环境，design|runtime
       2. store，全局状态管理
+        - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
+        - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
+        - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
 
@@ -119,6 +122,9 @@ export default function developMyBricksModule(config: Config) {
       1. _env，环境变量
         - _env.mode: 运行环境，design|runtime
       2. store，全局状态管理
+        - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
+        - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
+        - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
     2. 该页面或弹窗是一个响应式页面或弹窗，页面或弹窗内使用store中的数据时，数据变更会自动刷新页面或弹窗；
   </pageRef说明>
   
@@ -174,6 +180,7 @@ export default function developMyBricksModule(config: Config) {
 
     <注意>
       - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要更新字段A时，必须修改A的值；
+      - store 是纯 class 实例，不提供也不支持任何 hooks API（例如 store.useState、store.useXxx 等均不存在），禁止调用；
       - 禁止使用 getter 方法（例如：get count() {...}）;
       - 使用service.js时，务必使用'service'这个路径，禁止做其他发挥，禁止动态引用；
       - 任何数据初始化动作都不允许写在 constructor 内；

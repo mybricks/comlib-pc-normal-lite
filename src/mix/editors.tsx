@@ -707,10 +707,10 @@ export default function (props: Props, actions: Actions, ...args) {
   };
 
   const exportCodeConfig = [{
-    title: "导出",
+    title: "代码",
     items: [
       {
-        title: "导出为代码",
+        title: "导出代码",
         type: "Button",
         value: {
           async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
@@ -909,7 +909,9 @@ export default function (props: Props, actions: Actions, ...args) {
           pageIndex: Number(pageIndex),
           style: {
             // 水平位移：把「页相对根容器」的视口距离，按根容器缩放比换算成布局坐标，再减去左边框和内边距
-            transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`
+            transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`,
+            maxWidth: pageBCR.width,
+            maxHeight: pageBCR.height
           },
           rootStyle: {
             // 根容器内容区宽高（去掉 padding 后的可排版区域）
