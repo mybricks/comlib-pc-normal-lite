@@ -342,11 +342,25 @@ function createRouterLib(
         return !seenElementTypes.has(elementType);
       });
 
+      const baseCtx = ctx ?? { currentPath: '', _env };
+
       return (
         <>
-          {visibleRoutes.map((r, i) => (
-            <React.Fragment key={i}>{r.props.element}</React.Fragment>
-          ))}
+          {visibleRoutes.map((r, i) => {
+            // 为每个页面注入独立的 RouterContext，使 useLocation 能返回该页面对应的路径
+            const routePath = r.props.index ? '' : normalizePath(r.props.path ?? '');
+            const pageCtx: RouterContextValue = {
+              ...baseCtx,
+              currentPath: routePath,
+              navigate: () => {},
+              params: {},
+            };
+            return (
+              <RouterContext.Provider key={i} value={pageCtx}>
+                {r.props.element}
+              </RouterContext.Provider>
+            );
+          })}
         </>
       );
     }
@@ -609,6 +623,8 @@ export function createMybricks(options: CreateMybricksOptions) {
             minHeight: 600,
             display: 'inline-block',
             transform: 'scale(1)',
+            height: 'fit-content',
+            width: 'fit-content',
             ...env._debugTarget?.style,
             ...themes.reduce((pre, cur) => {
               pre[cur.propertyName] = cur.value;
