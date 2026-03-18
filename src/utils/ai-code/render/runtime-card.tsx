@@ -220,7 +220,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
     const hasCompiledCode = data.runtimeJsxCompiled && String(data.runtimeJsxCompiled).trim() !== ''
 
     const shouldRenderSender = !!window._render_comp_start_view_;
-    
+
     const renderSender = useMemo(() => {
       if (window._render_comp_start_view_) {
         return (
