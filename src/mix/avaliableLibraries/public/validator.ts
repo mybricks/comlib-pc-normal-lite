@@ -17,6 +17,8 @@ const BUILTIN_LIBRARIES: readonly string[] = [
  * 新增允许库时在此追加。
  */
 const THIRD_PARTY_LIBRARIES: readonly string[] = [
+  'react',
+  'react-dom',
   'antd',
   '@ant-design/icons',
   'echarts-for-react',
