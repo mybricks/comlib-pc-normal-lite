@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
+import { Console } from "console-feed";
 import context from "../context";
 import lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
@@ -44,6 +45,28 @@ export const lowcodeViewEvents = new Events<{
 export default function LowcodeView(params: Params) {
   const [selectedFileName, setSelectedFileName] = useState<FileName>(FILES[0]);
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
+
+  const componentId = params.model?.runtime?.id;
+
+  // 从 context 读取当前组件的调试状态（强制刷新用的 tick）
+  const [, setTick] = useState(0);
+  const forceUpdate = useCallback(() => setTick(t => t + 1), []);
+
+  // 订阅当前组件的调试/日志状态变更
+  useEffect(() => {
+    if (!componentId) return;
+    const off = context.getComDebugStateEvents(componentId).on('change', () => forceUpdate(), false);
+    return () => off();
+  }, [componentId, forceUpdate]);
+
+  const debugState = componentId ? context.getComDebugState(componentId) : null;
+  const isDebugging = debugState?.isDebugging ?? false;
+  const bottomTab = debugState?.bottomTab ?? 'source';
+  const consoleLogs = debugState?.logs ?? [];
+
+  const setBottomTab = useCallback((tab: 'source' | 'console') => {
+    if (componentId) context.setComBottomTab(componentId, tab);
+  }, [componentId]);
 
   const coderOptions = useMemo(() => {
     const path = `file:///${"组件id"}/${selectedFileName}`;
@@ -104,6 +127,7 @@ export default function LowcodeView(params: Params) {
       // [TODO] 闪烁问题
       // 切到runtime代码
       setSelectedFileName("runtime.jsx");
+      setBottomTab('source');
 
       // 等待编辑器就绪
       let editor = codeIns.current?.editor;
@@ -239,6 +263,22 @@ export default function LowcodeView(params: Params) {
   return (
     <>
       <div className={css['lowcode-view-toolbar']}>
+        <div className={css['lowcode-view-toolbar-tabs']}>
+          <div
+            className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+            onClick={() => setBottomTab('source')}
+          >
+            源代码
+          </div>
+          {isDebugging && (
+            <div
+              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'console' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+              onClick={() => setBottomTab('console')}
+            >
+              控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className={`${css['lowcode-view-toolbar-button']} ${hasUnsavedChanges ? css['lowcode-view-toolbar-button-nosave'] : css['lowcode-view-toolbar-button-disabled']}`}
@@ -248,7 +288,8 @@ export default function LowcodeView(params: Params) {
           保存
         </button>
       </div>
-      <div className={css['lowcode-view']}>
+      {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
+      <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
         <div className={css['file-list']}>
           {FILES.map((fileName) => (
             <div
@@ -279,6 +320,31 @@ export default function LowcodeView(params: Params) {
           </Editor>
         </div>
       </div>
+      {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}
+      {isDebugging && (
+        <div className={css['lowcode-view']} style={{ display: bottomTab === 'console' ? 'flex' : 'none' }}>
+          <div className={css['console-container']}>
+            <div className={css['console-toolbar']}>
+              <button
+                className={css['console-clear-btn']}
+                onClick={() => { if (componentId) context.clearComLogs(componentId); }}
+              >
+                清空
+              </button>
+            </div>
+            <div className={css['console-feed-wrapper']}>
+              <Console
+                logs={consoleLogs}
+                variant="light"
+                styles={{
+                  BASE_FONT_SIZE: 12,
+                  BASE_LINE_HEIGHT: 1.4,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

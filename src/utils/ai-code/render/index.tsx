@@ -288,7 +288,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
         const storeCompiledCode = decodeURIComponent(data.storeJsCompiled ?? '');
         const storeIsCommonJS = storeCompiledCode && !/\bexport\b/.test(storeCompiledCode);
         const StoreClass = storeIsCommonJS
-          ? runRender(storeCompiledCode, { ...serviceDeps })
+          ? runRender(storeCompiledCode, { ...serviceDeps, 'mybricks': tempMybricksLib, })
           : evalJSCompiled(storeCompiledCode, data);
 
         // 3. 用真实 StoreClass 创建最终 mybricksLib

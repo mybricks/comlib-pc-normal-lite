@@ -13,426 +13,435 @@
   "serviceJsCompiled": "",
   "debugTarget": null,
   "mockJsonSource": "",
-  "themes": [
-    {
-      "propertyName": "--color-primary",
-      "value": "#1890ff",
-      "title": "品牌色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-bg",
-      "value": "#e6f7ff",
-      "title": "主色浅色背景色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-bg-hover",
-      "value": "#bae7ff",
-      "title": "主色浅色背景悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-border",
-      "value": "#91d5ff",
-      "title": "主色描边色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-border-hover",
-      "value": "#69c0ff",
-      "title": "主色描边色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-hover",
-      "value": "#40a9ff",
-      "title": "主色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-active",
-      "value": "#096dd9",
-      "title": "主色激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-text-hover",
-      "value": "#40a9ff",
-      "title": "主色文本悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-text",
-      "value": "#1890ff",
-      "title": "主色文本",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-primary-text-active",
-      "value": "#096dd9",
-      "title": "主色文本激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error",
-      "value": "#ff4d4f",
-      "title": "错误色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-bg",
-      "value": "#fff2f0",
-      "title": "错误色的浅色背景颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-bg-hover",
-      "value": "#fff1f0",
-      "title": "错误色的浅色背景色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-border",
-      "value": "#ffccc7",
-      "title": "错误色的描边色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-border-hover",
-      "value": "#ffa39e",
-      "title": "错误色的描边色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-hover",
-      "value": "#ff7875",
-      "title": "错误色的深色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-active",
-      "value": "#d9363e",
-      "title": "错误色的深色激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-text-hover",
-      "value": "#ff7875",
-      "title": "错误色的文本悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-text",
-      "value": "#ff4d4f",
-      "title": "错误色的文本默认态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-error-text-active",
-      "value": "#d9363e",
-      "title": "错误色的文本激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning",
-      "value": "#faad14",
-      "title": "警戒色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-bg",
-      "value": "#fffbe6",
-      "title": "警戒色的浅色背景颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-bg-hover",
-      "value": "#fff1b8",
-      "title": "警戒色的浅色背景色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-border",
-      "value": "#ffe58f",
-      "title": "警戒色的描边色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-border-hover",
-      "value": "#ffd666",
-      "title": "警戒色的描边色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-hover",
-      "value": "#ffd666",
-      "title": "警戒色的深色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-active",
-      "value": "#d48806",
-      "title": "警戒色的深色激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-text-hover",
-      "value": "#ffc53d",
-      "title": "警戒色的文本悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-text",
-      "value": "#faad14",
-      "title": "警戒色的文本默认态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-warning-text-active",
-      "value": "#d48806",
-      "title": "警戒色的文本激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success",
-      "value": "#52c41a",
-      "title": "成功色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-bg",
-      "value": "#f6ffed",
-      "title": "成功色的浅色背景颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-bg-hover",
-      "value": "#d9f7be",
-      "title": "成功色的浅色背景色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-border",
-      "value": "#b7eb8f",
-      "title": "成功色的描边色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-border-hover",
-      "value": "#95de64",
-      "title": "成功色的描边色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-hover",
-      "value": "#95de64",
-      "title": "成功色的深色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-active",
-      "value": "#389e0d",
-      "title": "成功色的深色激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-text-hover",
-      "value": "#73d13d",
-      "title": "成功色的文本悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-text",
-      "value": "#52c41a",
-      "title": "成功色的文本默认态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-success-text-active",
-      "value": "#389e0d",
-      "title": "成功色的文本激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info",
-      "value": "#1890ff",
-      "title": "信息色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-bg",
-      "value": "#e6f7ff",
-      "title": "信息色的浅色背景颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-bg-hover",
-      "value": "#bae7ff",
-      "title": "信息色的浅色背景色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-border",
-      "value": "#91d5ff",
-      "title": "信息色的描边色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-border-hover",
-      "value": "#69c0ff",
-      "title": "信息色的描边色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-hover",
-      "value": "#69c0ff",
-      "title": "信息色的深色悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-active",
-      "value": "#096dd9",
-      "title": "信息色的深色激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-text-hover",
-      "value": "#40a9ff",
-      "title": "信息色的文本悬浮态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-text",
-      "value": "#1890ff",
-      "title": "信息色的文本默认态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-info-text-active",
-      "value": "#096dd9",
-      "title": "信息色的文本激活态",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-link",
-      "value": "#1890ff",
-      "title": "链接色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-link-hover",
-      "value": "#69c0ff",
-      "title": "超链接悬浮颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-link-active",
-      "value": "#096dd9",
-      "title": "超链接激活颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-text-base",
-      "value": "#000",
-      "title": "基础文本色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-text",
-      "value": "rgba(0, 0, 0, 0.88)",
-      "title": "一级文本色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-text-secondary",
-      "value": "rgba(0, 0, 0, 0.65)",
-      "title": "二级文本色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-text-tertiary",
-      "value": "rgba(0, 0, 0, 0.45)",
-      "title": "三级文本色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-text-quaternary",
-      "value": "rgba(0, 0, 0, 0.25)",
-      "title": "四级文本色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-bg-base",
-      "value": "#fff",
-      "title": "基础背景色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-bg-container",
-      "value": "#ffffff",
-      "title": "组件容器背景色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-bg-elevated",
-      "value": "#ffffff",
-      "title": "浮层容器背景色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-bg-layout",
-      "value": "#f5f5f5",
-      "title": "布局背景色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-bg-spotlight",
-      "value": "rgba(0, 0, 0, 0.85)",
-      "title": "引起注意的背景色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-bg-mask",
-      "value": "rgba(0, 0, 0, 0.45)",
-      "title": "浮层的背景蒙层颜色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-border",
-      "value": "#d9d9d9",
-      "title": "一级边框色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-border-secondary",
-      "value": "#f0f0f0",
-      "title": "二级边框色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-fill",
-      "value": "rgba(0, 0, 0, 0.15)",
-      "title": "一级填充色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-fill-secondary",
-      "value": "rgba(0, 0, 0, 0.06)",
-      "title": "二级填充色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-fill-tertiary",
-      "value": "rgba(0, 0, 0, 0.04)",
-      "title": "三级填充色",
-      "type": "color"
-    },
-    {
-      "propertyName": "--color-fill-quaternary",
-      "value": "rgba(0, 0, 0, 0.02)",
-      "title": "四级填充色",
-      "type": "color"
-    }
-  ]
+  "themes": {
+    "activeThemeId": "theme-1",
+    "themes": [
+      {
+        "id": "theme-1",
+        "name": "默认主题",
+        "vars": [
+          {
+            "propertyName": "--color-primary",
+            "value": "#1890ff",
+            "title": "品牌色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-bg",
+            "value": "#e6f7ff",
+            "title": "主色浅色背景色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-bg-hover",
+            "value": "#bae7ff",
+            "title": "主色浅色背景悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-border",
+            "value": "#91d5ff",
+            "title": "主色描边色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-border-hover",
+            "value": "#69c0ff",
+            "title": "主色描边色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-hover",
+            "value": "#40a9ff",
+            "title": "主色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-active",
+            "value": "#096dd9",
+            "title": "主色激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-text-hover",
+            "value": "#40a9ff",
+            "title": "主色文本悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-text",
+            "value": "#1890ff",
+            "title": "主色文本",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-primary-text-active",
+            "value": "#096dd9",
+            "title": "主色文本激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error",
+            "value": "#ff4d4f",
+            "title": "错误色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-bg",
+            "value": "#fff2f0",
+            "title": "错误色的浅色背景颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-bg-hover",
+            "value": "#fff1f0",
+            "title": "错误色的浅色背景色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-border",
+            "value": "#ffccc7",
+            "title": "错误色的描边色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-border-hover",
+            "value": "#ffa39e",
+            "title": "错误色的描边色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-hover",
+            "value": "#ff7875",
+            "title": "错误色的深色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-active",
+            "value": "#d9363e",
+            "title": "错误色的深色激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-text-hover",
+            "value": "#ff7875",
+            "title": "错误色的文本悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-text",
+            "value": "#ff4d4f",
+            "title": "错误色的文本默认态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-error-text-active",
+            "value": "#d9363e",
+            "title": "错误色的文本激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning",
+            "value": "#faad14",
+            "title": "警戒色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-bg",
+            "value": "#fffbe6",
+            "title": "警戒色的浅色背景颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-bg-hover",
+            "value": "#fff1b8",
+            "title": "警戒色的浅色背景色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-border",
+            "value": "#ffe58f",
+            "title": "警戒色的描边色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-border-hover",
+            "value": "#ffd666",
+            "title": "警戒色的描边色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-hover",
+            "value": "#ffd666",
+            "title": "警戒色的深色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-active",
+            "value": "#d48806",
+            "title": "警戒色的深色激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-text-hover",
+            "value": "#ffc53d",
+            "title": "警戒色的文本悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-text",
+            "value": "#faad14",
+            "title": "警戒色的文本默认态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-warning-text-active",
+            "value": "#d48806",
+            "title": "警戒色的文本激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success",
+            "value": "#52c41a",
+            "title": "成功色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-bg",
+            "value": "#f6ffed",
+            "title": "成功色的浅色背景颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-bg-hover",
+            "value": "#d9f7be",
+            "title": "成功色的浅色背景色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-border",
+            "value": "#b7eb8f",
+            "title": "成功色的描边色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-border-hover",
+            "value": "#95de64",
+            "title": "成功色的描边色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-hover",
+            "value": "#95de64",
+            "title": "成功色的深色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-active",
+            "value": "#389e0d",
+            "title": "成功色的深色激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-text-hover",
+            "value": "#73d13d",
+            "title": "成功色的文本悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-text",
+            "value": "#52c41a",
+            "title": "成功色的文本默认态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-success-text-active",
+            "value": "#389e0d",
+            "title": "成功色的文本激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info",
+            "value": "#1890ff",
+            "title": "信息色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-bg",
+            "value": "#e6f7ff",
+            "title": "信息色的浅色背景颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-bg-hover",
+            "value": "#bae7ff",
+            "title": "信息色的浅色背景色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-border",
+            "value": "#91d5ff",
+            "title": "信息色的描边色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-border-hover",
+            "value": "#69c0ff",
+            "title": "信息色的描边色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-hover",
+            "value": "#69c0ff",
+            "title": "信息色的深色悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-active",
+            "value": "#096dd9",
+            "title": "信息色的深色激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-text-hover",
+            "value": "#40a9ff",
+            "title": "信息色的文本悬浮态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-text",
+            "value": "#1890ff",
+            "title": "信息色的文本默认态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-info-text-active",
+            "value": "#096dd9",
+            "title": "信息色的文本激活态",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-link",
+            "value": "#1890ff",
+            "title": "链接色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-link-hover",
+            "value": "#69c0ff",
+            "title": "超链接悬浮颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-link-active",
+            "value": "#096dd9",
+            "title": "超链接激活颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-text-base",
+            "value": "#000",
+            "title": "基础文本色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-text",
+            "value": "rgba(0, 0, 0, 0.88)",
+            "title": "一级文本色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-text-secondary",
+            "value": "rgba(0, 0, 0, 0.65)",
+            "title": "二级文本色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-text-tertiary",
+            "value": "rgba(0, 0, 0, 0.45)",
+            "title": "三级文本色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-text-quaternary",
+            "value": "rgba(0, 0, 0, 0.25)",
+            "title": "四级文本色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-bg-base",
+            "value": "#fff",
+            "title": "基础背景色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-bg-container",
+            "value": "#ffffff",
+            "title": "组件容器背景色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-bg-elevated",
+            "value": "#ffffff",
+            "title": "浮层容器背景色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-bg-layout",
+            "value": "#f5f5f5",
+            "title": "布局背景色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-bg-spotlight",
+            "value": "rgba(0, 0, 0, 0.85)",
+            "title": "引起注意的背景色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-bg-mask",
+            "value": "rgba(0, 0, 0, 0.45)",
+            "title": "浮层的背景蒙层颜色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-border",
+            "value": "#d9d9d9",
+            "title": "一级边框色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-border-secondary",
+            "value": "#f0f0f0",
+            "title": "二级边框色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-fill",
+            "value": "rgba(0, 0, 0, 0.15)",
+            "title": "一级填充色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-fill-secondary",
+            "value": "rgba(0, 0, 0, 0.06)",
+            "title": "二级填充色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-fill-tertiary",
+            "value": "rgba(0, 0, 0, 0.04)",
+            "title": "三级填充色",
+            "type": "color"
+          },
+          {
+            "propertyName": "--color-fill-quaternary",
+            "value": "rgba(0, 0, 0, 0.02)",
+            "title": "四级填充色",
+            "type": "color"
+          }
+        ]
+      }
+    ]
+  }
 }

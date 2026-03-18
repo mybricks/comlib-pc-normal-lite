@@ -53,7 +53,7 @@ export default function developMyBricksModule(config: Config) {
   1. runtime.jsx文件
   <代码示例>
   \`\`\`jsx file="runtime.jsx"
-  import { comRef, pageRef, appRef } from "mybricks";
+  import { comRef, pageRef, appRef, logger } from "mybricks";
   import css from 'style.less'
 
   const Title = comRef(({ title }) => {
@@ -65,6 +65,7 @@ export default function developMyBricksModule(config: Config) {
       <button
         /** onClick:redirectToLogin */
         onClick={() => {
+          logger.info('[LoginButton/onClick] 点击登录按钮');
           store.redirectToLogin();
         }}
       >登录</button>
@@ -88,8 +89,8 @@ export default function developMyBricksModule(config: Config) {
   </代码示例>
 
   <编写规范>
-  1. 组件 props 禁止传递*保留字段*：_env，store，logger；
-    - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
+  1. 组件 props 禁止传递*保留字段*：_env，store；
+    - 错误：\`<UserInfo _env={_env} store={store} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
   3. 页面、弹窗、组件必须遵循规范进行定义
@@ -150,15 +151,19 @@ export default function developMyBricksModule(config: Config) {
     store.js文件用于管理模块的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
     <代码示例>
     \`\`\`js file="store.js"
+    import { logger } from 'mybricks';
+
     export default class Store {
       count = 1;
       name = "";
 
       incCount() {
+        logger.info('[Store/incCount] 计数加一', { before: this.count });
         this.count++;
       }
 
       setName(name) {
+        logger.info('[Store/setName] 设置名称', { name });
         this.name = name;
       }
     }
@@ -256,6 +261,26 @@ export default function developMyBricksModule(config: Config) {
     > 如果用户指定类库中并不在<允许使用的类库/>范围内，则告知用户无法使用，并且使用当前 <允许使用的类库/> 进行替代实现或者占位。
   </技术栈和类库使用说明>
 
+  <日志规范>
+    项目中必须使用 mybricks 提供的 \`logger\` 工具打印日志，禁止使用 console.log / console.warn / console.error 等原生方法。
+
+    <打日志的强制要求>
+      必须在以下所有场景中打印足量日志，确保运行时行为可追踪、可排查：
+      1. 用户交互事件：所有 onClick、onChange、onBlur 等事件触发时，打印 logger.info 记录操作行为及关键参数；
+      2. 数据请求：接口调用前打印 logger.info 记录请求参数，请求成功后打印 logger.info 记录返回数据摘要，请求失败时打印 logger.error 记录错误信息；
+      3. 状态变更：store 中任何方法被调用时，打印 logger.info 记录方法名及关键入参；
+      4. 条件分支与异常：进入关键条件分支时打印 logger.info 说明走了哪个分支；try-catch 中 catch 块必须打印 logger.error 记录异常；
+      5. 路由跳转：导航跳转时打印 logger.info 记录目标路径；
+      6. 任何可能失败的操作（如数据解析、类型转换等）都需要用 try-catch 包裹，并在 catch 中使用 logger.error 打印错误详情。
+    </打日志的强制要求>
+
+    <日志格式要求>
+      - 日志消息应包含上下文前缀，便于定位来源，格式推荐：\`[组件名/方法名] 具体描述\`；
+      - 示例：\`logger.info('[UserList/fetchUsers] 开始请求用户列表', { page: 1 })\`；
+      - 错误日志必须携带 error 对象：\`logger.error('[Store/loadData] 数据加载失败', error)\`。
+    </日志格式要求>
+  </日志规范>
+
   <设计风格与主题变量使用说明>
     在*项目信息*中，会提供当前项目配置的主题变量（即「设计风格」部分），这些 CSS 变量已自动注入页面，你在编写样式时必须遵守以下原则：
     1. 凡是涉及颜色（主色、辅色、背景色、文字色、边框色等）、圆角、间距等与品牌/视觉规范相关的属性，必须优先使用主题变量，禁止硬编码具体色值或数值；
@@ -276,7 +301,8 @@ export default function developMyBricksModule(config: Config) {
   注意：
   1、要严格参考 <技术栈和类库使用说明/> 来开发；
   2、要严格参考 <设计风格与主题变量使用说明/> 来编写样式，优先使用项目提供的主题变量；
-  3、你要完成的是中文场景下的开发任务，请仔细斟酌文案、用语，在各类文案表达中尽量使用中文，但是对于代码、技术术语等，可以使用英文。
+  3、你要完成的是中文场景下的开发任务，请仔细斟酌文案、用语，在各类文案表达中尽量使用中文，但是对于代码、技术术语等，可以使用英文；
+  4、必须严格遵循 <日志规范/>；
 </MyBricks模块开发要求>
 
 <区块拆分原则与规范>
@@ -516,15 +542,16 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`after file="runtime.jsx"
   import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes, Route } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, logger } from 'mybricks';
   import { Button } from 'antd';
 
-  const MainButton = comRef(({ store, logger }) => {
+  const MainButton = comRef(({ store }) => {
     return (
       <Button
         className={css.mainBtn}
         /** onClick:click */
         onClick={() => {
+          logger.info('[MainButton/onClick] 点击按钮');
           store.click();
           store.setLoading(true);
           setTimeout(() => {
@@ -578,7 +605,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
 
   \`\`\`after file="runtime.jsx"
-  import { comRef, pageRef, appRef, Routes, Route, useNavigate } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, useNavigate, logger } from 'mybricks';
   import { Button } from 'xy-ui';
   import css from 'style.less';
 
@@ -590,7 +617,10 @@ export default function developMyBricksModule(config: Config) {
           className={css.btn}
           key={btn.text}
           /** onClick:navigateToPath */
-          onClick={() => navigate(btn.path)}
+          onClick={() => {
+            logger.info('[ToolBar/onClick] 点击导航按钮', { text: btn.text, path: btn.path });
+            navigate(btn.path);
+          }}
         >
           {btn.text}
         </Button>

@@ -117,3 +117,21 @@ export default appRef(() => {
   );
 });
 ```
+
+### 日志
+对于日志，我们提供了 `logger` 工具。
+
+#### 支持的方法
+
+| 方法 | 说明 | 适用场景 |
+|------|------|---------|
+| `logger.log(msg, ...args)` | 普通日志 | 一般性信息输出 |
+| `logger.info(msg, ...args)` | 信息日志 | 关键业务节点记录 |
+| `logger.warn(msg, ...args)` | 警告日志 | 非预期但可兼容的情况 |
+| `logger.error(msg, ...args)` | 错误日志 | 异常和错误信息 |
+
+#### 使用示例
+```js
+import { logger } from 'mybricks';
+logger.info('这是一条日志');
+```

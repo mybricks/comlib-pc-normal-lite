@@ -7,13 +7,27 @@ const dataCompatible = (data) => {
     data._errors = [];
   }
   if (!data.themes) {
-    data.themes = [];
-    type Themes = {
-      propertyName: string;
-      title: string;
-      value: string;
-      type: string;
-    }[];
+    data.themes = {
+      activeThemeId: 'theme-1',
+      themes: [
+        {
+          id: 'theme-1',
+          name: '默认主题',
+          vars: []
+        }
+      ]
+    };
+  } else if (Array.isArray(data.themes)) {
+    data.themes = {
+      activeThemeId: 'theme-1',
+      themes: [
+        {
+          id: 'theme-1',
+          name: '默认主题',
+          vars: data.themes
+        }
+      ]
+    }
   }
 }
 

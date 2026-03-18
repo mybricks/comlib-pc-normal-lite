@@ -144,6 +144,8 @@ interface AIRuntimeProps {
   /** 组件运行时的依赖 */
   dependencies?: Record<string, any>,
   wrapper?: FunctionComponent<{ children: ReactElement, env: any, canvasContainer: any }>,
+  /** logger 对象或 logger 工厂函数（接受组件 id 返回 logger 对象） */
+  logger: any | ((id: string) => any);
 }
 
 // const mybricks = {
@@ -152,8 +154,8 @@ interface AIRuntimeProps {
 //   }
 // }
 
-export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: AIRuntimeProps) =>
-  ({env, data, inputs, outputs, slots, logger, id}: RuntimeParams<any>) => {
+export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, logger}: AIRuntimeProps) =>
+  ({env, data, inputs, outputs, slots, id}: RuntimeParams<any>) => {
     // useMemo(() => {
     //   if (env.edit) {
     //     data._editors = void 0
@@ -273,11 +275,12 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
 
     // 4. runtime：编译成功，渲染组件
     if (hasCompiledCode) {
+      const resolvedLogger = typeof logger === 'function' ? logger({ id, mode: env.runtime ? 'runtime' : 'design'}) : logger;
       return (
         <Wrapper env={env} canvasContainer={canvasContainer}>
           <AIJsxRuntime
             env={env}
-            logger={logger}
+            logger={resolvedLogger}
             id={id}
             styleCode={data.styleCompiled}
             renderCode={data.runtimeJsxCompiled}

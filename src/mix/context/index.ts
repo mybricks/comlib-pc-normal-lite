@@ -3,6 +3,21 @@ import { updateRender, updateStyle, updateService, updateStore } from "../../uti
 import { Events } from "../../utils/events";
 import { parsemd } from "../../utils/ai-code/md"
 import { validateCode } from "../avaliableLibraries"
+import { getTimestamp } from "../../utils/time"
+
+export interface LogMessage {
+  method: 'log' | 'info' | 'warn' | 'error';
+  data: any[];
+  timestamp: string;
+  id: string;
+}
+
+export interface ComDebugState {
+  isDebugging: boolean;
+  bottomTab: 'source' | 'console';
+  logs: LogMessage[];
+  logIdCounter: number;
+}
 
 class Context {
   aiComParamsMap: Record<string, any> = {};
@@ -10,12 +25,98 @@ class Context {
     'debugTarget': any;
   }>> = {};
 
+  logEvents: Record<string, Events<{
+    'log': LogMessage;
+  }>> = {};
+
+  /** 每个组件的调试/日志状态，keyed by componentId */
+  comDebugStateMap: Record<string, ComDebugState> = {};
+
+  /** 每次状态变更通知 LowcodeView 重新读取 */
+  comDebugStateEvents: Record<string, Events<{ 'change': ComDebugState }>> = {};
+
+  getComDebugState(id: string): ComDebugState {
+    if (!this.comDebugStateMap[id]) {
+      this.comDebugStateMap[id] = {
+        isDebugging: false,
+        bottomTab: 'source',
+        logs: [],
+        logIdCounter: 0,
+      };
+    }
+    return this.comDebugStateMap[id];
+  }
+
+  getComDebugStateEvents(id: string) {
+    if (!this.comDebugStateEvents[id]) {
+      this.comDebugStateEvents[id] = new Events();
+    }
+    return this.comDebugStateEvents[id];
+  }
+
+  private notifyComDebugState(id: string) {
+    this.getComDebugStateEvents(id).emit('change', this.getComDebugState(id));
+  }
+
+  setComDebugging(id: string, isDebugging: boolean) {
+    const state = this.getComDebugState(id);
+    state.isDebugging = isDebugging;
+    if (isDebugging) {
+      // 启动调试：自动切到控制台
+      state.bottomTab = 'console';
+    } else {
+      // 取消调试：清空日志，切回源代码
+      state.logs = [];
+      state.logIdCounter = 0;
+      state.bottomTab = 'source';
+    }
+    this.notifyComDebugState(id);
+  }
+
+  setComBottomTab(id: string, tab: 'source' | 'console') {
+    const state = this.getComDebugState(id);
+    state.bottomTab = tab;
+    this.notifyComDebugState(id);
+  }
+
+  clearComLogs(id: string) {
+    const state = this.getComDebugState(id);
+    state.logs = [];
+    state.logIdCounter = 0;
+    this.notifyComDebugState(id);
+  }
+
   getAiComEvents(id: string) {
     let events = this.aiComEvents[id];
     if (!events) {
       events = this.aiComEvents[id] = new Events();
+      // 自动同步调试状态到 comDebugStateMap
+      events.on('debugTarget', (debugTarget: any) => {
+        this.setComDebugging(id, !!debugTarget);
+      }, false);
     }
     return events;
+  }
+
+  getLogEvents(id: string) {
+    let events = this.logEvents[id];
+    if (!events) {
+      events = this.logEvents[id] = new Events();
+    }
+    return events;
+  }
+
+  pushLog(id: string, method: LogMessage['method'], data: any[]) {
+    const state = this.getComDebugState(id);
+    const msg: LogMessage = {
+      method,
+      timestamp: getTimestamp(),
+      data,
+      id: String(++state.logIdCounter),
+    };
+    state.logs = [...state.logs, msg];
+    this.getLogEvents(id).emit('log', msg);
+    this.notifyComDebugState(id);
   }
 
   setAiCom(id: string, { params, actions }) {

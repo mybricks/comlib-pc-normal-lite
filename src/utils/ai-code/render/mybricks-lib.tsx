@@ -404,7 +404,7 @@ function createRouterLib(
     );
   }
 
-  function createAppRef(store: any, logger: any, useSyncExternalStore: any) {
+  function createAppRef(store: any, useSyncExternalStore: any) {
     return function appRef(Component: any) {
       return (props: any) => {
         /**
@@ -457,7 +457,6 @@ function createRouterLib(
             <Component
               {...props}
               _env={_env}
-              logger={logger}
               store={autoStore.current}
               _state={state}
             />
@@ -492,7 +491,6 @@ function createRouterLib(
         //       <Component
         //         {...props}
         //         _env={_env}
-        //         logger={logger}
         //         store={autoStore.current}
         //         _state={state}
         //       />
@@ -590,7 +588,6 @@ export function createMybricks(options: CreateMybricksOptions) {
         <Component
           {...props}
           _env={_env}
-          logger={logger}
           store={autoStore.current}
           _state={state}
         />
@@ -612,7 +609,8 @@ export function createMybricks(options: CreateMybricksOptions) {
         autoStore.current[SYMBOL_GETSNAPSHOT]
       );
 
-      const themes = data.themes;
+      const { activeThemeId, themes } = data.themes;
+      const theme = themes.find((theme) => theme.id === activeThemeId);
 
       return (
         <div
@@ -626,7 +624,7 @@ export function createMybricks(options: CreateMybricksOptions) {
             height: 'fit-content',
             width: 'fit-content',
             ...env._debugTarget?.style,
-            ...themes.reduce((pre, cur) => {
+            ...theme?.vars?.reduce((pre, cur) => {
               pre[cur.propertyName] = cur.value;
               return pre;
             }, {})
@@ -634,7 +632,6 @@ export function createMybricks(options: CreateMybricksOptions) {
           <Component
             {...props}
             _env={_env}
-            logger={logger}
             store={autoStore.current}
             _state={state}
           />
@@ -652,7 +649,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   return {
     comRef: wrapWithStore,
     pageRef: wrapPageWithStore,
-    appRef: routerLib.createAppRef(store, logger, useSyncExternalStore),
+    appRef: routerLib.createAppRef(store, useSyncExternalStore),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
     /** @deprecated 建议使用 useNavigate */
@@ -666,6 +663,7 @@ export function createMybricks(options: CreateMybricksOptions) {
         return Promise.resolve(mockData[config.url]);
       }
     } : createAPI,
+    logger,
   };
 }
 
