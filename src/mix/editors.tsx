@@ -838,7 +838,7 @@ export default function (props: Props, actions: Actions, ...args) {
                 let resultEvents: any = [];
                 const eventsArray = JSON.parse(events);
                 eventsArray.forEach((eventId) => {
-                  const findEvent = docs.events.find((event) => event.id === eventId);
+                  const findEvent = docs.events?.find((event) => event.id === eventId);
                   if (findEvent) {
                     resultEvents.push(findEvent)
                   }

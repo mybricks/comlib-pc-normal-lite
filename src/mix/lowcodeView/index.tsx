@@ -261,7 +261,7 @@ export default function LowcodeView(params: Params) {
   }, [params.data?.mockJsonSource]);
 
   return (
-    <>
+    <div className={css['lowcode-view-container']}>
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div
@@ -345,6 +345,6 @@ export default function LowcodeView(params: Params) {
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }

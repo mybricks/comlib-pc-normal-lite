@@ -64,6 +64,12 @@ class Context {
     if (isDebugging) {
       // 启动调试：自动切到控制台
       state.bottomTab = 'console';
+      state.logs = [{
+        id: 'start',
+        timestamp: getTimestamp(),
+        data: ['开始调试'],
+        method: 'log',
+      }];
     } else {
       // 取消调试：清空日志，切回源代码
       state.logs = [];

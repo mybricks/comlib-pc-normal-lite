@@ -1,3 +1,10 @@
+.lowcode-view-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
 .lowcode-view {
   width: 100%;
   height: 100%;
@@ -83,22 +90,25 @@
 }
 
 .lowcode-view-toolbar {
-  position: absolute;
-  height: 32px;
-  width: calc(100% - 40px);
-  top: 0;
-  left: 0;
-  right: 40px;
+  // position: absolute;
+  // height: 40px;
+  height: 36px;
+  // width: calc(100% - 40px);
+  width: 100%;
+  // top: 0;
+  // left: 0;
+  // right: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-right: 40px;
 
   .lowcode-view-toolbar-tabs {
     display: flex;
     align-items: center;
     height: 100%;
     gap: 2px;
-    padding-left: 80px;
+    padding-left: 15px;
 
     .lowcode-view-toolbar-tab {
       height: 24px;
