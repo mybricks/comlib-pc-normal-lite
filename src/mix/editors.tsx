@@ -707,10 +707,10 @@ export default function (props: Props, actions: Actions, ...args) {
   };
 
   const exportCodeConfig = [{
-    title: "导出",
+    title: "代码",
     items: [
       {
-        title: "导出为代码",
+        title: "导出代码",
         type: "Button",
         value: {
           async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
