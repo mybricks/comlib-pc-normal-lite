@@ -454,7 +454,7 @@ export default function developMyBricksModule(config: Config) {
   最后，如果确实更新了上述模块的【源代码】中的内容，需要通过以下述格式返回：
   
     \`\`\`before file="文件名"
-  （修改前的部分代码内容）
+  （修改前的部分代码内容，保持在文件中唯一，必要时包含上下的行，否则会匹配失败）
     \`\`\`
   
     \`\`\`after file="文件名"
