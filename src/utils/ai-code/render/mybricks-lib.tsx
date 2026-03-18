@@ -436,31 +436,55 @@ function createRouterLib(
           [currentPath, navigateImpl, _env]
         );
 
-        // 设计态：直接渲染 pageRef 注册表里的所有页面，不走 App 组件 / Routes
-        if (_env.mode === 'design') {
-          return (
-            <RouterContext.Provider value={routerContextValue}>
-              {pageRefRegistry.map((Page, i) => (
-                <Page key={i} />
-              ))}
-            </RouterContext.Provider>
-          );
-        }
         const rootStyle = debugTarget?.rootStyle;
+
+        const provider = (
+          <RouterContext.Provider value={routerContextValue}>
+            <Component
+              {...props}
+              _env={_env}
+              logger={logger}
+              store={autoStore.current}
+              _state={state}
+            />
+          </RouterContext.Provider>
+        )
+
+        if (_env.mode === 'design') {
+          return provider
+        }
 
         return (
           <div className={css.routesRuntime} style={{...rootStyle}}>
-            <RouterContext.Provider value={routerContextValue}>
-              <Component
-                {...props}
-                _env={_env}
-                logger={logger}
-                store={autoStore.current}
-                _state={state}
-              />
-            </RouterContext.Provider>
+            {provider}
           </div>
-        );
+        )
+
+        // 设计态：直接渲染 pageRef 注册表里的所有页面，不走 App 组件 / Routes
+        // if (_env.mode === 'design') {
+        //   return (
+        //     <RouterContext.Provider value={routerContextValue}>
+        //       {pageRefRegistry.map((Page, i) => (
+        //         <Page key={i} />
+        //       ))}
+        //     </RouterContext.Provider>
+        //   );
+        // }
+        // const rootStyle = debugTarget?.rootStyle;
+
+        // return (
+        //   <div className={css.routesRuntime} style={{...rootStyle}}>
+        //     <RouterContext.Provider value={routerContextValue}>
+        //       <Component
+        //         {...props}
+        //         _env={_env}
+        //         logger={logger}
+        //         store={autoStore.current}
+        //         _state={state}
+        //       />
+        //     </RouterContext.Provider>
+        //   </div>
+        // );
       };
     };
   }
