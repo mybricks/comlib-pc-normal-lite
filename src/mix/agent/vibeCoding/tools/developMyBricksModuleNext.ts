@@ -72,7 +72,7 @@ export default function developMyBricksModule(config: Config) {
     )
   })
 
-  const HelloWorld = comRef(() => {
+  const HelloWorld = pageRef(() => {
     return (
       <div className={css.container}>
         <Title title="Hello" />
