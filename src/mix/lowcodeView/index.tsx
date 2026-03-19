@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
-import { Console } from "console-feed";
 import context from "../context";
+import ConsoleLogPanel from "./console";
 import lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
 
@@ -323,26 +323,7 @@ export default function LowcodeView(params: Params) {
       {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}
       {isDebugging && (
         <div className={css['lowcode-view']} style={{ display: bottomTab === 'console' ? 'flex' : 'none' }}>
-          <div className={css['console-container']}>
-            <div className={css['console-toolbar']}>
-              <button
-                className={css['console-clear-btn']}
-                onClick={() => { if (componentId) context.clearComLogs(componentId); }}
-              >
-                清空
-              </button>
-            </div>
-            <div className={css['console-feed-wrapper']}>
-              <Console
-                logs={consoleLogs}
-                variant="light"
-                styles={{
-                  BASE_FONT_SIZE: 12,
-                  BASE_LINE_HEIGHT: 1.4,
-                }}
-              />
-            </div>
-          </div>
+          <ConsoleLogPanel componentId={componentId} logs={consoleLogs} />
         </div>
       )}
     </div>
