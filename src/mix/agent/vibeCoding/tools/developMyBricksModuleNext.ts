@@ -5,13 +5,14 @@ import syncMarkdownformybricksModule from "./syncMarkdownformybricksModule";
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
 
-/** execute 返回值：直接返回 UpdateComponentFilesResult，由本工具根据 success 格式化并决定是否抛错 */
-export type ExecuteResult = void | UpdateComponentFilesResult;
+/** onUpdate 返回值：直接返回 UpdateComponentFilesResult 或其 Promise，由本工具根据 mergeSuccess 格式化并决定是否抛错 */
+export type ExecuteResult = void | UpdateComponentFilesResult | Promise<UpdateComponentFilesResult | void>;
 
 interface Config {
-  /** execute 时一次性传入完整 files，由 host 调 updateComponentFiles；直接返回结果，本工具统一格式化与抛错 */
-  execute?: (params: { files: Array<{ fileName: string; content: string }> }) => ExecuteResult;
+  /** onUpdate 时一次性传入完整 files，由 host 调 updateComponentFiles；直接返回结果，本工具统一格式化与抛错 */
+  onUpdate?: (params: { files: Array<{ fileName: string; content: string }> }) => ExecuteResult;
   focusComId?: string;
+  hasAttachments?: boolean;
 }
 
 export default function developMyBricksModule(config: Config) {
@@ -740,7 +741,7 @@ export default function developMyBricksModule(config: Config) {
       // 这个才是会被记录到数据库的，stream只是展示作用，execute在 stream 执行之后执行，所以可以获取到
       // return `${params.content}\n\n${excuteMessage}`;
     },
-    stream(params: any, context) {
+    async stream(params: any, context) {
       const { status, replaceContent } = params;
       const { ToolRetryError } = context ?? {};
       const files = normalizeFiles(params?.files);
@@ -762,13 +763,13 @@ export default function developMyBricksModule(config: Config) {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
-          const result = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const result = await config.onUpdate?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
           const msg = result ? formatUpdateResult(result) : '';
 
-          if (result && !result.success && ToolRetryError) {
+          if (result && !result.mergeSuccess && ToolRetryError) {
             const errMsg = msg || '执行失败';
             throw new ToolRetryError({
-              llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg, // 报错过程目前没有代码，需要添加下，后续可以看看
+              llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
               displayContent: '执行失败，当前操作已回滚，请重试',
               autoRetry: true,
               maxRetries: 2

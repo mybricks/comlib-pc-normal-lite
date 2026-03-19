@@ -15,7 +15,7 @@ import {
   type ComponentFileItem,
   type FileUpdateResult,
   type UpdateComponentFilesResult,
-} from "./tools/developMyBricksModuleNext";
+} from "./tools/utils/files";
 import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
 import { uuid } from "../../../utils";
 
@@ -32,11 +32,11 @@ export type { FileUpdateResult, UpdateComponentFilesResult };
  * 写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
  * 使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
  */
-function updateComponentFiles(
+async function updateComponentFiles(
   files: Array<ComponentFileItem>,
   comId: string,
   context: any
-): UpdateComponentFilesResult {
+): Promise<UpdateComponentFilesResult> {
   const aiComParams = context.getAiComParams(comId);
   const fileResults: FileUpdateResult[] = [];
 
@@ -102,18 +102,38 @@ function updateComponentFiles(
     }
   }
 
-  const success = fileResults.every((r) => r.success);
-  if (success) {
-    for (const { fileName, content } of pendingWrites) {
-      context.updateFile(comId, { fileName, content });
-    }
+  const mergeSuccess = fileResults.every((r) => r.success);
+  if (mergeSuccess) {
+    // 并发写入所有文件（updateFile 对异步分支返回 Promise，await 等待编译完成）
+    await Promise.all(
+      pendingWrites.map(({ fileName, content }) =>
+        Promise.resolve(context.updateFile(comId, { fileName, content }))
+      )
+    );
     aiComParams.data.document = '';
   }
+
+  // 收集编译/校验错误（来自 data._errors，只取本次涉及文件的错误）
+  const updatedFileNames = new Set(pendingWrites.map((f) => f.fileName));
+  const rawErrors: Array<{ file: string; message: string; type?: string }> =
+    aiComParams.data._errors ?? [];
+  const compileErrors = rawErrors
+    .filter((e) => updatedFileNames.has(e.file))
+    .map((e) => ({
+      file: e.file,
+      message: e.message,
+      type: (e.type === 'validate' ? 'validate' : 'compile') as 'compile' | 'validate',
+    }));
+
+  const compileSuccess = compileErrors.length === 0;
 
   return {
     comId,
     fileResults,
-    success,
+    mergeSuccess,
+    compileErrors,
+    compileSuccess,
+    success: mergeSuccess && compileSuccess,
   };
 }
 
@@ -543,13 +563,13 @@ ${text}
             readRelated({ project }),
             developModule({
               hasAttachments,
-              execute(p) {
+              onUpdate(p) {
                 return updateComponentFiles(p.files ?? [], focus.comId, context);
               },
             }),
             answer(),
             syncMarkdownformybricksModule({
-              execute(p) {
+              onUpdate(p) {
                 return updateComponentFiles(p.files ?? [], focus.comId, context);
               },
             })

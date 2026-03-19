@@ -285,7 +285,7 @@ export default appRef(() => {
       // 这个才是会被记录到数据库的，stream只是展示作用，execute在 stream 执行之后执行，所以可以获取到
       return `${params.content}\n\n${excuteMessage}`;
     },
-    stream(params: any, context) {
+    async stream(params: any, context) {
       const { status, replaceContent } = params;
       const { ToolRetryError } = context ?? {};
       const files = normalizeFiles(params?.files);
@@ -307,13 +307,13 @@ export default appRef(() => {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
-          const result = config.execute?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const result = await config.onUpdate?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
           const msg = result ? formatUpdateResult(result) : '';
 
-          if (result && !result.success && ToolRetryError) {
+          if (result && !result.mergeSuccess && ToolRetryError) {
             const errMsg = msg || '执行失败';
             throw new ToolRetryError({
-              llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg, // 报错过程目前没有代码，需要添加下，后续可以看看
+              llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
               displayContent: '执行失败，当前操作已回滚，请重试',
               autoRetry: true,
               maxRetries: 1

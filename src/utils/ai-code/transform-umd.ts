@@ -126,7 +126,7 @@ export function transformLess(code) {
   return res;
 }
 
-export function updateRender({ data, success }, renderCode) {
+export function updateRender({ data, success }, renderCode): Promise<void> {
   const writeSource = () => {
     data.runtimeJsxSource = encodeURIComponent(renderCode);
   };
@@ -141,7 +141,7 @@ export function updateRender({ data, success }, renderCode) {
   if (data.serviceJsSource) {
     try { relatedFiles['service.js'] = decodeURIComponent(data.serviceJsSource); } catch {}
   }
-  transformTsx(renderCode, { fileName: 'runtime.jsx', relatedFiles }).then(({ transformCode, constituency }) => {
+  return transformTsx(renderCode, { fileName: 'runtime.jsx', relatedFiles }).then(({ transformCode, constituency }) => {
     data.runtimeJsxCompiled = encodeURIComponent(transformCode);
     writeSource();
     data.runtimeJsxConstituency = constituency;
@@ -167,11 +167,11 @@ export function updateRender({ data, success }, renderCode) {
   });
 }
 
-export function updateStore({ data, success }, storeCode) {
+export function updateStore({ data, success }, storeCode): Promise<void> {
   const writeSource = () => {
     data.storeJsSource = encodeURIComponent(storeCode);
   };
-  transformTsx(storeCode, { fileName: 'store.js' }).then(({ transformCode }) => {
+  return transformTsx(storeCode, { fileName: 'store.js' }).then(({ transformCode }) => {
     data.storeJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
@@ -193,11 +193,11 @@ export function updateStore({ data, success }, storeCode) {
   });
 }
 
-export function updateService({ data, success }, serviceCode) {
+export function updateService({ data, success }, serviceCode): Promise<void> {
   const writeSource = () => {
     data.serviceJsSource = encodeURIComponent(serviceCode);
   };
-  transformTsx(serviceCode, { fileName: 'service.js' }).then(({ transformCode }) => {
+  return transformTsx(serviceCode, { fileName: 'service.js' }).then(({ transformCode }) => {
     data.serviceJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
