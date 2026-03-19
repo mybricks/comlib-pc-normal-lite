@@ -1,0 +1,37 @@
+.console-container {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+
+  .console-toolbar {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-bottom: 1px solid #EEE;
+    flex-shrink: 0;
+
+    .console-clear-btn {
+      height: 20px;
+      padding: 0 10px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid #DDD;
+      border-radius: 4px;
+      background: #FFF;
+      color: #666;
+
+      &:hover {
+        background: #F5F5F5;
+      }
+    }
+  }
+
+  .console-feed-wrapper {
+    flex: 1;
+    overflow: auto;
+  }
+}

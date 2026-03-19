@@ -404,7 +404,7 @@ function createRouterLib(
     );
   }
 
-  function createAppRef(store: any, logger: any, useSyncExternalStore: any) {
+  function createAppRef(store: any, useSyncExternalStore: any, dialogRefRegistry: any[] = []) {
     return function appRef(Component: any) {
       return (props: any) => {
         /**
@@ -457,7 +457,6 @@ function createRouterLib(
             <Component
               {...props}
               _env={_env}
-              logger={logger}
               store={autoStore.current}
               _state={state}
             />
@@ -465,7 +464,15 @@ function createRouterLib(
         )
 
         if (_env.mode === 'design') {
-          return provider
+        const dialogs = dialogRefRegistry.map((DialogRoot, i) => (
+          <DialogRoot key={`dialog-${i}`} />
+        ));
+          return (
+            <>
+              {provider}
+              {dialogs}
+            </>
+          );
         }
 
         return (
@@ -492,7 +499,6 @@ function createRouterLib(
         //       <Component
         //         {...props}
         //         _env={_env}
-        //         logger={logger}
         //         store={autoStore.current}
         //         _state={state}
         //       />
@@ -574,6 +580,13 @@ export function createMybricks(options: CreateMybricksOptions) {
   const pageRefRegistry: any[] = [];
   const pageRefOriginalsSet = new Set<any>();
 
+  /**
+   * dialogRef 注册表：收集所有 dialogRef 包装后的根节点组件。
+   * 在 appRef 渲染时与 pageRef 同级挂载到根节点下。
+   */
+  const dialogRefRegistry: any[] = [];
+  const dialogRefOriginalsSet = new Set<any>();
+
   const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget);
 
   const wrapWithStore = (Component: any) => {
@@ -590,7 +603,6 @@ export function createMybricks(options: CreateMybricksOptions) {
         <Component
           {...props}
           _env={_env}
-          logger={logger}
           store={autoStore.current}
           _state={state}
         />
@@ -612,7 +624,8 @@ export function createMybricks(options: CreateMybricksOptions) {
         autoStore.current[SYMBOL_GETSNAPSHOT]
       );
 
-      const themes = data.themes;
+      const { activeThemeId, themes } = data.themes;
+      const theme = themes.find((theme) => theme.id === activeThemeId);
 
       return (
         <div
@@ -626,7 +639,7 @@ export function createMybricks(options: CreateMybricksOptions) {
             height: 'fit-content',
             width: 'fit-content',
             ...env._debugTarget?.style,
-            ...themes.reduce((pre, cur) => {
+            ...theme?.vars?.reduce((pre, cur) => {
               pre[cur.propertyName] = cur.value;
               return pre;
             }, {})
@@ -634,7 +647,6 @@ export function createMybricks(options: CreateMybricksOptions) {
           <Component
             {...props}
             _env={_env}
-            logger={logger}
             store={autoStore.current}
             _state={state}
           />
@@ -649,10 +661,110 @@ export function createMybricks(options: CreateMybricksOptions) {
     return wrapped;
   };
 
+  const wrapDialogWithStore = (Component: any) => {
+    // 注册到 dialogRefRegistry，在 appRef 根节点与 pageRef 同级渲染
+    const dialogIndex = pageRefRegistry.length + dialogRefRegistry.length;
+
+    const DialogRoot = (props) => {
+      const autoStore = useRef<any>(null);
+      if (!autoStore.current) {
+        autoStore.current = createReactiveStore(store);
+      }
+      const state = useSyncExternalStore(
+        autoStore.current[SYMBOL_SUBSCRIBE],
+        autoStore.current[SYMBOL_GETSNAPSHOT]
+      );
+
+      const { activeThemeId, themes } = data.themes;
+      const theme = themes.find((theme) => theme.id === activeThemeId);
+
+      if (_env.mode === "design") {
+        return (
+          <div
+            data-zone-type="page"
+            data-desn-page={dialogIndex}
+            style={{
+              minWidth: 1200,
+              minHeight: 600,
+              display: 'inline-block',
+              transform: 'scale(1)',
+              height: 'fit-content',
+              width: 'fit-content',
+              ...env._debugTarget?.style,
+              ...theme?.vars?.reduce((pre, cur) => {
+                pre[cur.propertyName] = cur.value;
+                return pre;
+              }, {})
+            }}>
+            <Component
+              {...props}
+              _env={_env}
+              store={autoStore.current}
+              _state={state}
+              dialogContainer={false}
+            />
+          </div>
+        );
+      } else {
+        const containerRef = useRef<HTMLDivElement>(null);
+        const [container, setContainer] = useState(false);
+
+        useLayoutEffect(() => {
+          const page = containerRef.current?.closest('[data-zone-type="page"]')
+          if (page) {
+            setContainer(page)
+          }
+        }, [])
+        
+        return (
+          <>
+            <div ref={containerRef} />
+            <Component
+              {...props}
+              _env={_env}
+              store={autoStore.current}
+              _state={state}
+              dialogContainer={container}
+            />
+          </>
+        )
+      }
+    };
+
+    if (_env.mode === 'design') {
+      // 运行态不做任何处理，保留类字段原始初始值
+      if (!dialogRefOriginalsSet.has(Component)) {
+        dialogRefOriginalsSet.add(Component);
+        dialogRefRegistry.push(DialogRoot);
+      }
+      return () => null;
+    }
+
+    return DialogRoot
+  };
+
+  /**
+   * 浮层类组件在设计态默认展开
+   */
+  const dialogVisible = (target, propertyKey) => {
+    if (_env.mode !== 'design') {
+      // 运行态不做任何处理，保留类字段原始初始值
+      return;
+    }
+    // 设计态：强制初始值为 true 且不允许修改
+    return {
+      initializer: () => true,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    };
+  }
+
   return {
+    dialogRef: wrapDialogWithStore,
     comRef: wrapWithStore,
     pageRef: wrapPageWithStore,
-    appRef: routerLib.createAppRef(store, logger, useSyncExternalStore),
+    appRef: routerLib.createAppRef(store, useSyncExternalStore, dialogRefRegistry),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
     /** @deprecated 建议使用 useNavigate */
@@ -666,6 +778,8 @@ export function createMybricks(options: CreateMybricksOptions) {
         return Promise.resolve(mockData[config.url]);
       }
     } : createAPI,
+    logger,
+    dialogVisible
   };
 }
 

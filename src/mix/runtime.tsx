@@ -5,7 +5,14 @@ import echartsForReact from './../utils/echarts-for-react'
 import {StyleProvider} from '@ant-design/cssinjs'
 import {ConfigProvider} from "antd";
 import zhCN from 'antd/locale/zh_CN'
+import context from './context'
 
+const SUPPORTED_LOGS = {
+  log: true,
+  info: true,
+  error: true,
+  warn: true,
+}
 
 export default genAIRuntime({
   title: 'AI',
@@ -42,4 +49,23 @@ export default genAIRuntime({
       </StyleProvider>
     )
   },
+  logger: ({ id, mode }) => {
+    if (mode === "runtime") {
+      return new Proxy({}, {
+        get(_, prop: string) {
+          return (...args) => {
+            if (SUPPORTED_LOGS[prop]) {
+              context.pushLog(id, prop as any, args);
+            }
+          }
+        }
+      })
+    } else {
+      return new Proxy({}, {
+        get() {
+          return () => {}
+        }
+      })
+    }
+  }
 })

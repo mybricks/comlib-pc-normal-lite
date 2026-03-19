@@ -1,10 +1,17 @@
+.lowcode-view-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
 .lowcode-view {
   width: 100%;
   height: 100%;
   display: flex;
 
   .file-list {
-    border-top: 1px solid #EEE;
+    // border-top: 1px solid #EEE;
     height: 100%;
     position: relative;
     overflow: auto;
@@ -42,16 +49,54 @@
       overflow: hidden;
     }
   }
+
+
 }
 
 .lowcode-view-toolbar {
-  position: absolute;
-  height: 32px;
-  width: fit-content;
-  top: 0;
-  right: 40px;
+  // position: absolute;
+  // height: 40px;
+  height: 36px;
+  min-height: 36px;
+  // width: calc(100% - 40px);
+  width: 100%;
+  // top: 0;
+  // left: 0;
+  // right: 40px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding-right: 40px;
+
+  .lowcode-view-toolbar-tabs {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    gap: 2px;
+    padding-left: 15px;
+
+    .lowcode-view-toolbar-tab {
+      height: 24px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      color: #666;
+      user-select: none;
+
+      &:hover {
+        background: #F0F0F0;
+      }
+    }
+
+    .lowcode-view-toolbar-tab-active {
+      background: #E8E8E8;
+      color: #333;
+      font-weight: 500;
+    }
+  }
 
   .lowcode-view-toolbar-button {
     cursor: pointer;
@@ -65,6 +110,8 @@
     border: 1px solid transparent;
     border-radius: 6px;
     font-size: 12px;
+    margin-right: 8px;
+    flex-shrink: 0;
   }
 
   .lowcode-view-toolbar-button-disabled {

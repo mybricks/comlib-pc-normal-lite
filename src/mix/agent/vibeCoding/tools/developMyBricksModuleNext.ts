@@ -54,7 +54,7 @@ export default function developMyBricksModule(config: Config) {
   1. runtime.jsx文件
   <代码示例>
   \`\`\`jsx file="runtime.jsx"
-  import { comRef, pageRef, appRef } from "mybricks";
+  import { comRef, pageRef, appRef, logger } from "mybricks";
   import css from 'style.less'
 
   const Title = comRef(({ title }) => {
@@ -66,13 +66,14 @@ export default function developMyBricksModule(config: Config) {
       <button
         /** onClick:redirectToLogin */
         onClick={() => {
+          logger.info('[LoginButton/onClick] 点击登录按钮');
           store.redirectToLogin();
         }}
       >登录</button>
     )
   })
 
-  const HelloWorld = comRef(() => {
+  const HelloWorld = pageRef(() => {
     return (
       <div className={css.container}>
         <Title title="Hello" />
@@ -89,20 +90,22 @@ export default function developMyBricksModule(config: Config) {
   </代码示例>
 
   <编写规范>
-  1. 组件 props 禁止传递*保留字段*：_env，store，logger；
-    - 错误：\`<UserInfo _env={_env} store={store} logger={logger} user={store.user}/>\`
+  1. 组件 props 禁止传递*保留字段*：_env，store，dialogContainer；
+    - 错误：\`<UserInfo _env={_env} store={store} dialogContainer={dialogContainer} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 页面、弹窗、组件必须遵循规范进行定义
+  3. 页面、浮层类组件、组件必须遵循规范进行定义
     - 整个项目有且只能有一个export default导出，那就是appRef;
-    - 所有页面和弹窗都需要通过 pageRef 包装，无需导出；
+    - 所有页面都需要通过 pageRef 包装，无需导出；
     - 所有组件和模块都需要使用 comRef 包装，无需导出;
+    - 所有浮层类组件（弹窗/抽屉等）都需要使用 dialogRef 包装，无需导出;
     - 路由通过 Routes + Route 进行渲染；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
   6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
   7. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
   8. 包含事件（例如onClick、onChange、onBlur等）的标签内必须包含注释「/** 事件名:事件key */」；
+  9. 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
   </编写规范>
 
   <comRef说明>
@@ -114,21 +117,46 @@ export default function developMyBricksModule(config: Config) {
         - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
+      3. dialogContainer，浮层类组件指定挂载节点
+        - 浮层类组件的挂载节点必须指向dialogContainer
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
 
   <pageRef说明>
-    pageRef是MyBricks提供的高阶函数，用于创建一个页面或弹窗。
-    1. 该页面或弹窗默认接收以下*保留字段*：
+    pageRef是MyBricks提供的高阶函数，用于创建一个页面。
+    1. 该页面默认接收以下*保留字段*：
       1. _env，环境变量
         - _env.mode: 运行环境，design|runtime
       2. store，全局状态管理
         - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-    2. 该页面或弹窗是一个响应式页面或弹窗，页面或弹窗内使用store中的数据时，数据变更会自动刷新页面或弹窗；
+      3. dialogContainer，浮层类组件指定挂载节点
+        - 浮层类组件的挂载节点必须指向dialogContainer
+    2. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；
   </pageRef说明>
-  
+
+  <dialogRef说明>
+    dialogRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
+    1. 该浮层类组件默认接收以下*保留字段*：
+      1. _env，环境变量
+        - _env.mode: 运行环境，design|runtime
+      2. store，全局状态管理
+        - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
+        - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
+        - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
+      3. dialogContainer，浮层类组件指定挂载节点
+        - 浮层类组件的挂载节点必须指向dialogContainer
+    2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
+  </dialogRef说明>
+
+  <dialogVisible装饰器说明>
+    dialogVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下将变量默认设置为**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
+    <注意>
+      1. 对于浮层类组件的打开与否，不需要在runtime层控制，统一由装饰器进行管理；
+    </注意>
+  </dialogVisible装饰器说明>
+
   2. style.less文件
     <代码示例>
     \`\`\`less file="style.less"
@@ -144,24 +172,31 @@ export default function developMyBricksModule(config: Config) {
     </代码示例>
 
     <编写规范>
-    1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式，优先使用项目提供的主题变量；
+    1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，编写前必须先列举全部可用变量，再对照每条样式属性逐一检查是否有对应变量，有则必须使用，禁止硬编码已有主题变量所覆盖的色值或数值；
     </编写规范>
 
   3. store.js文件
     store.js文件用于管理模块的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
     <代码示例>
     \`\`\`js file="store.js"
+    import { logger } from 'mybricks';
+
     export default class Store {
       count = 1;
       name = "";
 
       incCount() {
+        logger.info('[Store/incCount] 计数加一', { before: this.count });
         this.count++;
       }
 
       setName(name) {
+        logger.info('[Store/setName] 设置名称', { name });
         this.name = name;
       }
+
+      @dialogVisible
+      modalVisible = false;
     }
     \`\`\`
     </代码示例>
@@ -178,6 +213,10 @@ export default function developMyBricksModule(config: Config) {
       - 若有 service 配置，store 必须优先通过 service 调用接口获取数据，不得在 store 内再声明或使用 mock 数据；
       - store 是正式代码，禁止在 store 内出现任何 mock 相关代码或 mock 数据；mock 仅在设计态由 mock.json 提供，与 store 无关。
     </使用原则>
+
+    <编写规范>
+      1. 当字段用于控制浮层类组件的显示/隐藏状态时，需要对该字段使用装饰器 @dialogVisible；
+    </编写规范>
 
     <注意>
       - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要更新字段A时，必须修改A的值；
@@ -257,12 +296,36 @@ export default function developMyBricksModule(config: Config) {
     > 如果用户指定类库中并不在<允许使用的类库/>范围内，则告知用户无法使用，并且使用当前 <允许使用的类库/> 进行替代实现或者占位。
   </技术栈和类库使用说明>
 
+  <日志规范>
+    项目中必须使用 mybricks 提供的 \`logger\` 工具打印日志，禁止使用 console.log / console.warn / console.error 等原生方法。
+
+    <打日志的强制要求>
+      必须在以下所有场景中打印足量日志，确保运行时行为可追踪、可排查：
+      1. 用户交互事件：所有 onClick、onChange、onBlur 等事件触发时，打印 logger.info 记录操作行为及关键参数；
+      2. 数据请求：接口调用前打印 logger.info 记录请求参数，请求成功后打印 logger.info 记录返回数据摘要，请求失败时打印 logger.error 记录错误信息；
+      3. 状态变更：store 中任何方法被调用时，打印 logger.info 记录方法名及关键入参；
+      4. 条件分支与异常：进入关键条件分支时打印 logger.info 说明走了哪个分支；try-catch 中 catch 块必须打印 logger.error 记录异常；
+      5. 路由跳转：导航跳转时打印 logger.info 记录目标路径；
+      6. 任何可能失败的操作（如数据解析、类型转换等）都需要用 try-catch 包裹，并在 catch 中使用 logger.error 打印错误详情。
+    </打日志的强制要求>
+
+    <日志格式要求>
+      - 日志消息应包含上下文前缀，便于定位来源，格式推荐：\`[组件名/方法名] 具体描述\`；
+      - 示例：\`logger.info('[UserList/fetchUsers] 开始请求用户列表', { page: 1 })\`；
+      - 错误日志必须携带 error 对象：\`logger.error('[Store/loadData] 数据加载失败', error)\`。
+    </日志格式要求>
+  </日志规范>
+
   <设计风格与主题变量使用说明>
     在*项目信息*中，会提供当前项目配置的主题变量（即「设计风格」部分），这些 CSS 变量已自动注入页面，你在编写样式时必须遵守以下原则：
-    1. 凡是涉及颜色（主色、辅色、背景色、文字色、边框色等）、圆角、间距等与品牌/视觉规范相关的属性，必须优先使用主题变量，禁止硬编码具体色值或数值；
+
+    【第一步：识别并列举主题变量】
+    在编写任何样式之前，必须先仔细阅读*项目信息*中「设计风格」部分，将所有可用的主题变量逐一列出，明确每个变量的语义（如主色、背景色、文字色、圆角等），再根据语义对号入座地应用到对应样式属性上。禁止跳过此步骤直接硬编码色值。
+
+    1. 【强制要求】只要*项目信息*中提供了主题变量，编写 style.less 时必须对照变量列表，逐一检查每个颜色、圆角、间距等样式属性——凡是有对应主题变量的，一律使用该变量，禁止硬编码具体值；
     2. 禁止在 style.less 或任何文件中重复定义已注入的主题变量；
     3. 主题变量的使用方式：直接以 CSS 变量形式引用，例如 \`color: var(--primary-color)\`；
-    4. 若某属性在主题变量中找不到对应项，方可使用具体数值，但需保持与主题整体风格一致；
+    4. 若某属性在主题变量中找不到语义对应的变量，方可使用具体数值，但需保持与主题整体风格一致；
     5. 所有新增或修改的样式，应与当前主题风格保持协调统一，不得出现与主题风格明显违和的配色、圆角或间距；
     6. 三方类库组件自带的默认样式不会自动使用项目主题变量。当三方组件的默认样式（如主色、圆角等）与项目主题风格不一致时，需在 style.less 中通过覆写其样式来适配主题变量，仅在视觉不协调时按需覆写；
       - 对于三方类库，重点关注各类主题风格色值的配置，例如color、border-color、background-color等
@@ -271,13 +334,29 @@ export default function developMyBricksModule(config: Config) {
       - 用户要求整体视觉调整，如「统一风格」「让界面更协调」「按照设计稿来」等；
       - 用户提供了新的风格变量，要求还原或对齐；
       - 用户调整了项目主题变量配置，要求同步更新界面效果；
-      此时不得仅修改用户明确指出的单一属性，而应同步审视并更新所有存在硬编码色值、不符合主题变量规范的样式，确保整体视觉风格统一协调。
+      此时不得仅修改用户明确指出的单一属性，而应同步审视并更新所有存在硬编码色值、不符合主题变量规范的样式，确保整体视觉风格统一协调；
+    8. 【变量映射示例】假设项目提供了如下主题变量：
+      \`\`\`
+      --primary-color: #1890ff;
+      --text-color: #333333;
+      --bg-color: #f5f5f5;
+      --border-radius: 4px;
+      --border-color: #e8e8e8;
+      \`\`\`
+      则编写样式时必须：
+      - 所有主色调（按钮背景、链接色、激活态等）→ \`var(--primary-color)\`
+      - 所有正文颜色 → \`var(--text-color)\`
+      - 页面/区域背景色 → \`var(--bg-color)\`
+      - 所有圆角 → \`var(--border-radius)\`
+      - 所有边框颜色 → \`var(--border-color)\`
+      绝不允许在代码中出现 \`color: #1890ff\`、\`background: #f5f5f5\` 等与主题变量值相同的硬编码写法；
   </设计风格与主题变量使用说明>
 
   注意：
   1、要严格参考 <技术栈和类库使用说明/> 来开发；
   2、要严格参考 <设计风格与主题变量使用说明/> 来编写样式，优先使用项目提供的主题变量；
-  3、你要完成的是中文场景下的开发任务，请仔细斟酌文案、用语，在各类文案表达中尽量使用中文，但是对于代码、技术术语等，可以使用英文。
+  3、你要完成的是中文场景下的开发任务，请仔细斟酌文案、用语，在各类文案表达中尽量使用中文，但是对于代码、技术术语等，可以使用英文；
+  4、必须严格遵循 <日志规范/>；
 </MyBricks模块开发要求>
 
 <区块拆分原则与规范>
@@ -437,7 +516,7 @@ export default function developMyBricksModule(config: Config) {
     1、对于卡片类、容器类等需求，最外层容器的宽度与高度都要100%；
     2、确保style.less文件的代码严格遵守以下要求：
       - 所有与样式相关的内容都要写在style.less文件中，避免在runtime.jsx中通过style编写；
-      - 要严格参考 <设计风格与主题变量使用说明/> 来编写样式，优先使用项目提供的主题变量；
+      - 要严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，必须先列举全部可用变量，再逐一检查每条样式属性是否有对应变量可用，有则必须使用，禁止对已有主题变量的属性硬编码色值或数值；
       - 在选择器中，多个单词之间使用驼峰的方式，不能使用-连接;
       - 当提出例如“要适应容器尺寸”等要求时，这里的容器指的是模块的父容器，不是整个页面；
       - 禁止使用 CSS Modules 的 :global 语法；
@@ -517,15 +596,16 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`after file="runtime.jsx"
   import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes, Route } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, logger } from 'mybricks';
   import { Button } from 'antd';
 
-  const MainButton = comRef(({ store, logger }) => {
+  const MainButton = comRef(({ store }) => {
     return (
       <Button
         className={css.mainBtn}
         /** onClick:click */
         onClick={() => {
+          logger.info('[MainButton/onClick] 点击按钮');
           store.click();
           store.setLoading(true);
           setTimeout(() => {
@@ -579,7 +659,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
 
   \`\`\`after file="runtime.jsx"
-  import { comRef, pageRef, appRef, Routes, Route, useNavigate } from 'mybricks';
+  import { comRef, pageRef, appRef, Routes, Route, useNavigate, logger } from 'mybricks';
   import { Button } from 'xy-ui';
   import css from 'style.less';
 
@@ -591,7 +671,10 @@ export default function developMyBricksModule(config: Config) {
           className={css.btn}
           key={btn.text}
           /** onClick:navigateToPath */
-          onClick={() => navigate(btn.path)}
+          onClick={() => {
+            logger.info('[ToolBar/onClick] 点击导航按钮', { text: btn.text, path: btn.path });
+            navigate(btn.path);
+          }}
         >
           {btn.text}
         </Button>
@@ -786,14 +869,15 @@ export default function developMyBricksModule(config: Config) {
             .replace(/mock\.json/g, '') + '\n' + msg;
         }
       }
+      return params.content;
 
-      return raw
-        .replace(/action\.json/g, actionReason)
-        .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
-        .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
-        .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
-        .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
-        .replace(/mock\.json/, '尝试修改mock数据...').replace(/mock\.json/g, '');
+      // return raw
+      //   .replace(/action\.json/g, actionReason)
+      //   .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
+      //   .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
+      //   .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
+      //   .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
+      //   .replace(/mock\.json/, '尝试修改mock数据...').replace(/mock\.json/g, '');
     },
     aiRole: ({ params }, execCtx) => {
       const mode = params?.mode ?? 'generate';

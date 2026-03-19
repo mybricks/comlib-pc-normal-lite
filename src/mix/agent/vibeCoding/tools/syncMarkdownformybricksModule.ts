@@ -331,13 +331,15 @@ export default appRef(() => {
         }
       }
 
-      return raw
-        .replace(/action\.json/g, actionReason)
-        .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
-        .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
-        .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
-        .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
-        .replace(/runtime\.md/, '尝试修改说明文档...').replace(/runtime\.md/g, '');
+      return params.content;
+
+      // return raw
+      //   .replace(/action\.json/g, actionReason)
+      //   .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
+      //   .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
+      //   .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
+      //   .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
+      //   .replace(/runtime\.md/, '尝试修改说明文档...').replace(/runtime\.md/g, '');
     },
     aiRole: ({ params }, execCtx) => {
       const retryCount = execCtx?.retryCount ?? 0;

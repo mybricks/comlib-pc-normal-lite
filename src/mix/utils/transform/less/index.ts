@@ -206,12 +206,141 @@ class Parse {
   }
 }
 
+/**
+ * 从原始 Less 代码中提取所有 :global(...) 表达式，替换为合法的占位符类名。
+ * 使用括号计数器处理嵌套括号（如 :global(.a:not(.b))），跳过注释区域。
+ *
+ * 返回：
+ *   sanitized  - 占位符替换后的 Less 代码，可直接送入 less.render()
+ *   globalMap  - 占位符 → 原始 :global() 内容的映射
+ */
+const extractGlobals = (code: string): { sanitized: string; globalMap: Map<string, string> } => {
+  const globalMap = new Map<string, string>();
+
+  // 生成在当前 code 中不存在的唯一短前缀（纯小写字母，避免 Less 对特殊字符的处理干扰）
+  const chars = "abcdefghijklmnopqrstuvwxyz";
+  let prefix = "";
+  for (let k = 0; k < 6; k++) {
+    prefix += chars[Math.floor(Math.random() * chars.length)];
+  }
+  // 确保前缀在原始代码中不存在，防止与真实类名冲突
+  while (code.includes(prefix)) {
+    prefix = "";
+    for (let k = 0; k < 8; k++) {
+      prefix += chars[Math.floor(Math.random() * chars.length)];
+    }
+  }
+
+  let result = "";
+  let i = 0;
+  let counter = 0;
+
+  // 将计数器转为字母序列（a, b, ..., z, aa, ab, ...），确保占位符全为字母，不含数字
+  const toLetters = (n: number): string => {
+    let s = "";
+    do {
+      s = chars[n % 26] + s;
+      n = Math.floor(n / 26) - 1;
+    } while (n >= 0);
+    return s;
+  };
+
+  while (i < code.length) {
+    // 跳过块注释 /* ... */
+    if (code[i] === "/" && code[i + 1] === "*") {
+      const end = code.indexOf("*/", i + 2);
+      if (end === -1) {
+        result += code.slice(i);
+        break;
+      }
+      result += code.slice(i, end + 2);
+      i = end + 2;
+      continue;
+    }
+
+    // 跳过行注释 // ...
+    if (code[i] === "/" && code[i + 1] === "/") {
+      const end = code.indexOf("\n", i + 2);
+      if (end === -1) {
+        result += code.slice(i);
+        break;
+      }
+      result += code.slice(i, end + 1);
+      i = end + 1;
+      continue;
+    }
+
+    // 匹配 :global(
+    if (code.slice(i, i + 8) === ":global(") {
+      // 用括号计数器找到配对的 )
+      let depth = 1;
+      let j = i + 8;
+      while (j < code.length && depth > 0) {
+        if (code[j] === "(") depth++;
+        else if (code[j] === ")") depth--;
+        j++;
+      }
+      // j 现在指向配对 ) 的下一位
+      const innerContent = code.slice(i + 8, j - 1); // :global() 括号内的内容
+      const placeholder = `${prefix}${toLetters(counter++)}`;
+      globalMap.set(placeholder, innerContent.trim());
+      // 输出时：占位符作为后代选择器（加空格）还是拼接（&前缀）需保留原始上下文中的 & 前缀
+      // 这里只替换 :global(...) 本身，& 在 code 中紧邻于前，保持不变
+      result += `.${placeholder}`;
+      i = j;
+      continue;
+    }
+
+    result += code[i];
+    i++;
+  }
+
+  return { sanitized: result, globalMap };
+};
+
+/**
+ * 将 cssObj 所有层级的 key 中的占位符还原为原始选择器内容。
+ * 深度递归处理，兼容 @media 嵌套结构。
+ *
+ * 注意：还原后含 combinator 的 global 内容（如 ".ant-picker-input > input"）
+ * 会被 splitSelectorKeys 拆分为多层嵌套，这在 Less 中语义等价，不影响正确性。
+ */
+const restoreGlobals = (cssObj: CSSObj, globalMap: Map<string, string>): CSSObj => {
+  if (globalMap.size === 0) return cssObj;
+
+  const restoreKey = (key: string): string => {
+    // 遍历 globalMap，精确替换所有占位符（避免正则对 prefix 格式的依赖）
+    let result = key;
+    globalMap.forEach((original, placeholder) => {
+      // 用空字符串 join，让 split 保留上下文中的原有空格：
+      //   ".parent.__gbl_0"（&:global 拼接）→ [".parent", ""] → ".parent" + ".ant-xxx" = ".parent.ant-xxx"
+      //   ".parent .__gbl_0"（子代 :global）→ [".parent ", ""] → ".parent " + ".ant-xxx" = ".parent .ant-xxx"
+      result = result.split(`.${placeholder}`).join(original);
+    });
+    // 合并多余空格，去首尾
+    return result.replace(/\s+/g, " ").trim();
+  };
+
+  const walk = (obj: CSSObj): CSSObj => {
+    const result: CSSObj = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const restoredKey = restoreKey(key);
+      result[restoredKey] = typeof value === "object" && value !== null ? walk(value) : value;
+    }
+    return result;
+  };
+
+  return walk(cssObj);
+};
+
 export const parseLess = (code: string) => {
   const less = window.less;
   let cssObj: CSSObj = {};
 
+  const { sanitized, globalMap } = extractGlobals(code);
+
   try {
-    less.render(code, (error, output) => {
+    less.render(sanitized, (error, output) => {
       if (error) {
         console.error(error);
       } else {
@@ -220,7 +349,7 @@ export const parseLess = (code: string) => {
             console.error(error);
           } else {
             const parse = new Parse(output);
-            cssObj = parse.get();
+            cssObj = restoreGlobals(parse.get(), globalMap);
           }
         })
       }
