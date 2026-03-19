@@ -1352,7 +1352,7 @@ function inferNodeType(el, computed, tag) {
   if (tag === 'picture' || (el.querySelector && el.querySelector('img'))) return 'frame'; // wrap or container
   const display = computed.display;
   const isFlex = display === 'flex' || display === 'inline-flex';
-  const isBlock = display === 'block' || display === 'flex' || display === 'grid' || display === 'inline-block';
+  const isBlock = display === 'block' || display === 'flex' || display === 'grid' || display === 'inline-block' || display === 'table-cell' || display === 'table-row' || display === 'table-header-group' || display === 'table-row-group';
   const hasElementChildren = el.children && el.children.length > 0;
   const hasOnlyText = !hasElementChildren; // 无子元素
   if (hasOnlyText) {
@@ -1577,7 +1577,10 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   var gradientFill = bgImage ? parseLinearGradientFromBgImage(bgImage) : null;
   var imageUrl = bgImage ? parseUrlFromBgImage(bgImage) : null;
   if (gradientFill) {
-    style.fills = [gradientFill];
+    // 同时保留背景色作为底层 fill，避免渐变透明区域在 Figma 中透出阴影导致整体变深
+    var _bgColorDecl = d(['background-color', 'backgroundColor']) || computed.backgroundColor;
+    var _bgColorRgba = _bgColorDecl ? cssColorToRgba(_bgColorDecl) : null;
+    style.fills = _bgColorRgba ? [_bgColorRgba, gradientFill] : [gradientFill];
   } else if (imageUrl) {
     style.fills = [{ type: 'IMAGE', url: imageUrl }];
   } else {
