@@ -7,7 +7,7 @@ import { parseLess, stringifyLess } from "./utils/transform/less";
 import { deepClone } from "./utils/normal";
 import { convertHyphenToCamel } from "../utils/string";
 import { MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP } from "./context/constants";
-import { generateCodeStructure, exportCode, isExportSupported } from "../utils/code-export";
+import ExportCodePanel from "../utils/code-export/render";
 import "../utils/antd";
 import "./utils/dom-to-json";
 
@@ -707,56 +707,15 @@ export default function (props: Props, actions: Actions, ...args) {
   };
 
   const exportCodeConfig = [{
-    title: "代码",
-    items: [
-      {
-        title: "导出代码",
-        type: "Button",
-        value: {
-          async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
-            const comId = params?.id;
-            if (!comId) {
-              console.warn("[导出为代码] 无组件 ID");
-              return;
-            }
-            try {
-              const aiComParams = context.getAiComParams(comId);
-              if (!aiComParams?.data) {
-                console.error("[导出为代码] 组件数据不存在");
-                return;
-              }
-              const files = generateCodeStructure(aiComParams.data);
-              if (!isExportSupported()) {
-                alert('当前环境不支持导出，请使用 Chrome、Edge 或在 VSCode 中打开');
-                return;
-              }
-              const message = (window as any).antd?.message;
-              let hideLoading: any = null;
-              if (message) hideLoading = message.loading('正在导出代码...', 0);
-              await exportCode(files, {
-                folderName: 'App',
-                onProgress: (progress) => {
-                  console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
-                },
-              });
-              if (hideLoading) hideLoading();
-              if (message) message.success('导出代码成功！');
-              else alert('导出代码成功！');
-            } catch (error) {
-              const message = (window as any).antd?.message;
-              if ((error as any)?.message?.includes('取消')) {
-                console.log('[导出为代码] 用户取消导出');
-              } else {
-                if (message) message.error(`导出失败: ${(error as any)?.message || '未知错误'}`);
-                else alert(`导出失败: ${(error as any)?.message || '未知错误'}`);
-                console.error('[导出为代码] 导出失败', error);
-              }
-            }
-          }
-        }
-      }
-    ]
-  }, {
+      title: "导出代码",
+      type: "editorRender",
+      options: {
+        render: () => <ExportCodePanel
+          comId={props.id}
+          data={props.data}
+        />
+      },
+    }, {
     type: "themes",
     value: {
       get(params) {
