@@ -2,7 +2,7 @@ import * as types from "../types";
 import { parseJSDocComment } from "./jsdoc";
 
 
-type RefKind = "comRef" | "pageRef";
+type RefKind = "comRef" | "pageRef" | "dialogRef";
 
 /**
  * 从「组件定义」AST 节点上，取出 comRef(...) / pageRef(...) 对应的调用节点（CallExpression）。
@@ -17,7 +17,20 @@ function getRefCallFromComponentPath(componentPath: any, refKind: RefKind): any 
   if (node.type === "VariableDeclarator") call = node.init;
   else if (node.type === "ExportDefaultDeclaration") call = node.declaration;
   if (!call || call.type !== "CallExpression" || !call.arguments?.[0]) return null;
-  const isMatch = refKind === "comRef" ? isComRefCall(call.callee) : isPageRefCall(call.callee);
+  let isMatch;
+  switch (refKind) {
+    case 'comRef':
+      isMatch = isComRefCall(call.callee)
+      break
+    case 'pageRef':
+      isMatch = isPageRefCall(call.callee)
+      break
+    case 'dialogRef':
+      isMatch = isDialogRefCall(call.callee)
+      break
+    default:
+      break
+  }
   return isMatch ? call : null;
 }
 
@@ -138,6 +151,16 @@ function isPageRefCall(callee: any): boolean {
 }
 
 /**
+ * 判断当前「调用」的 callee 是不是 dialogRef。
+ */
+function isDialogRefCall(callee: any): boolean {
+  if (types.isIdentifier(callee)) return callee.name === "dialogRef";
+  if (callee?.type === "MemberExpression" && callee.property?.type === "Identifier")
+    return callee.property.name === "dialogRef";
+  return false;
+}
+
+/**
  * 对「当前这个 JSX 元素」判断：它是不是某个 comRef 组件的根节点？如果是，返回该组件 JSDoc（summary、props）；否则返回 null。
  *
  * 流程：
@@ -194,7 +217,7 @@ export function getComRefForJSXPath(
 }
 
 /**
- * 对「当前这个 JSX 元素」判断：它是不是某个 pageRef 页面/弹窗的根节点？
+ * 对「当前这个 JSX 元素」判断：它是不是某个 pageRef 页面的根节点？
  * 若是则返回 { name, jsdoc, rootJSX }，用于写入 data-zone-type='page' 与 data-zone-title（页面 title）。
  */
 export function getPageRefForJSXPath(
@@ -238,4 +261,85 @@ export function getPageRefForJSXPath(
 
   if (cached.rootJSX !== jsxPath.node) return null;
   return cached;
+}
+
+/**
+ * 对「当前这个 JSX 元素」判断：它是不是某个 dialogRef 弹窗的根节点？
+ * 若是则返回 { name, jsdoc, rootJSX }，用于写入 data-zone-type='page' 与 data-zone-title（页面 title）。
+ */
+export function getDialogRefForJSXPath(
+  jsxPath: any,
+  cache: Map<any, any>
+): any | null {
+  const componentPath = jsxPath.findParent((p: any) => {
+    if (p.isVariableDeclarator()) {
+      const init = p.node.init;
+      return init && init.type === "CallExpression" && isDialogRefCall(init.callee);
+    }
+    if (p.isExportDefaultDeclaration()) {
+      const decl = p.node.declaration;
+      return decl && decl.type === "CallExpression" && isDialogRefCall(decl.callee);
+    }
+    return false;
+  });
+  if (!componentPath) return null;
+
+  let cached = cache.get(componentPath.node);
+  if (cached === undefined) {
+    cached = {};
+    const rootJSX = getDialogRootJSXNode(componentPath);
+    console.log("[🚀 rootJSX]", rootJSX)
+    let jsdoc: ReturnType<typeof parseJSDocComment> = null;
+    if (rootJSX) {
+      const node = componentPath.node;
+      const comments =
+        node.type === "ExportDefaultDeclaration"
+          ? node.leadingComments
+          : (componentPath.parentPath?.node?.leadingComments ?? node.leadingComments);
+      cached.name = node.type === "ExportDefaultDeclaration" ? "root" : node.id.name;
+      if (Array.isArray(comments) && comments.length > 0) {
+        const block = comments.find((c: any) => c.type === "CommentBlock");
+        if (block && typeof block.value === "string") jsdoc = parseJSDocComment(block.value);
+      }
+    }
+    cached.rootJSX = rootJSX;
+    cached.jsdoc = jsdoc;
+    cache.set(componentPath.node, cached);
+  }
+
+  if (cached.rootJSX !== jsxPath.node) return null;
+  return cached;
+}
+
+/**
+ * 与 getComponentRootJSXNode 类似，但 dialogRef 允许根为 Fragment，此时返回 Fragment 的第一个子元素作为「逻辑根」。
+ */
+function getDialogRootJSXNode(componentPath: any): any {
+  const call = getRefCallFromComponentPath(componentPath, "dialogRef");
+  if (!call) return null;
+  const fn = call.arguments[0];
+  const body = fn?.body;
+  if (!body) return null;
+
+  let returnExpr: any = null;
+  if (fn.type === "ArrowFunctionExpression") {
+    if (body.type === "BlockStatement") {
+      const ret = body.body?.find((s: any) => s.type === "ReturnStatement");
+      returnExpr = ret?.argument ?? null;
+    } else {
+      returnExpr = body;
+    }
+  } else if (fn.type === "FunctionExpression" && body.type === "BlockStatement") {
+    const ret = body.body?.find((s: any) => s.type === "ReturnStatement");
+    returnExpr = ret?.argument ?? null;
+  }
+  if (!returnExpr) return null;
+
+  const maxUnwrap = 20;
+  let unwraps = 0;
+  while (returnExpr?.type === "ParenthesizedExpression" && unwraps < maxUnwrap) {
+    returnExpr = returnExpr.expression;
+    unwraps++;
+  }
+  return getFirstRenderedJSXElement(returnExpr);
 }

@@ -12,6 +12,21 @@
 ### 页面声明
 页面必须通过 pageRef 包裹实现
 
+### 浮层类组件声明
+浮层类组件（弹窗、抽屉等）必须通过 dialogRef 包裹实现
+
+### dialogVisible装饰器
+dialogVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下默认保持**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
+
+在store.js中的使用示例
+```js
+import { dialogVisible } from 'mybricks'
+
+export default class Store {
+  @dialogVisible
+  modalVisible = false;
+}
+```
 
 ### 接口使用
 对于所有的接口，都必须维护到service.js文件中，我们提供了 `createEnvs` + `createAPI`，对axios做了代理，所有接口和环境必须通过这两个函数来定义。
