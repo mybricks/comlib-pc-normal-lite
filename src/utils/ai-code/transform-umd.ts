@@ -25,52 +25,50 @@ export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies
   })
 }
 
-export function transformTsx(code, ctx?: import('../../mix/avaliableLibraries/types').ValidateContext): Promise<{ transformCode: string, constituency: any }> {
-  return new Promise((resolve, reject) => {
-    let transformCode
-    const constituency: any = [];
+export function transformTsx(code, ctx?: import('../../mix/avaliableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
+  let transformCode
+  const constituency: any = [];
 
-    try {
-      const validatorPlugins = getValidatorPlugins(ctx ?? { fileName: 'runtime.jsx' })
+  try {
+    const validatorPlugins = getValidatorPlugins(ctx ?? { fileName: 'runtime.jsx' })
 
-      const options = {
-        presets: [
-          [
-            "env",
-            {
-              "modules": "commonjs"//umd->commonjs
-            }
-          ],
-          'react'
+    const options = {
+      presets: [
+        [
+          "env",
+          {
+            "modules": "commonjs"//umd->commonjs
+          }
         ],
-        plugins: [
-          ['proposal-decorators', {legacy: true}],
-          'proposal-class-properties',
-          [
-            'transform-typescript',
-            {
-              isTSX: true
-            }
-          ],
-          babelPlugin({ constituency }),
-          ...validatorPlugins,
-        ]
-      }
-
-      if (!window.Babel) {
-        loadBabel()
-        reject('当前环境 BaBel编译器 未准备好')
-      } else {
-        transformCode = window.Babel.transform(code, options).code
-      }
-
-    } catch (error) {
-      console.error("[@transformTsx error]", error);
-      reject(error)
+        'react'
+      ],
+      plugins: [
+        ['proposal-decorators', {legacy: true}],
+        'proposal-class-properties',
+        [
+          'transform-typescript',
+          {
+            isTSX: true
+          }
+        ],
+        babelPlugin({ constituency }),
+        ...validatorPlugins,
+      ]
     }
 
-    return resolve({ transformCode, constituency })
-  })
+    if (!window.Babel) {
+      loadBabel()
+      throw new Error('当前环境 BaBel编译器 未准备好')
+    } else {
+      transformCode = window.Babel.transform(code, options).code
+    }
+
+  } catch (error) {
+    console.error("[@transformTsx error]", error);
+    throw error
+  }
+
+  return { transformCode, constituency }
 }
 
 // export function transformLess(code): Promise<string> {
@@ -141,7 +139,9 @@ export function updateRender({ data, success }, renderCode) {
   if (data.serviceJsSource) {
     try { relatedFiles['service.js'] = decodeURIComponent(data.serviceJsSource); } catch {}
   }
-  transformTsx(renderCode, { fileName: 'runtime.jsx', relatedFiles }).then(({ transformCode, constituency }) => {
+
+  try {
+    const { transformCode, constituency } = transformTsx(renderCode, { fileName: 'runtime.jsx', relatedFiles });
     data.runtimeJsxCompiled = encodeURIComponent(transformCode);
     writeSource();
     data.runtimeJsxConstituency = constituency;
@@ -150,7 +150,7 @@ export function updateRender({ data, success }, renderCode) {
     data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
     data._errors = data._errors.filter(err => err.file);
     success?.();
-  }).catch(e => {
+  } catch (e) {
     console.error("[@transformTsx error]", e);
     writeSource();
     // 添加编译错误到统一错误列表
@@ -164,20 +164,22 @@ export function updateRender({ data, success }, renderCode) {
       }
     ];
     success?.();
-  });
+  }
 }
 
 export function updateStore({ data, success }, storeCode) {
   const writeSource = () => {
     data.storeJsSource = encodeURIComponent(storeCode);
   };
-  transformTsx(storeCode, { fileName: 'store.js' }).then(({ transformCode }) => {
+
+  try {
+    const { transformCode } = transformTsx(storeCode, { fileName: 'store.js' });
     data.storeJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
     data._errors = data._errors.filter(err => err.file !== 'store.js');
     success?.();
-  }).catch(e => {
+  } catch (e) {
     console.error("[@updateStore error]", e);
     writeSource();
     if (!data._errors) data._errors = [];
@@ -190,20 +192,22 @@ export function updateStore({ data, success }, storeCode) {
       }
     ];
     success?.();
-  });
+  }
 }
 
 export function updateService({ data, success }, serviceCode) {
   const writeSource = () => {
     data.serviceJsSource = encodeURIComponent(serviceCode);
   };
-  transformTsx(serviceCode, { fileName: 'service.js' }).then(({ transformCode }) => {
+
+  try {
+    const { transformCode } = transformTsx(serviceCode, { fileName: 'service.js' });
     data.serviceJsCompiled = encodeURIComponent(transformCode);
     writeSource();
     if (!data._errors) data._errors = [];
     data._errors = data._errors.filter(err => err.file !== 'service.js');
     success?.();
-  }).catch(e => {
+  } catch (e) {
     console.error("[@updateService error]", e);
     writeSource();
     if (!data._errors) data._errors = [];
@@ -216,7 +220,7 @@ export function updateService({ data, success }, serviceCode) {
       }
     ];
     success?.();
-  });
+  }
 }
 
 // export function updateStyle({ id, data, success }, styleCode) {

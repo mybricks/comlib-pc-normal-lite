@@ -19,7 +19,7 @@ const FILES = [
   "store.js",
   "service.js",
   "mock.json",
-  "runtime.md",
+  "README.md",
   // "config.js",
   // "com.json"
 ] as const;
@@ -34,7 +34,7 @@ const FILES_MAP: Record<string, string> = {
   "com.json": "componentConfig",
   "store.js": "storeJsSource",
   "service.js": "serviceJsSource",
-  "runtime.md": "runtimeMdSource",
+  "README.md": "runtimeMdSource",
   "mock.json": "mockJsonSource",
 };
 
@@ -92,7 +92,7 @@ export default function LowcodeView(params: Params) {
     //   };
     // }
     // .md 文件需用 Monaco 的 language id: 'markdown'（不能用 'md'）
-    if (selectedFileName === "runtime.md") {
+    if (selectedFileName === "README.md") {
       return {
         path,
         language: "markdown",
@@ -237,7 +237,7 @@ export default function LowcodeView(params: Params) {
   }, [params.data?.runtimeJsxSource]);
 
   useEffect(() => {
-    clearFileIfDataChanged("runtime.md");
+    clearFileIfDataChanged("README.md");
   }, [params.data?.runtimeMdSource]);
 
   // useEffect(() => {

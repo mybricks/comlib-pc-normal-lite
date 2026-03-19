@@ -93,10 +93,11 @@ export default function developMyBricksModule(config: Config) {
     - 错误：\`<UserInfo _env={_env} store={store} dialogContainer={dialogContainer} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 页面、弹窗、组件必须遵循规范进行定义
+  3. 页面、浮层类组件、组件必须遵循规范进行定义
     - 整个项目有且只能有一个export default导出，那就是appRef;
-    - 所有页面和弹窗都需要通过 pageRef 包装，无需导出；
+    - 所有页面都需要通过 pageRef 包装，无需导出；
     - 所有组件和模块都需要使用 comRef 包装，无需导出;
+    - 所有浮层类组件（弹窗/抽屉等）都需要使用 dialogRef 包装，无需导出;
     - 路由通过 Routes + Route 进行渲染；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
@@ -116,7 +117,7 @@ export default function developMyBricksModule(config: Config) {
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
       3. dialogContainer，浮层类组件指定挂载节点
-        - 浮层类的挂载节点必须指向dialogContainer
+        - 浮层类组件的挂载节点必须指向dialogContainer
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
 
@@ -130,7 +131,7 @@ export default function developMyBricksModule(config: Config) {
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
       3. dialogContainer，浮层类组件指定挂载节点
-        - 浮层类的挂载节点必须指向dialogContainer
+        - 浮层类组件的挂载节点必须指向dialogContainer
     2. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；
   </pageRef说明>
 
@@ -144,7 +145,7 @@ export default function developMyBricksModule(config: Config) {
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
       3. dialogContainer，浮层类组件指定挂载节点
-        - 浮层类的挂载节点必须指向dialogContainer
+        - 浮层类组件的挂载节点必须指向dialogContainer
     2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
   </dialogRef说明>
 
