@@ -8,7 +8,7 @@ import {
   findRelyAndSource,
   getComRefForJSXPath,
   getPageRefForJSXPath,
-  getDialogRefForJSXPath,
+  getPopupRefForJSXPath,
   getEvents,
   getJSXElementNameString
 } from "./utils";
@@ -20,8 +20,8 @@ export default function ({ constituency }) {
     const componentJsdocCache = new Map<any, any>();
     /** 按组件声明缓存 pageRef 的 { rootJSX, jsdoc, name }，每个 pageRef 只计算一次 */
     const pageRefCache = new Map<any, any>();
-    /** 按组件声明缓存 dialogRef 的 { rootJSX, jsdoc, name }，每个 dialogRef 只计算一次 */
-    const dialogRefCache = new Map<any, any>();
+    /** 按组件声明缓存 popupRef 的 { rootJSX, jsdoc, name }，每个 popupRef 只计算一次 */
+    const popupRefCache = new Map<any, any>();
 
     /** 遍历时 comRef 的 jsdoc 栈，子元素通过栈顶读到当前组件的 jsdoc */
     // const jsdocStack: any[] = [];
@@ -83,11 +83,11 @@ export default function ({ constituency }) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
               }
 
-              const dialogRef = getDialogRefForJSXPath(path, dialogRefCache);
-              if (dialogRef) {
-                const dialogTitle = dialogRef.jsdoc?.summary ?? dialogRef.name ?? lastSelector;
+              const popupRef = getPopupRefForJSXPath(path, popupRefCache);
+              if (popupRef) {
+                const dialogTitle = popupRef.jsdoc?.summary ?? popupRef.name ?? lastSelector;
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", dialogTitle);
-                pushDataAttr(node.openingElement.attributes, "data-widget-name", dialogRef.name);
+                pushDataAttr(node.openingElement.attributes, "data-widget-name", popupRef.name);
               }
 
               const { relyName, source } = findRelyAndSource(tagName, importRelyMap);

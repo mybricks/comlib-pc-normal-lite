@@ -404,7 +404,7 @@ function createRouterLib(
     );
   }
 
-  function createAppRef(store: any, useSyncExternalStore: any, dialogRefRegistry: any[] = []) {
+  function createAppRef(store: any, useSyncExternalStore: any, popupRefRegistry: any[] = []) {
     return function appRef(Component: any) {
       return (props: any) => {
         /**
@@ -464,7 +464,7 @@ function createRouterLib(
         )
 
         if (_env.mode === 'design') {
-        const dialogs = dialogRefRegistry.map((DialogRoot, i) => (
+        const dialogs = popupRefRegistry.map((DialogRoot, i) => (
           <DialogRoot key={`dialog-${i}`} />
         ));
           return (
@@ -581,11 +581,11 @@ export function createMybricks(options: CreateMybricksOptions) {
   const pageRefOriginalsSet = new Set<any>();
 
   /**
-   * dialogRef 注册表：收集所有 dialogRef 包装后的根节点组件。
+   * popupRef 注册表：收集所有 popupRef 包装后的根节点组件。
    * 在 appRef 渲染时与 pageRef 同级挂载到根节点下。
    */
-  const dialogRefRegistry: any[] = [];
-  const dialogRefOriginalsSet = new Set<any>();
+  const popupRefRegistry: any[] = [];
+  const popupRefOriginalsSet = new Set<any>();
 
   const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget);
 
@@ -662,8 +662,8 @@ export function createMybricks(options: CreateMybricksOptions) {
   };
 
   const wrapDialogWithStore = (Component: any) => {
-    // 注册到 dialogRefRegistry，在 appRef 根节点与 pageRef 同级渲染
-    const dialogIndex = pageRefRegistry.length + dialogRefRegistry.length;
+    // 注册到 popupRefRegistry，在 appRef 根节点与 pageRef 同级渲染
+    const dialogIndex = pageRefRegistry.length + popupRefRegistry.length;
 
     const DialogRoot = (props) => {
       const autoStore = useRef<any>(null);
@@ -701,7 +701,7 @@ export function createMybricks(options: CreateMybricksOptions) {
               _env={_env}
               store={autoStore.current}
               _state={state}
-              dialogContainer={false}
+              wrapper={false}
             />
           </div>
         );
@@ -724,7 +724,7 @@ export function createMybricks(options: CreateMybricksOptions) {
               _env={_env}
               store={autoStore.current}
               _state={state}
-              dialogContainer={container}
+              wrapper={container}
             />
           </>
         )
@@ -733,9 +733,9 @@ export function createMybricks(options: CreateMybricksOptions) {
 
     if (_env.mode === 'design') {
       // 运行态不做任何处理，保留类字段原始初始值
-      if (!dialogRefOriginalsSet.has(Component)) {
-        dialogRefOriginalsSet.add(Component);
-        dialogRefRegistry.push(DialogRoot);
+      if (!popupRefOriginalsSet.has(Component)) {
+        popupRefOriginalsSet.add(Component);
+        popupRefRegistry.push(DialogRoot);
       }
       return () => null;
     }
@@ -746,7 +746,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   /**
    * 浮层类组件在设计态默认展开
    */
-  const dialogVisible = (target, propertyKey) => {
+  const PopupVisible = (target, propertyKey) => {
     if (_env.mode !== 'design') {
       // 运行态不做任何处理，保留类字段原始初始值
       return;
@@ -761,10 +761,10 @@ export function createMybricks(options: CreateMybricksOptions) {
   }
 
   return {
-    dialogRef: wrapDialogWithStore,
+    popupRef: wrapDialogWithStore,
     comRef: wrapWithStore,
     pageRef: wrapPageWithStore,
-    appRef: routerLib.createAppRef(store, useSyncExternalStore, dialogRefRegistry),
+    appRef: routerLib.createAppRef(store, useSyncExternalStore, popupRefRegistry),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
     /** @deprecated 建议使用 useNavigate */
@@ -779,7 +779,7 @@ export function createMybricks(options: CreateMybricksOptions) {
       }
     } : createAPI,
     logger,
-    dialogVisible
+    PopupVisible
   };
 }
 

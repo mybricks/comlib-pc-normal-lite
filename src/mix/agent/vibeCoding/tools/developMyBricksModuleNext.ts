@@ -90,15 +90,15 @@ export default function developMyBricksModule(config: Config) {
   </代码示例>
 
   <编写规范>
-  1. 组件 props 禁止传递*保留字段*：_env，store，dialogContainer；
-    - 错误：\`<UserInfo _env={_env} store={store} dialogContainer={dialogContainer} user={store.user}/>\`
+  1. 组件 props 禁止传递*保留字段*：_env，store，wrapper；
+    - 错误：\`<UserInfo _env={_env} store={store} wrapper={wrapper} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
   3. 页面、浮层类组件、组件必须遵循规范进行定义
     - 整个项目有且只能有一个export default导出，那就是appRef;
     - 所有页面都需要通过 pageRef 包装，无需导出；
     - 所有组件和模块都需要使用 comRef 包装，无需导出;
-    - 所有浮层类组件（弹窗/抽屉等）都需要使用 dialogRef 包装，无需导出;
+    - 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，无需导出;
     - 路由通过 Routes + Route 进行渲染；
   4. 遵循下文 <区块拆分原则与规范/>；
   5. 禁止编写未实现的事件函数；
@@ -117,8 +117,8 @@ export default function developMyBricksModule(config: Config) {
         - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-      3. dialogContainer，浮层类组件指定挂载节点
-        - 浮层类组件的挂载节点必须指向dialogContainer
+      3. wrapper，浮层类组件指定挂载节点
+        - 浮层类组件的挂载节点必须指向 wrapper
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
 
@@ -131,13 +131,13 @@ export default function developMyBricksModule(config: Config) {
         - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-      3. dialogContainer，浮层类组件指定挂载节点
-        - 浮层类组件的挂载节点必须指向dialogContainer
+      3. wrapper，浮层类组件指定挂载节点
+        - 浮层类组件的挂载节点必须指向 wrapper
     2. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；
   </pageRef说明>
 
-  <dialogRef说明>
-    dialogRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
+  <popupRef说明>
+    popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
     1. 该浮层类组件默认接收以下*保留字段*：
       1. _env，环境变量
         - _env.mode: 运行环境，design|runtime
@@ -145,17 +145,17 @@ export default function developMyBricksModule(config: Config) {
         - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
         - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
         - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-      3. dialogContainer，浮层类组件指定挂载节点
-        - 浮层类组件的挂载节点必须指向dialogContainer
+      3. wrapper，浮层类组件指定挂载节点
+        - 浮层类组件的挂载节点必须指向 wrapper
     2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
-  </dialogRef说明>
+  </popupRef说明>
 
-  <dialogVisible装饰器说明>
-    dialogVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下将变量默认设置为**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
+  <PopupVisible装饰器说明>
+    PopupVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下将变量默认设置为**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
     <注意>
       1. 对于浮层类组件的打开与否，不需要在runtime层控制，统一由装饰器进行管理；
     </注意>
-  </dialogVisible装饰器说明>
+  </PopupVisible装饰器说明>
 
   2. style.less文件
     <代码示例>
@@ -179,7 +179,7 @@ export default function developMyBricksModule(config: Config) {
     store.js文件用于管理模块的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
     <代码示例>
     \`\`\`js file="store.js"
-    import { logger } from 'mybricks';
+    import { logger, PopupVisible } from 'mybricks';
 
     export default class Store {
       count = 1;
@@ -195,7 +195,7 @@ export default function developMyBricksModule(config: Config) {
         this.name = name;
       }
 
-      @dialogVisible
+      @PopupVisible
       modalVisible = false;
     }
     \`\`\`
@@ -215,7 +215,7 @@ export default function developMyBricksModule(config: Config) {
     </使用原则>
 
     <编写规范>
-      1. 当字段用于控制浮层类组件的显示/隐藏状态时，需要对该字段使用装饰器 @dialogVisible；
+      1. 当字段用于控制浮层类组件的显示/隐藏状态时，需要对该字段使用装饰器 @PopupVisible；
     </编写规范>
 
     <注意>
