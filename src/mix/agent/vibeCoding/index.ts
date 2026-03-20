@@ -355,13 +355,23 @@ export default function ({ context }) {
       const onProgress = (status) => {
         const { focusArea } = focus;
         if (!focusArea) {
+          if (status === "start") {
+            context.startAIPendingVersion(focus.comId);
+          } else if (status === "complete") {
+            context.commitAIVersion(focus.comId);
+          } else if (status === "error") {
+            context.cancelAIPending(focus.comId);
+          }
           params?.onProgress?.(status);
         } else {
         if (status === "start") {
+          context.startAIPendingVersion(focus.comId);
           actions.lock(lockId, focusArea);
         } else if (status === "complete") {
+          context.commitAIVersion(focus.comId);
           actions.unlock(lockId, focusArea);
         } else if (status === "error") {
+          context.cancelAIPending(focus.comId);
           actions.unlock(lockId, focusArea);
         }
         }

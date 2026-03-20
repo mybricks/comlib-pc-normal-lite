@@ -1,6 +1,8 @@
 import React from 'react';
 import LowcodeView, { lowcodeViewEvents } from "./lowcodeView";
 import lowcodeViewCss from "./lowcodeView/index.lazy.less";
+import consoleViewCss from "./lowcodeView/console/index.lazy.less"
+import versionViewCss from "./lowcodeView/version/index.lazy.less"
 import context from "./context";
 import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from "./knowledges";
 import { parseLess, stringifyLess } from "./utils/transform/less";
@@ -254,6 +256,8 @@ const genStyleValue = (params) => {
 
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr })
+      // 编辑器保存后记录/更新编辑器版本快照
+      context.saveEditorVersion(comId);
     }
   }
 }
@@ -297,6 +301,8 @@ const genResizer = () => {
           })
           const cssStr = stringifyLess(cssObj);
           context.updateFile(params.id, { fileName: 'style.less', content: cssStr })
+          // 编辑器保存后记录/更新编辑器版本快照
+          context.saveEditorVersion(params.id);
         }
       }
     }
@@ -703,6 +709,8 @@ export default function (props: Props, actions: Actions, ...args) {
     if (hasChange) {
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr });
+      // 编辑器保存后记录/更新编辑器版本快照
+      context.saveEditorVersion(comId);
     }
   };
 
@@ -771,7 +779,9 @@ export default function (props: Props, actions: Actions, ...args) {
       },
       useCSS(){
         return [
-          lowcodeViewCss
+          lowcodeViewCss,
+          consoleViewCss,
+          versionViewCss
         ]
       }
     },

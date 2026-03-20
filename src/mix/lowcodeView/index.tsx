@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
 import context from "../context";
 import ConsoleLogPanel from "./console";
+import VersionPanel from "./version";
 import lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
 
@@ -64,7 +65,7 @@ export default function LowcodeView(params: Params) {
   const bottomTab = debugState?.bottomTab ?? 'source';
   const consoleLogs = debugState?.logs ?? [];
 
-  const setBottomTab = useCallback((tab: 'source' | 'console') => {
+  const setBottomTab = useCallback((tab: 'source' | 'console' | 'version') => {
     if (componentId) context.setComBottomTab(componentId, tab);
   }, [componentId]);
 
@@ -194,6 +195,8 @@ export default function LowcodeView(params: Params) {
         delete next[selectedFileName];
         return next;
       });
+      // 编辑器保存后记录/更新编辑器版本快照
+      context.saveEditorVersion(params.model.runtime.id);
     }
   }, [selectedFileName, modifiedContent, params.data]);
 
@@ -278,6 +281,12 @@ export default function LowcodeView(params: Params) {
               控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
             </div>
           )}
+          <div
+            className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+            onClick={() => setBottomTab('version')}
+          >
+            版本
+          </div>
         </div>
         <button
           type="button"
@@ -324,6 +333,12 @@ export default function LowcodeView(params: Params) {
       {isDebugging && (
         <div className={css['lowcode-view']} style={{ display: bottomTab === 'console' ? 'flex' : 'none' }}>
           <ConsoleLogPanel componentId={componentId} logs={consoleLogs} />
+        </div>
+      )}
+      {/* 版本面板 */}
+      {bottomTab === 'version' && componentId && (
+        <div className={css['lowcode-view']}>
+          <VersionPanel componentId={componentId} />
         </div>
       )}
     </div>

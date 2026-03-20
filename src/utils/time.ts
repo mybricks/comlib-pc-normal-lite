@@ -8,13 +8,14 @@ const getNumberStringWithWidth = (num: Number, width: number) => {
   return str.substr(0, width)
 }
 
-const getTimestamp = () => {
+const getTimestamp = (options?: { showMs?: boolean }) => {
+  const showMs = options?.showMs ?? true
   const date = new Date()
   const h = getNumberStringWithWidth(date.getHours(), 2)
   const min = getNumberStringWithWidth(date.getMinutes(), 2)
   const sec = getNumberStringWithWidth(date.getSeconds(), 2)
   const ms = getNumberStringWithWidth(date.getMilliseconds(), 3)
-  return `${h}:${min}:${sec}.${ms}`
+  return showMs ? `${h}:${min}:${sec}.${ms}` : `${h}:${min}:${sec}`
 }
 
 export {
