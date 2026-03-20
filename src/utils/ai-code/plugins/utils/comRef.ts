@@ -2,7 +2,7 @@ import * as types from "../types";
 import { parseJSDocComment } from "./jsdoc";
 
 
-type RefKind = "comRef" | "pageRef" | "dialogRef";
+type RefKind = "comRef" | "pageRef" | "popupRef";
 
 /**
  * 从「组件定义」AST 节点上，取出 comRef(...) / pageRef(...) 对应的调用节点（CallExpression）。
@@ -25,8 +25,8 @@ function getRefCallFromComponentPath(componentPath: any, refKind: RefKind): any 
     case 'pageRef':
       isMatch = isPageRefCall(call.callee)
       break
-    case 'dialogRef':
-      isMatch = isDialogRefCall(call.callee)
+    case 'popupRef':
+      isMatch = isPopupRefCall(call.callee)
       break
     default:
       break
@@ -151,12 +151,12 @@ function isPageRefCall(callee: any): boolean {
 }
 
 /**
- * 判断当前「调用」的 callee 是不是 dialogRef。
+ * 判断当前「调用」的 callee 是不是 popupRef
  */
-function isDialogRefCall(callee: any): boolean {
-  if (types.isIdentifier(callee)) return callee.name === "dialogRef";
+function isPopupRefCall(callee: any): boolean {
+  if (types.isIdentifier(callee)) return callee.name === "popupRef";
   if (callee?.type === "MemberExpression" && callee.property?.type === "Identifier")
-    return callee.property.name === "dialogRef";
+    return callee.property.name === "popupRef";
   return false;
 }
 
@@ -264,21 +264,21 @@ export function getPageRefForJSXPath(
 }
 
 /**
- * 对「当前这个 JSX 元素」判断：它是不是某个 dialogRef 弹窗的根节点？
+ * 对「当前这个 JSX 元素」判断：它是不是某个 popupRef 弹窗的根节点？
  * 若是则返回 { name, jsdoc, rootJSX }，用于写入 data-zone-type='page' 与 data-zone-title（页面 title）。
  */
-export function getDialogRefForJSXPath(
+export function getPopupRefForJSXPath(
   jsxPath: any,
   cache: Map<any, any>
 ): any | null {
   const componentPath = jsxPath.findParent((p: any) => {
     if (p.isVariableDeclarator()) {
       const init = p.node.init;
-      return init && init.type === "CallExpression" && isDialogRefCall(init.callee);
+      return init && init.type === "CallExpression" && isPopupRefCall(init.callee);
     }
     if (p.isExportDefaultDeclaration()) {
       const decl = p.node.declaration;
-      return decl && decl.type === "CallExpression" && isDialogRefCall(decl.callee);
+      return decl && decl.type === "CallExpression" && isPopupRefCall(decl.callee);
     }
     return false;
   });
@@ -312,10 +312,10 @@ export function getDialogRefForJSXPath(
 }
 
 /**
- * 与 getComponentRootJSXNode 类似，但 dialogRef 允许根为 Fragment，此时返回 Fragment 的第一个子元素作为「逻辑根」。
+ * 与 getComponentRootJSXNode 类似，但 popupRef 允许根为 Fragment，此时返回 Fragment 的第一个子元素作为「逻辑根」。
  */
 function getDialogRootJSXNode(componentPath: any): any {
-  const call = getRefCallFromComponentPath(componentPath, "dialogRef");
+  const call = getRefCallFromComponentPath(componentPath, "popupRef");
   if (!call) return null;
   const fn = call.arguments[0];
   const body = fn?.body;

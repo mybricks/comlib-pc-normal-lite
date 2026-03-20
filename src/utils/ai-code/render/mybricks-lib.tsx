@@ -7,6 +7,12 @@ export const SYMBOL_SETLISTENER = Symbol('setListener');
 export const SYMBOL_SUBSCRIBE = Symbol('subscribe');
 export const SYMBOL_GETSNAPSHOT = Symbol('getSnapshot');
 
+/**
+ * 模块级当前 key 收集器，类似 Vue3 的 activeEffect。
+ * 方法执行期间，boundContext 的 get 会向此回调上报读取的 key。
+ */
+let currentKeyCollector: ((key: string) => void) | null = null;
+
 class DefaultStore {}
 
 /**
@@ -65,6 +71,10 @@ export function genListenersStore(
     {},
     {
       get(_, k) {
+        // 若当前有活跃的收集器（方法调用中），上报读取的 key
+        if (currentKeyCollector && typeof k === 'string') {
+          currentKeyCollector(k);
+        }
         return store[k];
       },
       set(_, k, v) {
@@ -127,22 +137,37 @@ function createReactiveStore(store: any) {
     return snapshot;
   };
 
+  /**
+   * 将 key 纳入依赖追踪：首次遇到该 key 时注册监听。
+   */
+  const trackKey = (key: string) => {
+    if (collectionsListener.has(key)) return;
+    const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
+      state[k] = v;
+      dirty = true;
+      listeners.forEach((listener) => listener());
+    };
+    collectionsListener.set(key, store[SYMBOL_SETLISTENER](key, collectionListener));
+  };
+
   return new Proxy({} as any, {
     get(_target, key) {
       if (key === SYMBOL_SUBSCRIBE) return subscribe;
       if (key === SYMBOL_GETSNAPSHOT) return getSnapshot;
       const value = store[key];
-      if (!collectionsListener.has(key as string)) {
-        const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
-          state[k] = v;
-          dirty = true;
-          listeners.forEach((listener) => listener());
+      if (typeof value === 'function') {
+        // 包装函数：执行期间开启 key 收集，捕获方法内对 this.xxx 的读取
+        return (...args: any[]) => {
+          currentKeyCollector = (readKey: string) => trackKey(readKey);
+          try {
+            return value(...args);
+          } finally {
+            currentKeyCollector = null;
+          }
         };
-        collectionsListener.set(
-          key as string,
-          store[SYMBOL_SETLISTENER](key, collectionListener)
-        );
       }
+      // 非函数 key：直接追踪并返回
+      trackKey(key as string);
       return value;
     },
   });
@@ -404,7 +429,7 @@ function createRouterLib(
     );
   }
 
-  function createAppRef(store: any, useSyncExternalStore: any, dialogRefRegistry: any[] = []) {
+  function createAppRef(store: any, useSyncExternalStore: any, popupRefRegistry: any[] = []) {
     return function appRef(Component: any) {
       return (props: any) => {
         /**
@@ -464,7 +489,7 @@ function createRouterLib(
         )
 
         if (_env.mode === 'design') {
-        const dialogs = dialogRefRegistry.map((DialogRoot, i) => (
+        const dialogs = popupRefRegistry.map((DialogRoot, i) => (
           <DialogRoot key={`dialog-${i}`} />
         ));
           return (
@@ -581,11 +606,11 @@ export function createMybricks(options: CreateMybricksOptions) {
   const pageRefOriginalsSet = new Set<any>();
 
   /**
-   * dialogRef 注册表：收集所有 dialogRef 包装后的根节点组件。
+   * popupRef 注册表：收集所有 popupRef 包装后的根节点组件。
    * 在 appRef 渲染时与 pageRef 同级挂载到根节点下。
    */
-  const dialogRefRegistry: any[] = [];
-  const dialogRefOriginalsSet = new Set<any>();
+  const popupRefRegistry: any[] = [];
+  const popupRefOriginalsSet = new Set<any>();
 
   const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget);
 
@@ -662,8 +687,8 @@ export function createMybricks(options: CreateMybricksOptions) {
   };
 
   const wrapDialogWithStore = (Component: any) => {
-    // 注册到 dialogRefRegistry，在 appRef 根节点与 pageRef 同级渲染
-    const dialogIndex = pageRefRegistry.length + dialogRefRegistry.length;
+    // 注册到 popupRefRegistry，在 appRef 根节点与 pageRef 同级渲染
+    const dialogIndex = pageRefRegistry.length + popupRefRegistry.length;
 
     const DialogRoot = (props) => {
       const autoStore = useRef<any>(null);
@@ -701,7 +726,7 @@ export function createMybricks(options: CreateMybricksOptions) {
               _env={_env}
               store={autoStore.current}
               _state={state}
-              dialogContainer={false}
+              wrapper={false}
             />
           </div>
         );
@@ -724,7 +749,7 @@ export function createMybricks(options: CreateMybricksOptions) {
               _env={_env}
               store={autoStore.current}
               _state={state}
-              dialogContainer={container}
+              wrapper={container}
             />
           </>
         )
@@ -733,9 +758,9 @@ export function createMybricks(options: CreateMybricksOptions) {
 
     if (_env.mode === 'design') {
       // 运行态不做任何处理，保留类字段原始初始值
-      if (!dialogRefOriginalsSet.has(Component)) {
-        dialogRefOriginalsSet.add(Component);
-        dialogRefRegistry.push(DialogRoot);
+      if (!popupRefOriginalsSet.has(Component)) {
+        popupRefOriginalsSet.add(Component);
+        popupRefRegistry.push(DialogRoot);
       }
       return () => null;
     }
@@ -746,25 +771,29 @@ export function createMybricks(options: CreateMybricksOptions) {
   /**
    * 浮层类组件在设计态默认展开
    */
-  const dialogVisible = (target, propertyKey) => {
+  const PopupVisible = (target, propertyKey) => {
     if (_env.mode !== 'design') {
       // 运行态不做任何处理，保留类字段原始初始值
       return;
     }
-    // 设计态：强制初始值为 true 且不允许修改
+    // 设计态：强制初始值为 true 且不允许修改（setter 静默忽略赋值，避免严格模式报错）
     return {
-      initializer: () => true,
       enumerable: true,
       configurable: true,
-      writable: false,
+      get() {
+        return true;
+      },
+      set() { 
+        return false;
+      },
     };
   }
 
   return {
-    dialogRef: wrapDialogWithStore,
+    popupRef: wrapDialogWithStore,
     comRef: wrapWithStore,
     pageRef: wrapPageWithStore,
-    appRef: routerLib.createAppRef(store, useSyncExternalStore, dialogRefRegistry),
+    appRef: routerLib.createAppRef(store, useSyncExternalStore, popupRefRegistry),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
     /** @deprecated 建议使用 useNavigate */
@@ -779,7 +808,7 @@ export function createMybricks(options: CreateMybricksOptions) {
       }
     } : createAPI,
     logger,
-    dialogVisible
+    PopupVisible
   };
 }
 

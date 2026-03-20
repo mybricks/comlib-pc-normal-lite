@@ -725,6 +725,16 @@ function elementToMybricksJson(el, styleTagId) {
               if (ss.marginLeft != null) delete ss.marginLeft;
             }
           } else {
+            // WRAP 容器：在所有 margin 清理操作之前，先提取子节点 marginBottom 作为行间距
+            if (nodeJson.style && nodeJson.style.layoutWrap === 'WRAP' && !nodeJson.style.counterAxisSpacing) {
+              for (var _wEarly = 0; _wEarly < childNodesList.length; _wEarly++) {
+                var _wEarlyC = childNodesList[_wEarly];
+                if (_wEarlyC && _wEarlyC.style && _wEarlyC.style.marginBottom > 0) {
+                  nodeJson.style.counterAxisSpacing = _wEarlyC.style.marginBottom;
+                  break;
+                }
+              }
+            }
             if (childrenHaveUniformMargin(childNodesList, layoutMode)) {
               applyUniformMarginAsGap(nodeJson, childNodesList, layoutMode);
             }
@@ -752,6 +762,18 @@ function elementToMybricksJson(el, styleTagId) {
                 delete nodeJson.style.itemSpacing;
               }
             } else {
+              // itemSpacing 已从子节点 margin 中推断出来，清理子节点 margin
+              // 但若父容器是 WRAP，marginBottom 是行间距来源，先提取再删
+              var _isWrapContainer = nodeJson.style && nodeJson.style.layoutWrap === 'WRAP';
+              if (_isWrapContainer && !nodeJson.style.counterAxisSpacing) {
+                for (var _wPre = 0; _wPre < childNodesList.length; _wPre++) {
+                  var _wPreC = childNodesList[_wPre];
+                  if (_wPreC && _wPreC.style && _wPreC.style.marginBottom > 0) {
+                    nodeJson.style.counterAxisSpacing = _wPreC.style.marginBottom;
+                    break;
+                  }
+                }
+              }
               for (var si = 0; si < childNodesList.length; si++) {
                 var ss = childNodesList[si].style || {};
                 if (ss.marginTop != null) delete ss.marginTop;
@@ -762,13 +784,116 @@ function elementToMybricksJson(el, styleTagId) {
             }
           }
         }
+        // 绝对定位子节点（position: absolute）在 CSS 里靠 z-index 浮于普通流之上，
+        // Figma 没有 z-index，层叠顺序由 children 数组决定（后面的在上层）。
+        // 将 positionType: absolute 的节点移到数组末尾，保证它们始终渲染在最上层。
+        var _absNodes = [];
+        var _flowNodes = [];
+        for (var _zi = 0; _zi < childNodesList.length; _zi++) {
+          var _zn = childNodesList[_zi];
+          if (_zn && _zn.style && _zn.style.positionType === 'absolute') {
+            _absNodes.push(_zn);
+          } else {
+            _flowNodes.push(_zn);
+          }
+        }
+        if (_absNodes.length > 0) childNodesList = _flowNodes.concat(_absNodes);
+        // ant-radio-group：过滤掉各 wrapper 内的 pseudo-before 竖线（Figma 里不需要，边框各自渲染）
+        if (nodeJson.className && nodeJson.className.indexOf('ant-radio-group') !== -1) {
+          for (var _rgi = 0; _rgi < childNodesList.length; _rgi++) {
+            var _rgChild = childNodesList[_rgi];
+            if (_rgChild && _rgChild.children) {
+              _rgChild.children = _rgChild.children.filter(function(c) { return c.name !== 'pseudo-before'; });
+            }
+          }
+        }
         nodeJson.children = childNodesList;
+        // flex-wrap 容器：兜底检查（通常已在上方 margin 清理前提取），防止遗漏
+        if (nodeJson.style && nodeJson.style.layoutWrap === 'WRAP' && !nodeJson.style.counterAxisSpacing) {
+          for (var _wsi = 0; _wsi < childNodesList.length; _wsi++) {
+            var _wsc = childNodesList[_wsi];
+            if (_wsc && _wsc.style && _wsc.style.marginBottom > 0) {
+              nodeJson.style.counterAxisSpacing = _wsc.style.marginBottom;
+              break;
+            }
+          }
+        }
+      }
+      // 表格行（display: table-row / <tr>）的 border-bottom 需下移到子单元格
+      // 因为 Figma 中子 frame 背景会遮盖父 frame 的底部边框，浏览器表格模型不存在这个问题
+      if (nodeJson.children && nodeJson.children.length > 0 && nodeJson.style && nodeJson.style.strokeBottomWeight > 0) {
+        var _elDisplay = computed.display || '';
+        if (_elDisplay === 'table-row' || (node.tagName || '').toLowerCase() === 'tr') {
+          var _trStrokeColor = nodeJson.style.strokeColor;
+          var _trStrokeBottomW = nodeJson.style.strokeBottomWeight;
+          for (var _tdi = 0; _tdi < nodeJson.children.length; _tdi++) {
+            var _tdNode = nodeJson.children[_tdi];
+            if (!_tdNode || !_tdNode.style) continue;
+            if (!_tdNode.style.strokeColor) _tdNode.style.strokeColor = _trStrokeColor;
+            var _tdBotW = _tdNode.style.strokeBottomWeight || 0;
+            if (_trStrokeBottomW > _tdBotW) _tdNode.style.strokeBottomWeight = _trStrokeBottomW;
+          }
+          nodeJson.style.strokeBottomWeight = 0;
+        }
       }
     }
 
     if (nodeType === 'frame') {
       var frameTitle = getFrameTitleFromElement(node);
       if (frameTitle) nodeJson.name = frameTitle;
+      // input/textarea 改为 frame 后需补入 placeholder 文字子节点
+      if (tag === 'input' || tag === 'textarea') {
+        var _inputPlaceholder = node.placeholder || '';
+        var _inputValue = (node.value || '').trim();
+        var _inputText = _inputValue || _inputPlaceholder;
+        if (_inputText) {
+          try {
+            var _inputPl = nodeJson.style ? (nodeJson.style.paddingLeft || 0) : 0;
+            var _inputPr = nodeJson.style ? (nodeJson.style.paddingRight || 0) : 0;
+            var _inputPt = nodeJson.style ? (nodeJson.style.paddingTop || 0) : 0;
+            var _inputPb = nodeJson.style ? (nodeJson.style.paddingBottom || 0) : 0;
+            var _inputW = nodeJson.style && nodeJson.style.width != null ? Math.max(1, nodeJson.style.width - _inputPl - _inputPr) : undefined;
+            var _inputH = nodeJson.style && nodeJson.style.height != null ? Math.max(1, nodeJson.style.height - _inputPt - _inputPb) : undefined;
+            var _inputFontSize = nodeJson.style ? (nodeJson.style.fontSize || 14) : 14;
+            var _inputColor = nodeJson.style ? nodeJson.style.color : undefined;
+            if (!_inputValue && _inputPlaceholder) {
+              try {
+                var _phColor = window.getComputedStyle(node, '::placeholder').color;
+                if (_phColor && _phColor !== 'rgba(0, 0, 0, 0)') _inputColor = _phColor;
+              } catch (e) {}
+            }
+            var _isTextarea = tag === 'textarea';
+            var _inputChildStyle = {
+              positionType: _isTextarea ? 'absolute' : undefined,
+              x: _inputPl,
+              y: _isTextarea ? _inputPt : undefined,
+              width: _inputW,
+              height: _isTextarea ? _inputH : undefined,
+              fontSize: _inputFontSize,
+              singleLine: !_isTextarea,
+              textAlignVertical: _isTextarea ? 'TOP' : 'CENTER',
+              textAlignHorizontal: nodeJson.style ? (nodeJson.style.textAlignHorizontal || 'LEFT') : 'LEFT',
+            };
+            if (_inputColor) _inputChildStyle.color = cssColorToRgba(_inputColor) || _inputColor;
+            if (nodeJson.style && nodeJson.style.fontFamily) _inputChildStyle.fontFamily = nodeJson.style.fontFamily;
+            if (nodeJson.style && nodeJson.style.fontFamilyStack) _inputChildStyle.fontFamilyStack = nodeJson.style.fontFamilyStack;
+            if (nodeJson.style && nodeJson.style.fontWeight) _inputChildStyle.fontWeight = nodeJson.style.fontWeight;
+            // textarea 自身 frame 对齐改为 flex-start，防止被父容器 counterAxisAlignItems:CENTER 影响
+            if (_isTextarea && nodeJson.style) {
+              nodeJson.style.alignSelf = 'MIN';
+            }
+            nodeJson.children = [{ type: 'text', name: 'placeholder', content: _inputText, style: _inputChildStyle }];
+            if (nodeJson.style) {
+              delete nodeJson.style.color;
+              delete nodeJson.style.fontSize;
+              delete nodeJson.style.fontFamily;
+              delete nodeJson.style.fontFamilyStack;
+              delete nodeJson.style.fontWeight;
+              delete nodeJson.style.textAlignHorizontal;
+            }
+          } catch (e) {}
+        }
+      }
     }
 
     if (nodeType === 'component' && tag === 'svg') {
@@ -1122,6 +1247,16 @@ function domToMybricksJson(frameId, styleTagId) {
               if (s.marginLeft != null) delete s.marginLeft;
             }
           } else {
+            // WRAP 容器：在所有 margin 清理操作之前，先提取子节点 marginBottom 作为行间距
+            if (node.style && node.style.layoutWrap === 'WRAP' && !node.style.counterAxisSpacing) {
+              for (var _wEarly2 = 0; _wEarly2 < childNodes.length; _wEarly2++) {
+                var _wEarlyC2 = childNodes[_wEarly2];
+                if (_wEarlyC2 && _wEarlyC2.style && _wEarlyC2.style.marginBottom > 0) {
+                  node.style.counterAxisSpacing = _wEarlyC2.style.marginBottom;
+                  break;
+                }
+              }
+            }
             if (childrenHaveUniformMargin(childNodes, layoutMode)) {
               applyUniformMarginAsGap(node, childNodes, layoutMode);
             }
@@ -1152,6 +1287,18 @@ function domToMybricksJson(frameId, styleTagId) {
                 delete node.style.itemSpacing;
               }
             } else {
+              // itemSpacing 已从子节点 margin 中推断出来，清理子节点 margin
+              // 但若父容器是 WRAP，marginBottom 是行间距来源，先提取再删
+              var _isWrapContainer2 = node.style && node.style.layoutWrap === 'WRAP';
+              if (_isWrapContainer2 && !node.style.counterAxisSpacing) {
+                for (var _wPre2 = 0; _wPre2 < childNodes.length; _wPre2++) {
+                  var _wPreC2 = childNodes[_wPre2];
+                  if (_wPreC2 && _wPreC2.style && _wPreC2.style.marginBottom > 0) {
+                    node.style.counterAxisSpacing = _wPreC2.style.marginBottom;
+                    break;
+                  }
+                }
+              }
               for (var i = 0; i < childNodes.length; i++) {
                 var s = childNodes[i].style || {};
                 if (s.marginTop != null) delete s.marginTop;
@@ -1162,7 +1309,59 @@ function domToMybricksJson(frameId, styleTagId) {
             }
           }
         }
+        // 绝对定位子节点（position: absolute）在 CSS 里靠 z-index 浮于普通流之上，
+        // Figma 没有 z-index，层叠顺序由 children 数组决定（后面的在上层）。
+        // 将 positionType: absolute 的节点移到数组末尾，保证它们始终渲染在最上层。
+        var _absNodes2 = [];
+        var _flowNodes2 = [];
+        for (var _zi2 = 0; _zi2 < childNodes.length; _zi2++) {
+          var _zn2 = childNodes[_zi2];
+          if (_zn2 && _zn2.style && _zn2.style.positionType === 'absolute') {
+            _absNodes2.push(_zn2);
+          } else {
+            _flowNodes2.push(_zn2);
+          }
+        }
+        if (_absNodes2.length > 0) childNodes = _flowNodes2.concat(_absNodes2);
+        // ant-radio-group：过滤掉各 wrapper 内的 pseudo-before 竖线（Figma 里不需要，边框各自渲染）
+        if (node.className && node.className.indexOf('ant-radio-group') !== -1) {
+          for (var _rgi2 = 0; _rgi2 < childNodes.length; _rgi2++) {
+            var _rgChild2 = childNodes[_rgi2];
+            if (_rgChild2 && _rgChild2.children) {
+              _rgChild2.children = _rgChild2.children.filter(function(c) { return c.name !== 'pseudo-before'; });
+            }
+          }
+        }
         node.children = childNodes;
+        // flex-wrap 容器：若 counterAxisSpacing 未设置（无 row-gap），从子节点 marginBottom 推断行间距
+        if (node.style && node.style.layoutWrap === 'WRAP' && !node.style.counterAxisSpacing) {
+          var _wrapSpacing2 = 0;
+          for (var _wsi2 = 0; _wsi2 < childNodes.length; _wsi2++) {
+            var _wsc2 = childNodes[_wsi2];
+            if (_wsc2 && _wsc2.style && _wsc2.style.marginBottom > 0) {
+              _wrapSpacing2 = _wsc2.style.marginBottom;
+              break;
+            }
+          }
+          if (_wrapSpacing2 > 0) node.style.counterAxisSpacing = _wrapSpacing2;
+        }
+      }
+      // 表格行（display: table-row / <tr>）的 border-bottom 需下移到子单元格
+      // 因为 Figma 中子 frame 背景会遮盖父 frame 的底部边框，浏览器表格模型不存在这个问题
+      if (node.children && node.children.length > 0 && node.style && node.style.strokeBottomWeight > 0) {
+        var _elDisplay2 = computed.display || '';
+        if (_elDisplay2 === 'table-row' || (el.tagName || '').toLowerCase() === 'tr') {
+          var _trStrokeColor2 = node.style.strokeColor;
+          var _trStrokeBottomW2 = node.style.strokeBottomWeight;
+          for (var _tdi2 = 0; _tdi2 < node.children.length; _tdi2++) {
+            var _tdNode2 = node.children[_tdi2];
+            if (!_tdNode2 || !_tdNode2.style) continue;
+            if (!_tdNode2.style.strokeColor) _tdNode2.style.strokeColor = _trStrokeColor2;
+            var _tdBotW2 = _tdNode2.style.strokeBottomWeight || 0;
+            if (_trStrokeBottomW2 > _tdBotW2) _tdNode2.style.strokeBottomWeight = _trStrokeBottomW2;
+          }
+          node.style.strokeBottomWeight = 0;
+        }
       }
     }
 
@@ -1170,6 +1369,59 @@ function domToMybricksJson(frameId, styleTagId) {
     if (nodeType === 'frame') {
       var frameTitle = getFrameTitleFromElement(el);
       if (frameTitle) node.name = frameTitle;
+      // input/textarea 改为 frame 后需补入 placeholder 文字子节点
+      if (tag === 'input' || tag === 'textarea') {
+        var _inputPlaceholder2 = el.placeholder || '';
+        var _inputValue2 = (el.value || '').trim();
+        var _inputText2 = _inputValue2 || _inputPlaceholder2;
+        if (_inputText2) {
+          try {
+            var _inputPl2 = node.style ? (node.style.paddingLeft || 0) : 0;
+            var _inputPr2 = node.style ? (node.style.paddingRight || 0) : 0;
+            var _inputPt2 = node.style ? (node.style.paddingTop || 0) : 0;
+            var _inputPb2 = node.style ? (node.style.paddingBottom || 0) : 0;
+            var _inputW2 = node.style && node.style.width != null ? Math.max(1, node.style.width - _inputPl2 - _inputPr2) : undefined;
+            var _inputH2 = node.style && node.style.height != null ? Math.max(1, node.style.height - _inputPt2 - _inputPb2) : undefined;
+            var _inputFontSize2 = node.style ? (node.style.fontSize || 14) : 14;
+            var _inputColor2 = node.style ? node.style.color : undefined;
+            if (!_inputValue2 && _inputPlaceholder2) {
+              try {
+                var _phColor2 = window.getComputedStyle(el, '::placeholder').color;
+                if (_phColor2 && _phColor2 !== 'rgba(0, 0, 0, 0)') _inputColor2 = _phColor2;
+              } catch (e) {}
+            }
+            var _isTextarea2 = tag === 'textarea';
+            var _inputChildStyle2 = {
+              positionType: _isTextarea2 ? 'absolute' : undefined,
+              x: _inputPl2,
+              y: _isTextarea2 ? _inputPt2 : undefined,
+              width: _inputW2,
+              height: _isTextarea2 ? _inputH2 : undefined,
+              fontSize: _inputFontSize2,
+              singleLine: !_isTextarea2,
+              textAlignVertical: _isTextarea2 ? 'TOP' : 'CENTER',
+              textAlignHorizontal: node.style ? (node.style.textAlignHorizontal || 'LEFT') : 'LEFT',
+            };
+            if (_inputColor2) _inputChildStyle2.color = cssColorToRgba(_inputColor2) || _inputColor2;
+            if (node.style && node.style.fontFamily) _inputChildStyle2.fontFamily = node.style.fontFamily;
+            if (node.style && node.style.fontFamilyStack) _inputChildStyle2.fontFamilyStack = node.style.fontFamilyStack;
+            if (node.style && node.style.fontWeight) _inputChildStyle2.fontWeight = node.style.fontWeight;
+            // textarea 自身 frame 对齐改为 flex-start，防止被父容器 counterAxisAlignItems:CENTER 影响
+            if (_isTextarea2 && node.style) {
+              node.style.alignSelf = 'MIN';
+            }
+            node.children = [{ type: 'text', name: 'placeholder', content: _inputText2, style: _inputChildStyle2 }];
+            if (node.style) {
+              delete node.style.color;
+              delete node.style.fontSize;
+              delete node.style.fontFamily;
+              delete node.style.fontFamilyStack;
+              delete node.style.fontWeight;
+              delete node.style.textAlignHorizontal;
+            }
+          } catch (e) {}
+        }
+      }
     }
 
     // SVG：序列化为字符串，消费端用 figma.createNodeFromSVG 直接创建，保留所有 fill/stroke
@@ -1344,11 +1596,12 @@ function elementToMybricksJsonWithInlineImages(el, styleTagId) {
 function inferNodeType(el, computed, tag) {
   if (tag === 'img') return 'image';
   if (tag === 'svg') return 'component';
-  // input/textarea 必须最优先识别为 text，不能因 padding/background 被误判为 frame
+  // input/textarea 识别为 frame：在 Figma 中用带边框+圆角+背景的 Frame 还原输入框外观
+  // （TextNode 不支持 strokes/borderRadius，若判为 text 会导致边框和圆角丢失）
   if (tag === 'input' && (el.type === 'text' || el.type === 'number' || el.type === 'password' || el.type === 'search' || el.type === 'email' || el.type === 'tel' || el.type === 'url' || !el.type || el.type === '')) {
-    return 'text';
+    return 'frame';
   }
-  if (tag === 'textarea') return 'text';
+  if (tag === 'textarea') return 'frame';
   if (tag === 'picture' || (el.querySelector && el.querySelector('img'))) return 'frame'; // wrap or container
   const display = computed.display;
   const isFlex = display === 'flex' || display === 'inline-flex';
@@ -1472,6 +1725,10 @@ function buildInlineTextStyle(parentEl, computed, textRect, parentRect, cssRuleM
     }
   }
   var color = d(['color']) || (computed && computed.color);
+  // 若声明层取到的是 CSS 变量，回退到 computed 实际解析值
+  if (color && color.indexOf('var(') >= 0) {
+    color = (computed && computed.color) || color;
+  }
   if (color) {
     var rgba = cssColorToRgba(color);
     if (rgba) style.color = rgba;
@@ -1579,12 +1836,20 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   if (gradientFill) {
     // 同时保留背景色作为底层 fill，避免渐变透明区域在 Figma 中透出阴影导致整体变深
     var _bgColorDecl = d(['background-color', 'backgroundColor']) || computed.backgroundColor;
+    // 若声明层取到的是 CSS 变量，回退到 computed 实际解析值
+    if (_bgColorDecl && _bgColorDecl.indexOf('var(') >= 0) {
+      _bgColorDecl = computed.backgroundColor || _bgColorDecl;
+    }
     var _bgColorRgba = _bgColorDecl ? cssColorToRgba(_bgColorDecl) : null;
     style.fills = _bgColorRgba ? [_bgColorRgba, gradientFill] : [gradientFill];
   } else if (imageUrl) {
     style.fills = [{ type: 'IMAGE', url: imageUrl }];
   } else {
     var bg = d(['background-color', 'backgroundColor', 'background']) || computed.backgroundColor;
+    // 若声明层取到的是 CSS 变量，回退到 computed 实际解析值
+    if (bg && bg.indexOf('var(') >= 0) {
+      bg = computed.backgroundColor || bg;
+    }
     if (bg) {
       var rgba = cssColorToRgba(bg);
       if (rgba) style.fills = [rgba];
@@ -1605,6 +1870,11 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   var _brColor = d(['border-right-color']) || computed.borderRightColor;
   var _bbColor = d(['border-bottom-color']) || computed.borderBottomColor;
   var _blColor = d(['border-left-color']) || computed.borderLeftColor;
+  // 若声明层取到的是 CSS 变量，回退到 computed 实际解析值
+  if (_btColor && _btColor.indexOf('var(') >= 0) _btColor = computed.borderTopColor || _btColor;
+  if (_brColor && _brColor.indexOf('var(') >= 0) _brColor = computed.borderRightColor || _brColor;
+  if (_bbColor && _bbColor.indexOf('var(') >= 0) _bbColor = computed.borderBottomColor || _bbColor;
+  if (_blColor && _blColor.indexOf('var(') >= 0) _blColor = computed.borderLeftColor || _blColor;
   // border 简写兜底：若四边均未读到有效值，尝试 border 简写
   var _borderShorthand = d(['border']);
   if (_borderShorthand && (_btW === 0 && _brW === 0 && _bbW === 0 && _blW === 0)) {
@@ -1764,9 +2034,14 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     // 统一转 lowercase 再查表，避免大写/空格导致 map miss（如 "Center"、" center"）
     var alignItemsNorm = alignItems ? String(alignItems).trim().toLowerCase() : undefined;
     var justifyContentNorm = justifyContent ? String(justifyContent).trim().toLowerCase() : undefined;
-    var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER', normal: 'MIN', stretch: 'MIN', baseline: 'MIN', start: 'MIN', end: 'MAX' };
+    var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER', normal: 'MIN', stretch: 'MIN', baseline: 'BASELINE', start: 'MIN', end: 'MAX' };
     style.primaryAxisAlignItems = alignMap[justifyContentNorm] || 'MIN';
     style.counterAxisAlignItems = alignMap[alignItemsNorm] || 'MIN';
+    // ant-radio-wrapper 包含圆形图标+文字，BASELINE 在 Figma 里会让图标贴顶，强制改为 CENTER
+    var _isAntRadioWrapper = (el.className && typeof el.className === 'string' && el.className.indexOf('ant-radio-wrapper') !== -1);
+    if (_isAntRadioWrapper && alignItemsNorm === 'baseline') {
+      style.counterAxisAlignItems = 'CENTER';
+    }
     if (_isRadioWrapper) {
     }
   } else if (display === 'block' || display === 'inline-block' || display === 'inline') {
@@ -1882,6 +2157,10 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     }
   }
   var color = d(['color']) || computed.color;
+  // 若声明层取到的是 CSS 变量，回退到 computed 实际解析值
+  if (color && color.indexOf('var(') >= 0) {
+    color = computed.color || color;
+  }
   if (color) {
     var rgba = cssColorToRgba(color);
     if (rgba) style.color = rgba;
@@ -1917,18 +2196,19 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   }
 
   // margin：用于后续在自动布局下转成 spacer 节点，不参与 padding/背景
-  var mT = px(d(['margin-top', 'marginTop']) || computed.marginTop);
-  var mR = px(d(['margin-right', 'marginRight']) || computed.marginRight);
-  var mB = px(d(['margin-bottom', 'marginBottom']) || computed.marginBottom);
-  var mL = px(d(['margin-left', 'marginLeft']) || computed.marginLeft);
+  var _mTRaw = d(['margin-top', 'marginTop']);
+  var _mRRaw = d(['margin-right', 'marginRight']);
+  var _mBRaw = d(['margin-bottom', 'marginBottom']);
+  var _mLRaw = d(['margin-left', 'marginLeft']);
+  // 若声明层取到 CSS 变量或 calc，降级到 computed
+  var mT = px((_mTRaw && String(_mTRaw).indexOf('var(') < 0 && String(_mTRaw).indexOf('calc(') < 0 ? _mTRaw : null) || computed.marginTop);
+  var mR = px((_mRRaw && String(_mRRaw).indexOf('var(') < 0 && String(_mRRaw).indexOf('calc(') < 0 ? _mRRaw : null) || computed.marginRight);
+  var mB = px((_mBRaw && String(_mBRaw).indexOf('var(') < 0 && String(_mBRaw).indexOf('calc(') < 0 ? _mBRaw : null) || computed.marginBottom);
+  var mL = px((_mLRaw && String(_mLRaw).indexOf('var(') < 0 && String(_mLRaw).indexOf('calc(') < 0 ? _mLRaw : null) || computed.marginLeft);
   if (mT != null) style.marginTop = mT;
   if (mR != null) style.marginRight = mR;
   if (mB != null) style.marginBottom = mB;
   if (mL != null) style.marginLeft = mL;
-  // 打印：仅当任意 margin 非零时输出，用于排查负 margin 采集
-  if (mT || mR || mB || mL) {
-    var _elClass = (el && el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0, 3).join('.') : '';
-  }
 
   // position: absolute/fixed → 消费端需让该节点脱离 Auto Layout 流式排布，统一标记为 'absolute'
   // 用 getPropertyValue 而非 .position 直接访问，Shadow DOM 环境下后者可能返回空字符串
@@ -2146,16 +2426,18 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     var elClass = (el && el.className) ? String(el.className) : '';
     if (/checkbox-inner|radio-inner/i.test(elClass)) return null;
 
-    // 只还原边框类伪元素（border-*），background-color / background-image 类暂不支持
     var bBottom = parseFloat(ps.borderBottomWidth) || 0;
     var bTop    = parseFloat(ps.borderTopWidth)    || 0;
     var bLeft   = parseFloat(ps.borderLeftWidth)   || 0;
     var bRight  = parseFloat(ps.borderRightWidth)  || 0;
     var hasBorder = bBottom > 0 || bTop > 0 || bLeft > 0 || bRight > 0;
 
-    if (!hasBorder) return null;
+    // 读取 background-color（getComputedStyle 已解析 CSS 变量为真实 RGB 值）
+    var bgColor = ps.backgroundColor;
+    var bgNotEmpty = bgColor && bgColor !== 'transparent' && bgColor !== 'rgba(0, 0, 0, 0)';
 
-    var bgNotEmpty = false; // 仅 border 类导出，bg 相关置 false
+    // 既无 border 也无背景色 → 不可见，跳过
+    if (!hasBorder && !bgNotEmpty) return null;
 
     // --- 坐标估算 ---
     // 伪元素是 position:absolute，解析 top/right/bottom/left 值（px 值才可用，auto 则忽略）
@@ -2170,11 +2452,11 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     var hasPsWidth  = psWidth  > 0 && isFinite(psWidth);
     var hasPsHeight = psHeight > 0 && isFinite(psHeight);
 
-    // 设计稿坐标系的宿主偏移量（相对父节点）
-    var pxOff = parentRect && typeof parentRect.left === 'number' && !isNaN(parentRect.left) ? parentRect.left : 0;
-    var pyOff = parentRect && typeof parentRect.top  === 'number' && !isNaN(parentRect.top)  ? parentRect.top  : 0;
-    var elRelX = elRect.left - pxOff;
-    var elRelY = elRect.top  - pyOff;
+    // 伪元素坐标是 position:absolute 相对宿主元素（el）的，直接使用 psLeft/psTop，不需要父容器偏移
+    // （elRelX/elRelY 仅作调试备用，勿在坐标计算中使用）
+    var elRelX = elRect.left - (parentRect && typeof parentRect.left === 'number' && !isNaN(parentRect.left) ? parentRect.left : 0);
+    var elRelY = elRect.top  - (parentRect && typeof parentRect.top  === 'number' && !isNaN(parentRect.top)  ? parentRect.top  : 0);
+    void elRelX; void elRelY;
 
     // 宽度：优先直接读取计算宽度（如 width:1px / width:100%），left/right 反推降级为 fallback
     var w;
@@ -2189,7 +2471,7 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     } else {
       w = elRect.width;
     }
-    // 高度：优先直接读取计算高度（如 height:100%），top/bottom 反推和 border 推算降级为 fallback
+    // 高度：优先直接读取计算高度（如 height:100%），top/bottom 反推和 border/bg 推算降级为 fallback
     var h;
     if (hasPsHeight) {
       h = psHeight;
@@ -2199,27 +2481,29 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
       h = Math.max(bTop, bBottom, bLeft, bRight);
       if (h < 1) h = 1;
     } else {
+      // 纯背景色伪元素：无法反推高度，兜底为 2px
       h = 2;
     }
 
-    // x 坐标
+    // x 坐标：positionType:absolute，伪元素的 left/top 是相对宿主元素（el）自身的，
+    // 不需要加 elRelX（该偏移只用于将坐标还原到父容器坐标系，而伪元素节点最终放在 el 的 children 里）
     var x;
     if (psLeft !== null) {
-      x = elRelX + psLeft;
+      x = psLeft;
     } else if (psRight !== null) {
-      x = elRelX + elRect.width - psRight - w;
+      x = elRect.width - psRight - w;
     } else {
-      x = elRelX;
+      x = 0;
     }
 
-    // y 坐标：bottom:0 最常见（分割线贴底）
+    // y 坐标：同理，相对宿主元素自身
     var y;
     if (psTop !== null) {
-      y = elRelY + psTop;
+      y = psTop;
     } else if (psBottom !== null) {
-      y = elRelY + elRect.height - psBottom - h;
+      y = elRect.height - psBottom - h;
     } else {
-      y = elRelY;
+      y = 0;
     }
 
     // 确保数值有效
@@ -2238,10 +2522,24 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
 
     // background-color → fills
     if (bgNotEmpty) {
-      var bgRgba = cssColorToRgba(bg);
+      var bgRgba = cssColorToRgba(bgColor);
       if (bgRgba) shapeStyle.fills = [bgRgba];
+      else shapeStyle.fills = [];
     } else {
       shapeStyle.fills = [];
+    }
+
+    // border-radius（getComputedStyle 已解析 var() 为 px 值）
+    var brtl = parseFloat(ps.borderTopLeftRadius) || 0;
+    var brtr = parseFloat(ps.borderTopRightRadius) || 0;
+    var brbr = parseFloat(ps.borderBottomRightRadius) || 0;
+    var brbl = parseFloat(ps.borderBottomLeftRadius) || 0;
+    if (brtl > 0 || brtr > 0 || brbr > 0 || brbl > 0) {
+      if (brtl === brtr && brtr === brbr && brbr === brbl) {
+        shapeStyle.borderRadius = Math.round(brtl);
+      } else {
+        shapeStyle.borderRadius = [Math.round(brtl), Math.round(brtr), Math.round(brbr), Math.round(brbl)];
+      }
     }
 
     // border → strokeColor + 四边独立描边

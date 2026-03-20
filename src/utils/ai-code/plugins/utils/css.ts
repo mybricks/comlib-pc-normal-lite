@@ -20,9 +20,22 @@ export function extractCssClassNames(node: any, isConditional = false): CssClass
   if (node.type === "MemberExpression") {
     const obj = node.object;
     const prop = node.property;
-    if (obj?.type === "Identifier" && obj.name === "css" && prop?.type === "Identifier") {
-      result.push({ name: prop.name, conditional: isConditional });
+    if (obj?.type === "Identifier" && obj.name === "css") {
+      // css.classname
+      if (prop?.type === "Identifier") {
+        result.push({ name: prop.name, conditional: isConditional });
+      }
+      // css['classname']
+      if (node.computed && prop?.type === "StringLiteral") {
+        result.push({ name: prop.value, conditional: isConditional });
+      }
     }
+    return result;
+  }
+
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    result.push(...extractCssClassNames(node.left, isConditional));
+    result.push(...extractCssClassNames(node.right, isConditional));
     return result;
   }
 
