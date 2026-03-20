@@ -314,6 +314,10 @@ export default appRef(() => {
             excuteMessage = msg;
           }
 
+          if (!result || result.mergeSuccess) {
+            (window as any)._mybricksOnEdit_?.();
+          }
+
           if (result && !result.mergeSuccess && ToolRetryError) {
             const errMsg = msg || '执行失败';
             throw new ToolRetryError({

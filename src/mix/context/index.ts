@@ -516,8 +516,6 @@ class Context {
       default:
         break;
     }
-
-    (window as any)._mybricksOnEdit_?.();
   }
 }
 
