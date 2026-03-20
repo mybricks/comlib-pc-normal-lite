@@ -1,13 +1,13 @@
 import React from 'react';
-import LowcodeView, { lowcodeViewEvents } from "./lowcodeView";
+import LowcodeView, {lowcodeViewEvents} from "./lowcodeView";
 import lowcodeViewCss from "./lowcodeView/index.lazy.less";
 import context from "./context";
-import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from "./knowledges";
-import { parseLess, stringifyLess } from "./utils/transform/less";
-import { deepClone } from "./utils/normal";
-import { convertHyphenToCamel } from "../utils/string";
-import { MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP } from "./context/constants";
-import { generateCodeStructure, exportCode, isExportSupported } from "../utils/code-export";
+import {ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP} from "./knowledges";
+import {parseLess, stringifyLess} from "./utils/transform/less";
+import {deepClone} from "./utils/normal";
+import {convertHyphenToCamel} from "../utils/string";
+import {MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP} from "./context/constants";
+import {generateCodeStructure, exportCode, isExportSupported} from "../utils/code-export";
 import "../utils/antd";
 import "./utils/dom-to-json";
 
@@ -63,7 +63,9 @@ const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
 
 const LONGHAND_TO_SHORTHAND: Record<string, string> = {};
 Object.entries(CSS_SHORTHAND_GROUPS).forEach(([shorthand, longhands]) => {
-  longhands.forEach(longhand => { LONGHAND_TO_SHORTHAND[longhand] = shorthand; });
+  longhands.forEach(longhand => {
+    LONGHAND_TO_SHORTHAND[longhand] = shorthand;
+  });
 });
 
 function camelToKebab(str: string): string {
@@ -130,7 +132,7 @@ function absorbOrphans(cssObj: Record<string, any>, targetKey: string): void {
 
     const nestedPath = segments.slice(0, i + 1).join(' ');
 
-    cssObj[nestedPath] = { ...cssObj[candidate], ...(cssObj[nestedPath] ?? {}) };
+    cssObj[nestedPath] = {...cssObj[candidate], ...(cssObj[nestedPath] ?? {})};
 
     delete cssObj[candidate];
   }
@@ -180,7 +182,7 @@ function findCompoundClassKey(
 }
 
 const genStyleValue = (params) => {
-  const { comId } = params;
+  const {comId} = params;
   return {
     set(params, value) {
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
@@ -253,7 +255,7 @@ const genStyleValue = (params) => {
       }
 
       const cssStr = stringifyLess(cssObj);
-      context.updateFile(comId, { fileName: 'style.less', content: cssStr })
+      context.updateFile(comId, {fileName: 'style.less', content: cssStr})
     }
   }
 }
@@ -262,7 +264,7 @@ const genResizer = () => {
   let cssObj = {};
   let cssObjKey = ""
 
-  return  {
+  return {
     type: '_resizer',
     value: {
       get() {
@@ -276,7 +278,7 @@ const genResizer = () => {
           const match = params.selector?.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
           const selector = match?.[1] ?? params.selector;
           cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
-      
+
           if (!cssObj[cssObjKey]) {
             cssObj[cssObjKey] = {};
           }
@@ -296,7 +298,7 @@ const genResizer = () => {
             cssObj[cssObjKey][key] = `${value}px`;
           })
           const cssStr = stringifyLess(cssObj);
-          context.updateFile(params.id, { fileName: 'style.less', content: cssStr })
+          context.updateFile(params.id, {fileName: 'style.less', content: cssStr})
         }
       }
     }
@@ -308,7 +310,7 @@ export default function (props: Props, actions: Actions, ...args) {
     return {};
   }
 
-  const { data, isLowCodeMode } = props;
+  const {data, isLowCodeMode} = props;
   const focusAreaConfigs: any = {};
 
   //console.log('props', props, actions, ...args);
@@ -376,7 +378,7 @@ export default function (props: Props, actions: Actions, ...args) {
   // } catch {}
 
   if (data.runtimeJsxConstituency) {
-    data.runtimeJsxConstituency.forEach(({ className, component, source, jsdoc, selectors }) => {
+    data.runtimeJsxConstituency.forEach(({className, component, source, jsdoc, selectors}) => {
       if (!component) {
         // [TODO] 通常是未处理到的标签，case by case 处理
         return;
@@ -431,7 +433,7 @@ export default function (props: Props, actions: Actions, ...args) {
                       {
                         title: "样式",
                         autoOptions: true,
-                        valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+                        valueProxy: genStyleValue({comId: props.model?.runtime?.id || props.id}),
                       },
                       genResizer()
                     ]
@@ -445,7 +447,7 @@ export default function (props: Props, actions: Actions, ...args) {
                     {
                       title: "样式",
                       autoOptions: true,
-                      valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+                      valueProxy: genStyleValue({comId: props.model?.runtime?.id || props.id}),
                     },
                     genResizer()
                   ]
@@ -500,7 +502,7 @@ export default function (props: Props, actions: Actions, ...args) {
           //   // } else {
           //   //   focusAreaConfigs[selector].items.push(genResizer())
           //   // }
-  
+
           //   focusAreaConfigs[selector].style.push(genResizer())
           // }
         })
@@ -566,15 +568,15 @@ export default function (props: Props, actions: Actions, ...args) {
   //                       const aiComParams = context.getAiComParams(comId);
   //                       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
   //                       const selector = params.selector;
-    
+
   //                       if (!cssObj[selector]) {
   //                         cssObj[selector] = {};
   //                       }
-    
+
   //                       Object.entries(value).forEach(([key, value]) => {
   //                         cssObj[selector][key] = value;
   //                       })
-    
+
   //                       const cssStr = stringifyLess(cssObj);
   //                       context.updateFile(comId, { fileName: 'style.less', content: cssStr })
   //                     }
@@ -670,7 +672,7 @@ export default function (props: Props, actions: Actions, ...args) {
     const diffs: { selector: string; key: string; from: string; to: string }[] = [];
 
     figmaItems.forEach((item) => {
-      const { selectors, value: styles } = item;
+      const {selectors, value: styles} = item;
       if (!Array.isArray(selectors) || selectors.length === 0 || !styles || typeof styles !== 'object') {
         skipped.push(String(selectors?.[0] ?? '(无 selectors)'));
         return;
@@ -693,7 +695,7 @@ export default function (props: Props, actions: Actions, ...args) {
         const camelKey = convertHyphenToCamel(cssKey);
         const currentValue = cssObj[cssObjKey][camelKey];
         if (currentValue !== figmaValue) {
-          diffs.push({ selector: cssObjKey, key: camelKey, from: String(currentValue ?? ''), to: figmaValue });
+          diffs.push({selector: cssObjKey, key: camelKey, from: String(currentValue ?? ''), to: figmaValue});
           cssObj[cssObjKey][camelKey] = figmaValue;
           hasChange = true;
         }
@@ -702,7 +704,7 @@ export default function (props: Props, actions: Actions, ...args) {
 
     if (hasChange) {
       const cssStr = stringifyLess(cssObj);
-      context.updateFile(comId, { fileName: 'style.less', content: cssStr });
+      context.updateFile(comId, {fileName: 'style.less', content: cssStr});
     }
   };
 
@@ -776,9 +778,9 @@ export default function (props: Props, actions: Actions, ...args) {
     focusAreaConfigs[':root'].items.push(...exportCodeConfig);
   }
 
-  context.setAiCom(props.id, { params: props, actions });
+  context.setAiCom(props.id, {params: props, actions});
 
-  context.createVibeCodingAgent({ register: window._registerAgent_ })
+  context.createVibeCodingAgent({register: window._registerAgent_})
 
   return {
     ...focusAreaConfigs,
@@ -793,14 +795,14 @@ export default function (props: Props, actions: Actions, ...args) {
         if (!data._errors) data._errors = [];
         data._errors = [
           ...data._errors.filter((e: any) => e.file),
-          { message: err.message, type: 'runtime' }
+          {message: err.message, type: 'runtime'}
         ];
         context.getAiCom(props.id)?.actions?.notifyChanged?.();
       }
     },
     /** 代码编辑器面板 */
-    '@lowcode':{
-      render(params, plugins){
+    '@lowcode': {
+      render(params, plugins) {
         context.plugins = plugins;
 
         const showAIDialog = plugins.showAIDialog;
@@ -810,7 +812,7 @@ export default function (props: Props, actions: Actions, ...args) {
           <LowcodeView {...params}/>
         )
       },
-      useCSS(){
+      useCSS() {
         return [
           lowcodeViewCss
         ]
@@ -818,9 +820,9 @@ export default function (props: Props, actions: Actions, ...args) {
     },
     '@getDocs'(params) {
       let result: any = {};
-      
+
       try {
-        const { runtimeMdCompiled } = params.data;
+        const {runtimeMdCompiled} = params.data;
         if (runtimeMdCompiled) {
           const focusElement = params.focusArea.ele;
           // [TODO] 需要一个新的属性，组件名
@@ -862,7 +864,7 @@ export default function (props: Props, actions: Actions, ...args) {
         {
           varName: "primary",
           varTitle: "主色调",
-          value:{
+          value: {
             get: (params) => {
               console.log("[@getThemes get primary]", params);
               return "red";
@@ -872,7 +874,7 @@ export default function (props: Props, actions: Actions, ...args) {
             }
           }
         }
-      ] 
+      ]
     },
     '@debug'(params, stop) {
       const events = context.getAiComEvents(params.id);
@@ -926,9 +928,9 @@ export default function (props: Props, actions: Actions, ...args) {
 
       if (dataLoc) {
         const loc = JSON.parse(dataLoc);
-        const { codeLine } = loc;
+        const {codeLine} = loc;
         if (codeLine) {
-          const { start, end } = codeLine;
+          const {start, end} = codeLine;
           lowcodeViewEvents.emit('viewCode', [start, end]);
         } else {
           console.error('[@viewCode] 请重新编译jsx，支持codeLine', params);
@@ -940,7 +942,7 @@ export default function (props: Props, actions: Actions, ...args) {
     '[data-zone-type=page]': {
       title: "页面",
       items: (pageProps, cate1) => {
-        const { focusArea, data } = pageProps;
+        const {focusArea, data} = pageProps;
         const comId = props.id;
         // focusArea 是被点选的 [data-desn-page] DOM 元素
         // data-desn-page={N} → dataset.desnPage === "N"
@@ -1028,6 +1030,13 @@ export default function (props: Props, actions: Actions, ...args) {
                     params.data.themes = themes;
                   }
                 }
+              },
+              {
+                type: '_resizer',
+                options: {margin: false},
+                set() {
+                  ///TODO
+                }
               }
             ]
           }
@@ -1042,7 +1051,7 @@ export default function (props: Props, actions: Actions, ...args) {
             {
               title: "样式",
               autoOptions: true,
-              valueProxy: genStyleValue({ comId: props.model?.runtime?.id || props.id }),
+              valueProxy: genStyleValue({comId: props.model?.runtime?.id || props.id}),
             },
             genResizer()
           ]
@@ -1056,7 +1065,7 @@ export default function (props: Props, actions: Actions, ...args) {
         }
       ]
     },
-    '[data-library-source]':{}
+    '[data-library-source]': {}
     /** 初始化 */
     // '@init': () => {},
     /** 保存的回调 */
