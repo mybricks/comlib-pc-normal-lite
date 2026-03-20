@@ -7,6 +7,12 @@ export const SYMBOL_SETLISTENER = Symbol('setListener');
 export const SYMBOL_SUBSCRIBE = Symbol('subscribe');
 export const SYMBOL_GETSNAPSHOT = Symbol('getSnapshot');
 
+/**
+ * 模块级当前 key 收集器，类似 Vue3 的 activeEffect。
+ * 方法执行期间，boundContext 的 get 会向此回调上报读取的 key。
+ */
+let currentKeyCollector: ((key: string) => void) | null = null;
+
 class DefaultStore {}
 
 /**
@@ -65,6 +71,10 @@ export function genListenersStore(
     {},
     {
       get(_, k) {
+        // 若当前有活跃的收集器（方法调用中），上报读取的 key
+        if (currentKeyCollector && typeof k === 'string') {
+          currentKeyCollector(k);
+        }
         return store[k];
       },
       set(_, k, v) {
@@ -127,22 +137,37 @@ function createReactiveStore(store: any) {
     return snapshot;
   };
 
+  /**
+   * 将 key 纳入依赖追踪：首次遇到该 key 时注册监听。
+   */
+  const trackKey = (key: string) => {
+    if (collectionsListener.has(key)) return;
+    const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
+      state[k] = v;
+      dirty = true;
+      listeners.forEach((listener) => listener());
+    };
+    collectionsListener.set(key, store[SYMBOL_SETLISTENER](key, collectionListener));
+  };
+
   return new Proxy({} as any, {
     get(_target, key) {
       if (key === SYMBOL_SUBSCRIBE) return subscribe;
       if (key === SYMBOL_GETSNAPSHOT) return getSnapshot;
       const value = store[key];
-      if (!collectionsListener.has(key as string)) {
-        const collectionListener = ({ key: k, value: v }: { key: string; value: any }) => {
-          state[k] = v;
-          dirty = true;
-          listeners.forEach((listener) => listener());
+      if (typeof value === 'function') {
+        // 包装函数：执行期间开启 key 收集，捕获方法内对 this.xxx 的读取
+        return (...args: any[]) => {
+          currentKeyCollector = (readKey: string) => trackKey(readKey);
+          try {
+            return value(...args);
+          } finally {
+            currentKeyCollector = null;
+          }
         };
-        collectionsListener.set(
-          key as string,
-          store[SYMBOL_SETLISTENER](key, collectionListener)
-        );
       }
+      // 非函数 key：直接追踪并返回
+      trackKey(key as string);
       return value;
     },
   });
