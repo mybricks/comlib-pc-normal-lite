@@ -885,7 +885,7 @@ export default function developMyBricksModule(config: Config) {
       const mode = params?.mode ?? 'generate';
       const retryCount = execCtx?.retryCount ?? 0;
       const hasImageAttachment = execCtx?.attachments?.some((a) => a?.type === 'image') ?? false;
-      if (retryCount >= 1) return 'architect';
+      if (retryCount > 1) return 'architect';
       return (mode === 'generate' && !hasImageAttachment) ? 'junior' : 'architect';
     },
   };
