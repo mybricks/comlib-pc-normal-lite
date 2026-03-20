@@ -1,15 +1,13 @@
 import React from 'react';
 import LowcodeView, { lowcodeViewEvents } from "./lowcodeView";
 import lowcodeViewCss from "./lowcodeView/index.lazy.less";
-import consoleViewCss from "./lowcodeView/console/index.lazy.less"
-import versionViewCss from "./lowcodeView/version/index.lazy.less"
 import context from "./context";
 import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from "./knowledges";
 import { parseLess, stringifyLess } from "./utils/transform/less";
 import { deepClone } from "./utils/normal";
 import { convertHyphenToCamel } from "../utils/string";
 import { MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP } from "./context/constants";
-import ExportCodePanel from "../utils/code-export/render";
+import { generateCodeStructure, exportCode, isExportSupported } from "../utils/code-export";
 import "../utils/antd";
 import "./utils/dom-to-json";
 
@@ -256,8 +254,6 @@ const genStyleValue = (params) => {
 
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr })
-      // 编辑器保存后记录/更新编辑器版本快照
-      context.saveEditorVersion(comId);
     }
   }
 }
@@ -301,8 +297,6 @@ const genResizer = () => {
           })
           const cssStr = stringifyLess(cssObj);
           context.updateFile(params.id, { fileName: 'style.less', content: cssStr })
-          // 编辑器保存后记录/更新编辑器版本快照
-          context.saveEditorVersion(params.id);
         }
       }
     }
@@ -709,21 +703,60 @@ export default function (props: Props, actions: Actions, ...args) {
     if (hasChange) {
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: 'style.less', content: cssStr });
-      // 编辑器保存后记录/更新编辑器版本快照
-      context.saveEditorVersion(comId);
     }
   };
 
   const exportCodeConfig = [{
-      title: "导出代码",
-      type: "editorRender",
-      options: {
-        render: () => <ExportCodePanel
-          comId={props.id}
-          data={props.data}
-        />
-      },
-    }, {
+    title: "代码",
+    items: [
+      {
+        title: "导出代码",
+        type: "Button",
+        value: {
+          async set(params: { id?: string; focusArea?: any; data?: any }, _value: any) {
+            const comId = params?.id;
+            if (!comId) {
+              console.warn("[导出为代码] 无组件 ID");
+              return;
+            }
+            try {
+              const aiComParams = context.getAiComParams(comId);
+              if (!aiComParams?.data) {
+                console.error("[导出为代码] 组件数据不存在");
+                return;
+              }
+              const files = generateCodeStructure(aiComParams.data);
+              if (!isExportSupported()) {
+                alert('当前环境不支持导出，请使用 Chrome、Edge 或在 VSCode 中打开');
+                return;
+              }
+              const message = (window as any).antd?.message;
+              let hideLoading: any = null;
+              if (message) hideLoading = message.loading('正在导出代码...', 0);
+              await exportCode(files, {
+                folderName: 'App',
+                onProgress: (progress) => {
+                  console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
+                },
+              });
+              if (hideLoading) hideLoading();
+              if (message) message.success('导出代码成功！');
+              else alert('导出代码成功！');
+            } catch (error) {
+              const message = (window as any).antd?.message;
+              if ((error as any)?.message?.includes('取消')) {
+                console.log('[导出为代码] 用户取消导出');
+              } else {
+                if (message) message.error(`导出失败: ${(error as any)?.message || '未知错误'}`);
+                else alert(`导出失败: ${(error as any)?.message || '未知错误'}`);
+                console.error('[导出为代码] 导出失败', error);
+              }
+            }
+          }
+        }
+      }
+    ]
+  }, {
     type: "themes",
     value: {
       get(params) {
@@ -779,9 +812,7 @@ export default function (props: Props, actions: Actions, ...args) {
       },
       useCSS(){
         return [
-          lowcodeViewCss,
-          consoleViewCss,
-          versionViewCss
+          lowcodeViewCss
         ]
       }
     },
@@ -880,13 +911,12 @@ export default function (props: Props, actions: Actions, ...args) {
             // 水平位移：把「页相对根容器」的视口距离，按根容器缩放比换算成布局坐标，再减去左边框和内边距
             transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`,
             maxWidth: pageBCR.width,
-            // maxHeight: pageBCR.height
+            maxHeight: pageBCR.height
           },
           rootStyle: {
             // 根容器内容区宽高（去掉 padding 后的可排版区域）
             width: layoutWidth - paddingLeft - paddingRight,
-            // height: layoutHeight - paddingTop - paddingBottom,
-            height: 'fit-content'
+            height: layoutHeight - paddingTop - paddingBottom,
           }
         });
       }
