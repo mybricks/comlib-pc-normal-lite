@@ -2,93 +2,13 @@ import type { ReplaceResultItem } from "../../../utils/editReplace";
 
 /** 工具 execute/stream 所需的文件（与 type.d.ts 一致） */
 export type ComponentFileItem = { fileName: string; content: string; isComplete?: boolean };
-type NormalizedFileItem = { fileName: string; content: string; isComplete: boolean };
-interface RxFile {
+export interface RxFile {
   fileName: string;
   name: string;
   extension: string;
   language: string;
   content: string;
   isComplete: boolean;
-}
-
-type RxFiles = Record<string, RxFile | RxFile[]>;
-
-
-/** 将 files 统一为 Array<{ fileName, content, isComplete }>，兼容 array 与 RxFiles */
-function normalizeFiles(files: Array<ComponentFileItem | NormalizedFileItem> | RxFiles | undefined): NormalizedFileItem[] {
-  if (!files) return [];
-  if (Array.isArray(files)) {
-    return files
-      .map((f) => {
-        const raw = f as Record<string, unknown>;
-        return {
-          fileName: (raw.fileName as string) ?? '',
-          content: (raw.content as string) ?? '',
-          isComplete: (raw.isComplete as boolean) ?? false,
-        };
-      })
-      .filter((f) => f.fileName);
-  }
-  const list: NormalizedFileItem[] = [];
-  Object.entries(files).forEach(([key, fileOrArr]) => {
-    const arr = Array.isArray(fileOrArr) ? fileOrArr : [fileOrArr];
-    arr.forEach((f) => {
-      const file = f as unknown as Record<string, unknown>;
-      const fileName = (file.fileName as string) ?? key;
-      if (fileName) {
-        list.push({
-          fileName,
-          content: (file.content as string) ?? '',
-          isComplete: (file.isComplete as boolean) ?? false,
-        });
-      }
-    });
-  });
-  return list;
-}
-
-/** 用 normalizeFiles 结果按 (comId, baseFileName) 分组后调用 onComponentUpdate */
-function applyFilesToOnComponentUpdate(
-  files: NormalizedFileItem[],
-  config: {
-    focusComId?: string;
-    onComponentUpdate: (comId: string, fileName: string, content: string) => void;
-    updatedKeys?: Set<string>;
-  }
-) {
-  const { focusComId, onComponentUpdate, updatedKeys } = config;
-  const seen = updatedKeys ?? new Set<string>();
-  type Group = { comId: string; baseFileName: string; items: NormalizedFileItem[] };
-  const groupBy = new Map<string, Group>();
-
-  files.forEach((item) => {
-    const { fileName } = item;
-    const comId = focusComId ?? '';
-    const baseFileName = fileName;
-    if (!comId) return;
-    const key = `${comId}|${baseFileName}`;
-    if (!groupBy.has(key)) groupBy.set(key, { comId, baseFileName, items: [] });
-    groupBy.get(key)!.items.push(item);
-  });
-
-  groupBy.forEach((group, key) => {
-    if (seen.has(key)) return;
-    const { comId, baseFileName, items } = group;
-    let content: string;
-    if (items.length >= 2 && items[0].isComplete && items[1].isComplete) {
-      const has0 = items[0].content.length > 0;
-      const has1 = items[1].content.length > 0;
-      if (has1) content = items[1].content;
-      else if (has0) content = items[0].content;
-      else return;
-    } else if (items.length === 1 && items[0].isComplete && items[0].content.length > 0) {
-      content = items[0].content;
-    } else return;
-    seen.add(key);
-    console.log('[开发模块 - 文件更新]', { comId, fileName: baseFileName, contentLength: content.length, contentPreview: content.slice(0, 80) + (content.length > 80 ? '...' : '') });
-    onComponentUpdate(comId, baseFileName, content);
-  });
 }
 
 /** 单个文件的更新结果（与 updateComponentFiles 返回结构一致） */
@@ -154,5 +74,5 @@ function formatUpdateResult(result: UpdateComponentFilesResult): string {
   return `\n准备执行修改\n\n${lines.join('\n')}`;
 }
 
-export { normalizeFiles, formatUpdateResult };
+export { formatUpdateResult };
 export type { UpdateComponentFilesResult };

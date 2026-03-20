@@ -1,4 +1,4 @@
-import { normalizeFiles, formatUpdateResult } from "./utils";
+import { formatUpdateResult, RxFile } from "./utils";
 
 const NAME = 'syncMarkdownformybricksModule';
 
@@ -288,7 +288,7 @@ export default appRef(() => {
     async stream(params: any, context) {
       const { status, replaceContent } = params;
       const { ToolRetryError } = context ?? {};
-      const files = normalizeFiles(params?.files);
+      const files = (params?.files ?? []) as RxFile[];
       const raw = replaceContent ?? '';
       // const actionsFile = files.find((f) => f.fileName === 'action.json');
 
@@ -310,6 +310,10 @@ export default appRef(() => {
           const result = await config.onUpdate?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
           const msg = result ? formatUpdateResult(result) : '';
 
+          if (msg) {
+            excuteMessage = msg;
+          }
+
           if (result && !result.mergeSuccess && ToolRetryError) {
             const errMsg = msg || '执行失败';
             throw new ToolRetryError({
@@ -319,9 +323,7 @@ export default appRef(() => {
               maxRetries: 1
             });
           }
-          if (msg) {
-            excuteMessage = msg;
-          }
+          
           return raw
             .replace(/runtime\.jsx/g, '')
             .replace(/style\.less/g, '')

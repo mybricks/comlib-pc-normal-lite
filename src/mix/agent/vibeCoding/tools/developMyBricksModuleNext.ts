@@ -1,5 +1,5 @@
 import readRelated from "./readRelated";
-import { normalizeFiles, formatUpdateResult, UpdateComponentFilesResult } from "./utils";
+import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
 import syncMarkdownformybricksModule from "./syncMarkdownformybricksModule";
 
 const NAME = 'developMyBricksModule'
@@ -786,7 +786,7 @@ export default function developMyBricksModule(config: Config) {
 `
     },
     execute(params, context) {
-      const files = normalizeFiles(params?.files);
+      const files = (params?.files ?? []) as RxFile[];
       const actionsFile = files.find((f) => f.fileName === 'action.json');
       let actionReason = '';
       let actionType: string | undefined;
@@ -827,7 +827,7 @@ export default function developMyBricksModule(config: Config) {
     async stream(params: any, context) {
       const { status, replaceContent } = params;
       const { ToolRetryError } = context ?? {};
-      const files = normalizeFiles(params?.files);
+      const files = (params?.files ?? []) as RxFile[];
       const raw = replaceContent ?? '';
       const actionsFile = files.find((f) => f.fileName === 'action.json');
 
@@ -849,6 +849,10 @@ export default function developMyBricksModule(config: Config) {
           const result = await config.onUpdate?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
           const msg = result ? formatUpdateResult(result) : '';
 
+          if (msg) {
+            excuteMessage = msg;
+          }
+
           if (result && !result.mergeSuccess && ToolRetryError) {
             const errMsg = msg || '执行失败';
             throw new ToolRetryError({
@@ -858,9 +862,7 @@ export default function developMyBricksModule(config: Config) {
               maxRetries: 2
             });
           }
-          if (msg) {
-            excuteMessage = msg;
-          }
+          
           return raw
             .replace(/runtime\.jsx/g, '')
             .replace(/style\.less/g, '')

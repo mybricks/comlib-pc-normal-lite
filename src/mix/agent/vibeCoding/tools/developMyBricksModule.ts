@@ -1082,7 +1082,7 @@ if (enabledBatch) {
       : {
           execute(params: any) {
             // 非批量：由 host 提供的 execute 直接调 updateComponentFiles(files, comId, context)
-            const list = normalizeFiles(params?.files).map(({ fileName, content }) => ({ fileName, content }));
+            const list = ((params?.files ?? []) as RxFile[]).map(({ fileName, content }) => ({ fileName, content }));
             config.execute?.({ files: list });
             return '编写完成';
           },
