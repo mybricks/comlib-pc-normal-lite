@@ -776,12 +776,16 @@ export function createMybricks(options: CreateMybricksOptions) {
       // 运行态不做任何处理，保留类字段原始初始值
       return;
     }
-    // 设计态：强制初始值为 true 且不允许修改
+    // 设计态：强制初始值为 true 且不允许修改（setter 静默忽略赋值，避免严格模式报错）
     return {
-      initializer: () => true,
       enumerable: true,
       configurable: true,
-      writable: false,
+      get() {
+        return true;
+      },
+      set() { 
+        return false;
+      },
     };
   }
 
