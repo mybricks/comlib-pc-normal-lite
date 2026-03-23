@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
 import context from "../context";
 import ConsoleLogPanel from "./console";
@@ -263,6 +263,26 @@ export default function LowcodeView(params: Params) {
     clearFileIfDataChanged("mock.json");
   }, [params.data?.mockJsonSource]);
 
+  const [editorTheme, setEditorTheme] = useState('light');
+
+  useLayoutEffect(() => {
+    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    // 定义切换回调
+    function handleModeChange(e) {
+      if (e.matches) {
+        setEditorTheme("vs-dark");
+      } else {
+        setEditorTheme("light");
+      }
+    }
+    handleModeChange(darkModeQuery);
+    darkModeQuery.addEventListener('change', handleModeChange);
+    return () => {
+      darkModeQuery.removeEventListener('change', handleModeChange);
+    }
+  }, [])
+
   return (
     <div className={css['lowcode-view-container']}>
       <div className={css['lowcode-view-toolbar']}>
@@ -316,7 +336,7 @@ export default function LowcodeView(params: Params) {
             value={code}
             {...coderOptions}
             options={editorOptions}
-            theme={'light'}
+            theme={editorTheme}
             wrapperClassName={css['coder']}
             onChange={handleEditorChange}
             // onMount={(editor, monaco) => {

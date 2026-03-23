@@ -3,6 +3,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
+  background-color: var(--mybricks-bg-color-main);
 }
 
 .lowcode-view {
@@ -29,10 +30,12 @@
       align-items: center;
       border: 1px solid transparent;
       cursor: pointer;
+      color: var(--mybricks-text-color-main);
     }
 
     .file-item-active {
-      background-color: #DDD;
+      // background-color: #DDD;
+      background: var(--mybricks-bg-color-active);
     }
   }
 
@@ -83,17 +86,20 @@
       font-size: 12px;
       cursor: pointer;
       border-radius: 4px;
-      color: #666;
+      // color: #666;
+      color: var(--mybricks-text-color-main);
       user-select: none;
 
       &:hover {
-        background: #F0F0F0;
+        // background: #F0F0F0;
       }
     }
 
     .lowcode-view-toolbar-tab-active {
-      background: #E8E8E8;
-      color: #333;
+      // background: #E8E8E8;
+      // color: #333;
+      background: var(--mybricks-bg-color-active);
+      color: var(--mybricks-text-color-main);
       font-weight: 500;
     }
   }
@@ -112,17 +118,23 @@
     font-size: 12px;
     margin-right: 8px;
     flex-shrink: 0;
+    // color: var(--mybricks-text-color-main, #666);
+    // background-color: var(--mybricks-bg-color-main, #fff);
+    background: var(--mybricks-bg-color-active);
+    box-shadow: var(--mybricks-shadow-main);
+    color: var(--mybricks-text-color-main);
   }
 
   .lowcode-view-toolbar-button-disabled {
-    background: #EEE;
-    color: #AAA;
+    // background: #EEE;
+    // color: #AAA;
+    color: var(--mybricks-text-color-disabled);
     pointer-events: none;
   }
 
   .lowcode-view-toolbar-button-nosave {
-    background: var(--mybricks-color-primary, #FA6400);
-    color: #FFF;
+    background: var(--mybricks-bg-color-main);
+    // color: #FFF;
     font-weight: bold;
   }
 }
