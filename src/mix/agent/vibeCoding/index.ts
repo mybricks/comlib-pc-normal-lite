@@ -352,11 +352,13 @@ export default function ({ context }) {
       // const lockId = uuid() + "_" + comName;
       let lockId = uuid();
 
+      let planAgent;
+
       const onProgress = (status) => {
         const { focusArea } = focus;
         if (!focusArea) {
           if (status === "start") {
-            context.startAIPendingVersion(focus.comId);
+            context.startAIPendingVersion(focus.comId, planAgent);
           } else if (status === "complete") {
             context.commitAIVersion(focus.comId);
           } else if (status === "error") {
@@ -365,7 +367,7 @@ export default function ({ context }) {
           params?.onProgress?.(status);
         } else {
         if (status === "start") {
-          context.startAIPendingVersion(focus.comId);
+          context.startAIPendingVersion(focus.comId, planAgent);
           actions.lock(lockId, focusArea);
         } else if (status === "complete") {
           context.commitAIVersion(focus.comId);
@@ -475,8 +477,6 @@ export default function ({ context }) {
       // });
 
       const hasAttachments = Array.isArray(params.attachments) && params.attachments?.length > 0;
-
-      onProgress("start");
 
       return new Promise((resolve, reject) => {
         // 基础配置（放在 Promise 内，以便 emits 能正确使用 resolve/reject）
@@ -610,6 +610,10 @@ ${text}
           },
           historyMessageMode: "expanded",
           formatUserMessage,
+          onPlan: (plan) => {
+            planAgent = plan;
+            onProgress("start");
+          }
         };
 
         // ReAct 模式
