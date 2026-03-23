@@ -29,6 +29,7 @@ export interface VersionSnapshot {
   timestamp: string;
   /** 全量 data 深拷贝；pending 时为 null */
   dataSnapshot: Record<string, any> | null;
+  planId?: string;
 }
 
 export interface VersionState {
@@ -88,7 +89,7 @@ class Context {
   }
 
   /** AI 对话开始时，推入一条 isPending=true 的版本记录 */
-  startAIPendingVersion(id: string) {
+  startAIPendingVersion(id: string, planAgent) {
     const state = this.getVersionState(id);
     // 若已有 pending，跳过（防止重复）
     if (state.versions.some(v => v.isPending)) return;
@@ -99,6 +100,7 @@ class Context {
       isPending: true,
       timestamp: getTimestamp({ showMs: false }),
       dataSnapshot: null,
+      planId: planAgent.id
     }];
     state.versionCounter++;
     this.notifyVersionState(id);
@@ -196,6 +198,15 @@ class Context {
     Object.keys(snap).forEach(key => {
       data[key] = snap[key];
     });
+    
+    const aiVersion = state.versions.slice(targetIdx + 1).find((version) => {
+      return version.type === "ai";
+    })
+
+    if (aiVersion) {
+      const rxai = (window as any)._getRxaiByAbstractAgentWithVibeCoding_(id);
+      rxai?.truncateFrom?.(aiVersion.planId);
+    }
 
     // 截断版本列表（保留 0..targetIdx），并重置计数器
     state.versions = state.versions.slice(0, targetIdx + 1);

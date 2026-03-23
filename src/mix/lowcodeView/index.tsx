@@ -59,7 +59,7 @@ export default function LowcodeView(params: Params) {
     if (!componentId) return;
     const off = context.getComDebugStateEvents(componentId).on('change', () => forceUpdate(), false);
     return () => off();
-  }, [componentId, forceUpdate]);
+  }, [componentId]);
 
   const debugState = componentId ? context.getComDebugState(componentId) : null;
   const isDebugging = debugState?.isDebugging ?? false;
