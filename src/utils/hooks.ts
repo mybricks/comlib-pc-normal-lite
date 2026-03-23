@@ -1,27 +1,55 @@
 import { useRef, useEffect, useState, useLayoutEffect } from 'react'
 export function usePrevious<T>(value: T): T {
-    const ref: any = useRef<T>();
-    useEffect(() => {
-        ref.current = value;
-    }, [value]);
-    return ref.current;
+	const ref: any = useRef<T>();
+	useEffect(() => {
+		ref.current = value;
+	}, [value]);
+	return ref.current;
+}
+
+function useWebDarkMode(): boolean {
+	const [isDark, setIsDark] = useState(() =>
+		window.matchMedia('(prefers-color-scheme: dark)').matches
+	);
+
+	useLayoutEffect(() => {
+		const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+		function handleModeChange(e: MediaQueryListEvent) {
+			setIsDark(e.matches);
+		}
+		darkModeQuery.addEventListener('change', handleModeChange);
+		return () => {
+			darkModeQuery.removeEventListener('change', handleModeChange);
+		};
+	}, []);
+
+	return isDark;
+}
+
+function isVSCodeDark(): boolean {
+  return (
+    document.body.classList.contains('vscode-dark') ||
+    document.body.classList.contains('vscode-high-contrast')
+  )
+}
+
+/**
+ * 感知 VS Code 主题（暗黑 / 亮色）
+ */
+function useVSCodeDarkMode() {
+  const [isDark, setIsDark] = useState(isVSCodeDark)
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(isVSCodeDark())
+    })
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+  return isDark
 }
 
 export function useDarkMode(): boolean {
-    const [isDark, setIsDark] = useState(() =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-    );
-
-    useLayoutEffect(() => {
-        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        function handleModeChange(e: MediaQueryListEvent) {
-            setIsDark(e.matches);
-        }
-        darkModeQuery.addEventListener('change', handleModeChange);
-        return () => {
-            darkModeQuery.removeEventListener('change', handleModeChange);
-        };
-    }, []);
-
-    return isDark;
+  const isVSCode = typeof (window as any).acquireVsCodeApi === 'function'
+  return isVSCode ? useVSCodeDarkMode() : useWebDarkMode()
 }
