@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
 import context from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
 import lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
+import { useDarkMode } from "../../utils/hooks";
 
 const css = lazyCss.locals;
 
@@ -263,25 +264,8 @@ export default function LowcodeView(params: Params) {
     clearFileIfDataChanged("mock.json");
   }, [params.data?.mockJsonSource]);
 
-  const [editorTheme, setEditorTheme] = useState('light');
-
-  useLayoutEffect(() => {
-    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    // 定义切换回调
-    function handleModeChange(e) {
-      if (e.matches) {
-        setEditorTheme("vs-dark");
-      } else {
-        setEditorTheme("light");
-      }
-    }
-    handleModeChange(darkModeQuery);
-    darkModeQuery.addEventListener('change', handleModeChange);
-    return () => {
-      darkModeQuery.removeEventListener('change', handleModeChange);
-    }
-  }, [])
+  const isDark = useDarkMode();
+  const editorTheme = isDark ? 'vs-dark' : 'light';
 
   return (
     <div className={css['lowcode-view-container']}>

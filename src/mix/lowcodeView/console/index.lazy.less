@@ -4,7 +4,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  // background: #fff;
+  background: var(--mybricks-bg-color-main);
 
   .console-toolbar {
     height: 28px;
@@ -21,12 +22,16 @@
       cursor: pointer;
       border: 1px solid #DDD;
       border-radius: 4px;
-      background: #FFF;
-      color: #666;
+      background: var(--mybricks-bg-color-main);
+      box-shadow: var(--mybricks-shadow-main);
+      cursor: pointer;
+      color: var(--mybricks-text-color-main);
+      // background: #FFF;
+      // color: #666;
 
-      &:hover {
-        background: #F5F5F5;
-      }
+      // &:hover {
+      //   background: #F5F5F5;
+      // }
     }
   }
 
