@@ -3,7 +3,7 @@
  * 根据 project.json 生成实时更新的 message：项目架构树 + 文件系统（按组件 name 展开代码）
  */
 
-import { getAllLibraryDocs } from '../../../avaliableLibraries';
+import { getAllLibraryDocs, getAllProjectLibraryDocs, getProjectLibraryNames } from '../../../avaliableLibraries';
 
 
 /** project.json 中单个节点的类型 */
@@ -310,7 +310,7 @@ ${themesContent}
 
     // const archMd = buildArchitectureMd(this.root);
 
-    const libraryDocsContent = getAllLibraryDocs();
+    const libraryDocsContent = [getAllLibraryDocs(), getAllProjectLibraryDocs()].filter(Boolean).join('\n\n');
 
     const fileSectionParts: string[] = [];
     fileSectionParts.push('\n## 源代码\n');

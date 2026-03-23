@@ -1,4 +1,5 @@
 import type { LibraryMeta } from '../types'
+import validator from './validator'
 
 const antvG6: LibraryMeta = {
   name: '@antv/g6',
@@ -11,6 +12,7 @@ const antvG6: LibraryMeta = {
       globalVar: 'G6',
     },
   ],
+  validator,
 }
 
 export default antvG6

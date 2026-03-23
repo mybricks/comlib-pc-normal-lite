@@ -12,7 +12,7 @@ import { DirectoryProvider, IKnowledgeNode, KnowledgeNodeType, IFileInfo } from 
 
 // import { ANTD_KNOWLEDGES_MAP, ECHARTS_KNOWLEDGES_MAP } from '../../../knowledges'
 
-import { getLibraryDoc } from './../../../avaliableLibraries'
+import { getLibraryDoc, getProjectLibraryDoc, getProjectLibraryNames } from './../../../avaliableLibraries'
 
 // function getLibraryDocumentation() {
 //   return antdPrompt + `\n\n` + echartsPrompt;
@@ -320,7 +320,10 @@ export class Workspace {
    */
   private async openDefaultFiles() {
     try {
-      await this.openLibraryDoc(['antd', '@ant-design/icons', 'dayjs','echarts-for-react', '@antv/g6'])
+      const builtinLibs = ['antd', '@ant-design/icons', 'dayjs','echarts-for-react', '@antv/g6'];
+      const projectLibs = getProjectLibraryNames();
+      const allLibs = [...builtinLibs, ...projectLibs.filter((n) => !builtinLibs.includes(n))];
+      await this.openLibraryDoc(allLibs)
     } catch (error) {
       
     }
@@ -346,11 +349,13 @@ export class Workspace {
 
   async openLibraryDoc(libs: string[] = []) {
     return libs.forEach(async (lib) => {
+      const content = getLibraryDoc(lib) || getProjectLibraryDoc(lib);
+      if (!content) return;
       await this.knowledgeBase.openDynamicDocument({
         id: lib.replace('/', '-'),
         title: `${lib}使用文档`,
         description: lib,
-        content: getLibraryDoc(lib),
+        content,
         directoryId: 'library-component-docs',
       });
     });

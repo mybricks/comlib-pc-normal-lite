@@ -800,9 +800,20 @@ export default function (props: Props, actions: Actions, ...args) {
     type: "themes",
     value: {
       get(params) {
-        return params.data.themes;
+        if (context.projectConfig?.themes && context.projectConfig.themes.length > 0) {
+          return {
+            themes: {
+              activeThemeId: context.projectConfig.themes?.[0]?.id,
+              themes: context.projectConfig.themes
+            }
+          }
+        }
+        return  params.data.themes;
       },
       set(params, themes) {
+        if (context.projectConfig?.themes && context.projectConfig.themes.length > 0) {
+          return
+        }
         params.data.themes = themes;
       }
     }
@@ -817,6 +828,10 @@ export default function (props: Props, actions: Actions, ...args) {
   }
 
   context.setAiCom(props.id, {params: props, actions});
+
+  if ((window as any)._getProjectConfig_) {
+    context.projectConfig = (window as any)._getProjectConfig_();
+  }
 
   context.createVibeCodingAgent({register: window._registerAgent_})
 
@@ -1065,7 +1080,7 @@ export default function (props: Props, actions: Actions, ...args) {
                 type: "themes",
                 value: {
                   get(params) {
-                    return params.data.themes;
+                    return context.projectConfig.themes ?? params.data.themes;
                   },
                   set(params, themes) {
                     params.data.themes = themes;

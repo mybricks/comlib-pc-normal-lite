@@ -1,7 +1,8 @@
-export { default as validator } from './validator'
+import validator from './validator'
 
 export default {
   name: 'dayjs',
   version: '1.11.19',
-  usage: require('./usage.md').default
+  usage: require('./usage.md').default,
+  validator,
 }

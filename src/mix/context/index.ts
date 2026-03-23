@@ -324,6 +324,8 @@ class Context {
     return this.aiComParamsMap[id]?.aiComParams;
   }
 
+  projectConfig: { avaliableLibraries?: any[]; themes?: any[] } = {};
+
   agent: any = {
     vibeCoding: null,
   };

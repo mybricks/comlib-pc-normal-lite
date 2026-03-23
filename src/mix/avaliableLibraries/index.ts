@@ -1,25 +1,34 @@
-import antd, { validator as antdValidator } from './antd'
-import antDesignIcons, { validator as antDesignIconsValidator } from './ant-design-icons'
-import echarts, { validator as echartsValidator } from './echarts-for-react'
-import dayjs, { validator as dayjsValidator } from './dayjs'
+import antd from './antd'
+import antDesignIcons from './ant-design-icons'
+import echarts from './echarts-for-react'
+import dayjs from './dayjs'
 import antvG6 from './antv-g6'
-import antvG6Validator from './antv-g6/validator'
 import mybricks from './mybricks'
-import publicValidator from './public/validator'
+import createPublicValidator from './public/validator'
+import context from '../context'
 
 export type { ValidationError, LibraryValidator, LibraryMeta, LibraryResource, CodeValidationResult, ValidateContext } from './types'
 
 /**
- * 所有已注册的三方库校验器（mybricks 为内置库，无需校验，故不加入）
- * 新增库时在此追加
+ * 所有内置库的注册表，每条记录包含库元信息和可选的校验器。
+ * 新增内置库时只需在此追加一条记录。
  */
+const BUILTIN_LIBS: import('./types').LibraryMeta[] = [
+  mybricks,
+  antd,
+  antDesignIcons,
+  echarts,
+  dayjs,
+  antvG6,
+]
+
+/** 内置库名称列表，从注册表派生 */
+export const BUILTIN_LIBRARY_NAMES = BUILTIN_LIBS.map((lib) => lib.name)
+
+/** 所有已注册的校验器（含 publicValidator），从注册表派生 */
 const VALIDATORS = [
-  publicValidator,
-  antDesignIconsValidator,
-  antdValidator,
-  echartsValidator,
-  dayjsValidator,
-  antvG6Validator,
+  createPublicValidator(BUILTIN_LIBRARY_NAMES),
+  ...BUILTIN_LIBS.map((lib) => lib.validator).filter(Boolean) as import('./types').LibraryValidator[],
 ]
 
 // ── 轻量字符串层 ──────────────────────────────────────────────────────────────
@@ -106,55 +115,28 @@ function formatValidationErrors(errors: import('./types').ValidationError[]): st
 
 // ── Library Doc ────────────────────────────────────────────────────────────────
 
-function getLibraryDocDescription(library: { version: string; usage: string }) {
-  return `version: ${library.version}\n${library.usage}`
+function getLibraryDocDescription(library: { name: string; version: string; usage: string }) {
+  return `---\nname: ${library.name}\nversion: ${library.version}\n---\n${library.usage}`
 }
 
-/**
- * 获取指定库的文档描述（用于注入 AI 提示词）。
- * mybricks 作为内置核心库，优先级最高，始终返回其文档。
- */
+/** 获取指定内置库的文档描述（用于注入 AI 提示词） */
 export function getLibraryDoc(libraryName: string): string {
-  switch (libraryName) {
-    case 'mybricks':
-      return getLibraryDocDescription(mybricks)
-    case 'antd':
-      return getLibraryDocDescription(antd)
-    case '@ant-design/icons':
-      return getLibraryDocDescription(antDesignIcons)
-    case 'echarts-for-react':
-      return getLibraryDocDescription(echarts)
-    case 'dayjs':
-      return getLibraryDocDescription(dayjs)
-    case '@antv/g6':
-      return getLibraryDocDescription(antvG6)
-    default:
-      return ''
-  }
+  const lib = BUILTIN_LIBS.find((l) => l.name === libraryName)
+  return lib ? getLibraryDocDescription(lib) : ''
 }
 
-/**
- * 获取所有库的文档描述，mybricks 优先排在最前面。
- */
+/** 获取所有内置库的文档描述拼接 */
 export function getAllLibraryDocs(): string {
-  return [
-    getLibraryDocDescription(mybricks),
-    getLibraryDocDescription(antd),
-    getLibraryDocDescription(antDesignIcons),
-    getLibraryDocDescription(echarts),
-    getLibraryDocDescription(dayjs),
-    getLibraryDocDescription(antvG6),
-  ].join('\n\n')
+  return BUILTIN_LIBS.map((l) => getLibraryDocDescription(l)).join('\n\n')
 }
 
 // ── 外部资源 ───────────────────────────────────────────────────────────────────
 
 /**
- * 所有需要加载外部 UMD 资源的库列表（按库名索引）。
- * 平台在启动渲染前应遍历此 Map，按顺序加载每个库的 resources。
+ * 所有需要加载外部 UMD 资源的库列表（按库名索引），从注册表派生。
  */
 const LIBRARY_RESOURCES_MAP: Map<string, import('./types').LibraryResource[]> = new Map(
-  ([antd, antDesignIcons, echarts, dayjs, antvG6] as import('./types').LibraryMeta[])
+  BUILTIN_LIBS
     .filter((lib) => lib.resources && lib.resources.length > 0)
     .map((lib) => [lib.name, lib.resources!])
 )
@@ -172,4 +154,54 @@ export function getLibraryResources(libraryName: string): import('./types').Libr
  */
 export function getAllLibraryResources(): Array<{ name: string; resources: import('./types').LibraryResource[] }> {
   return Array.from(LIBRARY_RESOURCES_MAP.entries()).map(([name, resources]) => ({ name, resources }))
+}
+
+
+// ── projectConfig 组件库信息 ────────────────────────────────────────────────────
+
+/**
+ * 将 projectConfig.avaliableLibraries 中的单条记录转换为 LibraryMeta 格式。
+ * readme → usage，其余字段对齐。
+ */
+function toLibraryMeta(lib: { name: string; version: string; readme: string }): import('./types').LibraryMeta {
+  return {
+    name: lib.name,
+    version: lib.version ?? '',
+    usage: lib.readme ?? '',
+  }
+}
+
+/**
+ * 获取 projectConfig.avaliableLibraries 中指定库的文档（转换为 LibraryMeta 后取 usage）。
+ * 不触发 URL 加载。
+ */
+export function getProjectLibraryDoc(libraryName: string): string {
+  const libs = context.projectConfig?.avaliableLibraries ?? []
+  const lib = libs.find((l) => l.name === libraryName)
+  if (!lib) return ''
+  return getLibraryDocDescription(toLibraryMeta(lib))
+}
+
+/**
+ * 获取 projectConfig.avaliableLibraries 中所有库的文档拼接（格式与内置库一致）。
+ * 不触发 URL 加载。
+ */
+export function getAllProjectLibraryDocs(): string {
+  const libs = context.projectConfig?.avaliableLibraries ?? []
+  return libs.map((lib) => getLibraryDocDescription(toLibraryMeta(lib))).join('\n\n')
+}
+
+/**
+ * 获取 projectConfig.avaliableLibraries 中所有库的名称列表。
+ */
+export function getProjectLibraryNames(): string[] {
+  return (context.projectConfig?.avaliableLibraries ?? []).map((l) => l.name)
+}
+
+/**
+ * 获取所有可用库的名称列表（内置库 + projectConfig 中声明的额外库），去重。
+ */
+export function getAllLibraryNames(): string[] {
+  const projectLibNames = getProjectLibraryNames().filter((n) => !BUILTIN_LIBRARY_NAMES.includes(n))
+  return [...BUILTIN_LIBRARY_NAMES, ...projectLibNames]
 }

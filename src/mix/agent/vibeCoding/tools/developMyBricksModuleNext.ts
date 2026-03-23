@@ -1,6 +1,7 @@
 import readRelated from "./readRelated";
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
 import syncMarkdownformybricksModule from "./syncMarkdownformybricksModule";
+import { getAllLibraryNames } from '../../../avaliableLibraries';
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
@@ -18,6 +19,7 @@ interface Config {
 export default function developMyBricksModule(config: Config) {
   const langs = "React、Less"
   const libTitles = `${langs}、mybricks`
+  const allLibNamesStr = getAllLibraryNames().join(', ')
 
   let excuteMessage = '';
 
@@ -288,8 +290,7 @@ export default function developMyBricksModule(config: Config) {
   
   <技术栈和类库使用说明>
     仅可以基于 ${libTitles} 技术栈进行开发，同时，可以使用*项目信息*中<允许使用的类库/>中声明类库，根据场景做合理的技术方案设计、不要超出声明的类库范围。
-    三方类库：*项目信息*中<允许使用的类库/>中声明的类库，目前有 mybricks, antd, @ant-design/icons, echarts-for-react, dayjs 可以使用，不允许使用其他类库；
-    三方类库：*项目信息*中<允许使用的类库/>中声明的类库，目前有 mybricks, antd, @ant-design/icons, echarts-for-react, dayjs 可以使用，不允许使用其他类库；
+    三方类库：*项目信息*中<允许使用的类库/>中声明的类库，目前有 ${allLibNamesStr} 可以使用，不允许使用其他类库；
     > 关于三方类库：仅允许使用*项目信息*中<允许使用的类库/>中声明的类库，不要超出范围，不允许使用其他类库；
       同时需要注意以下几点：
       - 按照文档中的使用说明来使用类库，比如*引用方式*、*何时使用*，*组件用法*等。

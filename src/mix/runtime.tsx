@@ -22,8 +22,8 @@ export default genAIRuntime({
     '制作一个包含分步表单的注册页面',
     '实现一个企业通讯录页面，左侧是部门组织架构树，右侧是该部门下的员工详情列表，右上角提供添加员工按钮',
   ],
-  dependencies: Object.defineProperties(
-    {
+  dependencies: (() => {
+    const base = {
       antd,
       'echarts-for-react': echartsForReact,
       'antd/locale/zh_CN': zhCN,
@@ -31,15 +31,32 @@ export default genAIRuntime({
       // '@dnd-kit/modifiers': dndModifiers,
       // '@dnd-kit/sortable': dndSortable,
       // '@dnd-kit/utilities': dndUtilities
-    },
-    {
+    };
+
+    const builtinDefs: PropertyDescriptorMap = {
       '@antv/g6': {
         get() { return (window as any).G6 },
         enumerable: true,
         configurable: true,
       },
+    };
+
+    // projectConfig.avaliableLibraries 中的库通过 library 全局变量名从 window 获取
+    const projectLibs = context.projectConfig?.avaliableLibraries ?? [];
+    const projectDefs: PropertyDescriptorMap = {};
+    for (const lib of projectLibs) {
+      if (lib.name && lib.library && !(lib.name in base) && !(lib.name in builtinDefs)) {
+        const globalVar = lib.library;
+        projectDefs[lib.name] = {
+          get() { return (window as any)[globalVar] },
+          enumerable: true,
+          configurable: true,
+        };
+      }
     }
-  ),
+
+    return Object.defineProperties(base, { ...builtinDefs, ...projectDefs });
+  })(),
   wrapper: ({ children, env, canvasContainer }) => {
     // const container = useRef(
     //   env.edit || env.runtime.debug
