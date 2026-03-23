@@ -38,6 +38,7 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
   }, [componentId]);
 
   const handleRollback = useCallback((versionId: string) => {
+    if (!window.confirm('确认回滚到该版本？回滚后该版本之后的内容将被删除，且操作不可撤销，请谨慎操作。')) return;
     context.rollbackToVersion(componentId, versionId);
   }, [componentId]);
 
