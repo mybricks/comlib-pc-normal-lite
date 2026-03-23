@@ -62,8 +62,8 @@ export default genAIRuntime({
       })
     } else {
       return new Proxy({}, {
-        get() {
-          return () => {}
+        get(_, key) {
+          return console[key] || (() => {})
         }
       })
     }
