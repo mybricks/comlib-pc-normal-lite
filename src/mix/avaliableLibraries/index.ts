@@ -2,10 +2,12 @@ import antd, { validator as antdValidator } from './antd'
 import antDesignIcons, { validator as antDesignIconsValidator } from './ant-design-icons'
 import echarts, { validator as echartsValidator } from './echarts-for-react'
 import dayjs, { validator as dayjsValidator } from './dayjs'
+import antvG6 from './antv-g6'
+import antvG6Validator from './antv-g6/validator'
 import mybricks from './mybricks'
 import publicValidator from './public/validator'
 
-export type { ValidationError, LibraryValidator, CodeValidationResult, ValidateContext } from './types'
+export type { ValidationError, LibraryValidator, LibraryMeta, LibraryResource, CodeValidationResult, ValidateContext } from './types'
 
 /**
  * 所有已注册的三方库校验器（mybricks 为内置库，无需校验，故不加入）
@@ -17,6 +19,7 @@ const VALIDATORS = [
   antdValidator,
   echartsValidator,
   dayjsValidator,
+  antvG6Validator,
 ]
 
 // ── 轻量字符串层 ──────────────────────────────────────────────────────────────
@@ -123,6 +126,8 @@ export function getLibraryDoc(libraryName: string): string {
       return getLibraryDocDescription(echarts)
     case 'dayjs':
       return getLibraryDocDescription(dayjs)
+    case '@antv/g6':
+      return getLibraryDocDescription(antvG6)
     default:
       return ''
   }
@@ -138,5 +143,33 @@ export function getAllLibraryDocs(): string {
     getLibraryDocDescription(antDesignIcons),
     getLibraryDocDescription(echarts),
     getLibraryDocDescription(dayjs),
+    getLibraryDocDescription(antvG6),
   ].join('\n\n')
+}
+
+// ── 外部资源 ───────────────────────────────────────────────────────────────────
+
+/**
+ * 所有需要加载外部 UMD 资源的库列表（按库名索引）。
+ * 平台在启动渲染前应遍历此 Map，按顺序加载每个库的 resources。
+ */
+const LIBRARY_RESOURCES_MAP: Map<string, import('./types').LibraryResource[]> = new Map(
+  ([antd, antDesignIcons, echarts, dayjs, antvG6] as import('./types').LibraryMeta[])
+    .filter((lib) => lib.resources && lib.resources.length > 0)
+    .map((lib) => [lib.name, lib.resources!])
+)
+
+/**
+ * 获取指定库的外部资源列表。
+ * 返回 undefined 表示该库无需加载外部资源（已打包到 bundle 中）。
+ */
+export function getLibraryResources(libraryName: string): import('./types').LibraryResource[] | undefined {
+  return LIBRARY_RESOURCES_MAP.get(libraryName)
+}
+
+/**
+ * 获取所有需要外部加载资源的库及其资源列表。
+ */
+export function getAllLibraryResources(): Array<{ name: string; resources: import('./types').LibraryResource[] }> {
+  return Array.from(LIBRARY_RESOURCES_MAP.entries()).map(([name, resources]) => ({ name, resources }))
 }

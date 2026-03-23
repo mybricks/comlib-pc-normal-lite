@@ -320,7 +320,7 @@ export class Workspace {
    */
   private async openDefaultFiles() {
     try {
-      await this.openLibraryDoc(['antd', '@ant-design/icons', 'dayjs','echarts-for-react'])
+      await this.openLibraryDoc(['antd', '@ant-design/icons', 'dayjs','echarts-for-react', '@antv/g6'])
     } catch (error) {
       
     }

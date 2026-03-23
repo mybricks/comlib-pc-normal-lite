@@ -23,6 +23,7 @@ const THIRD_PARTY_LIBRARIES: readonly string[] = [
   '@ant-design/icons',
   'echarts-for-react',
   'dayjs',
+  '@antv/g6',
 ];
 
 /** 合并所有允许的库（内置 + 三方） */

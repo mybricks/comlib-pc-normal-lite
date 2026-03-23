@@ -7,7 +7,32 @@
  *     parse/transform，精确且零额外开销；由 transformTsx 统一注入 plugins 数组
  *   - 多文件上下文（ValidateContext）：通过 ctx.relatedFiles 传入相关文件内容，
  *     供 AST plugin 在需要时做简单跨文件关联分析
+ *   - 外部资源（resources）：描述库需要从 UMD/CDN 加载的 JS/CSS 资源，
+ *     支持多文件、样式文件以及全局变量声明
  */
+
+// ── 外部资源 ──────────────────────────────────────────────────────────────────
+
+/**
+ * 单条外部资源描述。
+ *
+ * - type 为 'js'  时：通过 <script src="url"> 加载 UMD 脚本
+ * - type 为 'css' 时：通过 <link rel="stylesheet" href="url"> 加载样式表
+ *
+ * 加载顺序按数组顺序依次进行（串行），确保依赖关系正确。
+ */
+export interface LibraryResource {
+  /** 资源类型 */
+  type: 'js' | 'css';
+  /** 资源 URL（CDN 地址或本地路径） */
+  url: string;
+  /**
+   * 加载该 JS 资源后，挂载到 window 上的全局变量名（仅 type='js' 时有意义）。
+   * 平台可用此字段判断资源是否已加载，避免重复注入。
+   * 例如：G6 加载后挂载到 window.G6，则填写 'G6'
+   */
+  globalVar?: string;
+}
 
 // ── 多文件上下文 ─────────────────────────────────────────────────────────────
 
@@ -71,6 +96,28 @@ export interface LibraryValidator {
    * @returns 标准 Babel plugin factory：(babel) => { visitor: { ... } }
    */
   validatePlugin?(ctx: ValidateContext): (babel: any) => { visitor: Record<string, any> };
+}
+
+// ── 库元信息 ──────────────────────────────────────────────────────────────────
+
+/**
+ * 三方库元信息，每个库的 index.ts default export 实现此接口。
+ *
+ * resources 字段可选，仅需要通过 UMD/CDN 加载外部资源的库才需要填写。
+ * 加载顺序按数组顺序依次进行，确保多 JS 文件之间的依赖关系。
+ */
+export interface LibraryMeta {
+  /** 库名称（与 import source 对应） */
+  name: string;
+  /** 库版本号 */
+  version: string;
+  /** AI 使用文档（markdown） */
+  usage: string;
+  /**
+   * 需要从外部加载的资源列表（UMD JS 文件 + 样式文件）。
+   * 未填写时表示库已通过 npm 打包到 bundle 中，无需额外加载。
+   */
+  resources?: LibraryResource[];
 }
 
 // ── validateCode 返回值 ───────────────────────────────────────────────────────
