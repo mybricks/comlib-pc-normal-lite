@@ -1263,9 +1263,10 @@ export default function (props: Props, actions: Actions, ...args) {
               {
                 type: '_resizer',
                 options: {margin: false},
-                set() {
+                set(params, value) {
                   ///TODO
-                }
+                  console.log("[page _resizer set]", { params, value })
+                },
               }
             ]
           }
