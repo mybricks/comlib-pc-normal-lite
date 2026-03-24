@@ -1266,13 +1266,6 @@ export default function (props: Props, actions: Actions, ...args) {
                 set() {
                   ///TODO
                 }
-              },
-              {
-                type: '_resizer',
-                options: {margin: false},
-                set() {
-                  ///TODO
-                }
               }
             ]
           }
