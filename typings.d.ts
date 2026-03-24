@@ -178,4 +178,5 @@ declare interface Window {
   less: any; // Less 编译器，CDN 加载
   myTinymce: any; // Tinymce
   jstt: any;
+  MYBRICKS_AICOM_THEME_VARIABLES?: any;
 }
