@@ -1,5 +1,4 @@
 import codeTransform from './codeTransform';
-import utilsFiles from './utilsFiles';
 
 /**
  * 代码结构生成器
@@ -24,11 +23,15 @@ export interface ComponentData {
   [key: string]: any;
 }
 
+interface Config {
+  type: "application" | "component"
+}
+
 /**
  * 生成代码文件结构
  * 只导出三个核心文件：runtime.jsx, style.less, store.js
  */
-export function generateCodeStructure(data: ComponentData): FileItem[] {
+export function generateCodeStructure(data: ComponentData, config: Config): FileItem[] {
   const files: FileItem[] = [];
 
     const { runtimeJsxSource, storeJsSource, serviceJsSource, styleSource } = data;
@@ -38,7 +41,7 @@ export function generateCodeStructure(data: ComponentData): FileItem[] {
       store: decodeURIComponent(storeJsSource || ""),
       service: decodeURIComponent(serviceJsSource || ""),
       style: decodeURIComponent(styleSource || ""),
-    }).map((file) => {
+    }, config).map((file) => {
       return {
         fileName: `${file.path}`,
         content: file.content,
@@ -47,12 +50,12 @@ export function generateCodeStructure(data: ComponentData): FileItem[] {
 
     files.push(...codeFiles);
 
-    files.push(...utilsFiles.map((file) => {
-      return {
-        fileName: `utils/${file.path}`,
-        content: file.content,
-      }
-    }))
+    // files.push(...utilsFiles.map((file) => {
+    //   return {
+    //     fileName: `utils/${file.path}`,
+    //     content: file.content,
+    //   }
+    // }))
 
     return files;
 

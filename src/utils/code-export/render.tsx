@@ -9,12 +9,12 @@ interface ExportCodePanelProps {
 }
 
 export default function Render({ comId, data }: ExportCodePanelProps) {
-  const [loading, setLoading] = useState(false);
+  const [loadingType, setLoadingType] = useState<'application' | 'component' | null>(null);
 
   const isVSCode = typeof (window as any).exportCodeToVSCode === 'function';
   const outputDir: string | undefined = data?.exportOutputDir;
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (type: 'application' | 'component') => {
     if (!comId) return;
 
     const aiComParams = context.getAiComParams(comId);
@@ -29,10 +29,12 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
     }
 
     const message = (window as any).antd?.message;
-    setLoading(true);
+    setLoadingType(type);
+    let hideLoading: any = null;
+    if (message) hideLoading = message.loading('正在导出代码...', 0);
 
     try {
-      const files = generateCodeStructure(aiComParams.data);
+      const files = generateCodeStructure(aiComParams.data, { type });
       const usedDir = await exportCode(files, {
         folderName: 'App',
         outputDir: isVSCode ? outputDir : undefined,
@@ -41,7 +43,8 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
         },
       });
 
-      setLoading(false);
+      if (hideLoading) hideLoading();
+      setLoadingType(null);
 
       // VSCode 环境下记录路径
       if (isVSCode && usedDir && usedDir !== outputDir) {
@@ -52,7 +55,8 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
       if (message) message.success('导出代码成功！');
       else alert('导出代码成功！');
     } catch (error) {
-      setLoading(false);
+      if (hideLoading) hideLoading();
+      setLoadingType(null);
 
       if ((error as any)?.message?.includes('取消')) {
         console.log('[导出为代码] 用户取消导出');
@@ -64,32 +68,46 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
     }
   }, [comId, isVSCode, outputDir]);
 
+  const loading = loadingType !== null;
+
+  const buttonStyle: React.CSSProperties = {
+    cursor: loading ? 'not-allowed' : 'pointer',
+    flex: 1,
+    textAlign: 'center',
+    height: 26,
+    lineHeight: '26px',
+    borderRadius: 6,
+    border: '1px solid rgba(2, 9, 16, 0.13)',
+    backgroundColor: 'var(--mybricks-bg-color-hover, #F5F5F5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    color: loading ? '#aaa' : 'var(--mybricks-text-color-main)',
+    padding: 0,
+    opacity: loading ? 0.6 : 1,
+  };
+
   return (
     <div style={{ padding: '4px 0' }}>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleExport}
-        style={{
-          cursor: loading ? 'not-allowed' : 'pointer',
-          width: '100%',
-          textAlign: 'center',
-          height: 26,
-          lineHeight: '26px',
-          borderRadius: 6,
-          border: '1px solid rgba(2, 9, 16, 0.13)',
-          backgroundColor: 'var(--mybricks-bg-color-hover, #F5F5F5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 12,
-          color: loading ? '#aaa' : 'var(--mybricks-text-color-main)',
-          padding: 0,
-          opacity: loading ? 0.6 : 1,
-        }}
-      >
-        {loading ? '导出中...' : '导出代码'}
-      </button>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => handleExport('application')}
+          style={buttonStyle}
+        >
+          {loadingType === 'application' ? '导出中...' : '导出应用'}
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => handleExport('component')}
+          style={buttonStyle}
+        >
+          {loadingType === 'component' ? '导出中...' : '导出组件'}
+        </button>
+      </div>
       {isVSCode && outputDir && (
         <div
           title={outputDir}
