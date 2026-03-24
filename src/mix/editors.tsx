@@ -253,6 +253,7 @@ const genStyleValue = (params) => {
   const {comId} = params;
   return {
     set(params, value) {
+
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
       const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
@@ -367,6 +368,7 @@ const genResizer = () => {
           Object.entries(value).forEach(([key, value]) => {
             cssObj[cssObjKey][key] = `${value}px`;
           })
+
           const cssStr = stringifyLess(cssObj);
           context.updateFile(params.id, {fileName: 'style.less', content: cssStr})
           // 编辑器保存后记录/更新编辑器版本快照
@@ -875,7 +877,17 @@ export default function (props: Props, actions: Actions, ...args) {
     },
     '@getDocs'(params) {
       let result: any = {};
-
+      try {
+        const themesData = params?.data?.themes;
+        if (themesData) {
+          const activeTheme = themesData.themes?.find((t) => t.id === themesData.activeThemeId) || themesData.themes?.[0];
+          if (activeTheme?.vars) {
+            (window as any).MYBRICKS_AICOM_THEME_VARIABLES = activeTheme.vars;
+          }
+        }
+      } catch (e) {
+        console.error("[@getDocs syncTheme error]", e);
+      }
       try {
         const {runtimeMdCompiled} = params.data;
         if (runtimeMdCompiled) {
@@ -1120,8 +1132,15 @@ export default function (props: Props, actions: Actions, ...args) {
                     return context.projectConfig.themes ?? params.data.themes;
                   },
                   set(params, themes) {
-                    params.data.themes = themes;
+                    params.data.themes = themes
                   }
+                }
+              },
+              {
+                type: '_resizer',
+                options: {margin: false},
+                set() {
+                  ///TODO
                 }
               },
               {
