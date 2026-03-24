@@ -14,6 +14,25 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
   const isVSCode = typeof (window as any).exportCodeToVSCode === 'function';
   const outputDir: string | undefined = data?.exportOutputDir;
 
+  const handleSelectDir = useCallback(async () => {
+    const selectFolderPath = (window as any).selectFolderPath;
+    if (typeof selectFolderPath !== 'function') return;
+    try {
+      const newDir: string = await selectFolderPath();
+      if (newDir) {
+        const aiComParams = context.getAiComParams(comId);
+        if (aiComParams?.data) {
+          aiComParams.data.exportOutputDir = newDir;
+          context.getAiCom(comId)?.actions?.notifyChanged?.();
+        }
+      }
+    } catch (error) {
+      if (!(error as any)?.message?.includes('取消')) {
+        console.error('[选择目录] 失败', error);
+      }
+    }
+  }, [comId]);
+
   const handleExport = useCallback(async (type: 'application' | 'component') => {
     if (!comId) return;
 
@@ -30,8 +49,6 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
 
     const message = (window as any).antd?.message;
     setLoadingType(type);
-    let hideLoading: any = null;
-    if (message) hideLoading = message.loading('正在导出代码...', 0);
 
     try {
       const files = generateCodeStructure(aiComParams.data, { type });
@@ -43,7 +60,6 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
         },
       });
 
-      if (hideLoading) hideLoading();
       setLoadingType(null);
 
       // VSCode 环境下记录路径
@@ -52,10 +68,10 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
         context.getAiCom(comId)?.actions?.notifyChanged?.();
       }
 
-      if (message) message.success('导出代码成功！');
-      else alert('导出代码成功！');
+      const successMsg = isVSCode && usedDir ? `导出代码成功！路径：${usedDir}` : '导出代码成功！';
+      if (message) message.success(successMsg);
+      else alert(successMsg);
     } catch (error) {
-      if (hideLoading) hideLoading();
       setLoadingType(null);
 
       if ((error as any)?.message?.includes('取消')) {
@@ -110,42 +126,41 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
       </div>
       {isVSCode && outputDir && (
         <div
-          title={outputDir}
+          title={`${outputDir}\n点击重新选择目录`}
+          role="button"
+          tabIndex={0}
+          onClick={handleSelectDir}
+          onKeyDown={(e) => e.key === 'Enter' && handleSelectDir()}
           style={{
             marginTop: 8,
-            padding: '6px 6px',
-            fontSize: 10,
-            fontStyle: 'italic',
-            color: 'rgba(0,0,0,0.45)',
-            backgroundColor: 'rgba(0,0,0,0.04)',
+            backgroundColor: 'var(--mybricks-bg-color-hover)',
             borderRadius: 4,
+            padding: '6px 8px',
+            fontSize: 10,
             display: 'flex',
-            alignItems: 'center',
+            flexDirection: 'column',
             gap: 2,
-            overflow: 'hidden',
+            cursor: 'pointer',
           }}
         >
-          <span style={{ flexShrink: 0 }}>
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.586a1 1 0 0 1 .707.293L8 3.586A1 1 0 0 0 8.707 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9Z" fill="rgba(0,0,0,0.35)"/>
-            </svg>
-          </span>
-          {(outputDir === '.' ? ['根目录'] : outputDir.split('/')).map((seg, i, arr) => (
-            <React.Fragment key={i}>
-              <span style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flexShrink: i === arr.length - 1 ? 1 : 0,
-                color: i === arr.length - 1 ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.35)',
-              }}>
-                {seg}
-              </span>
-              {i < arr.length - 1 && (
-                <span style={{ flexShrink: 0, color: 'rgba(0,0,0,0.25)' }}>/</span>
-              )}
-            </React.Fragment>
-          ))}
+          <div style={{
+            fontWeight: 500,
+            color: 'var(--mybricks-text-color-main)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {outputDir === '.' ? '根目录' : (outputDir.split('/').pop() || outputDir)}
+          </div>
+          <div style={{
+            color: 'var(--mybricks-text-color-main)',
+            opacity: 0.45,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {outputDir === '.' ? '.' : (outputDir.split('/').slice(0, -1).join('/') || '/')}
+          </div>
         </div>
       )}
     </div>
