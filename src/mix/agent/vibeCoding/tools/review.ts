@@ -307,7 +307,7 @@ export default function reviewMyBricksModule(config: Config = {}) {
     aiRole: (_, execCtx) => {
       const retryCount = execCtx?.retryCount ?? 0;
       if (retryCount > 1) return 'architect';
-      return 'architect';
+      return;
     },
   };
 }
