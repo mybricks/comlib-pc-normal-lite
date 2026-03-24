@@ -97,7 +97,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
           onClick={() => handleExport('application')}
           style={buttonStyle}
         >
-          {loadingType === 'application' ? '导出中...' : '导出应用'}
+          {loadingType === 'application' ? '导出中...' : '导出页面'}
         </button>
         <button
           type="button"
