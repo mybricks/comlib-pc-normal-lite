@@ -367,16 +367,16 @@ export default function ({ context }) {
           }
           params?.onProgress?.(status);
         } else {
-        if (status === "start") {
-          context.startAIPendingVersion(focus.comId, planAgent);
-          actions.lock(lockId, focusArea);
-        } else if (status === "complete") {
-          context.commitAIVersion(focus.comId);
-          actions.unlock(lockId, focusArea);
-        } else if (status === "error") {
-          context.cancelAIPending(focus.comId);
-          actions.unlock(lockId, focusArea);
-        }
+          if (status === "start") {
+            context.startAIPendingVersion(focus.comId, planAgent);
+            actions.lock(lockId, focusArea);
+          } else if (status === "complete") {
+            context.commitAIVersion(focus.comId);
+            actions.unlock(lockId, focusArea);
+          } else if (status === "error") {
+            context.cancelAIPending(focus.comId);
+            actions.unlock(lockId, focusArea);
+          }
         }
         // console.log("[@comName]", comName);
         // console.log("[@status]", status);

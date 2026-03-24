@@ -785,10 +785,10 @@ export default function (props: Props, actions: Actions, ...args) {
   };
 
   const exportCodeConfig = [{
-    title: "代码",
+    title: "导出",
     items: [
       {
-        title: "导出代码",
+        title: "代码",
         type: "editorRender",
         options: {
           render: () => <ExportCodePanel
@@ -1263,16 +1263,10 @@ export default function (props: Props, actions: Actions, ...args) {
               {
                 type: '_resizer',
                 options: {margin: false},
-                set() {
+                set(params, value) {
                   ///TODO
-                }
-              },
-              {
-                type: '_resizer',
-                options: {margin: false},
-                set() {
-                  ///TODO
-                }
+                  console.log("[page _resizer set]", { params, value })
+                },
               }
             ]
           }
