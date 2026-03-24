@@ -1,6 +1,5 @@
 import readRelated from "./readRelated";
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
-import syncMarkdownformybricksModule from "./syncMarkdownformybricksModule";
 import reviewMyBricksModule from "./review";
 import { getAllLibraryNames } from '../../../avaliableLibraries';
 
@@ -813,14 +812,11 @@ export default function developMyBricksModule(config: Config) {
 
       const commands: any = []
 
-      if (files.find((f) => f.fileName === 'runtime.jsx')) {
+      const needsReview = files.some((f) => ['runtime.jsx', 'store.js'].includes(f.fileName));
+      if (needsReview) {
         if (!context.commands?.find((command) => command.name === reviewMyBricksModule.toolName)) {
           // 代码修改后先做 review 和修复
           commands.push({ toolName: reviewMyBricksModule.toolName });
-        }
-        if (!context.commands?.find((command) => command.name === syncMarkdownformybricksModule.toolName)) {
-          // 修改jsx才需要同步runtime.md
-          commands.push({ toolName: syncMarkdownformybricksModule.toolName });
         }
       }
 

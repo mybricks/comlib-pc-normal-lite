@@ -1,4 +1,5 @@
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
+import syncMarkdownformybricksModule from "./syncMarkdownformybricksModule";
 
 const NAME = 'codeReviewAndFix'
 reviewMyBricksModule.toolName = NAME
@@ -114,7 +115,7 @@ export default function reviewMyBricksModule(config: Config = {}) {
 - 检查页面是否正确使用 pageRef；
 - 检查组件是否正确使用 comRef；
 
-前置：修改代码后，在任务结束前，建议使用此工具进行审查和修复。
+前置：修改代码后，建议使用此工具进行审查和修复。
 `,
     getPrompts: () => {
       return `
@@ -239,7 +240,7 @@ export default function reviewMyBricksModule(config: Config = {}) {
 </examples>
 `
     },
-    execute(params: any) {
+    execute(params: any, context: any) {
       const files = (params?.files ?? []) as RxFile[];
       const llmContent = `${params.content}\n\n${excuteMessage}`;
 
@@ -248,9 +249,16 @@ export default function reviewMyBricksModule(config: Config = {}) {
         return params.content;
       }
 
+      const commands: any = [];
+
+      if (!context.commands?.find((command: any) => command.name === syncMarkdownformybricksModule.toolName)) {
+        commands.push({ toolName: syncMarkdownformybricksModule.toolName });
+      }
+
       return {
         llmContent,
         displayContent: llmContent,
+        appendCommands: commands.length > 0 ? commands : undefined,
       } as any;
     },
     async stream(params: any, context: any) {
@@ -295,6 +303,11 @@ export default function reviewMyBricksModule(config: Config = {}) {
       }
 
       return params.content;
+    },
+    aiRole: (_, execCtx) => {
+      const retryCount = execCtx?.retryCount ?? 0;
+      if (retryCount > 1) return 'architect';
+      return 'architect';
     },
   };
 }
