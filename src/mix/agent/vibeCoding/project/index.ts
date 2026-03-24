@@ -308,6 +308,13 @@ ${themesContent}
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
 `;
 
+    const designModeKnowledge = `
+- 搭建态展示方式：
+  - 在设计态（搭建态）中，所有路由页面会被同时平铺展示，而非只显示当前激活路由对应的页面；
+  - 这意味着每个通过 Route 注册的 pageRef 页面都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
+  - 因此在设计多页面时，不必担心某个页面"看不见"，它们都会并排呈现在搭建画布中；
+`;
+
     // const archMd = buildArchitectureMd(this.root);
 
     const libraryDocsContent = [getAllLibraryDocs(), getAllProjectLibraryDocs()].filter(Boolean).join('\n\n');
@@ -410,6 +417,8 @@ ${themesContent}
       // archMd,
       '\n',
       ...fileSectionParts,
+      '\n# MyBricks 搭建知识\n',
+      designModeKnowledge,
     ].join('');
   }
 

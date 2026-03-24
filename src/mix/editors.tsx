@@ -1010,6 +1010,23 @@ export default function (props: Props, actions: Actions, ...args) {
         // console.log('data', data);
         // console.log('focusArea', focusArea);
 
+        const figmaUiButtonStyle: React.CSSProperties = {
+          cursor: 'pointer',
+          width: '100%',
+          textAlign: 'center',
+          height: 26,
+          lineHeight: '26px',
+          borderRadius: 6,
+          border: '1px solid rgba(2, 9, 16, 0.13)',
+          backgroundColor: 'var(--mybricks-bg-color-hover, #F5F5F5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          color: 'var(--mybricks-text-color-main)',
+          padding: 0,
+        };
+
         cate1.title = "页面";
         cate1.items = [
           {
@@ -1017,64 +1034,84 @@ export default function (props: Props, actions: Actions, ...args) {
             items: [
               {
                 title: "导出到 Figma",
-                type: 'Button',
-                value: {
-                  set() {
-                    const fn = (window as any).elementToMybricksJsonWithInlineImages;
-                    if (typeof fn !== 'function') {
-                      console.warn("[导出页面] window.elementToMybricksJsonWithInlineImages 未定义");
-                      return;
-                    }
-                    const ele = focusArea?.ele;
-                    if (!ele) {
-                      console.warn("[导出页面] focusArea.ele 不存在");
-                      return;
-                    }
-                    const message = (window as any).antd?.message;
-                    fn(ele, comId).then((result: any) => {
-                      const jsonStr = JSON.stringify(result, null, 2);
-                      return navigator.clipboard.writeText(jsonStr);
-                    }).then(
-                      () => {
-                        if (message) message.success('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
-                        else alert('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
-                      },
-                      (err: any) => {
-                        if (message) message.error('导出失败，请检查剪切板权限');
-                        else alert('导出失败，请检查剪切板权限');
-                        console.error("[导出页面] 复制失败", err);
-                      }
-                    );
-                  }
-                }
+                type: "editorRender",
+                options: {
+                  render: () => (
+                    <div style={{ padding: '4px 0' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fn = (window as any).elementToMybricksJsonWithInlineImages;
+                          if (typeof fn !== 'function') {
+                            console.warn("[导出页面] window.elementToMybricksJsonWithInlineImages 未定义");
+                            return;
+                          }
+                          const ele = focusArea?.ele;
+                          if (!ele) {
+                            console.warn("[导出页面] focusArea.ele 不存在");
+                            return;
+                          }
+                          const message = (window as any).antd?.message;
+                          fn(ele, comId).then((result: any) => {
+                            const jsonStr = JSON.stringify(result, null, 2);
+                            return navigator.clipboard.writeText(jsonStr);
+                          }).then(
+                            () => {
+                              if (message) message.success('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
+                              else alert('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
+                            },
+                            (err: any) => {
+                              if (message) message.error('导出失败，请检查剪切板权限');
+                              else alert('导出失败，请检查剪切板权限');
+                              console.error("[导出页面] 复制失败", err);
+                            }
+                          );
+                        }}
+                        style={figmaUiButtonStyle}
+                      >
+                        导出到 Figma
+                      </button>
+                    </div>
+                  ),
+                },
               },
               {
                 title: "从 Figma 同步样式",
-                type: 'Button',
-                value: {
-                  set() {
-                    navigator.clipboard.readText().then(
-                      (text) => {
-                        if (!text || String(text).trim() === '') {
-                          alert('剪切板无内容，请先从 Figma 复制后再同步');
-                          return;
-                        }
-                        try {
-                          const parsed = JSON.parse(text);
-                          const figmaItems: FigmaImportItem[] = Array.isArray(parsed) ? parsed : [parsed];
-                          syncStylesFromFigmaJson(comId, figmaItems);
-                        } catch (e) {
-                          console.error("[从 Figma 同步页面] 剪切板内容不是合法 JSON", e);
-                          alert('剪切板内容不是合法 JSON，请确认已从 Figma 正确复制');
-                        }
-                      },
-                      (err) => {
-                        console.error("[从 Figma 同步页面] 读取剪切板失败", err);
-                        alert('读取剪切板失败，请检查浏览器权限或剪切板是否有内容');
-                      }
-                    );
-                  }
-                }
+                type: "editorRender",
+                options: {
+                  render: () => (
+                    <div style={{ padding: '4px 0' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.readText().then(
+                            (text) => {
+                              if (!text || String(text).trim() === '') {
+                                alert('剪切板无内容，请先从 Figma 复制后再同步');
+                                return;
+                              }
+                              try {
+                                const parsed = JSON.parse(text);
+                                const figmaItems: FigmaImportItem[] = Array.isArray(parsed) ? parsed : [parsed];
+                                syncStylesFromFigmaJson(comId, figmaItems);
+                              } catch (e) {
+                                console.error("[从 Figma 同步页面] 剪切板内容不是合法 JSON", e);
+                                alert('剪切板内容不是合法 JSON，请确认已从 Figma 正确复制');
+                              }
+                            },
+                            (err) => {
+                              console.error("[从 Figma 同步页面] 读取剪切板失败", err);
+                              alert('读取剪切板失败，请检查浏览器权限或剪切板是否有内容');
+                            }
+                          );
+                        }}
+                        style={figmaUiButtonStyle}
+                      >
+                        从 Figma 同步样式
+                      </button>
+                    </div>
+                  ),
+                },
               },
               {
                 type: "themes",

@@ -1,6 +1,7 @@
 import readRelated from "./readRelated";
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
 import syncMarkdownformybricksModule from "./syncMarkdownformybricksModule";
+import reviewMyBricksModule from "./review";
 import { getAllLibraryNames } from '../../../avaliableLibraries';
 
 const NAME = 'developMyBricksModule'
@@ -565,6 +566,8 @@ export default function developMyBricksModule(config: Config) {
       - before 非空 且after 为空 -> 内容删除；
       - before 为空 且after 非空 -> 空文件写入 / 整文件替换；
 
+  6、代码修改完成后，必须调用代码检查工具（reviewMyBricksModule）对本次修改进行审查和修复，确保代码符合规范，修复完成后再进行后续步骤。
+
   整个过程中要注意：
   - 如果模块【源代码】内容有修改，务必通过before/after返回；
   - 确保所有文件内容中禁止使用emoji、特殊字符、表情符号等；
@@ -811,9 +814,13 @@ export default function developMyBricksModule(config: Config) {
       const commands: any = []
 
       if (files.find((f) => f.fileName === 'runtime.jsx')) {
-        if (!context.commands?.find((command) => command.name === syncMarkdownformybricksModule.name)) {
+        if (!context.commands?.find((command) => command.name === reviewMyBricksModule.toolName)) {
+          // 代码修改后先做 review 和修复
+          commands.push({ toolName: reviewMyBricksModule.toolName });
+        }
+        if (!context.commands?.find((command) => command.name === syncMarkdownformybricksModule.toolName)) {
           // 修改jsx才需要同步runtime.md
-          commands.push({ toolName: syncMarkdownformybricksModule.name });
+          commands.push({ toolName: syncMarkdownformybricksModule.toolName });
         }
       }
 

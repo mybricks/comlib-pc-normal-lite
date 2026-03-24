@@ -12,7 +12,7 @@ export default function syncMarkdownformybricksModule(config) {
     name: NAME,
     displayName: '更新说明文档',
     description: `更新说明文档，将 MyBricks 模块的 runtime.jsx 源码整理成结构化的 runtime.md 文档
-如果调用了「developMyBricksModule」工具更新了runtime.jsx，则必须使用本工具来更新文档
+如果调用了「developMyBricksModule」工具更新了runtime.jsx，则需要在最后添加这个工具来修改文档
     `,
     getPrompts: () => {
       return `

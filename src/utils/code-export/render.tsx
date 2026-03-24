@@ -30,8 +30,6 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
 
     const message = (window as any).antd?.message;
     setLoading(true);
-    let hideLoading: any = null;
-    if (message) hideLoading = message.loading('正在导出代码...', 0);
 
     try {
       const files = generateCodeStructure(aiComParams.data);
@@ -43,7 +41,6 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
         },
       });
 
-      if (hideLoading) hideLoading();
       setLoading(false);
 
       // VSCode 环境下记录路径
@@ -55,7 +52,6 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
       if (message) message.success('导出代码成功！');
       else alert('导出代码成功！');
     } catch (error) {
-      if (hideLoading) hideLoading();
       setLoading(false);
 
       if ((error as any)?.message?.includes('取消')) {
@@ -82,12 +78,12 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
           lineHeight: '26px',
           borderRadius: 6,
           border: '1px solid rgba(2, 9, 16, 0.13)',
-          backgroundColor: '#FFF',
+          backgroundColor: 'var(--mybricks-bg-color-hover, #F5F5F5)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: 12,
-          color: loading ? '#aaa' : 'rgba(0,0,0,0.88)',
+          color: loading ? '#aaa' : 'var(--mybricks-text-color-main)',
           padding: 0,
           opacity: loading ? 0.6 : 1,
         }}

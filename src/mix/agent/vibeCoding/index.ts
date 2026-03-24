@@ -17,6 +17,7 @@ import {
   type UpdateComponentFilesResult,
 } from "./tools/utils/files";
 import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
+import codeReviewAndFix from "./tools/review";
 import { uuid } from "../../../utils";
 
 /** 单文件项：fileName + content */
@@ -574,6 +575,11 @@ ${text}
             readRelated({ project }),
             developModule({
               hasAttachments,
+              onUpdate(p) {
+                return updateComponentFiles(p.files ?? [], focus.comId, context);
+              },
+            }),
+            codeReviewAndFix({
               onUpdate(p) {
                 return updateComponentFiles(p.files ?? [], focus.comId, context);
               },
