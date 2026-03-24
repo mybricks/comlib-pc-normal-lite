@@ -1126,6 +1126,70 @@ export default function (props: Props, actions: Actions, ...args) {
                 },
               },
               {
+                title: "下载Figma插件",
+                type: 'Button',
+                value: {
+                  set(){
+                    const url = 'https://p66-ec.becukwai.com/udata/pkg/eshop/VibeUI/1.0.0/VibeUI.zip';
+                    fetch(url)
+                      .then(res => res.blob())
+                      .then(blob => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = 'VibeUI.zip';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(blobUrl);
+                      })
+                      .catch(() => {
+                        // fetch 跨域失败时降级为新标签页
+                        window.open(url, '_blank');
+                      });
+
+                    const Modal = (window as any).antd?.Modal;
+                    const h = (window as any).React?.createElement;
+                    if (Modal && h) {
+                      const InfoCircleOutlined = (window as any).icons?.InfoCircleOutlined;
+                      const icon = InfoCircleOutlined
+                        ? h(InfoCircleOutlined, {style: {color: 'var(--mybricks-color-primary)'}})
+                        : null;
+                      Modal.info({
+                        title: 'VibeUI Figma 插件使用教程',
+                        width: 520,
+                        okText: '知道了',
+                        icon,
+                        okButtonProps: {
+                          style: {
+                            backgroundColor: 'var(--mybricks-color-primary)',
+                            borderColor: 'var(--mybricks-color-primary)',
+                          }
+                        },
+                        styles: {
+                          content: { borderRadius: '16px' },
+                        },
+                        content: h('div', {style: {lineHeight: '1.8', fontSize: '14px'}},
+                          h('h3', {style: {marginTop: 0}}, '安装步骤'),
+                          h('ol', {style: {paddingLeft: 20}},
+                            h('li', null, '解压下载的 ', h('b', null, 'VibeUI.zip')),
+                            h('li', null, '打开 Figma，点击菜单 ', h('b', null, 'Plugins → Development → Import plugin from manifest…')),
+                            h('li', null, '选择解压后文件夹中的 ', h('b', null, 'manifest.json'), ' 文件'),
+                            h('li', null, '插件安装成功后，可在 ', h('b', null, 'Plugins → VibeUI'), ' 中找到并运行'),
+                          ),
+                          h('h3', null, '使用说明'),
+                          h('ul', {style: {paddingLeft: 20}},
+                            h('li', null, '在 MyBricks 画布中选中页面，点击 ', h('b', null, '导出到 Figma'), '，内容将复制到剪切板'),
+                            h('li', null, '打开 Figma，启动 VibeUI 插件，粘贴内容后点击 ', h('b', null, '生成页面')),
+                            h('li', null, '如需将 Figma 修改同步回 MyBricks，在插件中复制样式数据，回到 MyBricks 点击 ', h('b', null, '从 Figma 同步样式')),
+                          ),
+                        ),
+                      });
+                    }
+                  }
+                }
+              },
+              {
                 type: "themes",
                 value: {
                   get(params) {
