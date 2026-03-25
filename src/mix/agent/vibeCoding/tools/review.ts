@@ -42,7 +42,7 @@ const RULE_COM_REF = `
 const RULE_POPUP_REF = `
   <规则: popupRef使用规范>
     - 所有浮层类组件（弹窗/抽屉等）必须使用 popupRef 包装，无需导出；
-    - 控制浮层显示/隐藏状态的变量必须维护在 store 中，禁止设置固定值；
+    - 控制浮层显示/隐藏状态的变量必须维护在 store 中，使用PopupVisible装饰器，保证搭建态下默认打开；
     - 浮层类组件中挂载节点必须指向 wrapper；
   </规则>
 `;
