@@ -26,7 +26,7 @@
 
 .version-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 6px 14px;
   cursor: default;
@@ -80,12 +80,12 @@
 }
 
 .version-dot-ai {
-  background: var(--mybricks-color-primary, #FA6400);
+  background: #FA6400;
 }
 
 .version-dot-pending {
   background: transparent;
-  border: 2px solid var(--mybricks-color-primary, #FA6400);
+  border: 2px solid #FA6400;
   animation: version-pulse 1.2s ease-in-out infinite;
 }
 
@@ -98,8 +98,15 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
+}
+
+.version-main-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .version-label {
@@ -108,12 +115,6 @@
   color: var(--mybricks-text-color-main);
   font-weight: 500;
   opacity: 0.5;
-}
-
-.version-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .version-type-tag {
@@ -144,6 +145,15 @@
 .version-time {
   font-size: 10px;
   color: #bbb;
+}
+
+.version-summary {
+  font-size: 11px;
+  color: var(--mybricks-text-color-secondary, #999);
+  margin-top: 4px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .version-generating {

@@ -33,11 +33,11 @@ export type { FileUpdateResult, UpdateComponentFilesResult };
  * 写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
  * 使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
  */
-async function updateComponentFiles(
+function updateComponentFiles(
   files: Array<ComponentFileItem>,
   comId: string,
   context: any
-): Promise<UpdateComponentFilesResult> {
+): UpdateComponentFilesResult {
   const aiComParams = context.getAiComParams(comId);
   const fileResults: FileUpdateResult[] = [];
 
@@ -49,7 +49,7 @@ async function updateComponentFiles(
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
     { fileName: 'store.js', dataKey: 'storeJsSource' },
     { fileName: 'service.js', dataKey: 'serviceJsSource' },
-    { fileName: 'runtime.md', dataKey: 'runtimeMdSource' },
+    { fileName: 'README.md', dataKey: 'runtimeMdSource' },
     { fileName: 'mock.json', dataKey: 'mockJsonSource' },
   ];
 
@@ -106,11 +106,14 @@ async function updateComponentFiles(
   const mergeSuccess = fileResults.every((r) => r.success);
   if (mergeSuccess) {
     // 并发写入所有文件（updateFile 对异步分支返回 Promise，await 等待编译完成）
-    await Promise.all(
-      pendingWrites.map(({ fileName, content }) =>
-        Promise.resolve(context.updateFile(comId, { fileName, content }))
-      )
-    );
+    // await Promise.all(
+    //   pendingWrites.map(({ fileName, content }) =>
+    //     Promise.resolve(context.updateFile(comId, { fileName, content }))
+    //   )
+    // );
+    pendingWrites.map(({ fileName, content }) =>
+      context.updateFile(comId, { fileName, content })
+    )
     aiComParams.data.document = '';
   }
 
@@ -135,6 +138,7 @@ async function updateComponentFiles(
     compileErrors,
     compileSuccess,
     success: mergeSuccess && compileSuccess,
+    updateFile: !!(mergeSuccess && pendingWrites.length)
   };
 }
 
@@ -354,27 +358,28 @@ export default function ({ context }) {
       let lockId = uuid();
 
       let planAgent;
+      let updateFile = false;
 
       const onProgress = (status) => {
         const { focusArea } = focus;
         if (!focusArea) {
           if (status === "start") {
-            context.startAIPendingVersion(focus.comId, planAgent);
+            // context.startAIPendingVersion(focus.comId, planAgent);
           } else if (status === "complete") {
-            context.commitAIVersion(focus.comId);
+            // context.addVersion(focus.comId, "ai", planAgent);
           } else if (status === "error") {
-            context.cancelAIPending(focus.comId);
+            // context.cancelAIPending(focus.comId);
           }
           params?.onProgress?.(status);
         } else {
           if (status === "start") {
-            context.startAIPendingVersion(focus.comId, planAgent);
+            // context.startAIPendingVersion(focus.comId, planAgent);
             actions.lock(lockId, focusArea);
           } else if (status === "complete") {
-            context.commitAIVersion(focus.comId);
+            // context.addVersion(focus.comId, "ai", planAgent);
             actions.unlock(lockId, focusArea);
           } else if (status === "error") {
-            context.cancelAIPending(focus.comId);
+            // context.cancelAIPending(focus.comId);
             actions.unlock(lockId, focusArea);
           }
         }
@@ -392,6 +397,21 @@ export default function ({ context }) {
         //     actions.unlock(lockId, comName);
         //   }
         // }
+      }
+
+      const onUpdateFiles = (p) => {
+        const result = updateComponentFiles(p.files ?? [], focus.comId, context);
+        if (result.updateFile) {
+          if (!updateFile) {
+            // 插入记录
+            updateFile = true
+            context.addVersion(focus.comId, "ai", planAgent);
+          } else {
+            // 更新记录
+            context.updateVersion(focus.comId, planAgent);
+          }
+        }
+        return result
       }
 
       const focusArea = actions?.getFocusArea?.();
@@ -586,19 +606,29 @@ ${text}
             readRelated({ project }),
             developModule({
               hasAttachments,
-              onUpdate(p) {
-                return updateComponentFiles(p.files ?? [], focus.comId, context);
-              },
+              onUpdate: onUpdateFiles,
             }),
             codeReviewAndFix({
-              onUpdate(p) {
-                return updateComponentFiles(p.files ?? [], focus.comId, context);
+              onUpdate: (p) => {
+                onProgress("complete")
+                onUpdateFiles(p)
               },
             }),
             answer(),
             syncMarkdownformybricksModule({
-              onUpdate(p) {
-                return updateComponentFiles(p.files ?? [], focus.comId, context);
+              onUpdate: (p) => {
+                const files = p.files;
+                const summary = files.find((f) => f.fileName === "summary.md")
+
+                if (summary) {
+                  context.updateVersionWithContent(focus.comId, planAgent, {
+                    summary: summary.content
+                  })
+                }
+                
+                onUpdateFiles({
+                  files: summary ? files.filter((f) => f.fileName !== "summary.md") : files
+                })
               },
             })
           ],

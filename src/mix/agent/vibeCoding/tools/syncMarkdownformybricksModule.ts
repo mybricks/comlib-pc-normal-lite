@@ -11,13 +11,15 @@ export default function syncMarkdownformybricksModule(config) {
   return {
     name: NAME,
     displayName: '更新说明文档',
-    description: `更新说明文档，将 MyBricks 模块的 runtime.jsx 源码整理成结构化的 runtime.md 文档
+    description: `更新说明文档，将 MyBricks 模块的 runtime.jsx 源码整理成结构化的 README.md 文档
 如果调用了「developMyBricksModule」工具更新了runtime.jsx，则需要在最后添加这个工具来修改文档
+
+返回前置工具对于组件内容修改的摘要信息
     `,
     getPrompts: () => {
       return `
 <你的角色与任务>
-你是 MyBricks 模块文档专家。你的任务是根据当前模块的 runtime.jsx 源码，生成或更新对应的 runtime.md 说明文档。
+你是 MyBricks 模块文档专家。你的任务是根据当前模块的 runtime.jsx 源码，生成或更新对应的 README.md 说明文档。同时返回前置工具对于组件内容修改的摘要信息。
 </你的角色与任务>
 
 <文档编写规范>
@@ -64,8 +66,20 @@ export default function syncMarkdownformybricksModule(config) {
   </节点说明>
 </文档编写规范>
 
-<基于runtime.jsx的runtime.md示例>
-（以下仅说明 runtime.md 的文档结构与字段含义；实际更新文档时请勿照抄此格式，必须按下方「如何更新文档」用 before/after 块返回修改。）
+<组件内容修改摘要>
+  无论是否更新了README.md，都必须在最后通过以下格式返回当前组件修改内容的摘要：
+    \`\`\`md file="summary.md"
+  （前置工具对于各文件修改的简短摘要性说明）
+    \`\`\`
+
+  <编写规范>
+    1. 每一条摘要信息用 - 开头，并在结尾换行
+    2. 禁止针对每个文件来写摘要说明
+  </编写规范>
+</组件内容修改摘要>
+
+<基于runtime.jsx的README.md示例>
+（以下仅说明 README.md 的文档结构与字段含义；实际更新文档时请勿照抄此格式，必须按下方「如何更新文档」用 before/after 块返回修改。）
 
 \`\`\`jsx file="runtime.jsx"
 import { comRef, pageRef, appRef, Routes, Route } from 'mybricks'
@@ -119,7 +133,7 @@ export default appRef(() => {
 })
 \`\`\`
 
-\`\`\`md file="runtime.md"
+\`\`\`md file="README.md"
 # default
 
 - title: 登录/注册应用入口
@@ -155,31 +169,31 @@ export default appRef(() => {
   - signUp 注册 - flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 \`\`\`
-<基于runtime.jsx的runtime.md示例>
+<基于runtime.jsx的README.md示例>
 
 
 <工作流程>
-  <如何判断需要更新 runtime.md>
-  在以下任一情况成立时，应当更新 runtime.md；否则可仅阅读源码与现有文档，不做修改。
+  <如何判断需要更新 README.md>
+  在以下任一情况成立时，应当更新 README.md；否则可仅阅读源码与现有文档，不做修改。
 
   1）必须更新（强约束）
-  - 当前模块目录下不存在 runtime.md：需要根据 runtime.jsx 首次生成完整的 runtime.md。
+  - 当前模块目录下不存在 README.md：需要根据 runtime.jsx 首次生成完整的 README.md。
   - 需求直接要求更新文档。
 
   2）结构或内容变化（建议更新）
   - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/pageRef/comRef 节点（即文档中的「# default」及各级 ##、### 标题对应的节点）。
   - 根节点或层级变化：export default 的根节点类型或子节点类型组合发生变化，导致标题层级规则需要调整（如从「仅 page + com」变为「app + page + com」）。
-  - 事件增删改：在 JSX 中新增、删除或修改了带 /** onXXX:事件名 */ 注释的事件；或某节点下事件列表与 runtime.md 中该节点的 events 不一致。
-  - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 runtime.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
+  - 事件增删改：在 JSX 中新增、删除或修改了带 /** onXXX:事件名 */ 注释的事件；或某节点下事件列表与 README.md 中该节点的 events 不一致。
+  - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 README.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
 
   3）无需更新
-  - runtime.jsx、store.js 未被修改，且现有 runtime.md 已正确反映当前源码的节点结构、事件与说明时，无需对 runtime.md 做变更。
-  - 仅修改了与 runtime、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 runtime.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
+  - runtime.jsx、store.js 未被修改，且现有 README.md 已正确反映当前源码的节点结构、事件与说明时，无需对 README.md 做变更。
+  - 仅修改了与 runtime、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 README.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
 
-  判断时请对照当前【源代码】中的 runtime.jsx 与已有的 runtime.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
-  </如何判断需要更新 runtime.md>
+  判断时请对照当前【源代码】中的 runtime.jsx 与已有的 README.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
+  </如何判断需要更新 README.md>
 
-  如果确实更新了runtime.md，则需要通过以下述格式返回：
+  如果确实更新了README.md，则需要通过以下述格式返回：
     \`\`\`before file="文件名"
   （修改前的部分代码内容）
     \`\`\`
@@ -222,7 +236,7 @@ export default appRef(() => {
 <examples>
 【修改】只改某一段：用 before 匹配现有文档中的一段，after 为替换后的内容。
 
-\`\`\`before file="runtime.md"
+\`\`\`before file="README.md"
 ## SignIn
 
 - title: 登录页
@@ -230,7 +244,7 @@ export default appRef(() => {
 - type: page
 \`\`\`
 
-\`\`\`after file="runtime.md"
+\`\`\`after file="README.md"
 ## SignIn
 
 - title: 登录页
@@ -240,13 +254,13 @@ export default appRef(() => {
   - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 \`\`\`
 
-【整文件替换】仅当需要重写整个 runtime.md 时使用：before 为空，after 为完整的 runtime.md 全文（不是追加，会覆盖整个文件）。
+【整文件替换】仅当需要重写整个 README.md 时使用：before 为空，after 为完整的 README.md 全文（不是追加，会覆盖整个文件）。
 
-\`\`\`before file="runtime.md"
+\`\`\`before file="README.md"
 
 \`\`\`
 
-\`\`\`after file="runtime.md"
+\`\`\`after file="README.md"
 # default
 
 - title: 登录/注册应用入口
@@ -259,7 +273,7 @@ export default appRef(() => {
 ...
 \`\`\`
 
-【错误】禁止用 \`\`\`md file="runtime.md" 输出整份文档，必须用 before/after 块。
+【错误】禁止用 \`\`\`md file="README.md" 输出整份文档，必须用 before/after 块。
 </examples>
 `;
     },

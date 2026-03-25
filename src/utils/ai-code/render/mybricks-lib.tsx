@@ -727,8 +727,15 @@ export function createMybricks(options: CreateMybricksOptions) {
       const theme = themes.find((theme) => theme.id === activeThemeId);
 
       if (_env.mode === "design") {
+        const containerRef = useRef<HTMLDivElement>(null);
+        const [container, setContainer] = useState<HTMLDivElement | null>(null);
+
+        useLayoutEffect(() => {
+          setContainer(containerRef.current!)
+        }, [])
         return (
           <div
+            ref={containerRef}
             data-zone-type="page"
             data-zone-kind="popup"
             data-desn-page={dialogIndex}
@@ -745,13 +752,13 @@ export function createMybricks(options: CreateMybricksOptions) {
                 return pre;
               }, {})
             }}>
-            <Component
+            {container && <Component
               {...props}
               _env={_env}
               store={autoStore.current}
               _state={state}
-              wrapper={false}
-            />
+              wrapper={container}
+            />}
           </div>
         );
       } else {
@@ -768,13 +775,13 @@ export function createMybricks(options: CreateMybricksOptions) {
         return (
           <>
             <div ref={containerRef} />
-            <Component
+            {container && <Component
               {...props}
               _env={_env}
               store={autoStore.current}
               _state={state}
               wrapper={container}
-            />
+            />}
           </>
         )
       }

@@ -45,6 +45,9 @@ type UpdateComponentFilesResult = {
 
   /** 综合结果：mergeSuccess && compileSuccess，保持原有调用方兼容 */
   success: boolean;
+
+  /** 是否有文件更新 */
+  updateFile: boolean;
 };
 
 /** 将更新结果格式化为给用户/模型展示的文案 */

@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState, Component, ReactElement, cloneElement, useRef, useSyncExternalStore} from 'react';
+import ReactDOM from 'react-dom';
 import css from './index.less'
 import dayjs from "dayjs";
 import { createMybricks, genListenersStore } from './mybricks-lib';
@@ -304,6 +305,7 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
 
         const Com: any = runRender(oriCode, {
           'react': React,
+          'react-dom': ReactDOM,
           'mybricks': mybricksLib,
           'dayjs': dayjs,
           'service': serviceExports ?? {},

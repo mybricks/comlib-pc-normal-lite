@@ -4,6 +4,7 @@ import { Events } from "../../utils/events";
 import { parsemd } from "../../utils/ai-code/md"
 import { validateCode } from "../availableLibraries"
 import { getTimestamp } from "../../utils/time"
+import { deepClone } from "../utils/normal";
 
 export interface LogMessage {
   method: 'log' | 'info' | 'warn' | 'error';
@@ -20,22 +21,14 @@ export interface ComDebugState {
 }
 
 export interface VersionSnapshot {
-  id: string;
+  id: number;
   /** V0 / V1 / V2 ... */
   label: string;
-  type: 'init' | 'ai' | 'editor';
-  /** true 时表示 AI 正在生成中，dataSnapshot 为 null */
-  isPending: boolean;
+  type: 'ai' | 'editor';
   timestamp: string;
-  /** 全量 data 深拷贝；pending 时为 null */
-  dataSnapshot: Record<string, any> | null;
+  dataSnapshot: Record<string, any>;
   planId?: string;
-}
-
-export interface VersionState {
-  versions: VersionSnapshot[];
-  /** 版本序号计数器（回滚时会重置到目标版本+1） */
-  versionCounter: number;
+  summary?: string;
 }
 
 class Context {
@@ -45,177 +38,141 @@ class Context {
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
-  versionStateMap: Record<string, VersionState> = {};
-  versionStateEvents: Record<string, Events<{ 'change': VersionState }>> = {};
+  versionStateMap: Record<string, VersionSnapshot[]> = {};
+  versionStateEvents: Record<string, Events<{ 'change': VersionSnapshot[] }>> = {};
 
-  private getVersionState(id: string): VersionState {
-    if (!this.versionStateMap[id]) {
-      this.versionStateMap[id] = { versions: [], versionCounter: 0 };
+  rxaiMap: Record<string, any> = {};
+
+  getRxai(comId: string) {
+    if (!this.rxaiMap[comId]) {
+      const rxai = (window as any)._getRxaiByAbstractAgentWithVibeCoding_(comId);
+      this.rxaiMap[comId] = rxai;
+      rxai?.idb?.trimVersions?.(30);
     }
-    return this.versionStateMap[id];
+
+    return this.rxaiMap[comId];
   }
 
-  getVersionStateEvents(id: string): Events<{ 'change': VersionState }> {
+  async getVersions(comId: string): Promise<VersionSnapshot[]> {
+    if (!this.versionStateMap[comId]) {
+      const rxai = this.getRxai(comId);
+      const versions = rxai?.idb?.getVersions ? (await rxai?.idb?.getVersions?.()) : [];
+      this.versionStateMap[comId] = versions.map(({ data }) => {
+        return data;
+      });
+    }
+
+    return this.versionStateMap[comId];
+  }
+
+  async addVersion(comId, type, planAgent?) {
+    const versions = await this.getVersions(comId);
+    const lastVersion = versions[versions.length - 1];
+    const id = lastVersion ? lastVersion.id + 1 : 0
+    const aiComParams = this.getAiComParams(comId);
+    const rxai = this.getRxai(comId);
+
+    if (type === 'ai') {
+      const version: VersionSnapshot = {
+        id,
+        label: `V${id}`,
+        type,
+        timestamp: getTimestamp({ showMs: false }),
+        dataSnapshot: deepClone(aiComParams?.data ?? {}),
+        planId: planAgent?.id
+      }
+      rxai?.idb?.addVersion?.(version.id, version);
+      versions.push(version);
+      this.versionStateMap[comId] = versions;
+      this.getVersionStateEvents(comId).emit('change', versions);
+      return version
+    } else if (type === 'editor') {
+      if (lastVersion && lastVersion.type === 'editor') {
+        lastVersion.timestamp = getTimestamp({ showMs: false });
+        lastVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
+        rxai?.idb?.updateVersion?.(lastVersion.id, lastVersion)
+        this.getVersionStateEvents(comId).emit('change', [...versions]);
+        return lastVersion
+      } else {
+        const version: VersionSnapshot = {
+          id,
+          label: `V${id}`,
+          type,
+          timestamp: getTimestamp({ showMs: false }),
+          dataSnapshot: deepClone(aiComParams?.data ?? {}),
+          planId: planAgent?.id
+        }
+        rxai?.idb?.addVersion?.(version.id, version);
+        versions.push(version);
+        this.versionStateMap[comId] = versions;
+        this.getVersionStateEvents(comId).emit('change', versions);
+        return version
+      }
+    }    
+  }
+
+  async updateVersion(comId, planAgent) {
+    const versions = await this.getVersions(comId);
+    const updateVersion = versions.find(v => v.planId === planAgent.id)
+    const aiComParams = this.getAiComParams(comId);
+    const rxai = this.getRxai(comId);
+
+    if (updateVersion) {
+      updateVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
+      rxai?.idb?.updateVersion?.(updateVersion.id, updateVersion)
+      this.getVersionStateEvents(comId).emit('change', [...versions]);
+    }
+  }
+
+  async updateVersionWithContent(comId, planAgent, content) {
+    const versions = await this.getVersions(comId);
+    const updateVersion = versions.find(v => v.planId === planAgent.id)
+    const rxai = this.getRxai(comId);
+
+    if (updateVersion) {
+      Object.entries(content).forEach(([key, value]) => {
+        updateVersion[key] = value;
+      })
+      rxai?.idb?.updateVersion?.(updateVersion.id, updateVersion)
+      this.getVersionStateEvents(comId).emit('change', [...versions]);
+    }
+  }
+
+  getVersionStateEvents(id: string): Events<{ 'change': VersionSnapshot[] }> {
     if (!this.versionStateEvents[id]) {
       this.versionStateEvents[id] = new Events();
     }
     return this.versionStateEvents[id];
   }
 
-  private notifyVersionState(id: string) {
-    this.getVersionStateEvents(id).emit('change', this.getVersionState(id));
-  }
+  async rollbackToVersion(comId: string, version: VersionSnapshot) {
+    const versions = await this.getVersions(comId);
 
-  /** 只读暴露版本状态（供 UI 组件调用） */
-  getVersionHistory(id: string): VersionState {
-    return this.getVersionState(id);
-  }
+    const index = versions.findIndex(v => v.id === version.id);
 
-  /** 组件首次注册时，深拷贝 data 作为 V0 */
-  initVersion(id: string) {
-    const state = this.getVersionState(id);
-    if (state.versions.length > 0) return; // 已初始化，跳过
-    const aiComParams = this.getAiComParams(id);
-    state.versions = [{
-      id: `v${state.versionCounter}`,
-      label: `V${state.versionCounter}`,
-      type: 'init',
-      isPending: false,
-      timestamp: getTimestamp({ showMs: false }),
-      dataSnapshot: JSON.parse(JSON.stringify(aiComParams?.data ?? {})),
-    }];
-    state.versionCounter = 1;
-    this.notifyVersionState(id);
-  }
+    if (index !== -1) {
+      const rxai = (window as any)._getRxaiByAbstractAgentWithVibeCoding_(comId);
+      const aiComParams = this.getAiComParams(comId);
+      const data = aiComParams.data;
+      const rollbackVersion = versions[index];
 
-  /** AI 对话开始时，推入一条 isPending=true 的版本记录 */
-  startAIPendingVersion(id: string, planAgent) {
-    const state = this.getVersionState(id);
-    // 若已有 pending，跳过（防止重复）
-    if (state.versions.some(v => v.isPending)) return;
-    state.versions = [...state.versions, {
-      id: `v${state.versionCounter}`,
-      label: `V${state.versionCounter}`,
-      type: 'ai',
-      isPending: true,
-      timestamp: getTimestamp({ showMs: false }),
-      dataSnapshot: null,
-      planId: planAgent.id
-    }];
-    state.versionCounter++;
-    this.notifyVersionState(id);
-  }
+      Object.entries(rollbackVersion.dataSnapshot).forEach(([key, value]) => {
+        data[key] = value;
+      });
 
-  /** AI complete 时，将当前 data 全量快照填入最后一条 pending 版本 */
-  commitAIVersion(id: string) {
-    const state = this.getVersionState(id);
-    const pendingIdx = state.versions.findIndex(v => v.isPending);
-    if (pendingIdx === -1) return;
-    const aiComParams = this.getAiComParams(id);
-    const updated = [...state.versions];
-    updated[pendingIdx] = {
-      ...updated[pendingIdx],
-      isPending: false,
-      timestamp: getTimestamp({ showMs: false }),
-      dataSnapshot: JSON.parse(JSON.stringify(aiComParams?.data ?? {})),
-    };
-    state.versions = updated;
-    this.notifyVersionState(id);
-  }
+      const aiVersion = versions.slice(index + 1).find((version) => {
+        return version.type === "ai";
+      });
 
-  /** AI error 时，移除 pending 版本记录，并回退版本序号 */
-  cancelAIPending(id: string) {
-    const state = this.getVersionState(id);
-    const pendingIdx = state.versions.findIndex(v => v.isPending);
-    if (pendingIdx === -1) return;
-    // 回退计数器（因为 pending 版本被丢弃）
-    state.versionCounter = Math.max(0, state.versionCounter - 1);
-    state.versions = state.versions.filter(v => !v.isPending);
-    this.notifyVersionState(id);
-  }
+      if (aiVersion) {
+        rxai?.truncateFrom?.(aiVersion.planId);
+      }
 
-  /**
-   * 编辑器保存时调用。
-   * - 若最后一条 committed 版本是 editor 类型，覆盖其 snapshot（不产生新版本）
-   * - 否则，追加一条新的 editor 版本
-   */
-  saveEditorVersion(id: string) {
-    const state = this.getVersionState(id);
-    const aiComParams = this.getAiComParams(id);
-    const snapshot = JSON.parse(JSON.stringify(aiComParams?.data ?? {}));
-    // 找最后一条非 pending 的版本
-    const lastCommitted = [...state.versions].reverse().find(v => !v.isPending);
-    
-    if (lastCommitted && lastCommitted.type === 'editor') {
-      // 覆盖 snapshot，不生成新版本
-      const idx = state.versions.findIndex(v => v.id === lastCommitted.id);
-      const updated = [...state.versions];
-      updated[idx] = {
-        ...updated[idx],
-        timestamp: getTimestamp({ showMs: false }),
-        dataSnapshot: snapshot,
-      };
-      state.versions = updated;
-    } else {
-      // 追加新的 editor 版本
-      state.versions = [...state.versions, {
-        id: `v${state.versionCounter}`,
-        label: `V${state.versionCounter}`,
-        type: 'editor',
-        isPending: false,
-        timestamp: getTimestamp({ showMs: false }),
-        dataSnapshot: snapshot,
-      }];
-      state.versionCounter++;
+      rxai?.idb?.deleteVersion?.(versions[index + 1].id);
+
+      this.versionStateMap[comId] = versions.slice(0, index + 1);
+      this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
     }
-    this.notifyVersionState(id);
-  }
-
-  /**
-   * 回滚到指定版本：
-   * 1. 将 snapshot 逐字段赋给 data
-   * 2. 截断该版本之后的所有版本
-   * 3. 通知组件重新渲染
-   */
-  rollbackToVersion(id: string, versionId: string) {
-    const state = this.getVersionState(id);
-    const targetIdx = state.versions.findIndex(v => v.id === versionId);
-    if (targetIdx === -1) return;
-    const target = state.versions[targetIdx];
-    if (target.isPending || !target.dataSnapshot) return;
-
-    const aiCom = this.getAiCom(id);
-    const data = aiCom?.aiComParams?.data;
-    if (!data) return;
-
-    // 逐字段赋值
-    const snap = target.dataSnapshot;
-    // 先清除 data 中多余的 key
-    Object.keys(data).forEach(key => {
-      if (!(key in snap)) delete data[key];
-    });
-    // 再赋值
-    Object.keys(snap).forEach(key => {
-      data[key] = snap[key];
-    });
-    
-    const aiVersion = state.versions.slice(targetIdx + 1).find((version) => {
-      return version.type === "ai";
-    })
-
-    if (aiVersion) {
-      const rxai = (window as any)._getRxaiByAbstractAgentWithVibeCoding_(id);
-      rxai?.truncateFrom?.(aiVersion.planId);
-    }
-
-    // 截断版本列表（保留 0..targetIdx），并重置计数器
-    state.versions = state.versions.slice(0, targetIdx + 1);
-    state.versionCounter = targetIdx + 1;
-    this.notifyVersionState(id);
-
-    // 通知组件重新渲染
-    aiCom?.actions?.notifyChanged?.();
-    (window as any)._mybricksOnEdit_?.();
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -322,13 +279,28 @@ class Context {
   setAiCom(id: string, { params, actions }) {
     if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
-      // 首次注册时初始化 V0 快照
-      this.initVersion(id);
     }
+    this.registerGlobalBridge(id);
   }
 
   getAiCom(id: string) {
     return this.aiComParamsMap[id];
+  }
+
+  /**
+   * 注册全局桥接方法，供外部通过 window 调用。
+   * 每次组件注册时更新，始终指向最后一个加载的组件。
+   *
+   * _focusAndSendToVibeAgent_(message)
+   *   → 打开该组件的 AI 对话框，并延迟发送消息
+   */
+  private registerGlobalBridge(id: string) {
+    (window as any)._focusAndSendToVibeAgent_ = (message: any) => {
+      (window as any)._showAIDialog_?.(id);
+      setTimeout(() => {
+        (window as any)._sendToFocusVibeAgent_?.({ message });
+      }, 500);
+    };
   }
 
   getAiComParams(id: string) {
@@ -391,7 +363,7 @@ class Context {
     },
   };
 
-  updateFile(id, { fileName, content }): Promise<void> | void {
+  updateFile(id, { fileName, content }): void {
     const aiComParams = this.getAiComParams(id);
 
     switch (fileName) {
@@ -502,7 +474,7 @@ class Context {
           aiComParams?.setTitle?.(title);
         }
         break;
-      case 'runtime.md':
+      case 'README.md':
         aiComParams.data.runtimeMdSource = encodeURIComponent(content);
         try {
           aiComParams.data.runtimeMdCompiled = parsemd(content);

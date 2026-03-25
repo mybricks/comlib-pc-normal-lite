@@ -102,6 +102,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
     color: loading ? '#aaa' : 'var(--mybricks-text-color-main)',
     padding: 0,
     opacity: loading ? 0.6 : 1,
+    boxSizing: 'border-box',
   };
 
   return (

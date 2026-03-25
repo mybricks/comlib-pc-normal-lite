@@ -92,7 +92,7 @@ export default function developMyBricksModule(config: Config) {
   </代码示例>
 
   <编写规范>
-  1. 组件 props 禁止传递*保留字段*：_env，store，wrapper；
+  1. 组件 props 禁止传递<保留字段>：_env，store，wrapper；
     - 错误：\`<UserInfo _env={_env} store={store} wrapper={wrapper} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
@@ -110,45 +110,35 @@ export default function developMyBricksModule(config: Config) {
   9. 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
   </编写规范>
 
+  <保留字段>
+    1. _env，环境变量
+      - _env.mode: 运行环境，design|runtime
+    2. store，全局状态管理
+      - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
+      - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
+      - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
+    3. wrapper，浮层类组件指定挂载节点
+      - wrapper 的值为 DOM 元素；
+      - 浮层类组件（如弹窗、抽屉等）必须将 wrapper 作为挂载容器传入，通常通过 getContainer 或 container 等 prop 传递，例如：getContainer={() => wrapper}；
+      - 严禁将 wrapper 直接用作 React ref（即禁止写 ref={wrapper}），wrapper 不是 ref 对象，而是 DOM 元素；
+      - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
+  </保留字段>
+
   <comRef说明>
     comRef是MyBricks提供的高阶函数，用于创建一个组件。
-    1. 该组件默认接收以下*保留字段*：
-      1. _env，环境变量
-        - _env.mode: 运行环境，design|runtime
-      2. store，全局状态管理
-        - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
-        - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
-        - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-      3. wrapper，浮层类组件指定挂载节点
-        - 浮层类组件的挂载节点必须指向 wrapper
+    1. 该组件默认接收<保留字段>；
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
 
   <pageRef说明>
     pageRef是MyBricks提供的高阶函数，用于创建一个页面。
-    1. 该页面默认接收以下*保留字段*：
-      1. _env，环境变量
-        - _env.mode: 运行环境，design|runtime
-      2. store，全局状态管理
-        - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
-        - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
-        - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-      3. wrapper，浮层类组件指定挂载节点
-        - 浮层类组件的挂载节点必须指向 wrapper
+    1. 该组件默认接收<保留字段>；
     2. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；
   </pageRef说明>
 
   <popupRef说明>
     popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
-    1. 该浮层类组件默认接收以下*保留字段*：
-      1. _env，环境变量
-        - _env.mode: 运行环境，design|runtime
-      2. store，全局状态管理
-        - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
-        - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
-        - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-      3. wrapper，浮层类组件指定挂载节点
-        - 浮层类组件的挂载节点必须指向 wrapper
+    1. 该组件默认接收<保留字段>；
     2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
   </popupRef说明>
 
@@ -208,7 +198,7 @@ export default function developMyBricksModule(config: Config) {
       - 当多个区块需要读写或联动的派生数据；
       - 模块内可复用的业务逻辑与数据；
       - 禁止与 React hooks 混用；
-      - 禁止通过 props 传递 store 字段，这是保留字段，禁止对 store 进行解构够通过 props 传递；
+      - 禁止通过 props 传递 store 字段，这是<保留字段>，禁止对 store 进行解构够通过 props 传递；
       - 当需要更新嵌套对象内容时，必须使用扩展运算符更新整个对象
         - 正确：\`this.user = {...this.user, name: "名称"};\`
         - 错误：\`this.user.name = "名称";\`
