@@ -197,7 +197,7 @@ export default function LowcodeView(params: Params) {
         return next;
       });
       // 编辑器保存后记录/更新编辑器版本快照
-      context.saveEditorVersion(params.model.runtime.id);
+      context.addVersion(params.model.runtime.id, "editor")
     }
   }, [selectedFileName, modifiedContent, params.data]);
 

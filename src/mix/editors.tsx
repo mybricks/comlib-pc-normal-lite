@@ -326,7 +326,7 @@ const genStyleValue = (params) => {
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, {fileName: 'style.less', content: cssStr})
       // 编辑器保存后记录/更新编辑器版本快照
-      context.saveEditorVersion(comId);
+      context.addVersion(comId, "editor")
     }
   }
 }
@@ -372,7 +372,7 @@ const genResizer = () => {
           const cssStr = stringifyLess(cssObj);
           context.updateFile(params.id, {fileName: 'style.less', content: cssStr})
           // 编辑器保存后记录/更新编辑器版本快照
-          context.saveEditorVersion(params.id);
+          context.addVersion(params.id, "editor")
         }
       }
     }
@@ -780,7 +780,7 @@ export default function (props: Props, actions: Actions, ...args) {
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, {fileName: 'style.less', content: cssStr});
       // 编辑器保存后记录/更新编辑器版本快照
-      context.saveEditorVersion(comId);
+      context.addVersion(comId, "editor")
     }
   };
 
