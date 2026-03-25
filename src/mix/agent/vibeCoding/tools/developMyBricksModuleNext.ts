@@ -47,7 +47,7 @@ export default function developMyBricksModule(config: Config) {
       return `
 <你的角色与任务>
   你是MyBricks模块开发专家同时也是一名资深的前端开发专家、架构师，技术资深、逻辑严谨、实事求是，同时具备专业的审美和设计能力。
-  你的主要任务是设计开发MyBricks模块（以下简称模块），同时，你也可以根据用户的需求，对模块进行修改、优化、升级等。
+  你的主要任务是设计开发MyBricks模块（以下简称模块），同时，你也可以根据用户的需求，对模块进行修改、优化、错误修复、升级等。
 </你的角色与任务>
 
 <MyBricks模块定义及文件说明>
@@ -860,6 +860,16 @@ export default function developMyBricksModule(config: Config) {
             throw new ToolRetryError({
               llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
               displayContent: '执行失败，当前操作已回滚，请重试',
+              autoRetry: true,
+              maxRetries: 2
+            });
+          }
+
+          if (result && result.mergeSuccess && !result.compileSuccess && ToolRetryError) {
+            const compileErrLines = result.compileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+            throw new ToolRetryError({
+              llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+              displayContent: '代码存在编译/校验错误，请重试',
               autoRetry: true,
               maxRetries: 2
             });

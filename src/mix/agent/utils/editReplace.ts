@@ -279,6 +279,9 @@ export interface ReplaceResult {
  */
 export function replaceFile(content: string, before: string, after: string): ReplaceResult {
   if (before === after) {
+    if (before !== '') {
+      return { ok: true, newContent: content, strategy: 'no-op' };
+    }
     return { ok: false, error: 'NO_CHANGE', message: 'before 与 after 相同，无需替换' };
   }
 

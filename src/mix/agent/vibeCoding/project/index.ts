@@ -293,7 +293,8 @@ export class Project {
 
     let canvasStatus: string;
     if (errors.length > 0) {
-      canvasStatus = '画布当前处于报错状态，暂时无法看见任何展示内容。';
+      const errorLines = errors.map((e, i) => `  ${i + 1}. [${e.type}]${e.file ? ` ${e.file}` : ''}: ${e.message}`).join('\n');
+      canvasStatus = `画布当前处于报错状态，暂时无法看见任何展示内容。错误列表如下：\n${errorLines}`;
     } else if (pageRefNames.length === 0 && popupRefNames.length === 0) {
       canvasStatus = '当前代码暂无页面或弹窗组件，画布尚无可展示内容。';
     } else {
