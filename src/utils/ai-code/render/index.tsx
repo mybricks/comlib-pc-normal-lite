@@ -273,7 +273,8 @@ export const AIJsxRuntime = ({ id, env, styleCode, renderCode, data, inputs, out
           data,
         });
         const serviceCompiledCode = decodeURIComponent(data.serviceJsCompiled ?? '');
-        const serviceIsCommonJS = serviceCompiledCode && !/\bexport\b/.test(serviceCompiledCode);
+        const serviceIsCommonJS = serviceCompiledCode
+        // && !/\bexport\b/.test(serviceCompiledCode);
         const serviceExports = serviceIsCommonJS
           ? runRender(serviceCompiledCode, { 'mybricks': tempMybricksLib })
           : null;

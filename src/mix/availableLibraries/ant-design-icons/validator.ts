@@ -72,7 +72,6 @@ const validator: LibraryValidator = {
             if (VALID_ICON_NAMES.size === 0) return;
 
             path.node.specifiers.forEach((spec: any) => {
-              console.log('spec', spec)
               // 只处理具名导入（ImportSpecifier），跳过 import * as Icons 等
               if (spec.type !== 'ImportSpecifier') return;
               const name: string = spec.imported?.name ?? spec.imported?.value ?? '';
