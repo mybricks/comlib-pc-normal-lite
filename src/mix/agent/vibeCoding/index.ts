@@ -659,6 +659,7 @@ ${text}
           formatUserMessage,
           onPlan: (plan) => {
             planAgent = plan;
+            params?.onPlan?.(plan);
             onProgress("start");
           }
         };

@@ -288,7 +288,6 @@ export function getPopupRefForJSXPath(
   if (cached === undefined) {
     cached = {};
     const rootJSX = getDialogRootJSXNode(componentPath);
-    console.log("[🚀 rootJSX]", rootJSX)
     let jsdoc: ReturnType<typeof parseJSDocComment> = null;
     if (rootJSX) {
       const node = componentPath.node;
