@@ -488,6 +488,30 @@ function findArtboardIdFromElement(el) {
 }
 
 /**
+ * 绝对/固定定位的叶子 text：导出宽高常为整盒，浏览器用 flex 将一行字居中，Figma 需 textAlignVertical。
+ * 如 ant Pagination 的 .ant-pagination-item-ellipsis（•••）。
+ */
+function shouldSetTextAlignVerticalCenterForAbsoluteTextLeaf(textStyle, computed) {
+  if (!textStyle || !computed) return false;
+  var pt = textStyle.positionType;
+  if (pt !== 'absolute' && pt !== 'fixed') return false;
+  var gv = computed.getPropertyValue
+    ? function (k) { return (computed.getPropertyValue(k) || '').trim().toLowerCase(); }
+    : function (k) { return String(computed[k] || '').trim().toLowerCase(); };
+  var disp = gv('display');
+  var ai = gv('align-items');
+  if ((disp === 'flex' || disp === 'inline-flex') && ai === 'center') return true;
+  if (textStyle.singleLine !== true) return false;
+  var h = textStyle.height;
+  var fs = textStyle.fontSize;
+  if (h != null && fs != null && fs > 0 && h >= fs * 1.75) return true;
+  var lhRaw = computed.lineHeight;
+  var lh = (lhRaw && lhRaw !== 'normal') ? parseFloat(lhRaw) : null;
+  if (h != null && lh != null && !Number.isNaN(lh) && lh > 0 && h > lh * 1.25) return true;
+  return false;
+}
+
+/**
  * 从指定 DOM 元素直接导出，不需要通过 comId 查找 Shadow DOM。
  * 样式表通过 styleTagId（组件 ID）在 Shadow DOM 内查找 <style id="styleTagId">。
  * @param {Element} el - 要导出的 DOM 元素（如 focusArea.ele）
@@ -554,6 +578,10 @@ function elementToMybricksJson(el, styleTagId) {
       content: undefined,
       children: undefined,
     };
+    // 标记 radio-button-wrapper-checked（className 字段只存第一个 class，需从 DOM 全类名单独判断）
+    if (node.className && typeof node.className === 'string' && node.className.indexOf('ant-radio-button-wrapper-checked') !== -1) {
+      nodeJson._checkedWrapper = true;
+    }
 
     var matchedSelectors = cssRuleMap ? getMatchedSelectorsForElement(node, cssRuleMap) : [];
     if (matchedSelectors.length) nodeJson.selectors = matchedSelectors;
@@ -642,6 +670,8 @@ function elementToMybricksJson(el, styleTagId) {
             nodeJson.style.textAlignHorizontal = _taMap2[String(_taRaw2 || 'left').toLowerCase()] || 'LEFT';
           }
         }
+      } else if (nodeJson.style && shouldSetTextAlignVerticalCenterForAbsoluteTextLeaf(nodeJson.style, computed)) {
+        nodeJson.style.textAlignVertical = 'CENTER';
       }
       // 对 text 节点检测伪元素：若 ::before/::after 有内容，升级为 frame，原文本 + 伪元素作为子节点
       var _pseudoBefore2 = getPseudoTextNode(node, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
@@ -674,6 +704,27 @@ function elementToMybricksJson(el, styleTagId) {
     var childNodesList = [];
     var isLibrarySource = !!(node.getAttribute && node.getAttribute('data-library-source') != null);
     if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg')) {
+      var _mergedTextBr2 = '';
+      var _didMergeTextBr2 = false;
+      if (shouldMergeTextAndBrChildren(node)) {
+        _mergedTextBr2 = mergeTextAndBrChildNodesContent(node);
+        if (_mergedTextBr2) {
+          var _mergeRectVp2 = getElementContentsTextBlockRect(node);
+          var _mergeRect2 = _mergeRectVp2 ? getDesignRect(_mergeRectVp2, geo) : null;
+          var _mergeInline2 = buildInlineTextStyle(node, window.getComputedStyle(node), _mergeRect2, rect, cssRuleMap, globalFont);
+          var _mergeTextJson2 = {
+            type: 'text',
+            name: 'Text',
+            content: _mergedTextBr2,
+            style: _mergeInline2 && Object.keys(_mergeInline2).length ? _mergeInline2 : undefined,
+          };
+          if (nodeJson.selectors && nodeJson.selectors.length) _mergeTextJson2.selectors = nodeJson.selectors.slice();
+          if (nodeJson.className) _mergeTextJson2.className = nodeJson.className;
+          childNodesList.push(_mergeTextJson2);
+          _didMergeTextBr2 = true;
+        }
+      }
+      if (!_didMergeTextBr2) {
       for (var ci = 0; ci < node.childNodes.length; ci++) {
         var cchild = node.childNodes[ci];
         if (cchild.nodeType === 1) {
@@ -704,6 +755,7 @@ function elementToMybricksJson(el, styleTagId) {
             childNodesList.push(textNodeJson);
           }
         }
+      }
       }
       // 伪元素处理：::before 插到最前，::after 追加到最后
       var pseudoBefore = getPseudoTextNode(node, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
@@ -799,11 +851,15 @@ function elementToMybricksJson(el, styleTagId) {
         }
         if (_absNodes.length > 0) childNodesList = _flowNodes.concat(_absNodes);
         // ant-radio-group：过滤掉各 wrapper 内的 pseudo-before 竖线（Figma 里不需要，边框各自渲染）
+        // 注意：选中态 wrapper（ant-radio-button-wrapper-checked）的 ::before 是左侧高亮边，不能过滤
         if (nodeJson.className && nodeJson.className.indexOf('ant-radio-group') !== -1) {
           for (var _rgi = 0; _rgi < childNodesList.length; _rgi++) {
             var _rgChild = childNodesList[_rgi];
             if (_rgChild && _rgChild.children) {
-              _rgChild.children = _rgChild.children.filter(function(c) { return c.name !== 'pseudo-before'; });
+              var _isChecked = _rgChild._checkedWrapper === true;
+              if (!_isChecked) {
+                _rgChild.children = _rgChild.children.filter(function(c) { return c.name !== 'pseudo-before'; });
+              }
             }
           }
         }
@@ -1074,6 +1130,10 @@ function domToMybricksJson(frameId, styleTagId) {
       content: undefined,
       children: undefined,
     };
+    // 标记 radio-button-wrapper-checked（className 字段只存第一个 class，需从 DOM 全类名单独判断）
+    if (el.className && typeof el.className === 'string' && el.className.indexOf('ant-radio-button-wrapper-checked') !== -1) {
+      node._checkedWrapper = true;
+    }
 
     var matchedSelectors = cssRuleMap ? getMatchedSelectorsForElement(el, cssRuleMap) : [];
     if (matchedSelectors.length) node.selectors = matchedSelectors;
@@ -1163,6 +1223,8 @@ function domToMybricksJson(frameId, styleTagId) {
         } else {
           console.warn('[walk:input:align] node.style is undefined! content:', node.content, '| placeholder:', el.placeholder);
         }
+      } else if (node.style && shouldSetTextAlignVerticalCenterForAbsoluteTextLeaf(node.style, computed)) {
+        node.style.textAlignVertical = 'CENTER';
       }
       // 对 text 节点检测伪元素：若 ::before/::after 有内容，升级为 frame，原文本 + 伪元素作为子节点
       var _pseudoBefore = getPseudoTextNode(el, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
@@ -1196,6 +1258,27 @@ function domToMybricksJson(frameId, styleTagId) {
     var isLibrarySource = !!(el.getAttribute && el.getAttribute('data-library-source') != null);
     if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg')) {
       // 支持 div 内同时有文本和 DOM：按 childNodes 顺序，元素走 walk，文本节点单独成 text 节点；SVG 用占位组件不遍历子节点
+      var _mergedTextBr = '';
+      var _didMergeTextBr = false;
+      if (shouldMergeTextAndBrChildren(el)) {
+        _mergedTextBr = mergeTextAndBrChildNodesContent(el);
+        if (_mergedTextBr) {
+          var _mergeRectVp = getElementContentsTextBlockRect(el);
+          var _mergeRect = _mergeRectVp ? getDesignRect(_mergeRectVp, geo) : null;
+          var _mergeInline = buildInlineTextStyle(el, window.getComputedStyle(el), _mergeRect, rect, cssRuleMap, globalFont);
+          var _mergeTextJson = {
+            type: 'text',
+            name: 'Text',
+            content: _mergedTextBr,
+            style: _mergeInline && Object.keys(_mergeInline).length ? _mergeInline : undefined,
+          };
+          if (node.selectors && node.selectors.length) _mergeTextJson.selectors = node.selectors.slice();
+          if (node.className) _mergeTextJson.className = node.className;
+          childNodes.push(_mergeTextJson);
+          _didMergeTextBr = true;
+        }
+      }
+      if (!_didMergeTextBr) {
       for (let i = 0; i < el.childNodes.length; i++) {
         const child = el.childNodes[i];
         if (child.nodeType === 1) {
@@ -1226,6 +1309,7 @@ function domToMybricksJson(frameId, styleTagId) {
             childNodes.push(textNodeJson);
           }
         }
+      }
       }
       // 伪元素处理：::before 插到最前，::after 追加到最后
       var pseudoBefore = getPseudoTextNode(el, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
@@ -1324,11 +1408,15 @@ function domToMybricksJson(frameId, styleTagId) {
         }
         if (_absNodes2.length > 0) childNodes = _flowNodes2.concat(_absNodes2);
         // ant-radio-group：过滤掉各 wrapper 内的 pseudo-before 竖线（Figma 里不需要，边框各自渲染）
+        // 注意：选中态 wrapper（ant-radio-button-wrapper-checked）的 ::before 是左侧高亮边，不能过滤
         if (node.className && node.className.indexOf('ant-radio-group') !== -1) {
           for (var _rgi2 = 0; _rgi2 < childNodes.length; _rgi2++) {
             var _rgChild2 = childNodes[_rgi2];
             if (_rgChild2 && _rgChild2.children) {
-              _rgChild2.children = _rgChild2.children.filter(function(c) { return c.name !== 'pseudo-before'; });
+              var _isChecked2 = _rgChild2._checkedWrapper === true;
+              if (!_isChecked2) {
+                _rgChild2.children = _rgChild2.children.filter(function(c) { return c.name !== 'pseudo-before'; });
+              }
             }
           }
         }
@@ -1682,6 +1770,71 @@ function getGlobalFont(rootEl, computed, cssRuleMap) {
   var fs = (d(['font-style', 'fontStyle']) || (computed && computed.fontStyle) || 'normal').toString().toLowerCase();
   var fontStyle = (fs === 'italic' || fs === 'oblique') ? 'italic' : 'normal';
   return { fontFamily: fontFamily || undefined, fontWeight: fontWeight, fontStyle };
+}
+
+/** childNodes 在「导出语义」上是否仅由文本节点与 br 组成（无 span 等），用于与 br 合并为单段带 \\n 的 text */
+function shouldMergeTextAndBrChildren(parentEl) {
+  if (!parentEl || !parentEl.childNodes || parentEl.childNodes.length === 0) return false;
+  var hasBr = false;
+  var hasNonEmptyText = false;
+  for (var i = 0; i < parentEl.childNodes.length; i++) {
+    var n = parentEl.childNodes[i];
+    if (n.nodeType === 3) {
+      if ((n.textContent || '').replace(/[^\S\n]+/g, '').length > 0) hasNonEmptyText = true;
+      continue;
+    }
+    if (n.nodeType === 1) {
+      var tn = (n.tagName || '').toLowerCase();
+      if (tn === 'script' || tn === 'style' || tn === 'link') continue;
+      if (hasClassPrefix(n, 'selection-') || hasClassPrefix(n, 'append-') || hasClassPrefix(n, 'boardTitle-')) continue;
+      if (tn === 'br') {
+        hasBr = true;
+        continue;
+      }
+      return false;
+    }
+    if (n.nodeType === 8) continue;
+    return false;
+  }
+  return hasBr && hasNonEmptyText;
+}
+
+/** 按文档顺序拼接文本，br → \\n；空白与 getTextContent 一致（保留换行，折叠空格） */
+function mergeTextAndBrChildNodesContent(parentEl) {
+  var parts = [];
+  for (var i = 0; i < parentEl.childNodes.length; i++) {
+    var n = parentEl.childNodes[i];
+    if (n.nodeType === 3) {
+      parts.push(n.textContent || '');
+      continue;
+    }
+    if (n.nodeType === 1) {
+      var tn = (n.tagName || '').toLowerCase();
+      if (tn === 'script' || tn === 'style' || tn === 'link') continue;
+      if (hasClassPrefix(n, 'selection-') || hasClassPrefix(n, 'append-') || hasClassPrefix(n, 'boardTitle-')) continue;
+      if (tn === 'br') {
+        parts.push('\n');
+        continue;
+      }
+    }
+    if (n.nodeType === 8) continue;
+  }
+  var raw = parts.join('');
+  return raw.trim().replace(/[^\S\n]+/g, ' ');
+}
+
+/** 取元素全部子内容（含 br）的整体文本块包围盒，用于合并后的单个 text 节点 */
+function getElementContentsTextBlockRect(el) {
+  if (!el || !el.ownerDocument || !el.ownerDocument.createRange) return null;
+  try {
+    var range = el.ownerDocument.createRange();
+    range.selectNodeContents(el);
+    var r = range.getBoundingClientRect();
+    if (!r || (r.width <= 0 && r.height <= 0)) return null;
+    return r;
+  } catch (_) {
+    return null;
+  }
 }
 
 /** 用 Range 取文本节点的包围框（相对于视口） */
@@ -2452,6 +2605,20 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     var hasPsWidth  = psWidth  > 0 && isFinite(psWidth);
     var hasPsHeight = psHeight > 0 && isFinite(psHeight);
 
+    // 伪元素的 padding（content-box 下 getComputedStyle.height/width 只含内容，需补上 padding）
+    var psPaddingTop    = parseFloat(ps.paddingTop)    || 0;
+    var psPaddingBottom = parseFloat(ps.paddingBottom) || 0;
+    var psPaddingLeft   = parseFloat(ps.paddingLeft)   || 0;
+    var psPaddingRight  = parseFloat(ps.paddingRight)  || 0;
+
+    // 宿主元素的 border（CSS absolute 的 top/left 是相对宿主的 padding-edge，
+    // Figma 子节点 y/x 是相对宿主 frame 的外边缘，两者差 borderTopWidth / borderLeftWidth）
+    var _hostCs = window.getComputedStyle(el);
+    var hostBorderTop    = parseFloat(_hostCs.borderTopWidth)    || 0;
+    var hostBorderBottom = parseFloat(_hostCs.borderBottomWidth) || 0;
+    var hostBorderLeft   = parseFloat(_hostCs.borderLeftWidth)   || 0;
+    var hostBorderRight  = parseFloat(_hostCs.borderRightWidth)  || 0;
+
     // 伪元素坐标是 position:absolute 相对宿主元素（el）的，直接使用 psLeft/psTop，不需要父容器偏移
     // （elRelX/elRelY 仅作调试备用，勿在坐标计算中使用）
     var elRelX = elRect.left - (parentRect && typeof parentRect.left === 'number' && !isNaN(parentRect.left) ? parentRect.left : 0);
@@ -2459,24 +2626,26 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     void elRelX; void elRelY;
 
     // 宽度：优先直接读取计算宽度（如 width:1px / width:100%），left/right 反推降级为 fallback
+    // content-box 下 width 不含 padding，需加上左右 padding
     var w;
     if (hasPsWidth) {
-      w = psWidth;
+      w = psWidth + (ps.boxSizing !== 'border-box' ? psPaddingLeft + psPaddingRight : 0);
     } else if (psLeft !== null && psRight !== null) {
-      w = elRect.width - psLeft - psRight;
+      w = elRect.width - hostBorderLeft - hostBorderRight - psLeft - psRight;
     } else if (psLeft !== null) {
-      w = elRect.width - psLeft;
+      w = elRect.width - hostBorderLeft - psLeft;
     } else if (psRight !== null) {
-      w = elRect.width - psRight;
+      w = elRect.width - hostBorderRight - psRight;
     } else {
       w = elRect.width;
     }
     // 高度：优先直接读取计算高度（如 height:100%），top/bottom 反推和 border/bg 推算降级为 fallback
+    // content-box 下 height 不含 padding，需加上上下 padding
     var h;
     if (hasPsHeight) {
-      h = psHeight;
+      h = psHeight + (ps.boxSizing !== 'border-box' ? psPaddingTop + psPaddingBottom : 0);
     } else if (psTop !== null && psBottom !== null) {
-      h = elRect.height - psTop - psBottom;
+      h = elRect.height - hostBorderTop - hostBorderBottom - psTop - psBottom;
     } else if (hasBorder) {
       h = Math.max(bTop, bBottom, bLeft, bRight);
       if (h < 1) h = 1;
@@ -2485,23 +2654,23 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
       h = 2;
     }
 
-    // x 坐标：positionType:absolute，伪元素的 left/top 是相对宿主元素（el）自身的，
-    // 不需要加 elRelX（该偏移只用于将坐标还原到父容器坐标系，而伪元素节点最终放在 el 的 children 里）
+    // x 坐标：CSS absolute 的 left 是相对宿主 padding-edge，Figma 坐标相对宿主 border 外边缘
+    // 需加上 hostBorderLeft 来对齐
     var x;
     if (psLeft !== null) {
-      x = psLeft;
+      x = psLeft + hostBorderLeft;
     } else if (psRight !== null) {
-      x = elRect.width - psRight - w;
+      x = elRect.width - hostBorderRight - psRight - w;
     } else {
       x = 0;
     }
 
-    // y 坐标：同理，相对宿主元素自身
+    // y 坐标：同理，加上 hostBorderTop
     var y;
     if (psTop !== null) {
-      y = psTop;
+      y = psTop + hostBorderTop;
     } else if (psBottom !== null) {
-      y = elRect.height - psBottom - h;
+      y = elRect.height - hostBorderBottom - psBottom - h;
     } else {
       y = 0;
     }
