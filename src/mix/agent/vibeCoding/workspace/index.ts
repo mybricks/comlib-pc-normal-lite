@@ -12,7 +12,7 @@ import { DirectoryProvider, IKnowledgeNode, KnowledgeNodeType, IFileInfo } from 
 
 // import { ANTD_KNOWLEDGES_MAP, ECHARTS_KNOWLEDGES_MAP } from '../../../knowledges'
 
-import { getLibraryDoc, getProjectLibraryDoc, getProjectLibraryNames } from './../../../avaliableLibraries'
+import { getLibraryDoc, getProjectLibraryDoc, getAllLibraryNames } from './../../../availableLibraries'
 
 // function getLibraryDocumentation() {
 //   return antdPrompt + `\n\n` + echartsPrompt;
@@ -320,9 +320,7 @@ export class Workspace {
    */
   private async openDefaultFiles() {
     try {
-      const builtinLibs = ['antd', '@ant-design/icons', 'dayjs','echarts-for-react', '@antv/g6'];
-      const projectLibs = getProjectLibraryNames();
-      const allLibs = [...builtinLibs, ...projectLibs.filter((n) => !builtinLibs.includes(n))];
+      const allLibs = getAllLibraryNames();
       await this.openLibraryDoc(allLibs)
     } catch (error) {
       

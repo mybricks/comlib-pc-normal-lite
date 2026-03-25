@@ -10,26 +10,54 @@ import context from '../context'
 export type { ValidationError, LibraryValidator, LibraryMeta, LibraryResource, CodeValidationResult, ValidateContext } from './types'
 
 /**
- * 所有内置库的注册表，每条记录包含库元信息和可选的校验器。
+ * 第一层：基础库，无论何时都需要加载。
+ */
+const BASE_LIBS: import('./types').LibraryMeta[] = [
+  dayjs,
+  mybricks,
+]
+
+/**
+ * 第二层预设：当 projectConfig.availableLibraries 未配置时使用的默认附加库。
+ */
+const PRESET_ADDON_LIBS: import('./types').LibraryMeta[] = [
+  echarts,
+  antd,
+  antDesignIcons,
+  antvG6,
+]
+
+/**
+ * 所有内置库的注册表（基础库 + 预设附加库）。
  * 新增内置库时只需在此追加一条记录。
  */
 const BUILTIN_LIBS: import('./types').LibraryMeta[] = [
-  mybricks,
-  antd,
-  antDesignIcons,
-  echarts,
-  dayjs,
-  antvG6,
+  ...BASE_LIBS,
+  ...PRESET_ADDON_LIBS,
 ]
 
 /** 内置库名称列表，从注册表派生 */
 export const BUILTIN_LIBRARY_NAMES = BUILTIN_LIBS.map((lib) => lib.name)
 
-/** 所有已注册的校验器（含 publicValidator），从注册表派生 */
-const VALIDATORS = [
-  createPublicValidator(BUILTIN_LIBRARY_NAMES),
-  ...BUILTIN_LIBS.map((lib) => lib.validator).filter(Boolean) as import('./types').LibraryValidator[],
-]
+/**
+ * 获取当前生效的校验器列表（延迟计算，每次调用时按分层逻辑动态构建）：
+ * - publicValidator 使用当前生效的库名白名单
+ * - 各库自带的 validator 仅包含基础库和当前生效的附加库
+ */
+function getEffectiveValidators(): import('./types').LibraryValidator[] {
+  const effectiveNames = getAllLibraryNames()
+  const addonNames = getAddonLibraryNames()
+  // 生效的附加库（内置预设或项目配置）对应的内置 LibraryMeta validator
+  const addonValidators = PRESET_ADDON_LIBS
+    .filter((lib) => addonNames.includes(lib.name) && lib.validator)
+    .map((lib) => lib.validator!) as import('./types').LibraryValidator[]
+
+  return [
+    createPublicValidator(effectiveNames),
+    ...BASE_LIBS.map((lib) => lib.validator).filter(Boolean) as import('./types').LibraryValidator[],
+    ...addonValidators,
+  ]
+}
 
 // ── 轻量字符串层 ──────────────────────────────────────────────────────────────
 
@@ -48,7 +76,7 @@ export function validateCode(
 ): import('./types').CodeValidationResult {
   const errors: import('./types').ValidationError[] = []
 
-  for (const validator of VALIDATORS) {
+  for (const validator of getEffectiveValidators()) {
     if (!validator.validate) continue
     try {
       const result = validator.validate(code, ctx)
@@ -84,7 +112,7 @@ export function getValidatorPlugins(
 ): Array<(babel: any) => { visitor: Record<string, any> }> {
   const plugins: Array<(babel: any) => { visitor: Record<string, any> }> = []
 
-  for (const validator of VALIDATORS) {
+  for (const validator of getEffectiveValidators()) {
     if (!validator.validatePlugin) continue
     try {
       plugins.push(validator.validatePlugin(ctx))
@@ -130,6 +158,32 @@ export function getAllLibraryDocs(): string {
   return BUILTIN_LIBS.map((l) => getLibraryDocDescription(l)).join('\n\n')
 }
 
+/** 获取基础库（第一层）的文档描述拼接 */
+export function getBaseLibraryDocs(): string {
+  return BASE_LIBS.map((l) => getLibraryDocDescription(l)).join('\n\n')
+}
+
+/**
+ * 获取有效的附加库文档（第二层）：
+ * - 若 projectConfig.availableLibraries 有值，则返回其文档；
+ * - 否则返回预设附加库（echarts-for-react、antd、@ant-design/icons、@antv/g6）的文档。
+ */
+export function getAddonLibraryDocs(): string {
+  const projectLibs = context.projectConfig?.availableLibraries ?? []
+  if (projectLibs.length > 0) {
+    return projectLibs.map((lib) => getLibraryDocDescription(toLibraryMeta(lib))).join('\n\n')
+  }
+  return PRESET_ADDON_LIBS.map((l) => getLibraryDocDescription(l)).join('\n\n')
+}
+
+/**
+ * 获取全部有效库文档（基础库 + 附加库），供 AI 提示词注入使用。
+ * 分层逻辑见 getAddonLibraryDocs。
+ */
+export function getEffectiveLibraryDocs(): string {
+  return [getBaseLibraryDocs(), getAddonLibraryDocs()].filter(Boolean).join('\n\n')
+}
+
 // ── 外部资源 ───────────────────────────────────────────────────────────────────
 
 /**
@@ -160,7 +214,7 @@ export function getAllLibraryResources(): Array<{ name: string; resources: impor
 // ── projectConfig 组件库信息 ────────────────────────────────────────────────────
 
 /**
- * 将 projectConfig.avaliableLibraries 中的单条记录转换为 LibraryMeta 格式。
+ * 将 projectConfig.availableLibraries 中的单条记录转换为 LibraryMeta 格式。
  * readme → usage，其余字段对齐。
  */
 function toLibraryMeta(lib: { name: string; version: string; readme: string }): import('./types').LibraryMeta {
@@ -172,36 +226,51 @@ function toLibraryMeta(lib: { name: string; version: string; readme: string }): 
 }
 
 /**
- * 获取 projectConfig.avaliableLibraries 中指定库的文档（转换为 LibraryMeta 后取 usage）。
+ * 获取 projectConfig.availableLibraries 中指定库的文档（转换为 LibraryMeta 后取 usage）。
  * 不触发 URL 加载。
  */
 export function getProjectLibraryDoc(libraryName: string): string {
-  const libs = context.projectConfig?.avaliableLibraries ?? []
+  const libs = context.projectConfig?.availableLibraries ?? []
   const lib = libs.find((l) => l.name === libraryName)
   if (!lib) return ''
   return getLibraryDocDescription(toLibraryMeta(lib))
 }
 
 /**
- * 获取 projectConfig.avaliableLibraries 中所有库的文档拼接（格式与内置库一致）。
+ * 获取 projectConfig.availableLibraries 中所有库的文档拼接（格式与内置库一致）。
  * 不触发 URL 加载。
  */
 export function getAllProjectLibraryDocs(): string {
-  const libs = context.projectConfig?.avaliableLibraries ?? []
+  const libs = context.projectConfig?.availableLibraries ?? []
   return libs.map((lib) => getLibraryDocDescription(toLibraryMeta(lib))).join('\n\n')
 }
 
 /**
- * 获取 projectConfig.avaliableLibraries 中所有库的名称列表。
+ * 获取 projectConfig.availableLibraries 中所有库的名称列表。
  */
 export function getProjectLibraryNames(): string[] {
-  return (context.projectConfig?.avaliableLibraries ?? []).map((l) => l.name)
+  return (context.projectConfig?.availableLibraries ?? []).map((l) => l.name)
 }
 
 /**
- * 获取所有可用库的名称列表（内置库 + projectConfig 中声明的额外库），去重。
+ * 获取有效的附加库名称列表（第二层）：
+ * - 若 projectConfig.availableLibraries 有值，则返回其名称；
+ * - 否则返回预设附加库名称。
+ */
+export function getAddonLibraryNames(): string[] {
+  const projectLibs = context.projectConfig?.availableLibraries ?? []
+  if (projectLibs.length > 0) {
+    return projectLibs.map((l) => l.name)
+  }
+  return PRESET_ADDON_LIBS.map((l) => l.name)
+}
+
+/**
+ * 获取所有可用库的名称列表（基础库 + 附加库），去重。
+ * 分层逻辑见 getAddonLibraryNames。
  */
 export function getAllLibraryNames(): string[] {
-  const projectLibNames = getProjectLibraryNames().filter((n) => !BUILTIN_LIBRARY_NAMES.includes(n))
-  return [...BUILTIN_LIBRARY_NAMES, ...projectLibNames]
+  const baseNames = BASE_LIBS.map((l) => l.name)
+  const addonNames = getAddonLibraryNames().filter((n) => !baseNames.includes(n))
+  return [...baseNames, ...addonNames]
 }

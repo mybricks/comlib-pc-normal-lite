@@ -469,6 +469,8 @@ export default function ({ context }) {
         getRuntimeMdContent: () => runtimeMdContent,
         getMockJsonContent: () => mockJsonContent,
         getThemesContent: () => themesContent,
+        getDesignerState: () => aiComParams?.data?._designerState,
+        getErrors: () => aiComParams?.data?._errors,
       });
 
       // project.read('DataCard')
@@ -504,11 +506,20 @@ export default function ({ context }) {
             cancel: () => { },
           },
           presetMessages: async () => {
-            const content = await project.exportToMessage()
+            const codeStatus = await project.exportToMessage();
+            const designerStatus = await project.exportDesignerToMessage();
             return [
               {
                 role: 'user',
-                content
+                content: designerStatus,
+              },
+              {
+                role: 'assistant',
+                content: '收到，我了解了当前设计器的搭建状态视图了。'
+              },
+              {
+                role: 'user',
+                content: codeStatus
               },
               {
                 role: 'assistant',

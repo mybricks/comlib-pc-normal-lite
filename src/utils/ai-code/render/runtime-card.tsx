@@ -1,4 +1,4 @@
-import React, {FunctionComponent, ReactElement, useCallback, useMemo} from 'react'
+import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef} from 'react'
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
 import {AIJsxRuntime} from './index'
@@ -155,12 +155,37 @@ interface AIRuntimeProps {
 // }
 
 export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, logger}: AIRuntimeProps) =>
-  ({env, data, inputs, outputs, slots, id}: RuntimeParams<any>) => {
-    // useMemo(() => {
-    //   if (env.edit) {
-    //     data._editors = void 0
-    //   }
-    // }, [])
+  ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // 搭建态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
+    useEffect(() => {
+      if (env.runtime) return;
+      const el = containerRef.current;
+      if (!el || !data) return;
+
+      const collect = () => {
+        const zones = el.querySelectorAll('[data-zone-type="page"]');
+        const pages: string[] = [];
+        const popups: string[] = [];
+        zones.forEach((zone) => {
+          const kind = (zone as HTMLElement).dataset.zoneKind;
+          const widgetEl = zone.querySelector('[data-widget-name]');
+          const name = (widgetEl as HTMLElement)?.dataset?.widgetName ?? 'Unknown';
+          if (kind === 'popup') popups.push(name);
+          else pages.push(name);
+        });
+        if (!data._designerState) data._designerState = { pages: [], popups: [] };
+        data._designerState.pages = pages;
+        data._designerState.popups = popups;
+      };
+
+      collect();
+
+      const observer = new MutationObserver(collect);
+      observer.observe(el, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    }, []);
 
     const errorInfo = useMemo(() => {
       // 使用统一的错误列表
@@ -233,10 +258,16 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, l
       }
     }, [shouldRenderSender])
 
+    const resolvedLogger = typeof logger === 'function' ? logger({ id, mode: env.runtime ? 'runtime' : 'design'}) : logger;
+
     // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
-    if (data.generate) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
+    // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
+    // 3. error：Less/Babel 编译失败或 generate 的 error，统一错误样式
+    // 4. runtime：编译成功，渲染组件
+    // 5. placeholder：等待中，展示提示词
+    const innerContent = (() => {
+      if (data.generate) {
+        return (
           <GenerateLoadingView
             fileName={data.generateFileName ?? ''}
             content={data.generateContent ?? ''}
@@ -244,14 +275,10 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, l
             errorMessage={data.generateErrorMessage ?? ''}
             comId={id}
           />
-        </Wrapper>
-      );
-    }
-
-    // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
-    if ((data.document && !data.runtimeJsxCompiled) || data.loading) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
+        );
+      }
+      if ((data.document && !data.runtimeJsxCompiled) || data.loading) {
+        return (
           <div className={css.documentCard}>
             <div className={css.documentContent}>{data.document}</div>
             {data.loading && (
@@ -260,24 +287,13 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, l
               </div>
             )}
           </div>
-        </Wrapper>
-      );
-    }
-
-    // 3. error：Less/Babel 编译失败或 generate 的 error，统一错误样式
-    if (errorInfo) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
-          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />
-        </Wrapper>
-      );
-    }
-
-    // 4. runtime：编译成功，渲染组件
-    if (hasCompiledCode) {
-      const resolvedLogger = typeof logger === 'function' ? logger({ id, mode: env.runtime ? 'runtime' : 'design'}) : logger;
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
+        );
+      }
+      if (errorInfo) {
+        return <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
+      }
+      if (hasCompiledCode) {
+        return (
           <AIJsxRuntime
             env={env}
             logger={resolvedLogger}
@@ -296,14 +312,16 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, l
             }}
             inMybricksGeoWebview={!!canvasContainer}
           />
-        </Wrapper>
-      );
-    }
+        );
+      }
+      return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;
+    })();
 
-    // 5. placeholder：等待中，展示提示词
     return (
-      <Wrapper env={env} canvasContainer={canvasContainer}>
-        { shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} /> }
-      </Wrapper>
+      <div ref={containerRef} style={{ display: 'contents' }}>
+        <Wrapper env={env} canvasContainer={canvasContainer}>
+          {innerContent}
+        </Wrapper>
+      </div>
     );
   }

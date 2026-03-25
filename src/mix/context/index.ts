@@ -2,7 +2,7 @@ import genVibeCodingAgent from "../agent/vibeCoding";
 import { updateRender, updateStyle, updateService, updateStore } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { parsemd } from "../../utils/ai-code/md"
-import { validateCode } from "../avaliableLibraries"
+import { validateCode } from "../availableLibraries"
 import { getTimestamp } from "../../utils/time"
 
 export interface LogMessage {
@@ -335,7 +335,7 @@ class Context {
     return this.aiComParamsMap[id]?.aiComParams;
   }
 
-  projectConfig: { avaliableLibraries?: any[]; themes?: any[] } = {};
+  projectConfig: { availableLibraries?: any[]; themes?: any[] } = {};
 
   agent: any = {
     vibeCoding: null,

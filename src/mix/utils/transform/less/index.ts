@@ -132,7 +132,6 @@ class Parse {
         const res = this.handleAtRule(rule);
         cssObjs.push(res);
       } else {
-        debugger
         // @ts-ignore
         console.log("其它 => ", rule.type);
       }

@@ -308,7 +308,8 @@ export interface RouterContextValue {
 function createRouterLib(
   _env: { mode: 'design' | 'runtime' },
   pageRefRegistry: any[],
-  debugTarget?: any
+  debugTarget?: any,
+  data?: any
 ) {
   const debugPageIndex = debugTarget?.pageIndex;
   const RouterContext = createContext<RouterContextValue | null>(null);
@@ -366,6 +367,18 @@ function createRouterLib(
         }
         return !seenElementTypes.has(elementType);
       });
+
+      // 将当前可见页面的组件名写入 data._designerState.pages（每次渲染同步更新）
+      if (data) {
+        if (!data._designerState) data._designerState = { pages: [], popups: [] };
+        data._designerState.pages = visibleRoutes.map((r) => {
+          const el = r.props.element;
+          const elProps: any = React.isValidElement(el) ? el.props : null;
+          if (elProps?.['data-zone-title']) return elProps['data-zone-title'] as string;
+          const type: any = React.isValidElement(el) ? el.type : el;
+          return (type?.__originalName__ as string) || (type?.name as string) || 'Unknown';
+        });
+      }
 
       const baseCtx = ctx ?? { currentPath: '', _env };
 
@@ -597,6 +610,12 @@ export function createMybricks(options: CreateMybricksOptions) {
   const debugTarget: any =
     env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
 
+  // 将当前模式写入 data._designerState，供 Agent 实时读取
+  if (data) {
+    if (!data._designerState) data._designerState = { pages: [], popups: [] };
+    data._designerState.mode = debugTarget ? 'debug' : _env.mode; // 'design' | 'runtime' | 'debug'
+  }
+
   /**
    * pageRef 注册表：按声明顺序收集所有 pageRef 包装后的组件。
    * 在模块 eval 阶段（pageRef 调用时）填充，在 appRef 设计态渲染时消费。
@@ -612,7 +631,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   const popupRefRegistry: any[] = [];
   const popupRefOriginalsSet = new Set<any>();
 
-  const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget);
+  const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget, data);
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
@@ -639,7 +658,7 @@ export function createMybricks(options: CreateMybricksOptions) {
     // push 之前捕获，确保 pageIndex 与注册顺序一致
     const pageIndex = pageRefRegistry.length;
 
-    const wrapped = (props: any) => {
+    const wrapped: any = (props: any) => {
       const autoStore = useRef<any>(null);
       if (!autoStore.current) {
         autoStore.current = createReactiveStore(store);
@@ -655,6 +674,7 @@ export function createMybricks(options: CreateMybricksOptions) {
       return (
         <div
           data-zone-type="page"
+          data-zone-kind="page"
           data-desn-page={pageIndex}
           style={{
             minWidth: 1200,
@@ -678,6 +698,9 @@ export function createMybricks(options: CreateMybricksOptions) {
         </div>
       );
     };
+
+    // 记录原始组件名，供 Routes 设计态写入 data._designerState
+    wrapped.__originalName__ = Component.name;
     // 按原始 Component 去重后入注册表（防止同一组件多次 pageRef 调用）
     if (!pageRefOriginalsSet.has(Component)) {
       pageRefOriginalsSet.add(Component);
@@ -707,6 +730,7 @@ export function createMybricks(options: CreateMybricksOptions) {
         return (
           <div
             data-zone-type="page"
+            data-zone-kind="popup"
             data-desn-page={dialogIndex}
             style={{
               minWidth: 1200,
@@ -761,6 +785,13 @@ export function createMybricks(options: CreateMybricksOptions) {
       if (!popupRefOriginalsSet.has(Component)) {
         popupRefOriginalsSet.add(Component);
         popupRefRegistry.push(DialogRoot);
+        // 写入 data._designerState.popups
+        if (data) {
+          if (!data._designerState) data._designerState = { pages: [], popups: [] };
+          if (!data._designerState.popups.includes(Component.name)) {
+            data._designerState.popups.push(Component.name);
+          }
+        }
       }
       return () => null;
     }

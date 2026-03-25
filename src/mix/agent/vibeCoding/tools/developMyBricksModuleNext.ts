@@ -1,7 +1,7 @@
 import readRelated from "./readRelated";
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
 import reviewMyBricksModule from "./review";
-import { getAllLibraryNames } from '../../../avaliableLibraries';
+import { getAllLibraryNames } from '../../../availableLibraries';
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
@@ -261,24 +261,28 @@ export default function developMyBricksModule(config: Config) {
     </使用原则>
 
   5. mock.json文件
-    mock.json文件用于在设计态 mock 接口数据，其内容表示的是真实接口返回的数据结构，供设计态预览使用。
+    mock.json文件用于在设计态 mock 接口数据，其内容表示的是接口完整响应体（包括状态码、业务数据、消息等字段），与真实接口返回的完整结构保持一致，供设计态预览使用。
     <代码示例>
     \`\`\`json file="mock.json"
     {
       "/getUserById": {
-        "name": "张三",
-        "age": 18,
-        "gender": "男"
+        "status": 200,
+        "data": {
+          "name": "张三",
+          "age": 18,
+          "gender": "男"
+        },
+        "message": "success"
       }
     }
     \`\`\`
     </代码示例>
 
     <使用原则>
-      - mock 反映的是真实接口返回的数据结构，与 service 中对应 API 的响应结构保持一致；
+      - mock 的 value 必须是接口的完整响应体结构，与 service 中对应 API 实际返回的 JSON 结构完全一致（包含 status/code、data、message 等字段）；store 中消费接口数据的方式（如 res.data、res.status）必须与 mock 结构对应，否则设计态预览会拿不到数据；
       - mock.json 中的 key 必须与 service.js 中各 \`createAPI\` 定义的 \`url\` 字段一一对应，不得遗漏、不得多余；
       - 每新增或修改一个 service.js 接口，必须同步在 mock.json 中添加或更新对应的 mock 数据；
-      - mock 数据应尽量贴近真实业务场景，字段完整、有意义，便于设计态预览时呈现真实效果；
+      - mock 数据应尽量贴近真实业务场景，字段完整、有意义，便于设计态预览时呈现真实效果；也可以通过设置 status 为非成功状态码来模拟接口失败的场景；
       - mock 仅在设计态用于 mock 接口数据并展示内容，与 store、runtime 等正式代码无关；
       - store 内禁止再声明 mock，也不得依赖 mock 数据；有 service 时 store 应优先走 service 调用。
     </使用原则>

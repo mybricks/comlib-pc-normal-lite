@@ -1,6 +1,6 @@
 import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
-import { getValidatorPlugins } from '../../mix/avaliableLibraries'
+import { getValidatorPlugins } from '../../mix/availableLibraries'
 
 export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies = {}): Promise<Function> {
   return new Promise((resolve, reject) => {
@@ -25,7 +25,7 @@ export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies
   })
 }
 
-export function transformTsx(code, ctx?: import('../../mix/avaliableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
+export function transformTsx(code, ctx?: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
   let transformCode
   const constituency: any = [];
 

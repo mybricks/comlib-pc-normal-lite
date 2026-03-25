@@ -3,7 +3,7 @@
  * 根据 project.json 生成实时更新的 message：项目架构树 + 文件系统（按组件 name 展开代码）
  */
 
-import { getAllLibraryDocs, getAllProjectLibraryDocs, getProjectLibraryNames } from '../../../avaliableLibraries';
+import { getEffectiveLibraryDocs } from '../../../availableLibraries';
 
 
 /** project.json 中单个节点的类型 */
@@ -41,6 +41,10 @@ export interface ProjectConfig {
   getMockJsonContent: () => string;
   /** 获取主题配置全文 */
   getThemesContent: () => string;
+  /** 获取设计器运行时状态（由渲染层写入） */
+  getDesignerState?: () => { mode?: string; pages: string[]; popups: string[] } | undefined;
+  /** 获取当前运行时报错列表 */
+  getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
@@ -269,6 +273,53 @@ export class Project {
   //   return collectNodeAndDescendantNames(this.root);
   // }
 
+  async exportDesignerToMessage(): Promise<string> {
+    const designModeKnowledge = `
+## 页面渲染：
+### 搭建态渲染方式
+  - 在搭建态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的页面；
+  - 这意味着每个通过 Route 注册的 pageRef 页面都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
+### 运行态渲染方式
+  - 在运行态中，只有当前激活路由对应的页面会被展示；
+`;
+
+    const state = this.config.getDesignerState?.();
+    const mode = state?.mode ?? 'design';
+    const modeLabel = mode === 'debug' ? '调试态' : mode === 'runtime' ? '运行态' : '搭建态';
+    const pageRefNames = state?.pages ?? [];
+    const popupRefNames = state?.popups ?? [];
+
+    const errors = this.config.getErrors?.() ?? [];
+
+    let canvasStatus: string;
+    if (errors.length > 0) {
+      canvasStatus = '画布当前处于报错状态，暂时无法看见任何展示内容。';
+    } else if (pageRefNames.length === 0 && popupRefNames.length === 0) {
+      canvasStatus = '当前代码暂无页面或弹窗组件，画布尚无可展示内容。';
+    } else {
+      // 页面在前、弹窗在后，与搭建态画布实际渲染顺序一致
+      const allZones = [
+        ...pageRefNames.map((name) => ({ name, kind: '页面' })),
+        ...popupRefNames.map((name) => ({ name, kind: '弹窗/浮层' })),
+      ];
+      const zonesList = allZones.map((z, i) => `  ${i + 1}. ${z.name}（${z.kind}）`).join('\n');
+      canvasStatus = `画布从左到右共渲染了 ${allZones.length} 个画布（页面 ${pageRefNames.length} 个，弹窗/浮层 ${popupRefNames.length} 个），依次为：
+${zonesList}`;
+    }
+
+    const curStatus = `
+## 当前状态
+状态：${modeLabel}
+${canvasStatus}
+`    
+    return [
+      '# 设计器状态（实时更新）',
+      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「搭建态」和「运行态」，两种模式下展示的内容不一样',
+      designModeKnowledge,
+      curStatus
+    ].join('\n');
+  }
+
   /**
    * 生成实时 message（Markdown）
    */
@@ -308,16 +359,9 @@ ${themesContent}
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
 `;
 
-    const designModeKnowledge = `
-- 搭建态展示方式：
-  - 在设计态（搭建态）中，所有路由页面会被同时平铺展示，而非只显示当前激活路由对应的页面；
-  - 这意味着每个通过 Route 注册的 pageRef 页面都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
-  - 因此在设计多页面时，不必担心某个页面"看不见"，它们都会并排呈现在搭建画布中；
-`;
-
     // const archMd = buildArchitectureMd(this.root);
 
-    const libraryDocsContent = [getAllLibraryDocs(), getAllProjectLibraryDocs()].filter(Boolean).join('\n\n');
+    const libraryDocsContent = getEffectiveLibraryDocs();
 
     const fileSectionParts: string[] = [];
     fileSectionParts.push('\n## 源代码\n');
@@ -417,8 +461,6 @@ ${themesContent}
       // archMd,
       '\n',
       ...fileSectionParts,
-      '\n# MyBricks 搭建知识\n',
-      designModeKnowledge,
     ].join('');
   }
 

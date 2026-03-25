@@ -41,8 +41,8 @@ export default genAIRuntime({
       },
     };
 
-    // projectConfig.avaliableLibraries 中的库通过 library 全局变量名从 window 获取
-    const projectLibs = context.projectConfig?.avaliableLibraries ?? [];
+    // projectConfig.availableLibraries 中的库通过 library 全局变量名从 window 获取
+    const projectLibs = context.projectConfig?.availableLibraries ?? [];
     const projectDefs: PropertyDescriptorMap = {};
     for (const lib of projectLibs) {
       if (lib.name && lib.library && !(lib.name in base) && !(lib.name in builtinDefs)) {

@@ -10,7 +10,7 @@ import {deepClone} from "./utils/normal";
 import {convertHyphenToCamel} from "../utils/string";
 import {MYBRICKS_KNOWLEDGES_MAP, HTML_KNOWLEDGES_MAP} from "./context/constants";
 import ExportCodePanel from "../utils/code-export/render";
-import { getAllLibraryResources } from "./avaliableLibraries";
+import { getAllLibraryResources } from "./availableLibraries";
 import "../utils/antd";
 import "./utils/dom-to-json";
 
@@ -21,7 +21,7 @@ import "./utils/dom-to-json";
  * - JS：若已存在对应的 globalVar 则跳过，否则注入 <script> 等待加载完成
  * - CSS：通过 <link> 注入，重复 url 跳过
  */
-function loadResource(resource: import('./avaliableLibraries').LibraryResource): Promise<void> {
+function loadResource(resource: import('./availableLibraries').LibraryResource): Promise<void> {
   const { type, url, globalVar } = resource;
 
   if (type === 'js') {
