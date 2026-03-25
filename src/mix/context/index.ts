@@ -265,10 +265,23 @@ class Context {
     if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
     }
+    this.registerGlobalBridge(id);
   }
 
-  getAiCom(id: string) {
-    return this.aiComParamsMap[id];
+  /**
+   * 注册全局桥接方法，供外部通过 window 调用。
+   * 每次组件注册时更新，始终指向最后一个加载的组件。
+   *
+   * _focusAndSendToVibeAgent_(message)
+   *   → 打开该组件的 AI 对话框，并延迟发送消息
+   */
+  private registerGlobalBridge(id: string) {
+    (window as any)._focusAndSendToVibeAgent_ = (message: any) => {
+      (window as any)._showAIDialog_?.(id);
+      setTimeout(() => {
+        (window as any)._sendToFocusVibeAgent_?.({ message });
+      }, 500);
+    };
   }
 
   getAiComParams(id: string) {
