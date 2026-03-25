@@ -956,7 +956,7 @@ export default function (props: Props, actions: Actions, ...args) {
       if (pageIndex) {
         // 当前页在视口中的矩形（相对视口左上角）
         const pageBCR = page.getBoundingClientRect();
-        const rootEl = page.parentElement;
+        const rootEl = page.closest("[data-com-title]");
         // 根容器的视口矩形
         const rootBCR = rootEl.getBoundingClientRect();
         const rootComputedStyle = window.getComputedStyle(rootEl);
