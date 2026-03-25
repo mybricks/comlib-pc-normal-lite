@@ -13,11 +13,13 @@ export default function syncMarkdownformybricksModule(config) {
     displayName: '更新说明文档',
     description: `更新说明文档，将 MyBricks 模块的 runtime.jsx 源码整理成结构化的 README.md 文档
 如果调用了「developMyBricksModule」工具更新了runtime.jsx，则需要在最后添加这个工具来修改文档
+
+返回前置工具对于组件内容修改的摘要信息
     `,
     getPrompts: () => {
       return `
 <你的角色与任务>
-你是 MyBricks 模块文档专家。你的任务是根据当前模块的 runtime.jsx 源码，生成或更新对应的 README.md 说明文档。
+你是 MyBricks 模块文档专家。你的任务是根据当前模块的 runtime.jsx 源码，生成或更新对应的 README.md 说明文档。同时返回前置工具对于组件内容修改的摘要信息。
 </你的角色与任务>
 
 <文档编写规范>
@@ -63,6 +65,18 @@ export default function syncMarkdownformybricksModule(config) {
     3. 无事件可省略 events
   </节点说明>
 </文档编写规范>
+
+<组件内容修改摘要>
+  无论是否更新了README.md，都必须在最后通过以下格式返回当前组件修改内容的摘要：
+    \`\`\`md file="summary.md"
+  （前置工具对于各文件修改的简短摘要性说明）
+    \`\`\`
+
+  <编写规范>
+    1. 每一条摘要信息用 - 开头，并在结尾换行
+    2. 禁止针对每个文件来写摘要说明
+  </编写规范>
+</组件内容修改摘要>
 
 <基于runtime.jsx的README.md示例>
 （以下仅说明 README.md 的文档结构与字段含义；实际更新文档时请勿照抄此格式，必须按下方「如何更新文档」用 before/after 块返回修改。）

@@ -28,6 +28,7 @@ export interface VersionSnapshot {
   timestamp: string;
   dataSnapshot: Record<string, any>;
   planId?: string;
+  summary?: string;
 }
 
 class Context {
@@ -118,6 +119,20 @@ class Context {
 
     if (updateVersion) {
       updateVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
+      rxai?.idb?.updateVersion?.(updateVersion.id, updateVersion)
+      this.getVersionStateEvents(comId).emit('change', [...versions]);
+    }
+  }
+
+  async updateVersionWithContent(comId, planAgent, content) {
+    const versions = await this.getVersions(comId);
+    const updateVersion = versions.find(v => v.planId === planAgent.id)
+    const rxai = this.getRxai(comId);
+
+    if (updateVersion) {
+      Object.entries(content).forEach(([key, value]) => {
+        updateVersion[key] = value;
+      })
       rxai?.idb?.updateVersion?.(updateVersion.id, updateVersion)
       this.getVersionStateEvents(comId).emit('change', [...versions]);
     }

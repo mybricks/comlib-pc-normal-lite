@@ -605,7 +605,20 @@ ${text}
             }),
             answer(),
             syncMarkdownformybricksModule({
-              onUpdate: onUpdateFiles,
+              onUpdate: (p) => {
+                const files = p.files;
+                const summary = files.find((f) => f.fileName === "summary.md")
+
+                if (summary) {
+                  context.updateVersionWithContent(focus.comId, planAgent, {
+                    summary: summary.content
+                  })
+                }
+                
+                onUpdateFiles({
+                  files: summary ? files.filter((f) => f.fileName !== "summary.md") : files
+                })
+              },
             })
           ],
           planningCheck: (tools: any[]) => {
