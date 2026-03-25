@@ -49,7 +49,7 @@ function updateComponentFiles(
     { fileName: 'runtime.jsx', dataKey: 'runtimeJsxSource' },
     { fileName: 'store.js', dataKey: 'storeJsSource' },
     { fileName: 'service.js', dataKey: 'serviceJsSource' },
-    { fileName: 'runtime.md', dataKey: 'runtimeMdSource' },
+    { fileName: 'README.md', dataKey: 'runtimeMdSource' },
     { fileName: 'mock.json', dataKey: 'mockJsonSource' },
   ];
 

@@ -35,7 +35,7 @@ export interface ProjectConfig {
   getStoreContent: () => string;
   /** 获取 service.js 全文 */
   getServiceContent: () => string;
-  /** 获取 runtime.md 全文 */
+  /** 获取 README.md 全文 */
   getRuntimeMdContent: () => string;
   /** 获取 mock.json 全文（设计态 mock 数据） */
   getMockJsonContent: () => string;
@@ -388,10 +388,10 @@ ${themesContent}
     }
     if (runtimeMdRanges.length > 0) {
       fileSectionParts.push(
-        buildFileSection('runtime.md', runtimeMdContent, runtimeMdRanges, 'md')
+        buildFileSection('README.md', runtimeMdContent, runtimeMdRanges, 'md')
       );
     } else {
-      fileSectionParts.push(buildFileSection('runtime.md', runtimeMdContent, [], 'md'));
+      fileSectionParts.push(buildFileSection('README.md', runtimeMdContent, [], 'md'));
     }
     if (mockJsonRanges.length > 0) {
       fileSectionParts.push(

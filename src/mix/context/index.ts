@@ -442,7 +442,7 @@ class Context {
           aiComParams?.setTitle?.(title);
         }
         break;
-      case 'runtime.md':
+      case 'README.md':
         aiComParams.data.runtimeMdSource = encodeURIComponent(content);
         try {
           aiComParams.data.runtimeMdCompiled = parsemd(content);
