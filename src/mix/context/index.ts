@@ -280,13 +280,13 @@ class Context {
     if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
     }
-    this.registerGlobalBridge(id);
   }
-
+  
   getAiCom(id: string) {
+    this.registerGlobalBridge(id);
     return this.aiComParamsMap[id];
   }
-
+  
   /**
    * 注册全局桥接方法，供外部通过 window 调用。
    * 每次组件注册时更新，始终指向最后一个加载的组件。
