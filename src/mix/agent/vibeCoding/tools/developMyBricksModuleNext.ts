@@ -96,18 +96,12 @@ export default function developMyBricksModule(config: Config) {
     - 错误：\`<UserInfo _env={_env} store={store} wrapper={wrapper} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 页面、浮层类组件、组件必须遵循规范进行定义
-    - 整个项目有且只能有一个export default导出，那就是appRef;
-    - 所有页面都需要通过 pageRef 包装，无需导出；
-    - 所有组件和模块都需要使用 comRef 包装，无需导出;
-    - 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，无需导出;
-    - 路由通过 Routes + Route 进行渲染；
-  4. 遵循下文 <区块拆分原则与规范/>；
-  5. 禁止编写未实现的事件函数；
-  6. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
-  7. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
-  8. 包含事件（例如onClick、onChange、onBlur等）的标签内必须包含注释「/** 事件名:事件key */」；
-  9. 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
+  3. 遵循下文 <区块拆分原则与规范/>；
+  4. 禁止编写未实现的事件函数；
+  5. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
+  6. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
+  7. 包含事件（例如onClick、onChange、onBlur等）的标签内必须包含注释「/** 事件名:事件key */」；
+  8. 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
   </编写规范>
 
   <保留字段>
