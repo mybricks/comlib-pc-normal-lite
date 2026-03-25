@@ -139,7 +139,7 @@ function getDeclaredStyleForElement(el, cssRuleMap) {
       var colon = part.indexOf(':');
       if (colon <= 0) continue;
       var key = part.slice(0, colon).trim();
-      var val = part.slice(colon + 1).trim();
+      var val = part.slice(colon + 1).trim().replace(/\s*!important\s*$/i, '');
       if (key) declared[key] = val;
     }
   }
