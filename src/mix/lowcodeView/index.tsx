@@ -71,7 +71,7 @@ export default function LowcodeView(params: Params) {
   }, [componentId]);
 
   const coderOptions = useMemo(() => {
-    const path = `file:///${"组件id"}/${selectedFileName}`;
+    const path = `file:///${componentId}/${selectedFileName}`;
     if (selectedFileName === "runtime.jsx" || selectedFileName === "store.js" || selectedFileName === "service.js") {
       return {
         path,
@@ -108,7 +108,7 @@ export default function LowcodeView(params: Params) {
       };
     }
     return {};
-  }, [selectedFileName]);
+  }, [selectedFileName, componentId]);
 
   // 当前选中文件显示的内容：有未保存修改则用修改内容，否则从 data 读取
   const code = useMemo(() => {
@@ -123,6 +123,7 @@ export default function LowcodeView(params: Params) {
 
   useEffect(() => {
     let decorationsCollection;
+    let lastEditor;
     let timeOut;
 
     const off = lowcodeViewEvents.on('viewCode', async ([start, end]) => {
@@ -137,6 +138,13 @@ export default function LowcodeView(params: Params) {
         await new Promise(res => setTimeout(res, 100))
         editor = codeIns.current?.editor
       }
+
+      // 如果编辑器实例发生变化（key 导致重新挂载），重置 decorationsCollection
+      if (editor !== lastEditor) {
+        decorationsCollection = undefined;
+        lastEditor = editor;
+      }
+
       clearTimeout(timeOut);
       let isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
 
@@ -317,6 +325,7 @@ export default function LowcodeView(params: Params) {
         <div className={css['code-container']}>
           <Editor
             ref={codeIns}
+            key={coderOptions.path}
             value={code}
             {...coderOptions}
             options={editorOptions}
