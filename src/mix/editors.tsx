@@ -975,7 +975,8 @@ export default function (props: Props, actions: Actions, ...args) {
         // 写入调试目标：供预览/调试时定位当前页、同步根容器尺寸
         events.emit('debugTarget', {
           type: 'page',
-          pageIndex: Number(pageIndex),
+          // pageIndex: Number(pageIndex),
+          pageIndex,
           style: {
             // 水平位移：把「页相对根容器」的视口距离，按根容器缩放比换算成布局坐标，再减去左边框和内边距
             transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`,
