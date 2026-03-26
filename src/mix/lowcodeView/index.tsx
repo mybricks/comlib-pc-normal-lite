@@ -279,25 +279,29 @@ export default function LowcodeView(params: Params) {
     <div className={css['lowcode-view-container']}>
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
-          <div
-            className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-            onClick={() => setBottomTab('source')}
-          >
-            源代码
-          </div>
-          {isDebugging && (
+          <div className={css['lowcode-view-toolbar-left']}>
             <div
-              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'console' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-              onClick={() => setBottomTab('console')}
+              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+              onClick={() => setBottomTab('source')}
             >
-              控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
+              源代码
             </div>
-          )}
-          <div
-            className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-            onClick={() => setBottomTab('version')}
-          >
-            版本
+            <div
+              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+              onClick={() => setBottomTab('version')}
+            >
+              版本
+            </div>
+          </div>
+          <div className={css['lowcode-view-toolbar-right']}>
+            {isDebugging && (
+              <div
+                className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'console' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+                onClick={() => setBottomTab('console')}
+              >
+                控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
+              </div>
+            )}
           </div>
         </div>
         <button
