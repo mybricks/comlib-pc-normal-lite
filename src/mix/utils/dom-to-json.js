@@ -2402,6 +2402,31 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     var justifyContentNorm = justifyContent ? String(justifyContent).trim().toLowerCase() : undefined;
     var alignMap = { 'flex-start': 'MIN', 'flex-end': 'MAX', center: 'CENTER', 'space-between': 'SPACE_BETWEEN', 'space-around': 'CENTER', 'space-evenly': 'CENTER', normal: 'MIN', stretch: 'MIN', baseline: 'BASELINE', start: 'MIN', end: 'MAX' };
     style.primaryAxisAlignItems = alignMap[justifyContentNorm] || 'MIN';
+    // CSS：space-between 在仅 1 个参与排布的 flex 子项时贴在主轴起点；Figma SPACE_BETWEEN+单子项会居中，降级为 MIN/MAX
+    if (justifyContentNorm === 'space-between' && style.primaryAxisAlignItems === 'SPACE_BETWEEN' && el.children) {
+      var _inFlowFlexChildren = 0;
+      for (var _fi = 0; _fi < el.children.length; _fi++) {
+        try {
+          var _fpos = (window.getComputedStyle(el.children[_fi]).position || '').toLowerCase();
+          if (_fpos !== 'absolute' && _fpos !== 'fixed') _inFlowFlexChildren++;
+        } catch (_fe) {}
+      }
+      if (_inFlowFlexChildren <= 1) {
+        var _dirStr = (dir && String(dir).trim().toLowerCase()) || 'row';
+        var _rowRev = _dirStr === 'row-reverse';
+        var _colRev = _dirStr === 'column-reverse';
+        var _rtl = computed && String(computed.direction || 'ltr').toLowerCase() === 'rtl';
+        if (style.layoutMode === 'VERTICAL') {
+          style.primaryAxisAlignItems = _colRev ? 'MAX' : 'MIN';
+        } else {
+          if (_rowRev) {
+            style.primaryAxisAlignItems = _rtl ? 'MIN' : 'MAX';
+          } else {
+            style.primaryAxisAlignItems = _rtl ? 'MAX' : 'MIN';
+          }
+        }
+      }
+    }
     style.counterAxisAlignItems = alignMap[alignItemsNorm] || 'MIN';
     // ant-radio-wrapper 包含圆形图标+文字，BASELINE 在 Figma 里会让图标贴顶，强制改为 CENTER
     var _isAntRadioWrapper = (el.className && typeof el.className === 'string' && el.className.indexOf('ant-radio-wrapper') !== -1);
