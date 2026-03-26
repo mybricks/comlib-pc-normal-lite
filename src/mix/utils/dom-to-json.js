@@ -741,7 +741,7 @@ function elementToMybricksJson(el, styleTagId) {
             var _geoScale2 = geo.scale || 1;
             for (var _ci2 = 0; _ci2 < node.childNodes.length; _ci2++) {
               var _cn2 = node.childNodes[_ci2];
-              if (_cn2.nodeType === 3 && (_cn2.textContent || '').trim()) {
+              if (_cn2.nodeType === 3 && /\S/.test(_cn2.textContent || '')) {
                 var _tr2 = getTextNodeRect(_cn2);
                 if (_tr2 && _tr2.width > 0) _contentW2 += _tr2.width / _geoScale2;
               }
@@ -750,6 +750,15 @@ function elementToMybricksJson(el, styleTagId) {
               nodeJson.style.widthConstrained = true;
             }
           }
+        }
+        applyWidthConstrainedForFigmaEdgeWhitespace(nodeJson);
+      }
+      // 多行 + 中文数字混合：递归遍历所有子节点检测 DOM 实际断行位置，插入 \n，避免 Figma 在 CJK 标点处错误断行
+      if (nodeType === 'text' && nodeJson.style && !nodeJson.style.singleLine) {
+        var _rawT2 = nodeJson.content || '';
+        if (/[\u4e00-\u9fff\uff00-\uffef]/.test(_rawT2) && /\d/.test(_rawT2)) {
+          var _cwb2 = getTextWithActualLineBreaksForElement(node);
+          if (_cwb2) nodeJson.content = _cwb2;
         }
       }
       // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
@@ -813,6 +822,8 @@ function elementToMybricksJson(el, styleTagId) {
           };
           if (nodeJson.selectors && nodeJson.selectors.length) _mergeTextJson2.selectors = nodeJson.selectors.slice();
           if (nodeJson.className) _mergeTextJson2.className = nodeJson.className;
+          applyTextOverflowEllipsisExport(_mergeTextJson2, node, window.getComputedStyle(node), geo, null, rect);
+          applyWidthConstrainedForFigmaEdgeWhitespace(_mergeTextJson2);
           childNodesList.push(_mergeTextJson2);
           _didMergeTextBr2 = true;
         }
@@ -832,7 +843,7 @@ function elementToMybricksJson(el, styleTagId) {
           var cn = walk(celChild, rect);
           if (cn) childNodesList.push(cn);
         } else if (cchild.nodeType === 3) {
-          var textContent = (cchild.textContent || '').trim();
+          var textContent = normalizeTextExportPreserveTrailing(cchild.textContent || '', true);
           if (textContent) {
             var textRectViewport = getTextNodeRect(cchild);
             var textRect = textRectViewport ? getDesignRect(textRectViewport, geo) : null;
@@ -840,11 +851,13 @@ function elementToMybricksJson(el, styleTagId) {
             var textNodeJson = {
               type: 'text',
               name: 'Text',
-              content: textContent.replace(/\s+/g, ' '),
+              content: textContent,
               style: inlineStyle && Object.keys(inlineStyle).length ? inlineStyle : undefined,
             };
             if (nodeJson.selectors && nodeJson.selectors.length) textNodeJson.selectors = nodeJson.selectors.slice();
             if (nodeJson.className) textNodeJson.className = nodeJson.className;
+            applyTextOverflowEllipsisExport(textNodeJson, node, window.getComputedStyle(node), geo, cchild, rect);
+            applyWidthConstrainedForFigmaEdgeWhitespace(textNodeJson);
             childNodesList.push(textNodeJson);
           }
         }
@@ -920,11 +933,13 @@ function elementToMybricksJson(el, styleTagId) {
                 }
               }
               for (var si = 0; si < childNodesList.length; si++) {
-                var ss = childNodesList[si].style || {};
-                if (ss.marginTop != null) delete ss.marginTop;
-                if (ss.marginRight != null) delete ss.marginRight;
-                if (ss.marginBottom != null) delete ss.marginBottom;
-                if (ss.marginLeft != null) delete ss.marginLeft;
+                pruneChildMarginsAfterGapMerge(
+                  nodeJson.style,
+                  childNodesList[si].style,
+                  layoutMode,
+                  (nodeJson.name || '') + '/' + (nodeJson.className || ''),
+                  (childNodesList[si].name || '') + '/' + (childNodesList[si].className || '')
+                );
               }
             }
           }
@@ -966,6 +981,27 @@ function elementToMybricksJson(el, styleTagId) {
               break;
             }
           }
+        }
+        if (nodeJson.className === 'filterArea' && nodeJson.style) {
+          try {
+            console.log('[mb-d2f:filterArea:summary]', {
+              layoutMode: nodeJson.style.layoutMode,
+              layoutWrap: nodeJson.style.layoutWrap,
+              itemSpacing: nodeJson.style.itemSpacing,
+              counterAxisSpacing: nodeJson.style.counterAxisSpacing,
+              children: childNodesList.map(function (c) {
+                var s = c && c.style;
+                return {
+                  name: c && c.name,
+                  className: c && c.className,
+                  x: s && s.x,
+                  y: s && s.y,
+                  marginLeft: s && s.marginLeft,
+                  marginRight: s && s.marginRight,
+                };
+              }),
+            });
+          } catch (_eFa) {}
         }
       }
       // 表格行（display: table-row / <tr>）的 border-bottom 需下移到子单元格
@@ -1292,7 +1328,7 @@ function domToMybricksJson(frameId, styleTagId) {
             var _geoScale = geo.scale || 1;
             for (var _ci = 0; _ci < el.childNodes.length; _ci++) {
               var _cn = el.childNodes[_ci];
-              if (_cn.nodeType === 3 && (_cn.textContent || '').trim()) {
+              if (_cn.nodeType === 3 && /\S/.test(_cn.textContent || '')) {
                 var _tr = getTextNodeRect(_cn);
                 if (_tr && _tr.width > 0) _contentW += _tr.width / _geoScale;
               }
@@ -1301,6 +1337,15 @@ function domToMybricksJson(frameId, styleTagId) {
               node.style.widthConstrained = true;
             }
           }
+        }
+        applyWidthConstrainedForFigmaEdgeWhitespace(node);
+      }
+      // 多行 + 中文数字混合：递归遍历所有子节点检测 DOM 实际断行位置，插入 \n，避免 Figma 在 CJK 标点处错误断行
+      if (nodeType === 'text' && node.style && !node.style.singleLine) {
+        var _rawT = node.content || '';
+        if (/[\u4e00-\u9fff\uff00-\uffef]/.test(_rawT) && /\d/.test(_rawT)) {
+          var _cwb = getTextWithActualLineBreaksForElement(el);
+          if (_cwb) node.content = _cwb;
         }
       }
       // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
@@ -1367,6 +1412,8 @@ function domToMybricksJson(frameId, styleTagId) {
           };
           if (node.selectors && node.selectors.length) _mergeTextJson.selectors = node.selectors.slice();
           if (node.className) _mergeTextJson.className = node.className;
+          applyTextOverflowEllipsisExport(_mergeTextJson, el, window.getComputedStyle(el), geo, null, rect);
+          applyWidthConstrainedForFigmaEdgeWhitespace(_mergeTextJson);
           childNodes.push(_mergeTextJson);
           _didMergeTextBr = true;
         }
@@ -1386,7 +1433,7 @@ function domToMybricksJson(frameId, styleTagId) {
           const childNode = walk(elChild, rect);
           if (childNode) childNodes.push(childNode);
         } else if (child.nodeType === 3) {
-          var textContent = (child.textContent || '').trim();
+          var textContent = normalizeTextExportPreserveTrailing(child.textContent || '', false);
           if (textContent) {
             var textRectViewport = getTextNodeRect(child);
             var textRect = textRectViewport ? getDesignRect(textRectViewport, geo) : null;
@@ -1394,11 +1441,13 @@ function domToMybricksJson(frameId, styleTagId) {
             var textNodeJson = {
               type: 'text',
               name: 'Text',
-              content: textContent.replace(/[^\S\n]+/g, ' '),
+              content: textContent,
               style: inlineStyle && Object.keys(inlineStyle).length ? inlineStyle : undefined,
             };
             if (node.selectors && node.selectors.length) textNodeJson.selectors = node.selectors.slice();
             if (node.className) textNodeJson.className = node.className;
+            applyTextOverflowEllipsisExport(textNodeJson, el, window.getComputedStyle(el), geo, child, rect);
+            applyWidthConstrainedForFigmaEdgeWhitespace(textNodeJson);
             childNodes.push(textNodeJson);
           }
         }
@@ -1477,11 +1526,13 @@ function domToMybricksJson(frameId, styleTagId) {
                 }
               }
               for (var i = 0; i < childNodes.length; i++) {
-                var s = childNodes[i].style || {};
-                if (s.marginTop != null) delete s.marginTop;
-                if (s.marginRight != null) delete s.marginRight;
-                if (s.marginBottom != null) delete s.marginBottom;
-                if (s.marginLeft != null) delete s.marginLeft;
+                pruneChildMarginsAfterGapMerge(
+                  node.style,
+                  childNodes[i].style,
+                  layoutMode,
+                  (node.name || '') + '/' + (node.className || ''),
+                  (childNodes[i].name || '') + '/' + (childNodes[i].className || '')
+                );
               }
             }
           }
@@ -1525,6 +1576,27 @@ function domToMybricksJson(frameId, styleTagId) {
             }
           }
           if (_wrapSpacing2 > 0) node.style.counterAxisSpacing = _wrapSpacing2;
+        }
+        if (node.className === 'filterArea' && node.style) {
+          try {
+            console.log('[mb-d2f:filterArea:summary]', {
+              layoutMode: node.style.layoutMode,
+              layoutWrap: node.style.layoutWrap,
+              itemSpacing: node.style.itemSpacing,
+              counterAxisSpacing: node.style.counterAxisSpacing,
+              children: childNodes.map(function (c) {
+                var s = c && c.style;
+                return {
+                  name: c && c.name,
+                  className: c && c.className,
+                  x: s && s.x,
+                  y: s && s.y,
+                  marginLeft: s && s.marginLeft,
+                  marginRight: s && s.marginRight,
+                };
+              }),
+            });
+          } catch (_eFa2) {}
         }
       }
       // 表格行（display: table-row / <tr>）的 border-bottom 需下移到子单元格
@@ -1810,7 +1882,7 @@ function inferNodeType(el, computed, tag) {
       var tc = (el.textContent || '').trim().slice(0, 30);
       return 'frame';
     }
-    if ((el.textContent || '').trim()) {
+    if (/\S/.test(el.textContent || '')) {
       return 'text';
     }
   }
@@ -1892,7 +1964,7 @@ function shouldMergeTextAndBrChildren(parentEl) {
   return hasBr && hasNonEmptyText;
 }
 
-/** 按文档顺序拼接文本，br → \\n；空白与 getTextContent 一致（保留换行，折叠空格） */
+/** 按文档顺序拼接文本，br → \\n；空白与 getTextContent 一致（保留换行，折叠空格，保留行尾空白） */
 function mergeTextAndBrChildNodesContent(parentEl) {
   var parts = [];
   for (var i = 0; i < parentEl.childNodes.length; i++) {
@@ -1913,7 +1985,7 @@ function mergeTextAndBrChildNodesContent(parentEl) {
     if (n.nodeType === 8) continue;
   }
   var raw = parts.join('');
-  return raw.trim().replace(/[^\S\n]+/g, ' ');
+  return normalizeTextExportPreserveTrailing(raw, false);
 }
 
 /** 取元素全部子内容（含 br）的整体文本块包围盒，用于合并后的单个 text 节点 */
@@ -1942,6 +2014,54 @@ function getTextNodeRect(textNode) {
   } catch (_) {
     return null;
   }
+}
+
+/**
+ * Figma 在 textAutoResize=WIDTH_AND_HEIGHT 时，行首/行尾空白不参与撑宽，文本框会比浏览器实测窄。
+ * 有此类空白且已有实测 width 时标记 widthConstrained，消费侧固定宽度以保留空白占位。
+ */
+function shouldMarkWidthConstrainedForEdgeWhitespace(content) {
+  if (content == null || typeof content !== 'string') return false;
+  return /^\s/.test(content) || /\s$/.test(content);
+}
+
+/** @param {{ style?: object, content?: string }} json */
+function applyWidthConstrainedForFigmaEdgeWhitespace(json) {
+  if (!json || !json.style) return;
+  if (json.style.singleLine !== true || json.style.width == null) return;
+  if (!shouldMarkWidthConstrainedForEdgeWhitespace(json.content)) return;
+  json.style.widthConstrained = true;
+}
+
+/**
+ * 父元素有 text-overflow:ellipsis 时，将子文本 width 收窄到父容器可用宽度，
+ * 并标记 widthConstrained/textOverflow，由 Figma 插件的 textTruncation='ENDING' 自动渲染省略号。
+ * @param {object} json type:text 节点（会改写 style.width 等，不改 content）
+ * @param {Element} parentEl 包裹该文本的 DOM 元素
+ * @param {CSSStyleDeclaration} computed parentEl 的计算样式
+ * @param {object} geo scale 等
+ * @param {Text|null} textNode 原始 #text 节点（暂未使用，保留供将来扩展）
+ * @param {object|null} parentDesignRect 父元素的 design rect（含 width，已除以 geo.scale）
+ */
+function applyTextOverflowEllipsisExport(json, parentEl, computed, geo, textNode, parentDesignRect) {
+  if (!json || !json.style || !parentEl || !computed) return;
+  if ((computed.textOverflow || '') !== 'ellipsis') return;
+  if ((computed.overflowX || computed.overflow || '') === 'visible') return;
+  var full = json.content;
+  if (full == null || typeof full !== 'string' || full.indexOf('\n') >= 0) return;
+
+  // 父容器可用宽度 = 父设计宽度 - text.x（已含 paddingLeft 偏移）- paddingRight
+  var parentW = parentDesignRect ? parentDesignRect.width
+    : (parentEl.getBoundingClientRect().width / ((geo && geo.scale) || 1));
+  var paddingRight = parseFloat(computed.paddingRight || '0');
+  var availW = parentW - (json.style.x || 0) - paddingRight;
+  if (!(availW > 0)) return;
+  if (json.style.width != null && json.style.width <= availW) return;
+
+  json.style.width = availW;
+  json.style.widthConstrained = true;
+  json.style.textOverflow = 'ellipsis';
+  json.style.singleLine = true;
 }
 
 /** 仅用于 div 内内联文本节点：只含位置 + 文字相关样式，不含 layout/padding */
@@ -2456,6 +2576,19 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   if (mB != null) style.marginBottom = mB;
   if (mL != null) style.marginLeft = mL;
 
+  if (el.className && typeof el.className === 'string' && el.className.indexOf('filterActions') !== -1) {
+    try {
+      console.log('[mb-d2f:filterActions:buildStyle]', {
+        className: el.className,
+        marginLeftPx: mL,
+        marginRightPx: mR,
+        rawDeclaredML: _mLRaw,
+        computedMarginLeft: computed.marginLeft,
+        computedMarginRight: computed.marginRight,
+      });
+    } catch (_eFa3) {}
+  }
+
   // position: absolute/fixed → 消费端需让该节点脱离 Auto Layout 流式排布，统一标记为 'absolute'
   // 用 getPropertyValue 而非 .position 直接访问，Shadow DOM 环境下后者可能返回空字符串
   var positionDeclared = d(['position']);
@@ -2474,6 +2607,70 @@ function getM(node, side) {
   if (side === 'R') return s.marginRight ?? 0;
   if (side === 'B') return s.marginBottom ?? 0;
   return s.marginLeft ?? 0;
+}
+
+/**
+ * 父级已从子项 margin 推断出 itemSpacing 后，删除子项 margin 以免与 Figma Auto Layout 重复。
+ * 但若子项在主轴上的 margin 大于 itemSpacing（典型：margin-left/right:auto 吃掉的剩余空间），
+ * 必须保留，供消费端识别并关闭父级 Auto Layout，否则换行后第二行会贴左（x 被忽略）。
+ * @param {object} parentStyle
+ * @param {object} childStyle
+ * @param {string} layoutMode 'HORIZONTAL' | 'VERTICAL'
+ * @param {string} [dbgParent] 调试用：父节点 name/class
+ * @param {string} [dbgChild] 调试用：子节点 name/class
+ */
+function pruneChildMarginsAfterGapMerge(parentStyle, childStyle, layoutMode, dbgParent, dbgChild) {
+  if (!childStyle) return;
+  var spacing = parentStyle && parentStyle.itemSpacing != null ? parentStyle.itemSpacing : 0;
+  var thresh = spacing + 1;
+  var ml0 = childStyle.marginLeft;
+  var mr0 = childStyle.marginRight;
+  if (layoutMode === 'HORIZONTAL') {
+    if (childStyle.marginLeft != null) {
+      if (!(childStyle.marginLeft > thresh)) delete childStyle.marginLeft;
+    }
+    if (childStyle.marginRight != null) {
+      if (!(childStyle.marginRight > thresh)) delete childStyle.marginRight;
+    }
+    if (childStyle.marginTop != null) delete childStyle.marginTop;
+    if (childStyle.marginBottom != null) delete childStyle.marginBottom;
+  } else if (layoutMode === 'VERTICAL') {
+    if (childStyle.marginTop != null) {
+      if (!(childStyle.marginTop > thresh)) delete childStyle.marginTop;
+    }
+    if (childStyle.marginBottom != null) {
+      if (!(childStyle.marginBottom > thresh)) delete childStyle.marginBottom;
+    }
+    if (childStyle.marginLeft != null) delete childStyle.marginLeft;
+    if (childStyle.marginRight != null) delete childStyle.marginRight;
+  } else {
+    if (childStyle.marginTop != null) delete childStyle.marginTop;
+    if (childStyle.marginRight != null) delete childStyle.marginRight;
+    if (childStyle.marginBottom != null) delete childStyle.marginBottom;
+    if (childStyle.marginLeft != null) delete childStyle.marginLeft;
+  }
+  var _dp = dbgParent != null ? String(dbgParent) : '';
+  var _dc = dbgChild != null ? String(dbgChild) : '';
+  var _wantDbg =
+    (parentStyle && parentStyle.layoutWrap === 'WRAP') ||
+    _dp.indexOf('filterArea') >= 0 ||
+    _dc.indexOf('filterActions') >= 0;
+  if (_wantDbg) {
+    try {
+      console.log('[mb-d2f:pruneChildMargin]', _dp || '?', '→', _dc || '?', {
+        layoutMode: layoutMode,
+        itemSpacing: spacing,
+        thresh: thresh,
+        before: { marginLeft: ml0, marginRight: mr0 },
+        after: { marginLeft: childStyle.marginLeft, marginRight: childStyle.marginRight },
+        preservedLargeMainMargin:
+          (layoutMode === 'HORIZONTAL' &&
+            ((ml0 != null && ml0 > thresh && childStyle.marginLeft === ml0) ||
+              (mr0 != null && mr0 > thresh && childStyle.marginRight === mr0))) ||
+          false,
+      });
+    } catch (_eDbg) {}
+  }
 }
 
 /** 任意 flex 流中的子节点存在负值 margin，说明 flex 间距不均匀，不能用 Auto Layout */
@@ -2542,11 +2739,66 @@ function ensureItemSpacingFromPositions(parentNode, childNodes, layoutMode) {
   }
 }
 
+/**
+ * 导出用文本规范化：折叠空白（可选是否把换行也压成空格），去掉行首空白，保留行尾空白；无非空白字符则返回 ''。
+ * @param {string} raw
+ * @param {boolean} collapseNewlinesToSpace - true 时等同原 element walk 的 /\\s+/g
+ */
+function normalizeTextExportPreserveTrailing(raw, collapseNewlinesToSpace) {
+  if (raw == null || raw === '') return '';
+  var pat = collapseNewlinesToSpace ? /\s+/g : /[^\S\n]+/g;
+  var s = String(raw).replace(pat, ' ');
+  s = s.replace(/^[\s\uFEFF\xA0]+/, '');
+  if (!/\S/.test(s)) return '';
+  return s;
+}
+
 function getTextContent(el) {
   const tag = (el.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea') return el.value || el.placeholder || '';
-  // 保留换行符，只折叠同行内的多余空白（空格/tab），避免换行被压缩成空格
-  return (el.textContent || '').trim().replace(/[^\S\n]+/g, ' ');
+  // 保留换行符，只折叠同行内的多余空白；保留行尾空白（与 String#trim 不同）
+  return normalizeTextExportPreserveTrailing(el.textContent || '', false);
+}
+
+/**
+ * 对多行文本元素（singleLine:false，含 CJK+数字），递归遍历所有子节点（包括嵌套 span 等），
+ * 用 Range.getClientRects() 逐字符检测 DOM 实际断行位置，在换行处插入 '\n'。
+ * 仅当结果中确实存在 '\n' 时返回新字符串，否则返回 null（不改原 content）。
+ * @param {Element} el 文本元素（type:'text' 对应的 DOM 节点）
+ * @returns {string|null}
+ */
+function getTextWithActualLineBreaksForElement(el) {
+  var pieces = [];
+  function collectPieces(node) {
+    if (node.nodeType === 3) {
+      var t = node.textContent || '';
+      if (!t) return;
+      try {
+        var range = document.createRange();
+        for (var i = 0; i < t.length; i++) {
+          range.setStart(node, i);
+          range.setEnd(node, i + 1);
+          var rects = range.getClientRects();
+          pieces.push({ ch: t[i], top: (rects && rects.length) ? Math.round(rects[0].top) : null });
+        }
+      } catch (e) {
+        for (var j = 0; j < t.length; j++) pieces.push({ ch: t[j], top: null });
+      }
+    } else if (node.nodeType === 1) {
+      for (var k = 0; k < node.childNodes.length; k++) collectPieces(node.childNodes[k]);
+    }
+  }
+  for (var m = 0; m < el.childNodes.length; m++) collectPieces(el.childNodes[m]);
+  if (!pieces.length) return null;
+  var result = '';
+  var prevTop = null;
+  for (var p = 0; p < pieces.length; p++) {
+    var piece = pieces[p];
+    if (piece.top !== null && prevTop !== null && piece.top > prevTop + 2) result += '\n';
+    result += piece.ch;
+    if (piece.top !== null) prevTop = piece.top;
+  }
+  return result.indexOf('\n') !== -1 ? result : null;
 }
 
 function isShowingPlaceholder(el) {
