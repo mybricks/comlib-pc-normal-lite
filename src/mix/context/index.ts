@@ -296,10 +296,18 @@ class Context {
    */
   private registerGlobalBridge(id: string) {
     (window as any)._focusAndSendToVibeAgent_ = (params: any) => {
-      (window as any)._showAIDialog_?.(id);
-      setTimeout(() => {
-        (window as any)._sendToFocusVibeAgent_?.(params);
-      }, 500);
+      const win = window as any;
+      const tryExecute = () => {
+        if (win._showAIDialog_ && win._sendToFocusVibeAgent_) {
+          win._showAIDialog_(id);
+          setTimeout(() => {
+            win._sendToFocusVibeAgent_(params);
+          }, 500);
+        } else {
+          setTimeout(tryExecute, 100);
+        }
+      };
+      tryExecute();
     };
   }
 
