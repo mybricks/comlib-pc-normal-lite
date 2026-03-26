@@ -32,3 +32,11 @@ export function isMemberExpression(node, opts?) {
 
   return opts == null || shallowEqual(node, opts);
 }
+
+export function isCallExpression(node, opts?) {
+  if (!node) return false;
+
+  if (node.type !== "CallExpression") return false;
+
+  return opts == null || shallowEqual(node, opts);
+}

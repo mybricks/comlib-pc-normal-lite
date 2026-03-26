@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useReducer, useCallback } from 'react';
 import css from './mybricks-lib.less';
 
 // --- Store 相关：符号与响应式封装 ---
@@ -299,13 +299,289 @@ export interface RouterContextValue {
   params?: Record<string, string>;
 }
 
+function createRouterLib({
+  env,
+  _env,
+  pageRefRegistry,
+  debugTarget,
+  data
+}: {
+  env: any,
+  _env: { mode: 'design' | 'runtime' },
+  pageRefRegistry: any[],
+  debugTarget?: any,
+  data?: any
+}) {
+  const ROUTE_TYPE = Symbol('Route')
+
+  const isDesign = () => {
+    return _env.mode === 'design';
+  }
+
+  interface AppContextValue {
+    state: 'collect_routes' | 'runtime'
+    registerRoute: (route: string) => void
+  }
+  const AppContext = createContext<AppContextValue>({
+    state: 'runtime',
+    registerRoute: () => {}
+  });
+
+  const createAppRef = (store: any, useSyncExternalStore: any, popupRefRegistry: any[] = []) => {
+    return function appRef(Component) {
+      return (props) => {
+        const autoStore = useRef<any>(null);
+        if (!autoStore.current) {
+          autoStore.current = createReactiveStore(store);
+        }
+        const state = useSyncExternalStore(
+          autoStore.current[SYMBOL_SUBSCRIBE],
+          autoStore.current[SYMBOL_GETSNAPSHOT]
+        );
+
+        if (isDesign()) {
+          const collectingRoutes = useRef<string[]>([]);
+
+          const [app, setApp] = useState<AppContextValue>({
+            state: 'collect_routes',
+            registerRoute: (path: string) => {
+              collectingRoutes.current.push(path);
+            },
+          })
+
+          useLayoutEffect(() => {
+            setApp((app) => {
+              return {
+                ...app,
+                state: 'runtime'
+              }
+            })
+          }, [])
+
+          return (
+            <AppContext.Provider value={app}>
+              {app.state === "collect_routes" && (
+                <Component
+                  {...props}
+                  _env={_env}
+                  store={autoStore.current}
+                  _state={state}
+                />
+              )}
+              {app.state === 'runtime' && (
+                collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
+                  return (
+                    <CollectingRoute
+                      {...props}
+                      _env={_env}
+                      store={autoStore.current}
+                      _state={state}
+                      _route={route}
+                      _Component={Component}
+                    />
+                  )
+                }) : (
+                  <Component
+                    {...props}
+                    _env={_env}
+                    store={autoStore.current}
+                    _state={state}
+                  />
+                )
+              )}
+              {app.state === 'runtime' && (
+                popupRefRegistry.map((DialogRoot, index) => (
+                  <DialogRoot key={`dialog-${index}`}/>
+                ))
+              )}
+            </AppContext.Provider>
+          )
+        }
+
+        return (
+          <RuntimeRoute
+            {...props}
+            _env={_env}
+            store={autoStore.current}
+            _state={state}
+            _route={env._debugTarget.pageIndex}
+            _Component={Component}
+          />
+        )
+      }
+    }
+  }
+
+  type NavigateOptions = {
+    replace?: boolean
+    state?: unknown
+  }
+  type NavigateFn = (to: string | number, options?: NavigateOptions) => void
+  interface RouterContextValue {
+    currentPath: string
+    params: Record<string, string>
+    navigate: NavigateFn
+    locationState: unknown
+  }
+  const RouterContext = createContext<RouterContextValue>({
+    currentPath: '/',
+    navigate: () => {},
+    locationState: undefined,
+    params: {}
+  });
+
+  const CollectingRoute = (params: { _route: string, _Component: React.FC<any> }) => {
+    const { _route, _Component: Component } = params;
+    return (
+      <RouterContext.Provider
+        value={{
+          currentPath: _route,
+          navigate: () => {},
+          locationState: undefined,
+          params: {}
+        }}
+      >
+        <Component {...params}/>
+      </RouterContext.Provider>
+    )
+  }
+
+  const routerReducer = (state, action) => {
+    const { stack, cursor } = state
+    switch (action.type) {
+      case 'PUSH': {
+        const next = [...stack.slice(0, cursor + 1), { path: action.to, state: action.state }]
+        return { stack: next, cursor: cursor + 1 }
+      }
+      case 'REPLACE': {
+        const next = [...stack]
+        next[cursor] = { path: action.to, state: action.state }
+        return { stack: next, cursor }
+      }
+      case 'GO':
+        return { stack, cursor: Math.max(0, Math.min(stack.length - 1, cursor + action.delta)) }
+      default:
+        return state
+    }
+  }
+
+  const RuntimeRoute = (params: { _route: string, _Component: React.FC<any> }) => {
+    const { _route, _Component: Component } = params;
+    const [{ stack, cursor }, dispatch] = useReducer(
+      routerReducer,
+      { stack: [{ path: _route, state: undefined }], cursor: 0 }
+    )
+
+    const currentPath = stack[cursor].path
+
+    // navigate 无外部依赖，引用永远稳定，不会触发消费者重渲染
+    const navigate = useCallback((to, options: any = {}) => {
+      if (typeof to === 'number') dispatch({ type: 'GO', delta: to })
+      else if (options.replace) dispatch({ type: 'REPLACE', to, state: options.state })
+      else dispatch({ type: 'PUSH', to, state: options.state })
+    }, [])
+
+    const locationState = stack[cursor].state
+
+    const contextValue = useMemo<RouterContextValue>(
+      () => ({ currentPath, params: {}, navigate, locationState }),
+      [currentPath, navigate, locationState]
+    )
+
+    return (
+      <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
+        <RouterContext.Provider value={contextValue}>
+          <Component {...params}/>
+        </RouterContext.Provider>
+      </div>
+    )
+  }
+
+  const Routes = (params: React.PropsWithChildren) => {
+    const { children } = params;
+    const appCtx = useContext(AppContext);
+    if (appCtx.state === 'collect_routes') {
+      React.Children.forEach(children, (child) => {
+        if (React.isValidElement(child) && (child.type as any).__type === ROUTE_TYPE) {
+          const { path, index } = child.props;
+          appCtx.registerRoute(index ? '/' : path);
+        }
+      });
+    }
+
+    return children;
+  }
+
+  const Route = (params: { index?: number; path: string; element: React.ReactElement}) => {
+    const { index, path, element } = params;
+    const appContext = useContext(AppContext)
+    const routerContext = useContext(RouterContext)
+
+    if (appContext.state === 'collect_routes') {
+      return element
+    } else if (routerContext.currentPath === (index ? '/' : path)) {
+      const { activeThemeId, themes } = data.themes;
+      const theme = themes.find((theme) => theme.id === activeThemeId);
+
+      return (
+        <div
+          data-zone-type='page'
+          data-zone-kind='page'
+          data-desn-page={index ? '/' : path}
+          style={{
+            minWidth: 1200,
+            minHeight: 600,
+            display: 'inline-block',
+            transform: 'scale(1)',
+            height: 'fit-content',
+            width: 'fit-content',
+            ...env._debugTarget?.style,
+            ...theme?.vars?.reduce((pre, cur) => {
+              pre[cur.propertyName] = cur.value;
+              return pre;
+            }, {})
+          }}>
+            {element}
+        </div>
+      );
+    }
+
+    return null
+  }
+
+  Route.__type = ROUTE_TYPE
+
+  const useLocation = (): { pathname: string; state: unknown } => {
+    const ctx = useContext(RouterContext)
+    if (!ctx) throw new Error('useLocation must be used within a <Routes>')
+    return { pathname: ctx.currentPath, state: ctx.locationState }
+  }
+
+  const useNavigate = (): NavigateFn => {
+    const ctx = useContext(RouterContext)
+    if (!ctx) throw new Error('useNavigate must be used within a <Routes>')
+    return ctx.navigate
+  }
+
+  const useParams = (): Record<string, string> => {
+    const ctx = useContext(RouterContext)
+    if (!ctx) throw new Error('useParams must be used within a <Routes>')
+    return ctx.params
+  }
+
+  return { createAppRef, Routes, Route, useLocation, useNavigate, useParams }
+
+  // return { Route, Routes, createAppRef, redirect, useNavigate, useLocation, useParams };
+}
+
 /**
  * 创建当前 AIJsxRuntime 实例专属的路由 API。
  * 路由状态用 useState 管理，与业务 store 完全解耦。
  * 每次调用返回新的 RouterContext，作用域限定在一个 AIJsxRuntime 内。
  * pageRefRegistry：由 createMybricks 注入，收集所有 pageRef 注册的组件，供设计态渲染。
+ * @deprecated 弃用
  */
-function createRouterLib(
+function createRouterLib2(
   _env: { mode: 'design' | 'runtime' },
   pageRefRegistry: any[],
   debugTarget?: any,
@@ -631,7 +907,7 @@ export function createMybricks(options: CreateMybricksOptions) {
   const popupRefRegistry: any[] = [];
   const popupRefOriginalsSet = new Set<any>();
 
-  const routerLib = createRouterLib(_env, pageRefRegistry, debugTarget, data);
+  const routerLib = createRouterLib({_env, env, pageRefRegistry, debugTarget, data});
 
   const wrapWithStore = (Component: any) => {
     return (props: any) => {
@@ -764,7 +1040,7 @@ export function createMybricks(options: CreateMybricksOptions) {
         );
       } else {
         const containerRef = useRef<HTMLDivElement>(null);
-        const [container, setContainer] = useState(false);
+        const [container, setContainer] = useState<any>(false);
 
         useLayoutEffect(() => {
           const page = containerRef.current?.closest('[data-zone-type="page"]')
@@ -837,7 +1113,7 @@ export function createMybricks(options: CreateMybricksOptions) {
     Routes: routerLib.Routes,
     Route: routerLib.Route,
     /** @deprecated 建议使用 useNavigate */
-    redirect: routerLib.redirect,
+    // redirect: routerLib.redirect,
     useNavigate: routerLib.useNavigate,
     useLocation: routerLib.useLocation,
     useParams: routerLib.useParams,

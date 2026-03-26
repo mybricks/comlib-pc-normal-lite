@@ -26,6 +26,8 @@ export default function ({ constituency }) {
     /** 遍历时 comRef 的 jsdoc 栈，子元素通过栈顶读到当前组件的 jsdoc */
     // const jsdocStack: any[] = [];
 
+    const popupRefDeclarators = new Map();
+
     return {
       visitor: {
         ImportDeclaration(path) {
@@ -45,6 +47,15 @@ export default function ({ constituency }) {
               const name = path.node.id?.name;
               const relyName = path.node.init?.object?.loc?.identifierName;
               importRelyMap.set(name, relyName);
+            }
+            if (
+              types.isIdentifier(id) &&
+              types.isCallExpression(init) &&
+              types.isIdentifier(init.callee) &&
+              init.callee.name === 'popupRef'
+            ) {
+              const componentName = id.name;
+              popupRefDeclarators.set(path.node, componentName);
             }
           } catch { }
         },
@@ -197,6 +208,25 @@ export default function ({ constituency }) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
               }
               pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
+
+              let foundDeclaratorPath: any = null;
+              path.findParent(p => {
+                if (p.isJSXElement()) {
+                  return true; // 遇到父级 JSX 即停，说明当前节点不是顶层
+                }
+                if (p.isVariableDeclarator() && popupRefDeclarators.has(p.node)) {
+                  foundDeclaratorPath = p;
+                  return true;
+                }
+                return false;
+              });
+              const popupName = foundDeclaratorPath
+                ? popupRefDeclarators.get(foundDeclaratorPath.node)
+                : null;
+
+              if (popupName) {
+                pushDataAttr(node.openingElement.attributes, "data-widge-name", popupName);
+              }
             } catch {}
           },
           exit(path) {

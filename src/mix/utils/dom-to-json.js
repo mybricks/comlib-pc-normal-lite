@@ -280,6 +280,99 @@ function parseLinearGradientFromBgImage(bgImage) {
 }
 
 /**
+ * 解析 CSS background-image 中的 radial-gradient → { type: 'GRADIENT_RADIAL', gradientStops, centerX, centerY, radius }。
+ * 支持：
+ *   radial-gradient(circle, color1, color2)
+ *   radial-gradient(circle at 50% 50%, color1, color2)
+ *   radial-gradient(ellipse at 30% 60%, color1, color2)
+ */
+function parseRadialGradientFromBgImage(bgImage) {
+  if (!bgImage || typeof bgImage !== 'string') return null;
+  var str = bgImage.trim();
+  var idx = str.indexOf('radial-gradient');
+  if (idx < 0) return null;
+  // 逐字符提取括号内全部内容
+  var start = str.indexOf('(', idx);
+  if (start < 0) return null;
+  var depth = 0;
+  var end = -1;
+  for (var i = start; i < str.length; i++) {
+    if (str[i] === '(') depth++;
+    else if (str[i] === ')') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end < 0) return null;
+  var inner = str.slice(start + 1, end).trim();
+
+  // 按括号感知的逗号分割，括号内的逗号不分割
+  function splitTopLevelRadial(s) {
+    var parts = [];
+    var cur = '';
+    var d = 0;
+    for (var j = 0; j < s.length; j++) {
+      var ch = s[j];
+      if (ch === '(' || ch === '[') { d++; cur += ch; }
+      else if (ch === ')' || ch === ']') { d--; cur += ch; }
+      else if (ch === ',' && d === 0) { parts.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    return parts;
+  }
+
+  var parts = splitTopLevelRadial(inner);
+  if (parts.length < 2) return null;
+
+  // 解析第一段（形状 + 位置）：circle / ellipse / circle at X Y / ellipse at X Y
+  // 识别条件：含 circle/ellipse 关键字，或以 "at " 开头，且不含 rgb/rgba/#（避免误把色标当形状描述）
+  var centerX = 0.5;
+  var centerY = 0.5;
+  var stopsStartIndex = 0;
+  var firstPart = parts[0].trim().toLowerCase();
+  var looksLikeShapePart = (firstPart.indexOf('circle') >= 0 || firstPart.indexOf('ellipse') >= 0 || firstPart.startsWith('at ')) &&
+    firstPart.indexOf('rgb') < 0 && firstPart.indexOf('#') < 0;
+  if (looksLikeShapePart) {
+    stopsStartIndex = 1;
+    // 解析 "at X Y" 位置（百分比或关键字）
+    var atIdx = firstPart.indexOf(' at ');
+    if (atIdx >= 0) {
+      var posPart = firstPart.slice(atIdx + 4).trim();
+      var posTokens = posPart.split(/\s+/);
+      if (posTokens.length >= 2) {
+        var pctX = posTokens[0].replace('%', '');
+        var pctY = posTokens[1].replace('%', '');
+        var px = parseFloat(pctX);
+        var py = parseFloat(pctY);
+        if (!isNaN(px)) centerX = px / 100;
+        if (!isNaN(py)) centerY = py / 100;
+      }
+    }
+  }
+
+  // 解析色标（与 parseLinearGradientFromBgImage 相同逻辑）
+  var stops = [];
+  for (var k = stopsStartIndex; k < parts.length; k++) {
+    var seg = parts[k].trim();
+    var pctMatch = seg.match(/\s+([\d.]+)%\s*$/);
+    var pos;
+    if (pctMatch) {
+      pos = parseFloat(pctMatch[1]) / 100;
+      seg = seg.slice(0, seg.length - pctMatch[0].length).trim();
+    } else {
+      var stopIdx = k - stopsStartIndex;
+      var total = parts.length - stopsStartIndex - 1;
+      pos = total > 0 ? stopIdx / total : 0;
+    }
+    var outColor = cssColorToRgba(seg);
+    if (outColor) stops.push({ position: pos, color: outColor });
+  }
+
+  if (stops.length < 2) return null;
+  // radius: 0.5 表示圆形与节点边缘相切（归一化空间），色标百分比控制视觉渐变范围
+  var result = { type: 'GRADIENT_RADIAL', gradientStops: stops, centerX: centerX, centerY: centerY, radius: 0.5 };
+  return result;
+}
+
+/**
  * 解析 CSS box-shadow → [{ offsetX, offsetY, blur, spread?, color }]。
  * 仅解析外阴影（不含 inset），与 Figma DROP_SHADOW 对应。
  * 语法：none | (inset? (color? offset-x offset-y blur-radius spread-radius? | offset-x offset-y blur-radius spread-radius? color?))#
@@ -1981,10 +2074,10 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     bgImage = bgImageDecl;
   } else if (bgImageComputed && bgImageComputed !== 'none') {
     bgImage = bgImageComputed;
-  } else if (bgImageFromBackground && bgImageFromBackground.indexOf('linear-gradient') >= 0) {
+  } else if (bgImageFromBackground && (bgImageFromBackground.indexOf('linear-gradient') >= 0 || bgImageFromBackground.indexOf('radial-gradient') >= 0)) {
     bgImage = bgImageFromBackground;
   }
-  var gradientFill = bgImage ? parseLinearGradientFromBgImage(bgImage) : null;
+  var gradientFill = bgImage ? (parseLinearGradientFromBgImage(bgImage) || parseRadialGradientFromBgImage(bgImage)) : null;
   var imageUrl = bgImage ? parseUrlFromBgImage(bgImage) : null;
   if (gradientFill) {
     // 同时保留背景色作为底层 fill，避免渐变透明区域在 Figma 中透出阴影导致整体变深

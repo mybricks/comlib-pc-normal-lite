@@ -318,7 +318,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, l
     })();
 
     return (
-      <div ref={containerRef} style={{ display: 'contents' }}>
+      <div ref={containerRef} className={css.container} style={{ display: 'contents' }}>
         <Wrapper env={env} canvasContainer={canvasContainer}>
           {innerContent}
         </Wrapper>
