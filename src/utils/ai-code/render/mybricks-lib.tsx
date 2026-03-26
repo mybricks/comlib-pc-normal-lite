@@ -757,6 +757,7 @@ export function createMybricks(options: CreateMybricksOptions) {
               _env={_env}
               store={autoStore.current}
               _state={state}
+              popupNode={container}
               wrapper={container}
             />}
           </div>
@@ -780,6 +781,7 @@ export function createMybricks(options: CreateMybricksOptions) {
               _env={_env}
               store={autoStore.current}
               _state={state}
+              popupNode={container}
               wrapper={container}
             />}
           </>

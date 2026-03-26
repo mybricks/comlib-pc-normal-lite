@@ -92,8 +92,8 @@ export default function developMyBricksModule(config: Config) {
   </代码示例>
 
   <编写规范>
-  1. 组件 props 禁止传递<保留字段>：_env，store，wrapper；
-    - 错误：\`<UserInfo _env={_env} store={store} wrapper={wrapper} user={store.user}/>\`
+  1. 组件 props 禁止传递<保留字段>：_env，store，popupNode；
+    - 错误：\`<UserInfo _env={_env} store={store} popupNode={popupNode} user={store.user}/>\`
     - 正确：\`<UserInfo />\`
   2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
   3. 遵循下文 <区块拆分原则与规范/>；
@@ -111,10 +111,8 @@ export default function developMyBricksModule(config: Config) {
       - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
       - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
       - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-    3. wrapper，浮层类组件指定挂载节点
-      - wrapper 的值为 DOM 元素；
-      - 浮层类组件（如弹窗、抽屉等）必须将 wrapper 作为挂载容器传入，通常通过 getContainer 或 container 等 prop 传递，例如：getContainer={() => wrapper}；
-      - 严禁将 wrapper 直接用作 React ref（即禁止写 ref={wrapper}），wrapper 不是 ref 对象，而是 DOM 元素；
+    3. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
+      - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
       - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
   </保留字段>
 

@@ -33,7 +33,7 @@ const RULE_APP_REF = `
 const RULE_COM_REF = `
   <规则: comRef使用规范>
     - 所有普通组件必须使用 comRef 包装，无需导出；
-    - comRef 默认接收保留字段：_env、store、wrapper，禁止通过 props 显式传递这些保留字段；
+    - comRef 默认接收保留字段：_env、store、popupNode，禁止通过 props 显式传递这些保留字段；
     - 【违规示例】\`<UserInfo _env={_env} store={store} user={store.user}/>\`；
     - 【正确示例】\`<UserInfo />\`；
   </规则>
@@ -43,7 +43,7 @@ const RULE_POPUP_REF = `
   <规则: popupRef使用规范>
     - 所有浮层类组件（弹窗/抽屉等）必须使用 popupRef 包装，无需导出；
     - 控制浮层显示/隐藏状态的变量必须维护在 store 中，使用PopupVisible装饰器，保证搭建态下默认打开；
-    - 浮层类组件中挂载节点必须指向 wrapper；
+    - 浮层类组件中挂载节点必须指向 popupNode
   </规则>
 `;
 

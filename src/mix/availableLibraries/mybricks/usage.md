@@ -19,15 +19,13 @@
     - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
     - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
     - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-  3. wrapper，浮层类组件指定挂载节点
-    - wrapper 的值为 DOM 元素；
-    - 浮层类组件（如弹窗、抽屉等）必须将 wrapper 作为挂载容器传入，通常通过 getContainer 或 container 等 prop 传递，例如：getContainer={() => wrapper}；
-    - 严禁将 wrapper 直接用作 React ref（即禁止写 ref={wrapper}），wrapper 不是 ref 对象，而是 DOM 元素；
+  3. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
+    - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
     - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
 </保留字段>
 
-组件 props 禁止传递<保留字段>：_env，store，wrapper；
-- 错误：\`<UserInfo _env={_env} store={store} wrapper={wrapper} user={store.user}/>\`
+组件 props 禁止传递<保留字段>：_env，store，popupNode；
+- 错误：\`<UserInfo _env={_env} store={store} popupNode={popupNode} user={store.user}/>\`
 - 正确：\`<UserInfo />\`
 
 ### 页面声明
@@ -62,10 +60,10 @@ export default class Store {
 import ReactDOM from 'react-dom';
 import { popupRef } from 'mybricks'
 
-const ConfirmModal = popupRef(({ store, wrapper }) => {
-  return ReactDom.createPortal(<div className={css.mask} style={{ display: store.modalVisible ? 'blcok' : 'none' }}>
+const ConfirmModal = popupRef(({ store, popupNode }) => {
+  return ReactDOM.createPortal(<div className={css.mask} style={{ display: store.modalVisible ? 'block' : 'none' }}>
 
-  </div>, wrapper)
+  </div>, popupNode)
 })
 ```
 
