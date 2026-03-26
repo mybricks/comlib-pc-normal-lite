@@ -277,7 +277,6 @@ class Context {
   }
 
   setAiCom(id: string, { params, actions }) {
-    this.registerGlobalBridge(id);
     if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
     }
@@ -285,30 +284,6 @@ class Context {
   
   getAiCom(id: string) {
     return this.aiComParamsMap[id];
-  }
-
-  /**
-   * 注册全局桥接方法，供外部通过 window 调用。
-   * 每次组件注册时更新，始终指向最后一个加载的组件。
-   *
-   * _focusAndSendToVibeAgent_(params)
-   *   → 打开该组件的 AI 对话框，并延迟发送消息
-   */
-  private registerGlobalBridge(id: string) {
-    (window as any)._focusAndSendToVibeAgent_ = (params: any) => {
-      const win = window as any;
-      const tryExecute = () => {
-        if (win._showAIDialog_ && win._sendToFocusVibeAgent_) {
-          win._showAIDialog_(id);
-          setTimeout(() => {
-            win._sendToFocusVibeAgent_(params);
-          }, 500);
-        } else {
-          setTimeout(tryExecute, 100);
-        }
-      };
-      tryExecute();
-    };
   }
 
   getAiComParams(id: string) {

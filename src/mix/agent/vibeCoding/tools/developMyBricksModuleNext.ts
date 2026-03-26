@@ -138,6 +138,9 @@ export default function developMyBricksModule(config: Config) {
   2. style.less文件
     <代码示例>
     \`\`\`less file="style.less"
+    :frame {
+      width: 1660px;
+    }
     .container {
       width: 100%;
       height: 100%;
@@ -151,6 +154,7 @@ export default function developMyBricksModule(config: Config) {
 
     <编写规范>
     1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，编写前必须先列举全部可用变量，再对照每条样式属性逐一检查是否有对应变量，有则必须使用，禁止硬编码已有主题变量所覆盖的色值或数值；
+    2. 必须通过 :frame 来统一配置画布宽度，必须配置；
     </编写规范>
 
   3. store.js文件
@@ -568,6 +572,9 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
   
   \`\`\`after file="style.less"
+  :frame {
+    width: 1440px;
+  }
   .mainBtn{
     width:100%;
     height:100%;
@@ -627,6 +634,10 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
   
   \`\`\`after file="style.less"
+  :frame {
+    width: 1600px;
+  }
+
   .viewContainer{
     position:relative;
     width:100%;

@@ -249,6 +249,19 @@ export function updateService({ data, success }, serviceCode): void {
 //   });
 // }
 
+function extractFrameStyle(css: string): { width?: number } | undefined {
+  const match = css.match(/:frame\s*\{([^}]*)\}/);
+  if (!match) return undefined;
+
+  const block = match[1];
+  // 仅匹配纯 px 整数/小数，排除 min-width / max-width 以及 %、auto、fit-content 等非 px 值
+  const widthMatch = block.match(/(?<![a-z-])width:\s*(\d+(?:\.\d+)?)px\b/);
+
+  if (!widthMatch) return undefined;
+
+  return { width: Number(widthMatch[1]) };
+}
+
 export function updateStyle({ id, data, success }, styleCode) {
   const writeSource = () => {
     data.styleSource = encodeURIComponent(styleCode);
@@ -257,6 +270,7 @@ export function updateStyle({ id, data, success }, styleCode) {
   try {
     const css = transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`)
     data.styleCompiled = encodeURIComponent(css);
+    data.frameStyle = extractFrameStyle(css);
     writeSource();
     // 清除 style.less 相关错误
     if (!data._errors) data._errors = [];

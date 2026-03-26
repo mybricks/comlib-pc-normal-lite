@@ -489,12 +489,17 @@ function createRouterLib({
         data-zone-kind='page'
         data-desn-page={path}
         style={{
-          minWidth: 1200,
+          ...(data?.frameStyle?.width
+            ? { width: data.frameStyle.width }
+            : { minWidth: 1200, width: 'fit-content' }
+          ),
           minHeight: 600,
-          display: 'inline-block',
           transform: 'scale(1)',
           height: 'fit-content',
-          width: 'fit-content',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
           ...env._debugTarget?.style,
           ...theme?.vars?.reduce((pre, cur) => {
             pre[cur.propertyName] = cur.value;
@@ -978,12 +983,14 @@ export function createMybricks(options: CreateMybricksOptions) {
           data-zone-kind="page"
           data-desn-page={pageIndex}
           style={{
-            minWidth: 1200,
+            ...(data?.frameStyle?.width
+              ? { width: data.frameStyle.width }
+              : { minWidth: 1200, width: 'fit-content' }
+            ),
             minHeight: 600,
             display: 'inline-block',
             transform: 'scale(1)',
             height: 'fit-content',
-            width: 'fit-content',
             ...env._debugTarget?.style,
             ...theme?.vars?.reduce((pre, cur) => {
               pre[cur.propertyName] = cur.value;
@@ -1041,12 +1048,14 @@ export function createMybricks(options: CreateMybricksOptions) {
             data-zone-kind="popup"
             data-desn-page={dialogIndex}
             style={{
-              minWidth: 1200,
+              ...(data?.frameStyle?.width
+                ? { width: data.frameStyle.width }
+                : { minWidth: 1200, width: 'fit-content' }
+              ),
               minHeight: 600,
               display: 'inline-block',
               transform: 'scale(1)',
               height: 'fit-content',
-              width: 'fit-content',
               ...env._debugTarget?.style,
               ...theme?.vars?.reduce((pre, cur) => {
                 pre[cur.propertyName] = cur.value;
