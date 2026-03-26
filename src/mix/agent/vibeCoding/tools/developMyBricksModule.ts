@@ -134,7 +134,7 @@ export default function developMyBricksModule(config: Config) {
 
   return {
     name: NAME,
-    displayName: "编写组件",
+    displayName: "生成代码",
     description: `根据用户需求，以及类库知识，一次性编写/修改模块中的所有代码，开发MyBricks模块。
 参数：无
 

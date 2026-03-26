@@ -25,7 +25,7 @@ export default function developMyBricksModule(config: Config) {
 
   return {
     name: NAME,
-    displayName: "编写组件",
+    displayName: "生成代码",
     description: `根据用户需求，以及各类上下文，一次性编写、修改页面中的代码，实现功能。
 参数：无
 工具分类：操作执行类；
