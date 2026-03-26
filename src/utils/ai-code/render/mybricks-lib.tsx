@@ -1052,7 +1052,7 @@ export function createMybricks(options: CreateMybricksOptions) {
                 ? { width: data.frameStyle.width }
                 : { minWidth: 1200, width: 'fit-content' }
               ),
-              minHeight: 600,
+              minHeight: 2000,
               display: 'inline-block',
               transform: 'scale(1)',
               height: 'fit-content',
