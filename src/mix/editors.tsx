@@ -980,8 +980,7 @@ export default function (props: Props, actions: Actions, ...args) {
           style: {
             // 水平位移：把「页相对根容器」的视口距离，按根容器缩放比换算成布局坐标，再减去左边框和内边距
             transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`,
-            maxWidth: pageBCR.width,
-            // maxHeight: pageBCR.height
+            maxWidth: params.data?.frameStyle?.width ?? pageBCR.width,
           },
           rootStyle: {
             // 根容器内容区宽高（去掉 padding 后的可排版区域）
