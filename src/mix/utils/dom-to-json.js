@@ -2545,7 +2545,11 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     var colCount = parseGridTemplateColumnsCount(gridTemplateCols);
     if (colCount != null && colCount > 0) {
       style.layoutGridColumns = colCount;
-      if (style.layoutMode === 'HORIZONTAL') style.layoutWrap = 'WRAP';
+    }
+    // CSS grid 横向布局：无论固定列数还是 auto-fill/auto-fit，均设为换行
+    // （auto-fill/auto-fit 时 colCount 为 null，但 grid 本身就是换行的）
+    if (style.layoutMode === 'HORIZONTAL' && gridTemplateCols && String(gridTemplateCols).trim() !== 'none') {
+      style.layoutWrap = 'WRAP';
     }
     var rowGap = px(d(['row-gap', 'rowGap', 'gap']) || (computed && computed.rowGap) || (computed && computed.gap));
     if (rowGap != null && rowGap > 0) style.counterAxisSpacing = rowGap;
