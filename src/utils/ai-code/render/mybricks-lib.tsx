@@ -318,6 +318,10 @@ function createRouterLib({
     return _env.mode === 'design';
   }
 
+  const transformPath = ({ index, path }) => {
+    return index ? '/' : (path.startsWith("/") ? path : `/${path}`)
+  }
+
   interface AppContextValue {
     state: 'collect_routes' | 'runtime'
     registerRoute: (route: string) => void
@@ -504,7 +508,7 @@ function createRouterLib({
       React.Children.forEach(children, (child) => {
         if (React.isValidElement(child) && (child.type as any).__type === ROUTE_TYPE) {
           const { path, index } = child.props;
-          appCtx.registerRoute(index ? '/' : path);
+          appCtx.registerRoute(transformPath({ index, path }));
         }
       });
     }
@@ -519,31 +523,36 @@ function createRouterLib({
 
     if (appContext.state === 'collect_routes') {
       return element
-    } else if (routerContext.currentPath === (index ? '/' : path)) {
-      const { activeThemeId, themes } = data.themes;
-      const theme = themes.find((theme) => theme.id === activeThemeId);
+    } else if (index || path) {
+      const currentPath = transformPath({ index: null, path: routerContext.currentPath })
+      const propPath = transformPath({ index, path })
 
-      return (
-        <div
-          data-zone-type='page'
-          data-zone-kind='page'
-          data-desn-page={index ? '/' : path}
-          style={{
-            minWidth: 1200,
-            minHeight: 600,
-            display: 'inline-block',
-            transform: 'scale(1)',
-            height: 'fit-content',
-            width: 'fit-content',
-            ...env._debugTarget?.style,
-            ...theme?.vars?.reduce((pre, cur) => {
-              pre[cur.propertyName] = cur.value;
-              return pre;
-            }, {})
-          }}>
-            {element}
-        </div>
-      );
+      if (currentPath === propPath) {
+         const { activeThemeId, themes } = data.themes;
+        const theme = themes.find((theme) => theme.id === activeThemeId);
+
+        return (
+          <div
+            data-zone-type='page'
+            data-zone-kind='page'
+            data-desn-page={index ? '/' : path}
+            style={{
+              minWidth: 1200,
+              minHeight: 600,
+              display: 'inline-block',
+              transform: 'scale(1)',
+              height: 'fit-content',
+              width: 'fit-content',
+              ...env._debugTarget?.style,
+              ...theme?.vars?.reduce((pre, cur) => {
+                pre[cur.propertyName] = cur.value;
+                return pre;
+              }, {})
+            }}>
+              {element}
+          </div>
+        );
+      }
     }
 
     return null

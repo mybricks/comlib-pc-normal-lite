@@ -276,9 +276,10 @@ export class Project {
   async exportDesignerToMessage(): Promise<string> {
     const designModeKnowledge = `
 ## 页面渲染：
+通过 Route 注册的组件统一定义为页面；
 ### 搭建态渲染方式
-  - 在搭建态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的页面；
-  - 这意味着每个通过 Route 注册的 pageRef 页面都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
+  - 在搭建态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的组件；
+  - 这意味着每个通过 Route 注册的 comRef 组件都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
 ### 运行态渲染方式
   - 在运行态中，只有当前激活路由对应的页面会被展示；
 `;

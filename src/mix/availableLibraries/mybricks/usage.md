@@ -2,7 +2,7 @@
 - 内置的核心类库，对于组件、页面、浮层（弹窗/抽屉等）、APP声明以及路由相关功能必须使用此组件
 
 ## 使用指南
-- 所有页面都需要通过 pageRef 包装，无需导出；
+- 所有页面都需要通过 Route + comRef 包装，无需导出；
 - 所有组件和模块都需要使用 comRef 包装，无需导出;
 - 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在设计态进行展示，无需导出;
 - 路由通过 Routes + Route 进行渲染；
@@ -29,7 +29,7 @@
 - 正确：\`<UserInfo />\`
 
 ### 页面声明
-页面必须通过 pageRef 包裹实现，pageRef是MyBricks提供的高阶函数，用于创建一个页面。
+页面同样需要通过 comRef 包裹实现，但是需要被 Route 注册为页面
   1. 该组件默认接收<保留字段>；
   2. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；
 
@@ -125,7 +125,7 @@ export default {
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。
 
 ```jsx
-import { comRef, pageRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
+import { comRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
 import { Button } from 'xy-ui';
 import css from 'style.less';
 
@@ -144,7 +144,7 @@ const ToolBar = comRef(({ store }) => {
   ));
 });
 
-const PageButton = pageRef(() => (
+const PageButton = comRef(() => (
   <div className={css.viewContainer}><ToolBar /></div>
 ));
 
@@ -157,7 +157,7 @@ const UserDetail = comRef(({ store }) => {
   return <div>{user?.name}</div>;
 });
 
-const PageUser = pageRef(() => <UserDetail />);
+const PageUser = comRef(() => <UserDetail />);
 
 /**
  * @title 示例项目

@@ -10,7 +10,7 @@
 组件必须通过 comRef
 
 ### 页面声明
-页面必须通过 pageRef 包裹实现
+页面必须通过 Route + comRef 包裹实现
 
 
 ### 接口使用
@@ -71,7 +71,7 @@ export default {
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。
 
 ```jsx
-import { comRef, pageRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
+import { comRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
 import { Button } from 'xy-ui';
 import css from 'style.less';
 
@@ -90,7 +90,7 @@ const ToolBar = comRef(({ store }) => {
   ));
 });
 
-const PageButton = pageRef(() => (
+const PageButton = comRef(() => (
   <div className={css.viewContainer}><ToolBar /></div>
 ));
 
@@ -103,7 +103,7 @@ const UserDetail = comRef(({ store }) => {
   return <div>{user?.name}</div>;
 });
 
-const PageUser = pageRef(() => <UserDetail />);
+const PageUser = comRef(() => <UserDetail />);
 
 /**
  * @title 示例项目

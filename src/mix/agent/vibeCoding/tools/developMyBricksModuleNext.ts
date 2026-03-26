@@ -56,7 +56,7 @@ export default function developMyBricksModule(config: Config) {
   1. runtime.jsx文件
   <代码示例>
   \`\`\`jsx file="runtime.jsx"
-  import { comRef, pageRef, appRef, logger } from "mybricks";
+  import { comRef, appRef, logger } from "mybricks";
   import css from 'style.less'
 
   const Title = comRef(({ title }) => {
@@ -75,7 +75,7 @@ export default function developMyBricksModule(config: Config) {
     )
   })
 
-  const HelloWorld = pageRef(() => {
+  const HelloWorld = comRef(() => {
     return (
       <div className={css.container}>
         <Title title="Hello" />
@@ -121,12 +121,6 @@ export default function developMyBricksModule(config: Config) {
     1. 该组件默认接收<保留字段>；
     2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
   </comRef说明>
-
-  <pageRef说明>
-    pageRef是MyBricks提供的高阶函数，用于创建一个页面。
-    1. 该组件默认接收<保留字段>；
-    2. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；
-  </pageRef说明>
 
   <popupRef说明>
     popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
@@ -585,7 +579,7 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`after file="runtime.jsx"
   import css from 'style.less';
-  import { comRef, pageRef, appRef, Routes, Route, logger } from 'mybricks';
+  import { comRef, appRef, Routes, Route, logger } from 'mybricks';
   import { Button } from 'antd';
 
   const MainButton = comRef(({ store }) => {
@@ -605,7 +599,7 @@ export default function developMyBricksModule(config: Config) {
     )
   });
 
-  const PageButton = pageRef(() => {
+  const PageButton = comRef(() => {
     return (
       <div className={css.viewContainer}>
         <MainButton />
@@ -648,7 +642,7 @@ export default function developMyBricksModule(config: Config) {
   \`\`\`
 
   \`\`\`after file="runtime.jsx"
-  import { comRef, pageRef, appRef, Routes, Route, useNavigate, logger } from 'mybricks';
+  import { comRef, appRef, Routes, Route, useNavigate, logger } from 'mybricks';
   import { Button } from 'xy-ui';
   import css from 'style.less';
 
@@ -671,7 +665,7 @@ export default function developMyBricksModule(config: Config) {
     })
   })
 
-  const PageButton = pageRef(() => {
+  const PageButton = comRef(() => {
     return (
       <div className={css.viewContainer}>
         <ToolBar />
@@ -680,7 +674,7 @@ export default function developMyBricksModule(config: Config) {
   })
   
 
-  const PageView = pageRef(() => {
+  const PageView = comRef(() => {
     return (
       <div className={css.viewContainer}>
         // 查看页面内容
@@ -688,7 +682,7 @@ export default function developMyBricksModule(config: Config) {
     )
   })
 
-  const PageEdit = pageRef(() => {
+  const PageEdit = comRef(() => {
     return (
       <div className={css.viewContainer}>
         // 编辑页面内容

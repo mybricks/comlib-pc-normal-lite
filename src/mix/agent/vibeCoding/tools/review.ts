@@ -13,20 +13,10 @@ interface Config {
 
 // ─── Review 规则定义 ───────────────────────────────────────────────────────────
 
-const RULE_PAGE_REF = `
-  <规则: pageRef使用规范>
-    - 【强制】所有页面组件必须使用 pageRef 包装，不得使用普通函数组件或 comRef 替代；
-    - 整个模块中必须存在至少一个 pageRef 定义；
-    - pageRef 组件无需导出；
-    - 【违规示例】使用 comRef 定义页面：\`const LoginPage = comRef(() => {...})\`；
-    - 【正确示例】\`const LoginPage = pageRef(() => {...})\`；
-  </规则>
-`;
-
 const RULE_APP_REF = `
   <规则: appRef使用规范>
     - 整个项目有且只能有一个 export default 导出，那就是 appRef；
-    - appRef 通常配合 Routes + Route 渲染各个 pageRef 页面；
+    - appRef 通常配合 Routes + Route 渲染各个页面；
   </规则>
 `;
 
@@ -50,7 +40,7 @@ const RULE_POPUP_REF = `
 const RULE_BLOCK_INDEPENDENCE = `
   <规则: 区块独立性>
     - 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新；
-    - 如果是页面，必须通过pageRef + Route 的方式渲染，禁止在组件内部进行条件渲染；
+    - 如果是页面，必须通过comRef + Route 的方式渲染，禁止在组件内部进行条件渲染；
   </规则>
 `;
 
@@ -58,7 +48,7 @@ const RULE_ROUTES = `
   <规则: 路由规范>
     - 路由相关功能必须使用 mybricks 提供的 路由功能，禁止使用第三方路由库；
     - 多页面项目必须在 appRef 中通过 Routes + Route 组织路由，禁止在组件内部进行条件渲染来模拟路由切换；
-    - 每个路由页面必须使用 pageRef 包裹，并作为 Route 的 element 传入，element不得使用表达式；
+    - 每个路由页面必须使用 comRef 包裹，并作为 Route 的 element 传入，element不得使用表达式；
     - 使用 useNavigate 进行页面跳转，禁止直接修改 window.location；
     - 使用 useLocation 获取当前路径信息，使用 useParams 获取动态路由参数；
   </规则>
@@ -66,7 +56,7 @@ const RULE_ROUTES = `
 
 const RULE_STORE = `
   <规则: store规范>
-    - 业务逻辑必须封装在 store 中，禁止在 comRef/pageRef 组件内直接声明 useState 等 hooks；
+    - 业务逻辑必须封装在 store 中，禁止在 comRef 组件内直接声明 useState 等 hooks；
     - 禁止在 store 内出现 mock 相关代码；
     - 禁止使用 getter 方法；
     - store.js 是纯 JavaScript 文件，禁止出现任何 JSX 语法；
@@ -90,7 +80,6 @@ const RULE_LOGGER = `
 const ALL_RULES = [
   RULE_BLOCK_INDEPENDENCE,
   RULE_ROUTES,
-  RULE_PAGE_REF,
   RULE_APP_REF,
   RULE_COM_REF,
   RULE_POPUP_REF,
@@ -112,7 +101,7 @@ export default function reviewMyBricksModule(config: Config = {}) {
 
 作用：对当前模块代码进行全面的代码审查和自动修复，包括但不限于：
 - 检查代码是否符合MyBricks模块规范；
-- 检查页面是否正确使用 pageRef；
+- 检查页面是否正确使用 Route + comRef；
 - 检查组件是否正确使用 comRef；
 
 前置：修改代码后，建议使用此工具进行审查和修复。
@@ -192,32 +181,9 @@ export default function reviewMyBricksModule(config: Config = {}) {
 
   <b>发现的问题：</b>
 
-  1. LoginPage 是页面组件，但使用了 comRef 包装，应使用 pageRef；
-  2. MainButton 的 onClick 事件缺少 logger.info 日志；
+  1. MainButton 的 onClick 事件缺少 logger.info 日志；
 
   接下来进行修复：
-
-  \`\`\`before file="runtime.jsx"
-  import { comRef, appRef, logger } from 'mybricks';
-  import dayjs from 'dayjs';
-  \`\`\`
-
-  \`\`\`after file="runtime.jsx"
-  import { comRef, pageRef, appRef, Routes, Route, logger } from 'mybricks';
-  import dayjs from 'dayjs';
-  \`\`\`
-
-  \`\`\`before file="runtime.jsx"
-  const LoginPage = comRef(() => {
-    return <div>login</div>;
-  }
-  \`\`\`
-
-  \`\`\`after file="runtime.jsx"
-  const LoginPage = pageRef(() => {
-    return <div>login</div>;
-  }
-  \`\`\`
 
   \`\`\`before file="runtime.jsx"
       <button

@@ -26,8 +26,8 @@ export default function syncMarkdownformybricksModule(config) {
   <节点>
   按「在 JSX 中依赖顺序」依次写出，层级用标题级别表示。
   - appRef 应用节点
-  - pageRef 页面节点
-  - comRef 组件节点
+  - 页面节点：通过 Route 注册的 comRef 组件视为页面节点（即在 <Route element={<XxxComponent />} /> 中直接引用的组件）
+  - comRef 组件节点（未通过 Route 注册的）
   </节点>
 
   <根节点>
@@ -40,12 +40,13 @@ export default function syncMarkdownformybricksModule(config) {
   - 若仅有 page 与 com：page 对应一级（根即 # default）、com 对应二级（##）；
   - 若仅有 app 与 page 或单层类型，则按实际层级依次使用 ##、###，层级连续且不超过三级。
   - 标题内容对应代码中各节点变量声明的变量名；
+  - 必须按层级关系书写，子节点紧跟在父节点之后，不能将同级标题集中写在前面。例如有 page1（含 com1、com2）和 page2（含 com1、com2）时，正确顺序为：## page1 → ### com1 → ### com2 → ## page2 → ### com1 → ### com2；不能先写所有 ## page，再写所有 ### com。
   </标题层级>
 
   <节点说明>
   - title：根据节点内容与名称写出简洁的语义化标题，体现节点职责，避免与组件名简单重复（如组件叫 SignIn 时 title 可用「登录页」而非「登录」）；
   - summary：对节点的用途、场景或关键行为做简短说明，补充 title 未涵盖的信息，避免与 title 重复或仅罗列 UI 元素；
-  - type：app | page | com，与 appRef/pageRef/comRef 一一对应。
+  - type：app | page | com，其中 app 对应 appRef，page 对应通过 Route 注册的 comRef（页面组件），com 对应 comRef（非路由页面）。
   - events：该组件内声明的事件列表
     1. 从源码识别：JSX 块注释如 /** onClick:事件名 */（或其它 onXXX:事件名）
     2. 每条一行，格式：事件名 简短中文说明 - {根据事件内容生成对应的 Mermaid 语法流程图}
@@ -82,7 +83,7 @@ export default function syncMarkdownformybricksModule(config) {
 （以下仅说明 README.md 的文档结构与字段含义；实际更新文档时请勿照抄此格式，必须按下方「如何更新文档」用 before/after 块返回修改。）
 
 \`\`\`jsx file="runtime.jsx"
-import { comRef, pageRef, appRef, Routes, Route } from 'mybricks'
+import { comRef, appRef, Routes, Route } from 'mybricks'
 
 const StepRegisterForm = comRef(({ store }) => {
   return (
@@ -98,7 +99,7 @@ const StepRegisterForm = comRef(({ store }) => {
   )
 })
 
-const SignUp = pageRef(() => {
+const SignUp = comRef(() => {
   return (
     <div>
       <h1>注册</h1>
@@ -107,7 +108,7 @@ const SignUp = pageRef(() => {
   )
 })
 
-const SignIn = pageRef(({ store }) => {
+const SignIn = comRef(({ store }) => {
   return (
     <div>
       <h1>登录</h1>
@@ -150,6 +151,8 @@ export default appRef(() => {
 - events:
   - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
+（SignIn 是通过 Route index 注册的页面组件，因此 type 为 page）
+
 ---
 
 ## SignUp
@@ -157,6 +160,8 @@ export default appRef(() => {
 - title: 注册页
 - summary: 用户注册入口页，内嵌注册表单组件完成填写与提交。
 - type: page
+
+（SignUp 是通过 Route path="signup" 注册的页面组件，因此 type 为 page）
 
 ---
 
@@ -181,7 +186,7 @@ export default appRef(() => {
   - 需求直接要求更新文档。
 
   2）结构或内容变化（建议更新）
-  - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/pageRef/comRef 节点（即文档中的「# default」及各级 ##、### 标题对应的节点）。
+  - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/comRef 节点，或 Route 中注册的页面组件发生变化（即文档中的「# default」及各级 ##、### 标题对应的节点）。
   - 根节点或层级变化：export default 的根节点类型或子节点类型组合发生变化，导致标题层级规则需要调整（如从「仅 page + com」变为「app + page + com」）。
   - 事件增删改：在 JSX 中新增、删除或修改了带 /** onXXX:事件名 */ 注释的事件；或某节点下事件列表与 README.md 中该节点的 events 不一致。
   - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 README.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
