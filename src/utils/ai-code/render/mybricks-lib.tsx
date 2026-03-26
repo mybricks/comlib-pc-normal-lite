@@ -375,22 +375,31 @@ function createRouterLib({
               {app.state === 'runtime' && (
                 collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
                   return (
-                    <CollectingRoute
-                      {...props}
-                      _env={_env}
-                      store={autoStore.current}
-                      _state={state}
-                      _route={route}
-                      _Component={Component}
-                    />
+                    <Page path={route}>
+                      <CollectingRoute
+                        {...props}
+                        _env={_env}
+                        store={autoStore.current}
+                        _state={state}
+                        _route={route}
+                        _Component={Component}
+                      />
+                    </Page>
                   )
                 }) : (
-                  <Component
-                    {...props}
-                    _env={_env}
-                    store={autoStore.current}
-                    _state={state}
-                  />
+                  <Page path={'/'}>
+                    <Route
+                      path='/'
+                      element={(
+                        <Component
+                          {...props}
+                          _env={_env}
+                          store={autoStore.current}
+                          _state={state}
+                        />
+                      )}
+                    />
+                  </Page>
                 )
               )}
               {app.state === 'runtime' && (
@@ -469,6 +478,34 @@ function createRouterLib({
     }
   }
 
+  const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
+    const { path = '/', children } = params;
+    const { activeThemeId, themes } = data.themes;
+    const theme = themes.find((theme) => theme.id === activeThemeId);
+
+    return (
+      <div
+        data-zone-type='page'
+        data-zone-kind='page'
+        data-desn-page={path}
+        style={{
+          minWidth: 1200,
+          minHeight: 600,
+          display: 'inline-block',
+          transform: 'scale(1)',
+          height: 'fit-content',
+          width: 'fit-content',
+          ...env._debugTarget?.style,
+          ...theme?.vars?.reduce((pre, cur) => {
+            pre[cur.propertyName] = cur.value;
+            return pre;
+          }, {})
+        }}>
+          {children}
+      </div>
+    )
+  }
+
   const RuntimeRoute = (params: { _route: string, _Component: React.FC<any> }) => {
     const { _route, _Component: Component } = params;
     const [{ stack, cursor }, dispatch] = useReducer(
@@ -494,9 +531,11 @@ function createRouterLib({
 
     return (
       <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
-        <RouterContext.Provider value={contextValue}>
-          <Component {...params}/>
-        </RouterContext.Provider>
+        <Page>
+          <RouterContext.Provider value={contextValue}>
+            <Component {...params}/>
+          </RouterContext.Provider>
+        </Page>
       </div>
     )
   }
@@ -528,30 +567,7 @@ function createRouterLib({
       const propPath = transformPath({ index, path })
 
       if (currentPath === propPath) {
-         const { activeThemeId, themes } = data.themes;
-        const theme = themes.find((theme) => theme.id === activeThemeId);
-
-        return (
-          <div
-            data-zone-type='page'
-            data-zone-kind='page'
-            data-desn-page={index ? '/' : path}
-            style={{
-              minWidth: 1200,
-              minHeight: 600,
-              display: 'inline-block',
-              transform: 'scale(1)',
-              height: 'fit-content',
-              width: 'fit-content',
-              ...env._debugTarget?.style,
-              ...theme?.vars?.reduce((pre, cur) => {
-                pre[cur.propertyName] = cur.value;
-                return pre;
-              }, {})
-            }}>
-              {element}
-          </div>
-        );
+        return element;
       }
     }
 
@@ -1117,7 +1133,8 @@ export function createMybricks(options: CreateMybricksOptions) {
   return {
     popupRef: wrapDialogWithStore,
     comRef: wrapWithStore,
-    pageRef: wrapPageWithStore,
+    // pageRef: wrapPageWithStore,
+    pageRef: wrapWithStore,
     appRef: routerLib.createAppRef(store, useSyncExternalStore, popupRefRegistry),
     Routes: routerLib.Routes,
     Route: routerLib.Route,
