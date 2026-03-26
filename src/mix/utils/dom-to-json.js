@@ -2350,23 +2350,36 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     }
     // 终极 fallback：cssRuleMap 里没有规则（如 antd 全局 CSS 不在 style 标签内），
     // 且 computed 也是 "normal"（Shadow DOM cascade 丢失），改用子元素实际位置反推。
-    // HORIZONTAL flex 时：取第一个子元素的 getBoundingClientRect()，
-    // 若子元素中心点与容器中心点对齐（误差 <3px）→ CENTER；否则 MIN。
-    // 注意：SVG 在 Shadow DOM 里 getBoundingClientRect().height 可能为 0，需特殊处理。
+    // HORIZONTAL flex 时：
+    //   1. 优先找「高度明显小于行高（< containerH * 0.95）」的流内子项，用它的中心偏移判断 center / flex-start；
+    //   2. 若流内子项全都≈满行高，说明是 align-items: stretch（默认拉满），直接视为 stretch（→ MIN），
+    //      避免把「stretch 下盒子中心恰在行中」误判成 center；
+    //   3. 若只有 height=0 的子项（SVG），用偏移法兜底。
     var _elClassForDebug = (el.className && typeof el.className === 'string') ? el.className : '';
     if ((!alignItems || alignItems === 'normal') && style.layoutMode === 'HORIZONTAL' && el.children && el.children.length > 0) {
       var _containerRect = el.getBoundingClientRect();
       var _containerH = _containerRect.height;
       var _containerTop = _containerRect.top;
-      var _sampleChild = null;
-      // 优先取有实际高度的子元素，其次取任意子元素（含 SVG）
+      var _sampleChild = null;      // 找到的「矮」子项（未撑满行高），用于中心法
+      var _fullHeightChild = null;  // 流内满高子项备用
+      var _svgFallback = null;      // height=0 子项（SVG 等）备用
       for (var _ci = 0; _ci < el.children.length; _ci++) {
         var _ch = el.children[_ci];
+        // 跳过脱离 flex 流的绝对定位子节点（其高度与行高无关）
+        try {
+          var _chPos = (window.getComputedStyle(_ch).position || '').toLowerCase();
+          if (_chPos === 'absolute' || _chPos === 'fixed') continue;
+        } catch (_ce) {}
         var _chH = _ch.getBoundingClientRect().height;
-        if (_chH > 0) { _sampleChild = _ch; break; }
-        if (!_sampleChild) _sampleChild = _ch; // 备用：height=0 的 SVG 等
+        if (_chH > 0 && _containerH > 0 && _chH < _containerH * 0.95) {
+          _sampleChild = _ch; // 矮子项优先，找到即停
+          break;
+        }
+        if (!_fullHeightChild && _chH > 0) _fullHeightChild = _ch;
+        if (!_svgFallback && _chH === 0) _svgFallback = _ch;
       }
       if (_sampleChild && _containerH > 0) {
+        // 用矮子项的位置判断 center / flex-start
         var _childRect = _sampleChild.getBoundingClientRect();
         if (_childRect.height > 0) {
           var _childCenterY = _childRect.top - _containerTop + _childRect.height / 2;
@@ -2376,6 +2389,13 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
           var _childOffsetY = _childRect.top - _containerTop;
           alignItems = (_childOffsetY > _containerH * 0.2 && _childOffsetY < _containerH * 0.8) ? 'center' : 'flex-start';
         }
+      } else if (_fullHeightChild) {
+        // 流内子项都≈满高 → align-items: stretch（默认值），stretch 映射为 MIN（交叉轴顶对齐）
+        alignItems = 'stretch';
+      } else if (_svgFallback && _containerH > 0) {
+        // 只有 height=0 的 SVG 子项，用偏移法兜底
+        var _childOffsetY = _svgFallback.getBoundingClientRect().top - _containerTop;
+        alignItems = (_childOffsetY > _containerH * 0.2 && _childOffsetY < _containerH * 0.8) ? 'center' : 'flex-start';
       }
     }
     if ((!justifyContent || justifyContent === 'normal') && cssRuleMap && typeof el.matches === 'function') {
@@ -2525,7 +2545,11 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     var colCount = parseGridTemplateColumnsCount(gridTemplateCols);
     if (colCount != null && colCount > 0) {
       style.layoutGridColumns = colCount;
-      if (style.layoutMode === 'HORIZONTAL') style.layoutWrap = 'WRAP';
+    }
+    // CSS grid 横向布局：无论固定列数还是 auto-fill/auto-fit，均设为换行
+    // （auto-fill/auto-fit 时 colCount 为 null，但 grid 本身就是换行的）
+    if (style.layoutMode === 'HORIZONTAL' && gridTemplateCols && String(gridTemplateCols).trim() !== 'none') {
+      style.layoutWrap = 'WRAP';
     }
     var rowGap = px(d(['row-gap', 'rowGap', 'gap']) || (computed && computed.rowGap) || (computed && computed.gap));
     if (rowGap != null && rowGap > 0) style.counterAxisSpacing = rowGap;
