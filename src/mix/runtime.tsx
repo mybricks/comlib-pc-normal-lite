@@ -22,7 +22,7 @@ export default genAIRuntime({
     '制作一个包含分步表单的注册页面',
     '实现一个企业通讯录页面，左侧是部门组织架构树，右侧是该部门下的员工详情列表，右上角提供添加员工按钮',
   ],
-  dependencies: (() => {
+  getDependencies: () => {
     const base = {
       antd,
       'echarts-for-react': echartsForReact,
@@ -42,7 +42,8 @@ export default genAIRuntime({
     };
 
     // projectConfig.availableLibraries 中的库通过 library 全局变量名从 window 获取
-    const projectLibs = context.projectConfig?.availableLibraries ?? [];
+    const projectConfig = (window as any)._getProjectConfig_?.();
+    const projectLibs = projectConfig?.availableLibraries ?? [];
     const projectDefs: PropertyDescriptorMap = {};
     for (const lib of projectLibs) {
       if (lib.name && lib.library && !(lib.name in base) && !(lib.name in builtinDefs)) {
@@ -56,7 +57,7 @@ export default genAIRuntime({
     }
 
     return Object.defineProperties(base, { ...builtinDefs, ...projectDefs });
-  })(),
+  },
   wrapper: ({ children, env, canvasContainer }) => {
     // const container = useRef(
     //   env.edit || env.runtime.debug

@@ -142,7 +142,7 @@ interface AIRuntimeProps {
   /** 建议的例子 */
   examples: string[],
   /** 组件运行时的依赖 */
-  dependencies?: Record<string, any>,
+  getDependencies?: () => Record<string, any>,
   wrapper?: FunctionComponent<{ children: ReactElement, env: any, canvasContainer: any }>,
   /** logger 对象或 logger 工厂函数（接受组件 id 返回 logger 对象） */
   logger: any | ((id: string) => any);
@@ -154,7 +154,7 @@ interface AIRuntimeProps {
 //   }
 // }
 
-export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, logger}: AIRuntimeProps) =>
+export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -306,7 +306,7 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper, l
             placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
             renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} comId={id} />}
             dependencies={{
-              ...(dependencies ?? {}),
+              ...(getDependencies?.() ?? {}),
               'react': React,
               '@ant-design/icons': icons,
             }}
