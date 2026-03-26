@@ -1,6 +1,6 @@
 import readRelated from "./readRelated";
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
-import reviewMyBricksModule from "./review";
+import checkDesignStatus from "./checkDesignStatus";
 import { getAllLibraryNames } from '../../../availableLibraries';
 
 const NAME = 'developMyBricksModule'
@@ -792,11 +792,10 @@ export default function developMyBricksModule(config: Config) {
 
       const commands: any = []
 
-      const needsReview = files.some((f) => ['runtime.jsx', 'store.js'].includes(f.fileName));
-      if (needsReview) {
-        if (!context.commands?.find((command) => command.name === reviewMyBricksModule.toolName)) {
-          // 代码修改后先做 review 和修复
-          commands.push({ toolName: reviewMyBricksModule.toolName });
+      const needsCheck = files.some((f) => ['runtime.jsx', 'store.js', 'style.less'].includes(f.fileName));
+      if (needsCheck) {
+        if (!context.commands?.find((command: any) => command.name === checkDesignStatus.toolName)) {
+          commands.push({ toolName: checkDesignStatus.toolName });
         }
       }
 

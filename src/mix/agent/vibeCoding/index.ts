@@ -17,7 +17,7 @@ import {
   type UpdateComponentFilesResult,
 } from "./tools/utils/files";
 import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
-import codeReviewAndFix from "./tools/review";
+import checkDesignStatus from "./tools/checkDesignStatus";
 import { uuid } from "../../../utils";
 
 /** 单文件项：fileName + content */
@@ -608,13 +608,7 @@ ${text}
               hasAttachments,
               onUpdate: onUpdateFiles,
             }),
-            codeReviewAndFix({
-              onUpdate: (p) => {
-                onProgress("complete")
-                onUpdateFiles(p)
-              },
-            }),
-            answer(),
+            checkDesignStatus({ project }),
             syncMarkdownformybricksModule({
               onUpdate: (p) => {
                 const files = p.files;
@@ -630,7 +624,8 @@ ${text}
                   files: summary ? files.filter((f) => f.fileName !== "summary.md") : files
                 })
               },
-            })
+            }),
+            answer(),
           ],
           planningCheck: (tools: any[]) => {
             const toolNames = tools.map((t: any) => t[1]);
