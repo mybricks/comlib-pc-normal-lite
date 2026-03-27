@@ -5,6 +5,7 @@ import type { LibraryValidator, ValidateContext } from '../types';
  */
 const BUILTIN_LIBRARIES: readonly string[] = [
   'mybricks',
+  'mybricks/testing',
   'style.less',
   './style.less',
   'service',

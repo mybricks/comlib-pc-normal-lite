@@ -6,6 +6,13 @@
 - 所有组件和模块都需要使用 comRef 包装，无需导出;
 - 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在设计态进行展示，无需导出;
 - 路由通过 Routes + Route 进行渲染；
+- 数据管理流程为：
+  - 1. 先通过 dataSource.js 维护正式环境基本的动态数据源；
+  - 2. 设计态和不同场景的调试情况由 setup.js 维护
+  - 3. store.js 使用 dataSource.js 来获取数据；
+  > 不得重复声明多余的数据；在 setup.js 有的数据不需要在 dataSource.js 中重复声明，同样也不需要在 store.js 中重复声明；
+- 必须维护一个 dataSource.js 文件用于存放正式环境数据；
+- 必须维护一个 setup.js 来保证多环境测试，其中mock环境是必须的；
 
 ### 项目声明
 项目必须export default 一个由 appRef 包裹的实现
@@ -64,11 +71,11 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
 ```
 
 ### 数据源使用
-所有数据（接口请求、静态数据）必须维护在 `dataSource.js` 文件中。
+所有正式数据（接口请求、静态数据）必须维护在 `dataSource.js` 文件中。
 
 通过继承 `DataSource` 基类并 `export default new MyDatasource()` 来声明数据源：
 
-```js dataSource.js 结构说明
+```js DataSource 说明
 // DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
 // 使得 setup.js 中的 spyOn 能在运行时替换对应方法的返回值，子类无需任何额外代码。
 class DataSource {
@@ -101,20 +108,18 @@ export default new MyDatasource()
 ```
 
 ### 环境声明（setup.js）
-`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）和 `prod` 环境（运行时自动激活）**。
+`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）**，其余环境根据用户需求来实现。
 
 通过 `describe` / `spyOn` 来描述每套环境的行为，**必须从 `'mybricks/testing'` import 这两个 API**。
-`describe` 的回调在激活时才执行（惰性），直接在回调里写配置即可，无需额外的 `before` 包裹：
+`describe` 的回调在激活时才执行（惰性），直接在回调里写配置即可。
 
-> 每个 runtimeCard 实例有独立的 dataSource 实例和 envRunner，互不干扰。
 
 ```js
 import { describe, spyOn } from 'mybricks/testing'
-import dataSource from 'dataSource'
+import dataSource from './dataSource'
 
-// 必须：设计态 mock 环境
+// 必须：设计态 mock 环境，设计态无法请求真实接口，需要保证真实接口的模拟返回
 describe('mock', () => {
-  spyOn(dataSource, 'getConfig').mockReturn({ theme: 'dark', version: '1.0.0' })
   spyOn(dataSource, 'getUserById').mockReturn({
     status: 200,
     data: { id: 1, name: '张三', age: 18 },
@@ -122,25 +127,28 @@ describe('mock', () => {
   })
 })
 
-// 必须：运行时 prod 环境
-describe('prod', () => {
-  dataSource.axios.defaults.baseURL = 'https://api.prod.com'
+// 按需：用户需要的话，需要配置中文名
+describe('预发环境', () => {
+  // 预发请求staging环境接口和特殊headers
+  dataSource.axios.defaults.baseURL = 'https://api.staging.com';
+  dataSource.axios.defaults.headers.common['x-env'] = 'staging';
 })
 
-// 可选：预发环境
-describe('staging', () => {
-  dataSource.axios.defaults.baseURL = 'https://api.staging.com'
-  dataSource.axios.defaults.headers.common['x-env'] = 'staging'
+// 按需：用户需要的话，需要配置中文名
+describe('无权限测试', () => {
+  // 测试接口403情况
+  spyOn(dataSource, 'getUserById').mockReturn({
+    status: 403,
+  })
 })
 ```
 
 #### spyOn 使用原则
 - **必须从 `'mybricks/testing'` import `describe` / `spyOn`**，禁止直接使用全局变量
-- `describe` 回调惰性执行，直接在回调里写 spyOn 和 axios.defaults 配置即可，无需 `before` 包裹
-- `spyOn(dataSource, 'method').mockReturn(value)`：完全替换该方法的返回值，value 应为接口完整响应体结构（含 status/data/message 等字段）
-- `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；每个 dataSource 实例的 axios 是独立的，不会污染其他 runtimeCard
-- **必须声明 `mock` 环境**（设计态自动激活）；**必须声明 `prod` 环境**（运行时自动激活）；未声明 `prod` 时 axios 保持默认配置
-- 每新增或修改一个 dataSource.js 方法，必须同步在 mock 环境的 describe 里更新 spyOn
+- `spyOn(dataSource, 'method').mockReturn(value)`：完全替换该方法的返回值
+- `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；每个 dataSource 实例的 axios 是独立的
+- **必须声明 `mock` 环境**（设计态自动激活）；
+- 每新增或修改一个 dataSource.js 方法，需要考虑 setup.js 的更新
 
 ### 路由使用
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。
