@@ -41,7 +41,7 @@ export interface EnvRunner {
  * 创建一个独立的 EnvRunner 实例。
  * 每次 eval setup.js 前调用，天然隔离、无跨 eval 状态污染。
  */
-export function createEnvRunner(pushDataLog?: (entry: { type: string; method: string; args: any[] }) => void): EnvRunner {
+export function createEnvRunner(collectDebugLogs?: (entry: { type: string; method: string; args: any[]; result?: any }) => void): EnvRunner {
   /** 各 describe 存储的回调（惰性，activate 时才执行） */
   const registry: Record<string, DescribeFn> = {};
 
@@ -73,8 +73,10 @@ export function createEnvRunner(pushDataLog?: (entry: { type: string; method: st
       mockReturn(value: any) {
         spiedMethods.push({ target, method, original });
         target[method] = (...callArgs: any[]) => {
-          pushDataLog?.({ type: 'spyOn', method, args: callArgs });
-          return Promise.resolve(value)
+          console.log('spyOn', method, callArgs, value);
+          const result = Promise.resolve(value);
+          collectDebugLogs?.({ type: 'spyOn', method, args: callArgs, result: value });
+          return result;
         };
       },
       mockRestore() {
@@ -87,7 +89,7 @@ export function createEnvRunner(pushDataLog?: (entry: { type: string; method: st
 
   function activate(name: string) {
     restoreAll();
-    pushDataLog?.({ type: 'envActivate', method: 'activate', args: [name] });
+    collectDebugLogs?.({ type: 'envActivate', method: 'activate', args: [name] });
     const fn = registry[name];
     if (!fn) {
       console.warn(`[mybricks/testing] Environment "${name}" not found.`);

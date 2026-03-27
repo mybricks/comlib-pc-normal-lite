@@ -62,28 +62,25 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
       data
     })
 
-    const pushDataLog = mybricks._pushDataLog;
+    const collectDebugLogs = mybricks._collectDebugLogs;
 
-    // 包装 DataSource：拦截用户在子类中定义的所有方法调用，将调用记录写入 data._logs
+    // 包装 DataSource：通过 Proxy 拦截用户子类实例的所有方法调用，将调用记录写入 data._logs
     class DataSourceWithLog extends DataSource {
       constructor() {
         super();
-        // 遍历实例原型链上用户定义的方法（不含 DataSource 基类自身和 Object.prototype）
-        let proto = Object.getPrototypeOf(this);
-        while (proto && proto !== DataSource.prototype && proto !== Object.prototype) {
-          Object.getOwnPropertyNames(proto).forEach((key) => {
-            if (key === 'constructor') return;
-            const descriptor = Object.getOwnPropertyDescriptor(proto, key);
-            if (descriptor && typeof descriptor.value === 'function') {
-              const original = descriptor.value;
-              (this as any)[key] = (...args: any[]) => {
-                pushDataLog({ type: 'dataSource', method: key, args });
-                return original.apply(this, args);
+        return new Proxy(this, {
+          get(target, key: string) {
+            const val = (target as any)[key];
+            if (typeof val === 'function' && key !== 'constructor') {
+              return (...args: any[]) => {
+                const result = val.apply(target, args);
+                collectDebugLogs({ type: 'dataSource', method: key, args, result });
+                return result;
               };
             }
-          });
-          proto = Object.getPrototypeOf(proto);
-        }
+            return val;
+          }
+        });
       }
     }
 

@@ -48,7 +48,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   /** 向 data._logs 追加一条日志记录（按打印顺序入栈） */
-  const pushDataLog = (entry: { type: string; method: string; args: any[] }) => {
+  const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
     if (data && Array.isArray(data._logs)) {
       data._logs.push({ ...entry, timestamp: Date.now() });
     }
@@ -422,8 +422,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     get(target, prop: string) {
       const original = typeof target[prop] === 'function' ? target[prop] : (() => {});
       return (...args: any[]) => {
-        original(...args);
-        pushDataLog({ type: 'logger', method: prop, args });
+        const result = original(...args);
+        collectDebugLogs({ type: 'logger', method: prop, args, result });
+        return result;
       };
     }
   });
@@ -461,7 +462,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     logger: capturedLogger,
     makeAutoObservable,
     /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 data._logs */
-    _pushDataLog: pushDataLog,
+    _collectDebugLogs: collectDebugLogs,
     logger,
     makeAutoObservable,
     PopupVisible,
