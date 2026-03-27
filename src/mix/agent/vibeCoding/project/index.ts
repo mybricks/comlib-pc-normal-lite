@@ -26,25 +26,15 @@ export const ROOT_NAME = 'root';
 /** 项目配置 */
 export interface ProjectConfig {
   /** project.json 根数组（仅取第一个根节点） */
-  // projectJson: ProjectNode[];
-  /** 获取 runtime.jsx 全文 */
-  getRuntimeContent: () => string;
-  /** 获取 style.less 全文 */
-  getStyleContent: () => string;
-  /** 获取 store.js 全文 */
-  getStoreContent: () => string;
-  /** 获取 service.js 全文 */
-  getServiceContent: () => string;
-  /** 获取 README.md 全文 */
-  getRuntimeMdContent: () => string;
-  /** 获取 mock.json 全文（设计态 mock 数据） */
-  getMockJsonContent: () => string;
   /** 获取主题配置全文 */
   getThemesContent: () => string;
   /** 获取设计器运行时状态（由渲染层写入） */
   getDesignerState?: () => { mode?: string; pages: string[]; popups: string[] } | undefined;
   /** 获取当前运行时报错列表 */
   getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
+
+
+  getFiles: () => any[];
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
@@ -326,13 +316,7 @@ ${canvasStatus}
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent, getStoreContent, getServiceContent, getRuntimeMdContent, getMockJsonContent, getThemesContent } = this.config;
-    const runtimeContent = getRuntimeContent();
-    const styleContent = getStyleContent();
-    const storeContent = getStoreContent();
-    const serviceContent = getServiceContent();
-    const runtimeMdContent = getRuntimeMdContent();
-    const mockJsonContent = getMockJsonContent();
+    const { getFiles, getThemesContent } = this.config;
     const themesContent = getThemesContent();
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
@@ -366,91 +350,29 @@ ${themesContent}
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
 `;
 
-    // const archMd = buildArchitectureMd(this.root);
-
     const libraryDocsContent = getEffectiveLibraryDocs();
-
     const fileSectionParts: string[] = [];
+
     fileSectionParts.push('\n## 源代码\n');
     fileSectionParts.push('包含项目中的各代码文件。所有折叠内容可通过读取工具展开\n');
 
-    const runtimeLines = runtimeContent.split(/\r?\n/);
-    const styleLines = styleContent.split(/\r?\n/);
-    const storeLines = storeContent.split(/\r?\n/);
-    const serviceLines = serviceContent.split(/\r?\n/);
-    const runtimeMdLines = runtimeMdContent.split(/\r?\n/);
-    const mockJsonLines = mockJsonContent.split(/\r?\n/);
-    const isFullFile = this.expandedNames.has(ROOT_NAME);
-    // const defaultImportRanges =
-    //   this.root.commonImports
-    //     ?.filter((c) => c.path === RUNTIME_PATH)
-    //     .flatMap((c) => (c.locs ?? []).map(([start, end]) => ({ start, end }))) ?? [];
-    // const runtimeRanges = isFullFile
-    //   ? [{ start: 1, end: runtimeLines.length }]
-    //   : mergeRanges([
-    //       ...defaultImportRanges,
-    //       ...getInitialComponentRangesForRuntime(this.root),
-    //       ...getExpandedRangesForFile(this.root, this.expandedNames, RUNTIME_PATH),
-    //     ]);
-    // const styleRanges = isFullFile
-    //   ? [{ start: 1, end: styleLines.length }]
-    //   : getExpandedRangesForFile(this.root, this.expandedNames, STYLE_PATH);
-    // const storeRanges = isFullFile
-    //   ? [{ start: 1, end: storeLines.length }]
-    //   : getExpandedRangesForFile(this.root, this.expandedNames, STORE_PATH);
-    // const serviceRanges = isFullFile
-    //   ? [{ start: 1, end: serviceLines.length }]
-    //   : getExpandedRangesForFile(this.root, this.expandedNames, SERVICE_PATH);
+    const files = getFiles();
 
-    const runtimeRanges = [{ start: 1, end: runtimeLines.length }]
-    const styleRanges = [{ start: 1, end: styleLines.length }]
-    const storeRanges = [{ start: 1, end: storeLines.length }]
-    const serviceRanges = [{ start: 1, end: serviceLines.length }]
-    const runtimeMdRanges = [{ start: 1, end: runtimeMdLines.length }]
-    const mockJsonRanges = [{ start: 1, end: mockJsonLines.length }]
+    files.forEach((file) => {
+      const { fileName, source } = file;
+      const content = decodeURIComponent(source);
+      const lines = content.split(/\r?\n/);
+      const ranges = [{ start: 1, end: lines.length }];
+      const suffix = fileName.split('.').pop();
 
-    if (runtimeRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('runtime.jsx', runtimeContent, runtimeRanges, 'jsx')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('runtime.jsx', runtimeContent, [], 'jsx'));
-    }
-    if (styleRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('style.less', styleContent, styleRanges, 'less')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('style.less', styleContent, [], 'less'));
-    }
-    if (storeRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('store.js', storeContent, storeRanges, 'js')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('store.js', storeContent, [], 'js'));
-    }
-    if (serviceRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('service.js', serviceContent, serviceRanges, 'js')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('service.js', serviceContent, [], 'js'));
-    }
-    if (runtimeMdRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('README.md', runtimeMdContent, runtimeMdRanges, 'md')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('README.md', runtimeMdContent, [], 'md'));
-    }
-    if (mockJsonRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('mock.json', mockJsonContent, mockJsonRanges, 'json')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('mock.json', mockJsonContent, [], 'json'));
-    }
+      if (ranges.length > 0) {
+        fileSectionParts.push(
+          buildFileSection(fileName, content, ranges, suffix)
+        );
+      } else {
+        fileSectionParts.push(buildFileSection(fileName, content, [], suffix));
+      }
+    })
 
     return [
       '# 项目空间\n',
@@ -462,10 +384,6 @@ ${themesContent}
       '\n---\n\n',
       libraryDocsContent,
       '\n\n---\n\n',
-      // '## 组件架构\n',
-      // '\n组件树结构与层级关系有助于理解组件间关系；代码按组件层级展开，父组件包含所有子组件代码，子组件不包含父组件代码。\n',
-      // '根组件 → 组件（树状结构）：\n\n',
-      // archMd,
       '\n',
       ...fileSectionParts,
     ].join('');

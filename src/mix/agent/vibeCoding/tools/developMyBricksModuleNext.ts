@@ -12,7 +12,7 @@ export type ExecuteResult = void | UpdateComponentFilesResult | Promise<UpdateCo
 
 interface Config {
   /** onUpdate 时一次性传入完整 files，由 host 调 updateComponentFiles；直接返回结果，本工具统一格式化与抛错 */
-  onUpdate?: (params: { files: Array<{ fileName: string; content: string }> }) => ExecuteResult;
+  onUpdate?: (params: { files: Array<{ fileName: string; content: string; language: string }> }) => ExecuteResult;
   focusComId?: string;
   hasAttachments?: boolean;
 }
@@ -915,7 +915,7 @@ export default function developMyBricksModule(config: Config) {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
-          const result = await config.onUpdate?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
           const msg = result ? formatUpdateResult(result) : '';
 
           if (msg) {

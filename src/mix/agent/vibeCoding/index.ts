@@ -482,13 +482,7 @@ export default function ({ context }) {
 
       // const projectJson = buildProjectJson(runtimeContent, styleContent);
       const project = createProject({
-        // projectJson,
-        getRuntimeContent: () => runtimeContent,
-        getStyleContent: () => styleContent,
-        getStoreContent: () => storeContent,
-        getServiceContent: () => serviceContent,
-        getRuntimeMdContent: () => runtimeMdContent,
-        getMockJsonContent: () => mockJsonContent,
+        getFiles: () => aiComParams?.data?.files,
         getThemesContent: () => themesContent,
         getDesignerState: () => aiComParams?.data?._designerState,
         getErrors: () => aiComParams?.data?._errors,
