@@ -89,6 +89,10 @@ class FilesModule {
       return cacheFileModule;
     }
 
+    if (!file || !file.compiled) {
+      return undefined;
+    }
+
     const suffix = fileName.split('.').pop();
 
     if (suffix === 'jsx' || suffix === 'js') {

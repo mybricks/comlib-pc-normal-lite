@@ -12,8 +12,5 @@
   "editors": "./editors.tsx",
   "data": "./data.json",
   "slots": [],
-  "docs": "",
-  "target": {
-    "toReact": "./toReact.ts"
-  }
+  "docs": ""
 }

@@ -47,7 +47,7 @@ function updateComponentFiles(
 
   const fileNames = [...new Set(files.filter((f) => SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '')).map((f) => f.fileName))];
 
-  const currentFilesMap = aiComParams.data.files.reduce((pre, cur) => {
+  const currentFilesMap = (aiComParams.data.files ?? []).reduce((pre, cur) => {
     pre[cur.fileName] = cur;
     return pre;
   }, {})

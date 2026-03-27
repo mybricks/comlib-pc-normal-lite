@@ -159,6 +159,8 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
   ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
+    console.log(data)
+
     // 组件渲染后注册全局桥接方法，始终指向最后渲染的组件
     useEffect(() => {
       (window as any)._focusAndSendToVibeAgent_ = (params: any) => {
@@ -255,6 +257,19 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
 
+    // 兼容老版本数据：data.files 不存在时，从旧字段迁移
+    if (data && !Array.isArray(data.files)) {
+      data.files = [];
+      const migrate = (fileName: string, compiled: string) => {
+        if (compiled) data.files.push({ fileName, compiled });
+      };
+      migrate('index.jsx', data.runtimeJsxCompiled);
+      migrate('index.less', data.styleCompiled);
+      migrate('config.js', data.configJsCompiled);
+      migrate('store.js', data.storeJsCompiled);
+      migrate('service.js', data.serviceJsCompiled);
+    }
+
     const shouldRenderSender = !!window._render_comp_start_view_;
 
     const renderSender = useMemo(() => {
@@ -307,8 +322,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             env={env}
             logger={resolvedLogger}
             id={id}
-            styleCode={data.styleCompiled}
-            renderCode={data.runtimeJsxCompiled}
+
             data={data}
             inputs={inputs}
             outputs={outputs}

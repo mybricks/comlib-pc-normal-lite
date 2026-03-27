@@ -1,13 +1,6 @@
 {
   "comAry": [
-    "./src/mix/com.json",
-    "./src/mixjs/com.json",
-    {
-      "title": "排版布局",
-      "comAry": [
-        "./src/custom-container/com.json"
-      ]
-    }
+    "./src/mix/com.json"
   ],
   "domain": "",
   "sceneType": "PC",

@@ -292,6 +292,24 @@ class Context {
   setAiCom(id: string, { params, actions }) {
     if (actions.notifyChanged || actions.getFocusArea || actions.lock || actions.unlock) {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
+      // 兼容老版本数据：将旧字段迁移到 files 数组
+      const data = params?.data;
+      if (data && !Array.isArray(data.files)) {
+        data.files = [];
+        const migrate = (fileName: string, source: string, compiled: string) => {
+          if (source || compiled) {
+            data.files.push({ fileName, source: source || '', compiled: compiled || '' });
+          }
+        };
+        migrate('index.jsx', data.runtimeJsxSource, data.runtimeJsxCompiled);
+        migrate('index.less', data.styleSource, data.styleCompiled);
+        migrate('config.js', data.configJsSource, data.configJsCompiled);
+        migrate('store.js', data.storeJsSource, data.storeJsCompiled);
+        migrate('service.js', data.serviceJsSource, data.serviceJsCompiled);
+      }
+      if (data && !Array.isArray(data._errors)) {
+        data._errors = [];
+      }
     }
   }
   
