@@ -1030,12 +1030,12 @@ export default function (props: Props, actions: Actions, ...args) {
 
       if (dataLoc) {
         const loc = JSON.parse(dataLoc);
-        const {codeLine} = loc;
-        if (codeLine) {
+        const {codeLine, files} = loc;
+        if (codeLine && files?.jsx) {
           const {start, end} = codeLine;
-          lowcodeViewEvents.emit('viewCode', [start, end]);
+          lowcodeViewEvents.emit('viewCode', { fileName: files.jsx, codeLine: [start, end]});
         } else {
-          console.error('[@viewCode] 请重新编译jsx，支持codeLine', params);
+          console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
         }
       } else {
         console.error('[@viewCode] 未找到 data-loc', params);

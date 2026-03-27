@@ -18,7 +18,7 @@ interface Params {
 }
 
 export const lowcodeViewEvents = new Events<{
-  'viewCode': [number, number];
+  'viewCode': {fileName: string, codeLine: [number, number]};
 }>();
 
 export default function LowcodeView(params: Params) {
@@ -41,6 +41,7 @@ export default function LowcodeView(params: Params) {
   const files: Array<{ fileName: string; source: string; compiled?: string }> = data.files ?? [];
 
   const [selectFile, setSelectFile] = useState<{ path: string, source: string, fileName: string } | null>(null);
+  const [treeExpandIds, setTreeExpandIds] = useState<string[]>([]);
 
   // 从 context 读取当前组件的调试状态（强制刷新用的 tick）
   const [, setTick] = useState(0);
@@ -170,31 +171,53 @@ export default function LowcodeView(params: Params) {
     let lastEditor;
     let timeOut;
 
-    const off = lowcodeViewEvents.on('viewCode', async ([start, end]) => {
+    const off = lowcodeViewEvents.on('viewCode', async ({ fileName, codeLine: [start, end]}) => {
       // [TODO] 闪烁问题
       // 切到runtime代码
       // setSelectedFileName("runtime.jsx");
       setBottomTab('source');
+      const file = files.find(f => f.fileName === fileName)
 
-      // 等待编辑器就绪
-      let editor = codeIns.current?.editor;
-      while (!editor) {
-        await new Promise(res => setTimeout(res, 100))
-        editor = codeIns.current?.editor
+      if (!file) {
+        return
       }
 
-      // 如果编辑器实例发生变化（key 导致重新挂载），重置 decorationsCollection
-      if (editor !== lastEditor) {
-        decorationsCollection = undefined;
-        lastEditor = editor;
+      setSelectFile({
+        path: file.fileName,
+        source: decodeURIComponent(file.source),
+        fileName: file.fileName,
+      })
+
+      // 计算父目录路径列表，展开目录并滚动到目标文件
+      const segments = file.fileName.split('/').filter(Boolean);
+      if (segments.length > 1) {
+        const parentPaths: string[] = [];
+        for (let i = 1; i < segments.length; i++) {
+          parentPaths.push(segments.slice(0, i).join('/'));
+        }
+        setTreeExpandIds(prev => {
+          const set = new Set(prev);
+          parentPaths.forEach(p => set.add(p));
+          return Array.from(set);
+        });
       }
 
       clearTimeout(timeOut);
-      let isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
 
-      while (!isRuntime) {
-        await new Promise(res => setTimeout(res, 100))
-        isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
+      // 等待编辑器就绪，且 model 已切换到目标文件
+      // 必须同时满足两个条件，避免拿到旧 editor 或旧 model
+      let editor = codeIns.current?.editor;
+      let modelPath = editor?.getModel()?.uri.path ?? '';
+      while (!editor || !modelPath.endsWith(fileName)) {
+        await new Promise(res => setTimeout(res, 50))
+        editor = codeIns.current?.editor
+        modelPath = editor?.getModel()?.uri.path ?? ''
+      }
+
+      // editor 实例发生变化（key 导致重新挂载），重置 decorationsCollection
+      if (editor !== lastEditor) {
+        decorationsCollection = undefined;
+        lastEditor = editor;
       }
 
       const currentDeltaDecoration = {
@@ -230,7 +253,7 @@ export default function LowcodeView(params: Params) {
     return () => {
       off();
     }
-  }, [])
+  }, [componentId])
 
   const handleEditorChange = useCallback((value: string) => {
     if (!selectFile) {
@@ -331,7 +354,10 @@ export default function LowcodeView(params: Params) {
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
         <div className={css['file-list']}>
-          <TreeView defaultCurrent={selectFile?.fileName ?? "index.jsx"}>
+          <TreeView
+            defaultCurrent={selectFile?.fileName ?? "index.jsx"}
+            expandIds={treeExpandIds}
+          >
             <FilesTree
               nodes={filesJsonToTree(files)}
               onSelect={(file) => {
