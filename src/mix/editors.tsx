@@ -992,6 +992,38 @@ export default function (props: Props, actions: Actions, ...args) {
           }
         });
       }
+
+      // 返回可切换的调试环境列表，供引擎在调试工具栏中展示。
+      // data._debugEnvs 由 AIJsxRuntime 在 setup.js eval 后收集，内容来自用户 describe 注册的环境名。
+      // 规则：始终有"正式环境(prod)"；mock 映射为中文"测试环境"；其余自定义环境原样展示。
+      const data = context.getAiComParams(params.id)?.data;
+      const envNames: string[] = data?._debugEnvs ?? [];
+      const debugEnvOptions: { label: string; value: string }[] = [];
+      // 始终提供"正式环境"
+      debugEnvOptions.push({ label: '正式环境', value: 'prod' });
+      // mock 映射为中文"测试环境"
+      if (envNames.includes('mock')) {
+        debugEnvOptions.push({ label: '测试环境', value: 'mock' });
+      }
+      // 用户自定义环境（排除已内置的 mock/prod）
+      envNames.forEach(name => {
+        if (name !== 'mock' && name !== 'prod') {
+          debugEnvOptions.push({ label: name, value: name });
+        }
+      });
+      console.log('debugEnvOptions', debugEnvOptions);
+      return debugEnvOptions;
+    },
+    /**
+     * 切换调试环境：引擎调用此钩子后，将 value 写入 data._activeDebugEnv，
+     * 并触发 notifyChanged 重渲，AIJsxRuntime 的 useEffect 监听到变化后重新 activate 对应环境。
+     */
+    '@setDebugEnv'(ctx, value: string) {
+      const aiComParams = context.getAiComParams(ctx.id);
+      if (!aiComParams?.data) return;
+      aiComParams.data._activeDebugEnv = value;
+      console.log('_activeDebugEnv', value)
+      context.getAiCom(ctx.id)?.actions?.notifyChanged?.();
     },
     '@viewCode'(params) {
       const dataLoc = params.focusArea.ele.closest('[data-loc]')?.getAttribute('data-loc');

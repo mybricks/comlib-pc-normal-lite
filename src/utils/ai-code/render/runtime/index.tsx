@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useCssApi } from "./hooks";
 import FilesModule from "./FilesModule";
 import ErrorBoundary from "./ErrorBoundary";
@@ -55,6 +55,9 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
   } = params
   const cssApi = useCssApi({ id, env })
 
+  // 保存 envRunner 实例，供 useEffect 监听 _activeDebugEnv 时重新激活环境
+  const envRunnerRef = useRef<any>(null);
+
   const filesModule = useMemo(() => {
     const mybricks = createMyBricks({
       logger,
@@ -88,6 +91,8 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
 
     // 创建独立的 EnvRunner 实例，每次 eval 天然隔离
     const envRunner = createEnvRunner();
+    // 提升到 ref，供 useEffect 监听 _activeDebugEnv 变化时重新 activate
+    envRunnerRef.current = envRunner;
     const mybricksTesting = {
       describe: envRunner.describe.bind(envRunner),
       spyOn: envRunner.spyOn.bind(envRunner),
@@ -120,7 +125,15 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
             if (pkg === 'dataSource' || pkg === './dataSource') return dsExportForSetup;
             return undefined;
           });
-          envRunner.activate(env.runtime ? 'prod' : 'mock');
+          // 收集 describe 注册的所有环境名，供 @debug 钩子返回给搭建态展示
+          if (!env.runtime) {
+            data._debugEnvs = envRunner.getEnvNames();
+          }
+          // 优先用用户上次选择的环境，回退到默认值（设计态 mock，运行态 prod）
+          const envToActivate = env.runtime
+            ? 'prod'
+            : (data._activeDebugEnv ?? 'mock');
+          envRunner.activate(envToActivate);
         }
       } catch (e) {
         console.warn('[AIJsxRuntime] setup.js 激活失败', e);
@@ -171,6 +184,32 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
 
     return fm;
   }, [])
+
+  /**
+   * 监听 data._activeDebugEnv 变化，重新激活对应环境（无需重新 eval setup.js）。
+   * 用户在搭建态通过 @setDebugEnv 切换环境时，engines 会调用 notifyChanged 触发重渲，
+   * data._activeDebugEnv 发生变化，此 effect 随即执行，切换 spyOn/axios 配置生效。
+   */
+  useEffect(() => {
+    if (!env.runtime && envRunnerRef.current && data._activeDebugEnv) {
+      envRunnerRef.current.activate(data._activeDebugEnv);
+    }
+  }, [data._activeDebugEnv]);
+
+  /**
+   * 监听 data._activeDebugEnv 变化，重新激活对应环境（无需重新 eval setup.js）。
+   * 用户在搭建态通过 @setDebugEnv 切换环境时，engines 调用 notifyChanged 触发重渲，
+   * data._activeDebugEnv 发生变化，此 effect 随即执行，切换 spyOn/axios 配置生效。
+   *
+   * 【注意】不能在 useMemo 里切换：useMemo 在第一次渲染时已经 activate 了初始环境，
+   * 之后 _activeDebugEnv 变化只会触发 re-render，useMemo([], []) 不会重跑，
+   * 必须用 useEffect 监听变化后单独调用 activate。
+   */
+  useEffect(() => {
+    if (!env.runtime && envRunnerRef.current && data._activeDebugEnv) {
+      envRunnerRef.current.activate(data._activeDebugEnv);
+    }
+  }, [data._activeDebugEnv]);
 
   /**
    * 【重要】eval 失败时招技异常并直接写入 data._errors。
