@@ -57,8 +57,8 @@ export default function developMyBricksModule(config: Config) {
   ├─ index.jsx
   ├─ index.less
   ├─ store.js
-  ├─ dataSource.js
-  ├─ setup.js
+  ├─ dataSource.js # 项目唯一文件，必须
+  ├─ setup.js  # 项目唯一文件，必须
   ├─ pages
   |  └── HomePage
   |  |  ├── index.jsx
