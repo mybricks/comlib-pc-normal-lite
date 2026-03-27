@@ -41,14 +41,33 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
 
     const popupRefDeclarators = new Map();
 
+    // [TODO] 未来可能从多文件导入less
+    const lessMap = new Map();
+
     return {
       visitor: {
         ImportDeclaration(path) {
           try {
-            const { node } = path;
+            const { node } = path;     
             node.specifiers.forEach((specifier) => {
               if (types.isImportSpecifier(specifier) || types.isImportDefaultSpecifier(specifier)) {
                 importRelyMap.set(specifier.local.name, node.source.value);
+
+                if (node.source.value.endsWith('.less') && fileName) {
+                  let currentPath = fileName.split('/');
+                  currentPath = currentPath.slice(0, currentPath.length - 1)
+                  const targetPath = node.source.value.split('/');
+                  targetPath.forEach((path) => {
+                    if (path === ".") {
+                    } else if (path === "..") {
+                      currentPath.pop();
+                    } else {
+                      currentPath.push(path)
+                    }
+                  })
+                  const lessFilePath = currentPath.join('/');
+                  lessMap.set("less", lessFilePath);
+                }
               }
             })
           } catch { }
@@ -82,6 +101,10 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 codeLine: {
                   start: node.loc.start.line,
                   end: node.loc.end.line
+                },
+                files: {
+                  jsx: fileName,
+                  less: lessMap.get("less")
                 }
               };
               const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");

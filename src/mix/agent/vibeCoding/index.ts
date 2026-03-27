@@ -672,7 +672,7 @@ ${text}
         const { actions } = aiCom;
         const focusArea = actions?.getFocusArea?.();
         if (focusArea) {
-          comName = focusArea.elemenet.closest(`[data-com-name]`).dataset.comName;
+          comName = focusArea.elemenet.closest(`[data-com-name]`)?.dataset?.comName || "root";
         }
 
         return comName
