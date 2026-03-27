@@ -28,7 +28,7 @@ export type { ReplaceResultItem };
 
 export type { FileUpdateResult, UpdateComponentFilesResult };
 
-export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js'])
+export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md'])
 
 /**
  * 将指定组件的若干源文件（model.json / runtime.jsx / style.less / config.js / com.json）
@@ -436,48 +436,6 @@ export default function ({ context }) {
         focusInfo = buildFocusInfo(focusArea.elemenet);
       }
       // 创建 project 实例（projectJson 由 runtime/style 动态生成，失败时回退 defaultRoot）
-      const runtimeContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.runtimeJsxSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const styleContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.styleSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const storeContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.storeJsSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const serviceContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.serviceJsSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const runtimeMdContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.runtimeMdSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const mockJsonContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.mockJsonSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
 
       const themesContent = (() => {
         try {
