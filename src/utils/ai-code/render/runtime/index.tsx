@@ -4,20 +4,7 @@ import FilesModule from "./FilesModule";
 import ErrorBoundary from "./ErrorBoundary";
 import { createMyBricks } from "./mybricks";
 import { createEnvRunner } from "./mybricks/mybricks-testing";
-
-/** DataSource 基类：每个实例独立的 axios 实例，可直接操作 this.axios.defaults 修改 baseURL / headers */
-class DataSource {
-  axios: any;
-
-  constructor() {
-    const axiosLib = typeof window !== 'undefined' ? (window as any).axios : undefined;
-    this.axios = axiosLib?.create?.() ?? {
-      get: () => Promise.reject(new Error('axios not available')),
-      post: () => Promise.reject(new Error('axios not available')),
-      defaults: { baseURL: '', headers: { common: {} } },
-    };
-  }
-}
+import { DataSource } from "./mybricks/data-source";
 
 interface AIJsxRuntimeParams {
   /** 组件ID */
