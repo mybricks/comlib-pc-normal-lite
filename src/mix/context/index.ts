@@ -354,7 +354,7 @@ class Context {
         aiComParams.data.modelConfig = encodeURIComponent(content);
         break;
       case "runtime.jsx":
-        return updateRender({
+        updateRender({
           data: aiComParams.data,
           success: () => {
             const aiCom = this.getAiCom(id);
@@ -362,6 +362,7 @@ class Context {
           }},
           content
         );
+        break;
       case "style.less":
         updateStyle({
           id,
@@ -376,19 +377,21 @@ class Context {
         aiComParams.data.configJsSource = encodeURIComponent(content);
         break;
       case "store.js":
-        return updateStore({
+        updateStore({
           data: aiComParams.data,
           success: () => {
             this.getAiCom(id)?.actions?.notifyChanged?.();
           },
         }, content);
+        break;
       case "service.js":
-        return updateService({
+        updateService({
           data: aiComParams.data,
           success: () => {
             this.getAiCom(id)?.actions?.notifyChanged?.();
           },
         }, content);
+        break;
       case "com.json":
         aiComParams.data.componentConfig = encodeURIComponent(content);
         const oriInputs = aiComParams.input.get();
@@ -484,6 +487,8 @@ class Context {
       default:
         break;
     }
+
+    (window as any)._mybricksOnEdit_?.();
   }
 }
 
