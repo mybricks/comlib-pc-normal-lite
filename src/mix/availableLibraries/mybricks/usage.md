@@ -63,59 +63,84 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
 })
 ```
 
-### 接口使用
-对于所有的接口，都必须维护到service.js文件中，我们提供了 `createEnvs` + `createAPI`，对axios做了代理，所有接口和环境必须通过这两个函数来定义。
+### 数据源使用
+所有数据（接口请求、静态数据）必须维护在 `dataSource.js` 文件中。
 
-```js createEnvs 和 createAPI的源代码说明
-// createEnvs：本质是 axios.create，注册多套环境实例，实例隐式切换后被 createAPI 消费
-function createEnvs(envConfigs) {
-  Object.entries(envConfigs).forEach(([key, { title, baseUrl, ...rest }]) => {
-    envInstances[key] = axios.create({ baseURL: baseUrl, ...rest })
-  })
-}
+通过继承 `DataSource` 基类并 `export default new MyDatasource()` 来声明数据源：
 
-// createAPI：返回一个函数，调用时合并配置并用当前环境实例发请求，其中defaultConfig的method、url、summary必须
-function createAPI(defaultConfig, paramsMapper) {
-  return (params) => {
-    const runtimeConfig = paramsMapper ? paramsMapper(params) : {}
-    return getCurrentInstance()({ ...defaultConfig, ...runtimeConfig })
-  }
+```js dataSource.js 结构说明
+// DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
+// 使得 setup.js 中的 spyOn 能在运行时替换对应方法的返回值，子类无需任何额外代码。
+class DataSource {
+  constructor() { /* 对所有方法自动 Proxy 包装 */ }
 }
 ```
 
-
-service.js文件示例
+dataSource.js 文件示例：
 ```js
-import { createEnvs, createAPI } from 'mybricks'
+import { DataSource } from 'mybricks'
 
-createEnvs({
-  prod: {
-    title: '正式环境',
-    baseUrl: 'https://www.xxx.com/api',
-    headers: {
-      'x-id': '正式环境固定headers'
-    },
+class MyDatasource extends DataSource {
+  // 场景一：静态数据，直接 return
+  getConfig() {
+    return { theme: 'dark', version: '1.0.0' }
   }
+
+  // 场景二：真实接口，用 this.axios 发请求（不要自己 import axios）
+  // this.axios 是 DataSource 基类内置的独立 axios 实例，与其他组件隔离
+  async getUserById({ id }) {
+    return this.axios.get('/getUserById', { params: { id } })
+  }
+
+  async createUser(data) {
+    return this.axios.post('/createUser', data)
+  }
+}
+
+export default new MyDatasource()
+```
+
+### 环境声明（setup.js）
+`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）和 `prod` 环境（运行时自动激活）**。
+
+通过 `describe` / `spyOn` 来描述每套环境的行为，**必须从 `'mybricks/testing'` import 这两个 API**。
+`describe` 的回调在激活时才执行（惰性），直接在回调里写配置即可，无需额外的 `before` 包裹：
+
+> 每个 runtimeCard 实例有独立的 dataSource 实例和 envRunner，互不干扰。
+
+```js
+import { describe, spyOn } from 'mybricks/testing'
+import dataSource from 'dataSource'
+
+// 必须：设计态 mock 环境
+describe('mock', () => {
+  spyOn(dataSource, 'getConfig').mockReturn({ theme: 'dark', version: '1.0.0' })
+  spyOn(dataSource, 'getUserById').mockReturn({
+    status: 200,
+    data: { id: 1, name: '张三', age: 18 },
+    message: 'success'
+  })
 })
 
+// 必须：运行时 prod 环境
+describe('prod', () => {
+  dataSource.axios.defaults.baseURL = 'https://api.prod.com'
+})
 
-const getUserById = createAPI({
-  method: 'GET',
-  url: '/getUserById',
-  summary: '根据ID请求用户信息'
-}, ({ id }) => {
-  return {
-    params: {
-      id
-    }
-  }
-}).then()
-
-
-export default {
-  getUserById,
-}
+// 可选：预发环境
+describe('staging', () => {
+  dataSource.axios.defaults.baseURL = 'https://api.staging.com'
+  dataSource.axios.defaults.headers.common['x-env'] = 'staging'
+})
 ```
+
+#### spyOn 使用原则
+- **必须从 `'mybricks/testing'` import `describe` / `spyOn`**，禁止直接使用全局变量
+- `describe` 回调惰性执行，直接在回调里写 spyOn 和 axios.defaults 配置即可，无需 `before` 包裹
+- `spyOn(dataSource, 'method').mockReturn(value)`：完全替换该方法的返回值，value 应为接口完整响应体结构（含 status/data/message 等字段）
+- `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；每个 dataSource 实例的 axios 是独立的，不会污染其他 runtimeCard
+- **必须声明 `mock` 环境**（设计态自动激活）；**必须声明 `prod` 环境**（运行时自动激活）；未声明 `prod` 时 axios 保持默认配置
+- 每新增或修改一个 dataSource.js 方法，必须同步在 mock 环境的 describe 里更新 spyOn
 
 ### 路由使用
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。

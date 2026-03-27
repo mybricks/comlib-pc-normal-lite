@@ -3,6 +3,21 @@ import { useCssApi } from "./hooks";
 import FilesModule from "./FilesModule";
 import ErrorBoundary from "./ErrorBoundary";
 import { createMyBricks } from "./mybricks";
+import { createEnvRunner } from "./mybricks/mybricks-testing";
+
+/** DataSource 基类：每个实例独立的 axios 实例，可直接操作 this.axios.defaults 修改 baseURL / headers */
+class DataSource {
+  axios: any;
+
+  constructor() {
+    const axiosLib = typeof window !== 'undefined' ? (window as any).axios : undefined;
+    this.axios = axiosLib?.create?.() ?? {
+      get: () => Promise.reject(new Error('axios not available')),
+      post: () => Promise.reject(new Error('axios not available')),
+      defaults: { baseURL: '', headers: { common: {} } },
+    };
+  }
+}
 
 interface AIJsxRuntimeParams {
   /** 组件ID */
@@ -60,15 +75,92 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
       data
     })
 
-    return new FilesModule({
+    const mybricksWithDataSource = Object.assign(mybricks, { DataSource });
+
+    // 创建独立的 EnvRunner 实例，每次 eval 天然隔离
+    const envRunner = createEnvRunner();
+    const mybricksTesting = {
+      describe: envRunner.describe.bind(envRunner),
+      spyOn: envRunner.spyOn.bind(envRunner),
+    };
+
+    // 1. 先独立 eval dataSource.js，得到单例实例
+    //    不走 FilesModule 路径解析，确保 setup.js 和 index.jsx 共用同一个实例
+    let dataSourceInstance: any = null;
+    try {
+      const dsFile = (data.files as any[]).find(f => f.fileName === 'dataSource.js');
+      if (dsFile?.compiled) {
+        const exports: any = { default: null };
+        const wrapCode = `(function(exports,require){${decodeURIComponent(dsFile.compiled)}})`
+        eval(wrapCode)(exports, (pkg: string) => pkg === 'mybricks' ? mybricksWithDataSource : undefined);
+        dataSourceInstance = exports.default;
+      }
+    } catch (e) {
+      console.warn('[AIJsxRuntime] dataSource.js eval 失败', e);
+    }
+
+    // 2. eval setup.js，显式注入 dataSource 实例，激活对应环境
+    if (dataSourceInstance) {
+      try {
+        const setupFile = (data.files as any[]).find(f => f.fileName === 'setup.js');
+        if (setupFile?.compiled) {
+          const dsExportForSetup = { default: dataSourceInstance, __esModule: true };
+          const wrapCode = `(function(exports,require){${decodeURIComponent(setupFile.compiled)}})`
+          eval(wrapCode)({ default: null }, (pkg: string) => {
+            if (pkg === 'mybricks/testing') return mybricksTesting;
+            if (pkg === 'dataSource' || pkg === './dataSource') return dsExportForSetup;
+            return undefined;
+          });
+          envRunner.activate(env.runtime ? 'prod' : 'mock');
+        }
+      } catch (e) {
+        console.warn('[AIJsxRuntime] setup.js 激活失败', e);
+      }
+    }
+
+    // 3. 构建 FilesModule，将 dataSource 单例注入为具名依赖，跳过文件路径解析
+    //    包装为 { default, __esModule: true }，兼容 import X from 'dataSource' 的 interop
+    //    同时注册所有可能的相对路径变体，确保任意深度的文件 require 都命中同一实例
+    const dsExport = dataSourceInstance
+      ? { default: dataSourceInstance, __esModule: true }
+      : null;
+    const dataSourceDeps: Record<string, any> = {};
+    if (dsExport) {
+      // 非相对路径（直接引用）
+      dataSourceDeps['dataSource'] = dsExport;
+      // 从 filesMap 中推导所有可能的相对路径
+      const dsFileName = 'dataSource.js';
+      const allFiles: string[] = (data.files as any[]).map(f => f.fileName);
+      allFiles.forEach(f => {
+        // 对每个文件计算其 require('dataSource.js') 时对应的相对路径 key
+        const parts = f.split('/');
+        const depth = parts.length - 1; // 该文件所在目录层级
+        if (depth === 0) {
+          // 根目录文件：'./dataSource' 或 'dataSource'
+          dataSourceDeps['./dataSource'] = dsExport;
+        } else {
+          // 子目录文件：'../../dataSource'（根据深度）
+          const ups = Array(depth).fill('..').join('/');
+          dataSourceDeps[`${ups}/dataSource`] = dsExport;
+        }
+      });
+    }
+
+    const fm = new FilesModule({
       files: data.files,
-      dependencies: Object.assign(dependencies, { mybricks }),
+      dependencies: Object.assign(dependencies, {
+        mybricks: mybricksWithDataSource,
+        'mybricks/testing': mybricksTesting,
+        ...dataSourceDeps,
+      }),
       importCallBack: {
         less({ fileName, content }) {
           cssApi.set({ fileName, content })
         }
       }
     })
+
+    return fm;
   }, [])
 
   // 入口文件固定写法，直接读取

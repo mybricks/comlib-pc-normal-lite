@@ -57,6 +57,8 @@ export default function developMyBricksModule(config: Config) {
   ├─ index.jsx
   ├─ index.less
   ├─ store.js
+  ├─ dataSource.js
+  ├─ setup.js
   ├─ pages
   |  └── HomePage
   |  |  ├── index.jsx
@@ -949,7 +951,9 @@ export default function developMyBricksModule(config: Config) {
           return raw
             .replace(/runtime\.jsx/g, '')
             .replace(/style\.less/g, '')
-            .replace(/store\.js/g, '') + '\n' + msg;
+            .replace(/store\.js/g, '')
+            .replace(/dataSource\.js/g, '')
+            .replace(/setup\.js/g, '') + '\n' + msg;
         }
       }
       return params.content;
