@@ -1,3 +1,5 @@
+import { replaceToUnderline } from "./utils";
+
 function runRender(code, dependencies, fileName?: string) {
   const wrapCode = `
     (function(exports,require){
@@ -121,9 +123,10 @@ class FilesModule {
       return this.cache[fileName] = fileModule;
     } else if (suffix === 'less') {
       this.importCallBack.less({ fileName, content: decodeURIComponent(file.compiled) });
+      const prefix = replaceToUnderline(fileName)
       return this.cache[fileName] = new Proxy({}, {
-        get(_, key) {
-          return key;
+        get(_, key: string) {
+          return `${prefix}-${key}`;
         }
       });
     }
