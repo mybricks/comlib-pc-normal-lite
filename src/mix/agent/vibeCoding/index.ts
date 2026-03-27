@@ -52,6 +52,8 @@ function updateComponentFiles(
     return pre;
   }, {})
 
+  const deleteFileNames = new Set();
+
   for (const fileName of fileNames) {
     const matchedFiles = files.filter((f) => f.fileName === fileName);
     if (matchedFiles.length === 0) continue;
@@ -59,6 +61,12 @@ function updateComponentFiles(
     const dataKey = fileName;
 
     if (matchedFiles.length === 1) {
+
+      if (matchedFiles[0].language === "delete") {
+        deleteFileNames.add(matchedFiles[0].fileName);
+        continue;
+      }
+
       fileResults.push({
         fileName,
         dataKey,
@@ -114,6 +122,10 @@ function updateComponentFiles(
     )
     aiComParams.data.document = '';
   }
+
+  deleteFileNames.forEach((fileName) => {
+    context.updateFile(comId, { fileName, type: "delete" })
+  })
 
   // 收集编译/校验错误（来自 data._errors，只取本次涉及文件的错误）
   const updatedFileNames = new Set(pendingWrites.map((f) => f.fileName));

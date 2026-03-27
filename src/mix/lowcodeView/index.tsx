@@ -46,18 +46,58 @@ export default function LowcodeView(params: Params) {
   const [, setTick] = useState(0);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
 
-  // 订阅当前组件的调试/日志状态变更
+  // 辅助：从 files 中找到初始/回退选中的文件
+  const findFallbackFile = useCallback((fileList: typeof files) => {
+    const indexFile = fileList.find((f) => f.fileName === "index.jsx");
+    return indexFile ?? fileList[0] ?? null;
+  }, []);
+
+  // 订阅当前组件的调试/日志状态变更，并初始化选中文件
   useEffect(() => {
     if (!componentId) return;
     const off = context.getComDebugStateEvents(componentId).on('change', () => forceUpdate(), false);
-    const file = files.find((file) => file.fileName === "index.jsx")
-    setSelectFile({
-      path: 'index.jsx',
-      source: decodeURIComponent(file.source),
-      fileName: file.fileName
-    })
+    const fallback = findFallbackFile(files);
+    if (fallback) {
+      setSelectFile({
+        path: fallback.fileName,
+        source: decodeURIComponent(fallback.source),
+        fileName: fallback.fileName,
+      });
+    } else {
+      setSelectFile(null);
+    }
     return () => off();
   }, [componentId]);
+
+  // 用稳定的 key 字符串表示 files 快照，用于监听变化
+  const filesKey = files.map((f) => `${f.fileName}:${f.source}`).join('|');
+
+  // 监听 files 变化：刷新当前选中文件内容 / 处理文件被删除的情况
+  const prevFilesKeyRef = useRef<string>('');
+  useEffect(() => {
+    if (prevFilesKeyRef.current === filesKey) return;
+    prevFilesKeyRef.current = filesKey;
+
+    setSelectFile((prev) => {
+      if (!prev) {
+        // 没有选中文件时，尝试初始化
+        const fallback = findFallbackFile(files);
+        if (!fallback) return null;
+        return { path: fallback.fileName, source: decodeURIComponent(fallback.source), fileName: fallback.fileName };
+      }
+
+      const current = files.find((f) => f.fileName === prev.fileName);
+      if (current) {
+        // 文件仍存在，刷新 source
+        return { ...prev, source: decodeURIComponent(current.source) };
+      }
+
+      // 当前选中文件已被删除，回退选择
+      const fallback = findFallbackFile(files);
+      if (!fallback) return null;
+      return { path: fallback.fileName, source: decodeURIComponent(fallback.source), fileName: fallback.fileName };
+    });
+  }, [filesKey]);
 
   const debugState = componentId ? context.getComDebugState(componentId) : null;
   const isDebugging = debugState?.isDebugging ?? false;
@@ -135,7 +175,6 @@ export default function LowcodeView(params: Params) {
       // 切到runtime代码
       // setSelectedFileName("runtime.jsx");
       setBottomTab('source');
-      console.log("[files]", files)
 
       // 等待编辑器就绪
       let editor = codeIns.current?.editor;
@@ -211,7 +250,7 @@ export default function LowcodeView(params: Params) {
     const { fileName } = selectFile;
 
     if (fileName in modifiedContent) {
-      context.updateFile(params.model.runtime.id, { fileName, content: modifiedContent[fileName] });
+      context.updateFile(params.model.runtime.id, { fileName, content: modifiedContent[fileName], type: "update" });
       setModifiedContent((prev) => {
         const next = { ...prev };
         delete next[fileName];
@@ -291,19 +330,8 @@ export default function LowcodeView(params: Params) {
       </div>
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
-        {/* <div className={css['file-list']}>
-          {FILES.map((fileName) => (
-            <div
-              key={fileName}
-              className={`${css['file-item']} ${selectedFileName === fileName ? css['file-item-active'] : ""}`}
-              onClick={() => setSelectedFileName(fileName)}
-            >
-              {fileName in modifiedContent ? "*" : ""}{fileName}
-            </div>
-          ))}
-        </div> */}
         <div className={css['file-list']}>
-          <TreeView defaultCurrent="/index.jsx">
+          <TreeView defaultCurrent={selectFile?.fileName ?? "index.jsx"}>
             <FilesTree
               nodes={filesJsonToTree(files)}
               onSelect={(file) => {
@@ -360,7 +388,6 @@ const FilesTree = ({
             key={node.fileName}
             id={node.fileName}
             onSelect={isFile ? () => {
-              console.log("[ (node as any).fileName]",  (node as any).fileName)
               onSelect({
                 path: node.name,
                 source: decodeURIComponent((node as any).source ?? ""),

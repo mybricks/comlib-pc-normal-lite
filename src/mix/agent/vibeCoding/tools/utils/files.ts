@@ -1,7 +1,7 @@
 import type { ReplaceResultItem } from "../../../utils/editReplace";
 
 /** 工具 execute/stream 所需的文件（与 type.d.ts 一致） */
-export type ComponentFileItem = { fileName: string; content: string; isComplete?: boolean };
+export type ComponentFileItem = { fileName: string; content: string; isComplete?: boolean; language: string };
 export interface RxFile {
   fileName: string;
   name: string;
