@@ -336,7 +336,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       const { activeThemeId, themes } = data.themes;
       const theme = themes.find((theme) => theme.id === activeThemeId);
 
-      if (_env.mode === "design") {
+      if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
 
@@ -398,8 +398,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       }
     };
 
-    if (_env.mode === 'design') {
-      // 调试态不做任何处理，保留类字段原始初始值
+    if (isDesign()) {
+      // 运行态不做任何处理，保留类字段原始初始值
       if (!popupRefOriginalsSet.has(Component)) {
         popupRefOriginalsSet.add(Component);
         popupRefRegistry.push(DialogRoot);
@@ -427,6 +427,26 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       };
     }
   });
+  /**
+   * 浮层类组件在设计态默认展开
+   */
+  const PopupVisible = () => {
+    if (_env.mode !== 'design') {
+      // 运行态不做任何处理，保留类字段原始初始值
+      return;
+    }
+    // 设计态：强制初始值为 true 且不允许修改（setter 静默忽略赋值，避免严格模式报错）
+    return {
+      enumerable: true,
+      configurable: true,
+      get() {
+        return true;
+      },
+      set() { 
+        return false;
+      },
+    };
+  }
 
   return {
     appRef,
@@ -442,6 +462,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     makeAutoObservable,
     /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 data._logs */
     _pushDataLog: pushDataLog,
+    logger,
+    makeAutoObservable,
+    PopupVisible,
   }
 }
 
