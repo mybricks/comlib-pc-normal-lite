@@ -2448,10 +2448,26 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
       }
     }
     style.counterAxisAlignItems = alignMap[alignItemsNorm] || 'MIN';
-    // ant-radio-wrapper 包含圆形图标+文字，BASELINE 在 Figma 里会让图标贴顶，强制改为 CENTER
+    // ant-radio-wrapper：CSS align-items 可能因自定义主题（如 verticalRadio 竖排变体）被覆盖为 flex-start，
+    // 导致 radio 圆圈贴顶。改用几何法：取最矮的流内子项（即 radio 圆圈），
+    // 若其中心与容器中心对齐（误差 < 5px），则强制 CENTER，不依赖 CSS 声明值。
     var _isAntRadioWrapper = (el.className && typeof el.className === 'string' && el.className.indexOf('ant-radio-wrapper') !== -1);
-    if (_isAntRadioWrapper && alignItemsNorm === 'baseline') {
-      style.counterAxisAlignItems = 'CENTER';
+    if (_isAntRadioWrapper) {
+      var _rawWRect = el.getBoundingClientRect();
+      var _rawWH = _rawWRect.height;
+      var _rawShortCh = null;
+      for (var _rwci = 0; _rwci < el.children.length; _rwci++) {
+        try { if ((window.getComputedStyle(el.children[_rwci]).position || '').toLowerCase() === 'absolute') continue; } catch (_rwe) {}
+        var _rwcH = el.children[_rwci].getBoundingClientRect().height;
+        if (_rwcH > 0 && _rawWH > 0 && _rwcH < _rawWH * 0.95) { _rawShortCh = el.children[_rwci]; break; }
+      }
+      if (_rawShortCh && _rawWH > 0) {
+        var _rawCR = _rawShortCh.getBoundingClientRect();
+        var _rawCCY = _rawCR.top - _rawWRect.top + _rawCR.height / 2;
+        if (Math.abs(_rawCCY - _rawWH / 2) < 5) style.counterAxisAlignItems = 'CENTER';
+      } else if (alignItemsNorm === 'baseline' || alignItemsNorm === 'center') {
+        style.counterAxisAlignItems = 'CENTER';
+      }
     }
     if (_isRadioWrapper) {
     }
@@ -3082,6 +3098,60 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
       height: safeH,
       positionType: 'absolute',
     };
+
+    // transform: rotate() → rotation + 位置修正
+    // CSS transform 矩阵 matrix(a,b,c,d,tx,ty) 综合了 transform-origin 平移、rotate 及 translate
+    // 直接用矩阵将「元素中心」变换到视觉中心，反推 Figma 的 x/y，使 Figma 按中心旋转时与 CSS 匹配
+    if (ps.transform && ps.transform !== 'none') {
+      var psRotation = parseTransformRotation(ps.transform);
+      if (psRotation != null && psRotation !== 0) {
+        shapeStyle.rotation = psRotation;
+        var _matMatch = ps.transform.match(/matrix\(([^)]+)\)/);
+        if (_matMatch) {
+          var _mParts = _matMatch[1].split(',').map(function(s) { return parseFloat(s.trim()); });
+          if (_mParts.length >= 6) {
+            var _ma = _mParts[0], _mb = _mParts[1], _mc = _mParts[2], _md = _mParts[3];
+            var _mtx = _mParts[4], _mty = _mParts[5];
+
+            // Chrome getComputedStyle 返回的是不含 transform-origin 的纯变换矩阵。
+            // 需手动将 transform-origin (ox, oy) 折叠进矩阵：
+            //   tx_full = tx + ox*(1-a) - c*oy
+            //   ty_full = ty + oy*(1-d) - b*ox
+            var _toStr = (ps.transformOrigin || '').trim();
+            var _toParts = _toStr.split(/\s+/);
+            var _ox = parseFloat(_toParts[0]) || 0;
+            var _oy = parseFloat(_toParts[1]) || 0;
+            if (_ox !== 0 || _oy !== 0) {
+              _mtx = _mtx + _ox * (1 - _ma) - _mc * _oy;
+              _mty = _mty + _oy * (1 - _md) - _mb * _ox;
+            }
+
+            // 元素在宿主 CSS 坐标系（padding-edge 相对）中的预变换中心
+            // safeX/safeY 已正确处理 psLeft/psRight/psTop/psBottom 所有情况，但包含 hostBorder 偏移
+            // 转回 CSS padding-box 坐标系：减去 hostBorder
+            var _preCx = (safeX - hostBorderLeft) + w / 2;
+            var _preCy = (safeY - hostBorderTop) + h / 2;
+            // 应用含 origin 修正的矩阵，得到 CSS 视觉中心（仍在 padding-box 坐标系内）
+            var _postCx = _ma * _preCx + _mc * _preCy + _mtx;
+            var _postCy = _mb * _preCx + _md * _preCy + _mty;
+            // 转回 Figma 坐标系（border-edge 相对）：加上 hostBorder
+            // 令 Figma 矩形中心 = CSS 视觉中心，推算 x/y（Figma rotation 绕矩形中心旋转）
+            // 必须用 shapeStyle.width/height（即 Figma 实际尺寸，已 Math.round）做中心计算，
+            // 否则 h=1.5 → safeH=2 导致 Figma 中心比预期偏 0.25px
+            shapeStyle.x = _postCx + hostBorderLeft - shapeStyle.width / 2;
+            shapeStyle.y = _postCy + hostBorderTop - shapeStyle.height / 2;
+            console.log('[pseudo-transform]', pseudo,
+              'ox=' + _ox, 'oy=' + _oy,
+              'postCx=' + _postCx.toFixed(3), 'postCy=' + _postCy.toFixed(3),
+              'figmaX=' + shapeStyle.x.toFixed(3), 'figmaY=' + shapeStyle.y.toFixed(3),
+              'figmaW=' + shapeStyle.width, 'figmaH=' + shapeStyle.height,
+              'rotation=' + psRotation,
+              'figmaCenter=(' + (shapeStyle.x + shapeStyle.width / 2).toFixed(3) + ',' + (shapeStyle.y + shapeStyle.height / 2).toFixed(3) + ')'
+            );
+          }
+        }
+      }
+    }
 
     // background-color → fills
     if (bgNotEmpty) {
