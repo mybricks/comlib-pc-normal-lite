@@ -62,6 +62,7 @@ const RULE_STORE = `
     - store.js 是纯 JavaScript 文件，禁止出现任何 JSX 语法；
     - 有 service 时，store 必须优先通过 service 调用接口，禁止在 store 内重新声明或使用 mock 数据；
     - 控制浮层显示/隐藏的字段需使用 @PopupVisible 装饰器；
+    - makeAutoObservable 是 mybricks 提供的状态管理工具，构造函数 constructor 内部必须调用 makeAutoObservable 方法，并传入 this 作为参数，自动绑定当前实例的所有属性为可观察状态，所有方法为动作方法，严格遵循状态管理规范，保证响应式逻辑生效；
   </规则>
 `;
 

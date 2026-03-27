@@ -226,11 +226,15 @@ export default function developMyBricksModule(config: Config = {}) {
 
     <代码示例>
     \`\`\`js file="store.js"
-    import { logger, PopupVisible } from 'mybricks';
+    import { logger, PopupVisible, makeAutoObservable } from 'mybricks';
 
     class Store {
       count = 1;
       name = "";
+
+      constructor() {
+        makeAutoObservable(this);
+      }
 
       incCount() {
         logger.info('[Store/incCount] 计数加一', { before: this.count });
@@ -265,6 +269,7 @@ export default function developMyBricksModule(config: Config = {}) {
     <编写规范>
       1. 当字段用于控制浮层类组件的显示/隐藏状态时，需要对该字段使用装饰器 @PopupVisible；
       2. 默认导出 实例化后的 store
+      3. 必须使用 makeAutoObservable，
     </编写规范>
 
     <注意>
@@ -627,10 +632,14 @@ export default function developMyBricksModule(config: Config = {}) {
   \`\`\`
 
   \`\`\`write file="pages/ButtonPage/store.js"
-  import { logger } from 'mybricks';
+  import { logger, makeAutoObservable } from 'mybricks';
 
   class Store {
     loading = false;
+
+    constructor() {
+      makeAutoObservable(this);
+    }
 
     click() {
       logger.info('[Store/click] 按钮点击');
@@ -792,7 +801,13 @@ export default function developMyBricksModule(config: Config = {}) {
   \`\`\`
   
   \`\`\`write file="pages/MainPage/store.js"
+  import { makeAutoObservable } from "mybricks";
+
   class Store {
+    constructor() {
+      makeAutoObservable(this);
+    }
+
     btns = [
       { text: "查看", path: "/view" },
       { text: "修改", path: "/edit" },

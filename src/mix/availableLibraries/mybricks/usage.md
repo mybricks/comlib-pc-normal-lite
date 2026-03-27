@@ -217,3 +217,31 @@ export default appRef(() => {
 import { logger } from 'mybricks';
 logger.info('这是一条日志');
 ```
+
+### 数据响应式
+基于 store.js 的响应式编程，我们提供了 `makeAutoObservable` 状态管理工具。
+
+#### 使用示例
+构造函数 constructor 内部必须调用 makeAutoObservable 方法，并传入 this 作为参数，自动绑定当前实例的所有属性为可观察状态，所有方法为动作方法，严格遵循状态管理规范，保证响应式逻辑生效；
+```js
+import { logger, makeAutoObservable } from 'mybricks';
+
+class Store {
+  loading = false;
+
+  constructor() {
+    makeAutoObservable(this);
+  }
+
+  click() {
+    logger.info('[Store/click] 按钮点击');
+  }
+  
+  setLoading(loading) {
+    logger.info('[Store/setLoading] 设置loading状态', loading);
+    this.loading = loading;
+  }
+}
+
+export default new Store();
+```

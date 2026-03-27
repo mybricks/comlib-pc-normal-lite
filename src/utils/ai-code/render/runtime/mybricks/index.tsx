@@ -8,6 +8,8 @@ import React, {
   useReducer,
   useCallback
 } from 'react';
+import { makeAutoObservable } from 'mobx';
+import { observer } from 'mobx-react-lite';
 import css from './index.less';
 
 interface CreateMyBricksProps {
@@ -238,6 +240,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRefOriginalsSet = new Set<React.FC>();
 
   const appRef = (Component) => {
+    const ObservedComponent = observer(Component);
     return (props) => {
       if (isDesign()) {
         const collectingRoutes = useRef<string[]>([]);
@@ -261,7 +264,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         return (
           <AppContext.Provider value={app}>
             {app.state === "collect_routes" && (
-              <Component {...props} _env={_env}/>
+              <ObservedComponent {...props} _env={_env}/>
             )}
             {app.state === 'runtime' && (
               collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
@@ -271,7 +274,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                       {...props}
                       _env={_env}
                       _route={route}
-                      _Component={Component}
+                      _Component={ObservedComponent}
                     />
                   </Page>
                 )
@@ -280,7 +283,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   <Route
                     path='/'
                     element={(
-                      <Component {...props} _env={_env}/>
+                      <ObservedComponent {...props} _env={_env}/>
                     )}
                   />
                 </Page>
@@ -300,21 +303,23 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           {...props}
           _env={_env}
           _route={env._debugTarget?.pageIndex}
-          _Component={Component}
+          _Component={ObservedComponent}
         />
       )
     }
   }
 
   const comRef = (Component: any) => {
+    const ObservedComponent = observer(Component);
     return (props: any) => {
       return (
-        <Component {...props} _env={_env}/>
+        <ObservedComponent {...props} _env={_env}/>
       );
     };
   };
 
   const popupRef = (Component: any) => {
+    const ObservedComponent = observer(Component);
     const DialogRoot = (props) => {
       const { activeThemeId, themes } = data.themes;
       const theme = themes.find((theme) => theme.id === activeThemeId);
@@ -348,7 +353,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 return pre;
               }, {})
             }}>
-            {container && <Component
+            {container && <ObservedComponent
               {...props}
               _env={_env}
               popupNode={container}
@@ -370,7 +375,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         return (
           <>
             <div ref={containerRef} />
-            {container && <Component
+            {container && <ObservedComponent
               {...props}
               _env={_env}
               popupNode={container}
@@ -410,7 +415,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     useLocation,
     useNavigate,
     useParams,
-    logger
+    logger,
+    makeAutoObservable
   }
 }
 
