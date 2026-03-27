@@ -127,13 +127,27 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     }
   }
 
+  interface PageContextValue {
+    container: HTMLElement
+  }
+  const PageContext = createContext<PageContextValue>({
+    container: document.body
+  });
+
   const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
     const { path = '/', children } = params;
     const { activeThemeId, themes } = data.themes;
     const theme = themes.find((theme) => theme.id === activeThemeId);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [container, setContainer] = useState<PageContextValue>({ container: document.body });
+
+    useLayoutEffect(() => {
+      setContainer({ container: containerRef.current! })
+    }, [])
 
     return (
       <div
+        ref={containerRef}
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={path}
@@ -154,8 +168,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             pre[cur.propertyName] = cur.value;
             return pre;
           }, {})
-        }}>
+        }}
+      >
+        <PageContext.Provider value={container}>
           {children}
+        </PageContext.Provider>
       </div>
     )
   }
@@ -324,8 +341,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const comRef = (Component: any) => {
     const ObservedComponent = observer(Component);
     return (props: any) => {
+      const pageContext = useContext(PageContext);
       return (
-        <ObservedComponent {...props} _env={_env}/>
+        <ObservedComponent {...props} _env={_env} popupNode={pageContext.container}/>
       );
     };
   };
@@ -374,26 +392,15 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           </div>
         );
       } else {
-        const containerRef = useRef<HTMLDivElement>(null);
-        const [container, setContainer] = useState<any>(false);
-
-        useLayoutEffect(() => {
-          const page = containerRef.current?.closest('[data-zone-type="page"]')
-          if (page) {
-            setContainer(page)
-          }
-        }, [])
+        const pageContext = useContext(PageContext);
         
-        return (
-          <>
-            <div ref={containerRef} />
-            {container && <ObservedComponent
-              {...props}
-              _env={_env}
-              popupNode={container}
-              wrapper={container}
-            />}
-          </>
+        return pageContext.container && (
+          <ObservedComponent
+            {...props}
+            _env={_env}
+            popupNode={pageContext.container}
+            wrapper={pageContext.container}
+          />
         )
       }
     };
