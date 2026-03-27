@@ -397,6 +397,14 @@ export default function ({ context }) {
         //     actions.unlock(lockId, comName);
         //   }
         // }
+
+        if (status === "start") {
+          (window as any).__vibeCodingCallbacks__?.onStart?.();
+        } else if (status === "complete") {
+          (window as any).__vibeCodingCallbacks__?.onComplete?.();
+        } else if (status === "error") {
+          (window as any).__vibeCodingCallbacks__?.onError?.();
+        }
       }
 
       const onUpdateFiles = (p) => {
