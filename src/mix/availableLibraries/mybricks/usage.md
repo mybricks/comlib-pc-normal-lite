@@ -1,16 +1,15 @@
 # mybricks
-- 内置的核心类库，对于组件、页面、浮层（弹窗/抽屉等）、APP声明以及路由相关功能必须使用此组件
+- 内置的核心类库，对于页面、浮层（弹窗/抽屉等）、APP声明、数据源、接口以及页面路由相关功能必须使用此库
 
 ## 使用指南
 - 所有页面都需要通过 Route + comRef 包装，无需导出；
 - 所有组件和模块都需要使用 comRef 包装，无需导出;
-- 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在设计态进行展示，无需导出;
+- 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在搭建态进行展示，无需导出;
 - 路由通过 Routes + Route 进行渲染；
 - 数据管理流程为：
-  - 1. 先通过 dataSource.js 维护正式环境基本的动态数据源；
-  - 2. 设计态和不同场景的调试情况由 setup.js 维护
+  - 1. 先通过 dataSource.js 维护正式环境基本的动态数据源，对于还没有接口的情况，设计几个静态数据源方法；
+  - 2. 搭建态和不同场景的调试情况由 setup.js 维护，仅增量进行数据源方法spy，如果 dataSource.js 的某个方法已经包含静态数据源，则无需在 setup.js 重复spy整个方法
   - 3. store.js 使用 dataSource.js 来获取数据；
-  > 不得重复声明多余的数据；在 setup.js 有的数据不需要在 dataSource.js 中重复声明，同样也不需要在 store.js 中重复声明；
 - 必须维护一个 dataSource.js 文件用于存放正式环境数据；
 - 必须维护一个 setup.js 来保证多环境测试，其中mock环境是必须的；
 
@@ -44,7 +43,7 @@
 > 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
 
 #### PopupVisible装饰器
-PopupVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下默认保持**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
+PopupVisible 是一个属性装饰器，用于将浮层类组件在**搭建态**下默认保持**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
 
 #### 浮层使用
 
@@ -77,7 +76,6 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
 
 ```js DataSource 说明
 // DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
-// 使得 setup.js 中的 spyOn 能在运行时替换对应方法的返回值，子类无需任何额外代码。
 class DataSource {
   constructor() { /* 对所有方法自动 Proxy 包装 */ }
 }
@@ -108,17 +106,20 @@ export default new MyDatasource()
 ```
 
 ### 环境声明（setup.js）
-`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）**，其余环境根据用户需求来实现。
+`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（搭建态自动激活）**，其余环境根据用户需求来实现。
 
 通过 `describe` / `spyOn` 来描述每套环境的行为，**必须从 `'mybricks/testing'` import 这两个 API**。
 `describe` 的回调在激活时才执行（惰性），直接在回调里写配置即可。
 
+比如下面的代码核心要点，虽然 dataSource.js 有两个方法，但是对于mock环境来说，只需要增量劫持：
+1. getConfig 返回的是静态数据，搭建态可以展示，无需spy；
+2. getUserById 在搭建态无法请求真实接口，所以需要mock一个接口返回，保证搭建态渲染；
 
 ```js
 import { describe, spyOn } from 'mybricks/testing'
 import dataSource from './dataSource'
 
-// 必须：设计态 mock 环境，设计态无法请求真实接口，需要保证真实接口的模拟返回
+// 必须：搭建态 mock 环境，搭建态无法请求真实接口，需要保证真实接口的模拟返回
 describe('mock', () => {
   spyOn(dataSource, 'getUserById').mockReturn({
     status: 200,
@@ -144,11 +145,10 @@ describe('无权限测试', () => {
 ```
 
 #### spyOn 使用原则
-- **必须从 `'mybricks/testing'` import `describe` / `spyOn`**，禁止直接使用全局变量
-- `spyOn(dataSource, 'method').mockReturn(value)`：完全替换该方法的返回值
+- 仅必要时使用，比如由于搭建态无法请求真实接口
+- `spyOn(dataSource, 'method').mockReturn(value)`：可以替换该单个方法的返回值
 - `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；每个 dataSource 实例的 axios 是独立的
-- **必须声明 `mock` 环境**（设计态自动激活）；
-- 每新增或修改一个 dataSource.js 方法，需要考虑 setup.js 的更新
+- **必须声明 `mock` 环境**（搭建态自动激活）；
 
 ### 路由使用
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。

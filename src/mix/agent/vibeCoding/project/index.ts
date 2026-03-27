@@ -272,6 +272,8 @@ export class Project {
   - 这意味着每个通过 Route 注册的 comRef 组件都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
 ### 运行态渲染方式
   - 在运行态中，只有当前激活路由对应的页面会被展示；
+## 接口请求
+搭建态会替换axios的内部实现，不允许请求真实接口，需要提供 mock 数据。
 `;
 
     const state = this.config.getDesignerState?.();
