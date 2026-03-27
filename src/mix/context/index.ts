@@ -1,8 +1,6 @@
 import genVibeCodingAgent from "../agent/vibeCoding";
-import { updateRender, updateStyle, updateService, updateStore, transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
+import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
-import { parsemd } from "../../utils/ai-code/md"
-import { validateCode } from "../availableLibraries"
 import { getTimestamp } from "../../utils/time"
 import { deepClone } from "../utils/normal";
 
@@ -48,6 +46,7 @@ class Context {
   aiComParamsMap: Record<string, any> = {};
   aiComEvents: Record<string, Events<{
     'debugTarget': any;
+    'fileChange': any;
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
@@ -377,257 +376,126 @@ class Context {
     },
   };
 
-  updateFile(id, { fileName, content }) {
+  updateFile(id, { fileName, content, type }) {
     // 现在只有 jsx、less、js 三种文件
     const aiComParams = this.getAiComParams(id);
     const files = aiComParams.data.files;
 
-    const suffix = fileName.split('.').pop();
+    if (type === "delete") {
+      const deleteIndex = files.findIndex((f) => f.fileName === fileName);
+      if (deleteIndex !== -1) {
+        files.splice(deleteIndex, 1)
+      }
+    } else {
+      const suffix = fileName.split('.').pop();
 
-    switch (suffix) {
-      case 'jsx':
-        try {
-          const { transformCode, constituency } = transformTsx(content, { fileName });
-          updateFileContent({
-            fileName,
-            files,
-            content: {
-              source: encodeURIComponent(content),
-              compiled: encodeURIComponent(transformCode),
-              constituency
-            }
-          })
-          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file);
-        } catch (e: any) {
-          console.error("[@transformTsx error]", e);
-          updateFileContent({
-            fileName,
-            files,
-            content: {
-              source: encodeURIComponent(content)
-            }
-          })
-          aiComParams.data._errors = [
-            ...aiComParams.data._errors.filter(err => err.file !== fileName),
-            {
-              file: fileName,
-              message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-              type: 'compile'
-            }
-          ];
-        }
-        this.getAiCom(id)?.actions?.notifyChanged?.();
-        break;
-      case 'less':
-        try {
-          const css = transformLess(`.__mybricks_ai_module_id__ {${content}}`)
-          updateFileContent({
-            fileName,
-            files,
-            content: {
-              source: encodeURIComponent(content),
-              compiled: encodeURIComponent(css)
-            }
-          });
-          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-        } catch (e: any) {
-          console.error("[@transformLess error]", e);
-          updateFileContent({
-            fileName,
-            files,
-            content: {
-              source: encodeURIComponent(content),
-            }
-          });
-          aiComParams.data._errors = [
-            ...aiComParams.data._errors.filter(err => err.file !== fileName),
-            {
-              file: fileName,
-              message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-              type: 'compile'
-            }
-          ];
-        }
-        this.getAiCom(id)?.actions?.notifyChanged?.();
-        break;
-      case 'js':
-        try {
-          const { transformCode } = transformTsx(content, { fileName })
-          updateFileContent({
-            fileName,
-            files,
-            content: {
-              source: encodeURIComponent(content),
-              compiled: encodeURIComponent(transformCode)
-            }
-          })
-          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-        } catch (e: any) {
-          console.error("[@transformTsx error]", e);
-          updateFileContent({
-            fileName,
-            files,
-            content: {
-              source: encodeURIComponent(content),
-            }
-          })
-          aiComParams.data._errors = [
-            ...aiComParams.data._errors.filter(err => err.file !== fileName),
-            {
-              file: fileName,
-              message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-              type: 'compile'
-            }
-          ];
-        }
+      switch (suffix) {
+        case 'jsx':
+          try {
+            const { transformCode, constituency } = transformTsx(content, { fileName });
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+                compiled: encodeURIComponent(transformCode),
+                constituency
+              }
+            })
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file);
+          } catch (e: any) {
+            console.error("[@transformTsx error]", e);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content)
+              }
+            })
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter(err => err.file !== fileName),
+              {
+                file: fileName,
+                message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+                type: 'compile'
+              }
+            ];
+          }
+          this.getAiCom(id)?.actions?.notifyChanged?.();
+          break;
+        case 'less':
+          try {
+            const css = transformLess(`.__mybricks_ai_module_id__ {${content}}`)
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+                compiled: encodeURIComponent(css)
+              }
+            });
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+          } catch (e: any) {
+            console.error("[@transformLess error]", e);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+              }
+            });
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter(err => err.file !== fileName),
+              {
+                file: fileName,
+                message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+                type: 'compile'
+              }
+            ];
+          }
+          this.getAiCom(id)?.actions?.notifyChanged?.();
+          break;
+        case 'js':
+          try {
+            const { transformCode } = transformTsx(content, { fileName })
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+                compiled: encodeURIComponent(transformCode)
+              }
+            })
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+          } catch (e: any) {
+            console.error("[@transformTsx error]", e);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+              }
+            })
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter(err => err.file !== fileName),
+              {
+                file: fileName,
+                message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+                type: 'compile'
+              }
+            ];
+          }
 
-        this.getAiCom(id)?.actions?.notifyChanged?.();
-        break;
-      default:
-        break;
+          this.getAiCom(id)?.actions?.notifyChanged?.();
+          break;
+        default:
+          break;
+      }
     }
+
+    this.getAiComEvents(id)?.emit('fileChange', { fileName, content, type });
   }
-
-  // updateFile(id, { fileName, content }): void {
-  //   const aiComParams = this.getAiComParams(id);
-
-  //   switch (fileName) {
-  //     case "model.json":
-  //       aiComParams.data.modelConfig = encodeURIComponent(content);
-  //       break;
-  //     case "runtime.jsx":
-  //       return updateRender({
-  //         data: aiComParams.data,
-  //         success: () => {
-  //           const aiCom = this.getAiCom(id);
-  //           aiCom?.actions?.notifyChanged?.();
-  //         }},
-  //         content
-  //       );
-  //     case "style.less":
-  //       updateStyle({
-  //         id,
-  //         data: aiComParams.data,
-  //         success: () => {
-  //           this.getAiCom(id)?.actions?.notifyChanged?.();
-  //         },
-  //       }, content);
-  //       break;
-  //     case "config.js":
-  //       aiComParams.data.configJsCompiled = encodeURIComponent(content);
-  //       aiComParams.data.configJsSource = encodeURIComponent(content);
-  //       break;
-  //     case "store.js":
-  //       return updateStore({
-  //         data: aiComParams.data,
-  //         success: () => {
-  //           this.getAiCom(id)?.actions?.notifyChanged?.();
-  //         },
-  //       }, content);
-  //     case "service.js":
-  //       return updateService({
-  //         data: aiComParams.data,
-  //         success: () => {
-  //           this.getAiCom(id)?.actions?.notifyChanged?.();
-  //         },
-  //       }, content);
-  //     case "com.json":
-  //       aiComParams.data.componentConfig = encodeURIComponent(content);
-  //       const oriInputs = aiComParams.input.get();
-  //       const oriOutputs = aiComParams.output.get();
-  //       let parsed: { title?: string; inputs?: unknown[]; outputs?: unknown[] };
-  //       try {
-  //         parsed = JSON.parse(content);
-  //       } catch {
-  //         break;
-  //       }
-  //       const title = parsed?.title;
-  //       const inputs = Array.isArray(parsed?.inputs) ? parsed.inputs : [];
-  //       const outputs = Array.isArray(parsed?.outputs) ? parsed.outputs : [];
-
-  //       inputs.forEach((item: any) => {
-  //         const { id, title, desc, schema } = item ?? {};
-  //         if (id == null) return;
-  //         const oriInputIndex = oriInputs.findIndex((input) => input.id === id);
-  //         if (oriInputIndex !== - 1) {
-  //           // 修改
-  //           const oriInput = oriInputs[oriInputIndex];
-  //           oriInput.setTitle(title);
-  //           oriInput.setSchema(schema);
-  //           oriInputs.splice(oriInputIndex, 1)
-  //         } else {
-  //           // 新增
-  //           aiComParams.input.add({
-  //             id,
-  //             title,
-  //             desc,
-  //             schema,
-  //           });
-  //         }
-  //       })
-
-  //       oriInputs.forEach((input) => {
-  //         aiComParams.input.remove(input.id);
-  //       })
-
-  //       outputs.forEach((item: any) => {
-  //         const { id, title, desc, schema } = item ?? {};
-  //         if (id == null) return;
-  //         const oriOutputIndex = oriOutputs.findIndex((output) => output.id === id);
-  //         if (oriOutputIndex !== - 1) {
-  //           // 修改
-  //           const oriOutput = oriOutputs[oriOutputIndex];
-  //           oriOutput.setTitle(title);
-  //           oriOutput.setSchema(schema);
-  //           oriOutputs.splice(oriOutputIndex, 1)
-  //         } else {
-  //           // 新增
-  //           aiComParams.output.add({
-  //             id,
-  //             title,
-  //             desc,
-  //             schema,
-  //           });
-  //         }
-  //       })
-
-  //       oriOutputs.forEach((output) => {
-  //         aiComParams.output.remove(output.id);
-  //       })
-
-  //       if (title) {
-  //         aiComParams?.setTitle?.(title);
-  //       }
-  //       break;
-  //     case 'README.md':
-  //       aiComParams.data.runtimeMdSource = encodeURIComponent(content);
-  //       try {
-  //         aiComParams.data.runtimeMdCompiled = parsemd(content);
-  //       } catch (e) {
-  //         console.log("[@parsemd error]", e);
-  //       }
-  //       break;
-  //     case 'mock.json':
-  //       aiComParams.data.mockJsonSource = encodeURIComponent(content);
-  //       try {
-  //         JSON.parse(content);
-  //         aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== 'mock.json');
-  //       } catch (e: any) {
-  //         aiComParams.data._errors = [
-  //           ...aiComParams.data._errors.filter(err => err.file !== 'mock.json'),
-  //           {
-  //             file: 'mock.json',
-  //             message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-  //             type: 'compile'
-  //           }
-  //         ];
-  //       }
-  //       break;
-  //     default:
-  //       break;
-  //   }
-  // }
 }
 
 export default new Context();

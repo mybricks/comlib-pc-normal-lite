@@ -3,9 +3,6 @@ import Runtime from './runtime';
 import context from './context';
 
 const dataCompatible = (data) => {
-  if (data._errors.length) {
-    data._errors = []
-  }
   if (!data._errors) {
     data._errors = [];
   }
@@ -40,13 +37,16 @@ export default (props: any) => {
   dataCompatible(data);
 
   const [debugTarget, setDebugTarget] = useState<any>(null);
+  const [fileChangeKey, setFileChangeKey] = useState<number>(0);
 
   useLayoutEffect(() => {
     const events = context.getAiComEvents(props.id);
-    const cancelListen = events.on('debugTarget', setDebugTarget);
+    const cancelListenDebugTarget = events.on('debugTarget', setDebugTarget);
+    const cancelListenFileChange = events.on('fileChange', () => setFileChangeKey(c => c + 1));
 
     return () => {
-      cancelListen();
+      cancelListenDebugTarget();
+      cancelListenFileChange();
     }
   }, [])
 
@@ -70,9 +70,9 @@ export default (props: any) => {
   // key 变化时 React 会完整卸载再挂载：
   // - 编辑态 ↔ 页面调试态切换时，store/state 完全隔离，互不影响
   // - 不同页面之间切换时同样强制重建，避免上一页状态污染
-  const runtimeKey = isPageDebug
+  const runtimeKey = `${isPageDebug
     ? `page-debug-${debugTarget.pageIndex}`
-    : 'component-edit';
+    : 'component-edit'}_${fileChangeKey}`;
 
   return <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
 };

@@ -159,8 +159,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
   ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
-    console.log(data)
-
     // 组件渲染后注册全局桥接方法，始终指向最后渲染的组件
     useEffect(() => {
       (window as any)._focusAndSendToVibeAgent_ = (params: any) => {
@@ -322,7 +320,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             env={env}
             logger={resolvedLogger}
             id={id}
-
             data={data}
             inputs={inputs}
             outputs={outputs}

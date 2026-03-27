@@ -5,7 +5,8 @@ import React, {
   Children,
   isValidElement,
   useState,
-  useCallback
+  useCallback,
+  useEffect
 } from "react";
 
 import lazyCss from "./index.lazy.less";
@@ -26,6 +27,14 @@ const TreeViewContext = createContext<{
 
 const TreeView = (props: TreeViewProps) => {
   const [current, setCurrent] = useState(props.defaultCurrent);
+
+  // 当外部 defaultCurrent 变化时（如文件被删除后回退选择），同步更新内部 current
+  useEffect(() => {
+    if (props.defaultCurrent) {
+      setCurrent(props.defaultCurrent);
+    }
+  }, [props.defaultCurrent]);
+
   return (
     <TreeViewContext.Provider
       value={{
