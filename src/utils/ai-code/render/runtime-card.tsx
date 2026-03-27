@@ -169,7 +169,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       };
     }, [id]);
 
-    // 搭建态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
+    // 设计态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
     useEffect(() => {
       if (env.runtime) return;
       const el = containerRef.current;
@@ -198,6 +198,31 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       return () => observer.disconnect();
     }, []);
 
+    /**
+     * 【重要】首次挂载时清除纯 runtime 类型的旧错误，让组件重新走渲染流程并重新收集错误。
+     *
+     * 为什么用 useEffect（空依赖）而不是在 useMemo/render 里直接清除：
+     *   - useMemo 每次渲染都执行，若在里面清空 data._errors，
+     *     下方 AIJsxRuntime 渲染阶段收集到的新 runtime 错误会在下次渲染的 useMemo 里被再次清空，
+     *     导致错误永远无法被展示（清除 → 收集 → 清除 的死循环）。
+     *   - useEffect（空依赖）只在组件挂载后执行一次，时机在首次渲染之后，
+     *     保证新一轮渲染能收集到真实的 runtime 错误并正常展示。
+     *
+     * 只清除「全部为 runtime」的情况：若有 compile 错误则保留，不允许渲染。
+     */
+    useEffect(() => {
+      if (data._errors && Array.isArray(data._errors) && data._errors.length > 0) {
+        const hasNonRuntimeError = data._errors.some((e) => e.type !== 'runtime');
+        if (!hasNonRuntimeError) {
+          data._errors = [];
+        }
+      }
+    }, []);
+
+    /**
+     * 【重要】errorInfo 只负责「读取并格式化」data._errors，禁止在此处修改 data._errors。
+     * 若需要在渲染前重置错误，请在 useEffect（空依赖）里处理，见上方注释。
+     */
     const errorInfo = useMemo(() => {
       // 使用统一的错误列表
       if (data._errors && Array.isArray(data._errors) && data._errors.length > 0) {

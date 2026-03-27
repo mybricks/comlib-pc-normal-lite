@@ -62,7 +62,32 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
       data
     })
 
-    const mybricksWithDataSource = Object.assign(mybricks, { DataSource });
+    const pushDataLog = mybricks._pushDataLog;
+
+    // 包装 DataSource：拦截用户在子类中定义的所有方法调用，将调用记录写入 data._logs
+    class DataSourceWithLog extends DataSource {
+      constructor() {
+        super();
+        // 遍历实例原型链上用户定义的方法（不含 DataSource 基类自身和 Object.prototype）
+        let proto = Object.getPrototypeOf(this);
+        while (proto && proto !== DataSource.prototype && proto !== Object.prototype) {
+          Object.getOwnPropertyNames(proto).forEach((key) => {
+            if (key === 'constructor') return;
+            const descriptor = Object.getOwnPropertyDescriptor(proto, key);
+            if (descriptor && typeof descriptor.value === 'function') {
+              const original = descriptor.value;
+              (this as any)[key] = (...args: any[]) => {
+                pushDataLog({ type: 'dataSource', method: key, args });
+                return original.apply(this, args);
+              };
+            }
+          });
+          proto = Object.getPrototypeOf(proto);
+        }
+      }
+    }
+
+    const mybricksWithDataSource = Object.assign(mybricks, { DataSource: DataSourceWithLog });
 
     // 创建独立的 EnvRunner 实例，每次 eval 天然隔离
     const envRunner = createEnvRunner();
@@ -150,9 +175,35 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
     return fm;
   }, [])
 
-  // 入口文件固定写法，直接读取
+  /**
+   * 【重要】eval 失败时招技异常并直接写入 data._errors。
+   *
+   * 为什么必须在这里 catch：
+   *   - eval 在 useMemo 里调用，发生在 React 渲染周期之前（非 JSX render 阶段），
+   *     ErrorBoundary.componentDidCatch 只能捕获 render 阶段的异常，
+   *     因此 eval 抛出的错误不会被 ErrorBoundary 捕获，必须在此手动写入 data._errors。
+   */
   const ReactComponent = useMemo(() => {
-    return filesModule.getModule('index.jsx')
+    try {
+      return filesModule.getModule('index.jsx')
+    } catch (e: any) {
+      // eval 失败（运行时错误），直接写入 data._errors
+      if (data) {
+        if (!data._errors) data._errors = [];
+        const errorMessage = e?.message || String(e);
+        const fileName: string | undefined = e?.fileName;
+        data._errors = [
+          ...((data._errors as any[]).filter((err: any) => err.file)),
+          {
+            message: errorMessage,
+            type: 'runtime',
+            ...(fileName ? { file: fileName } : {}),
+          }
+        ];
+      }
+      console.log('data', data._errors)
+      return undefined;
+    }
   }, [])
 
   if (typeof ReactComponent !== 'function') {

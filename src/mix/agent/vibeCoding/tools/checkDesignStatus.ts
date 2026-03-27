@@ -18,12 +18,13 @@ export default function checkDesignStatus(config: CheckDesignStatusConfig): any 
   return {
     name: NAME,
     displayName: '查看当前状态',
-    description: `查看搭建态的情况，将会告知当前渲染是否正常渲染，是否有报错，以及渲染了几个页面和弹窗。
-在任何代码修改后都应该检查搭建态是否正常，我们特别希望在搭建态能够展示所有页面和弹窗，方便用户进行调试`,
+    description: `查看设计态的情况，将会告知当前渲染是否正常渲染，是否有报错，以及渲染了几个页面和弹窗。
+在任何代码修改后都应该检查设计态是否正常，我们特别希望在设计态能够展示所有页面和弹窗，方便用户进行调试`,
     execute(_params: any, context: any) {
       return new Promise<any>((resolve) => {
         setTimeout(async () => {
           const status = await project.exportDesignerToMessage();
+          const logsSection = project.exportLogsToMessage();
 
           const hasErrors = project.hasRuntimeErrors();
 
@@ -42,7 +43,7 @@ export default function checkDesignStatus(config: CheckDesignStatusConfig): any 
           }
 
           resolve({
-            llmContent: status,
+            llmContent: status + logsSection,
             displayContent: '已查看搭建状态',
             appendCommands: commands.length > 0 ? commands : undefined,
           });

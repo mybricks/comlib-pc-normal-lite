@@ -456,6 +456,7 @@ export default function ({ context }) {
         getThemesContent: () => themesContent,
         getDesignerState: () => aiComParams?.data?._designerState,
         getErrors: () => aiComParams?.data?._errors,
+        getLogs: () => aiComParams?.data?._logs,
       });
 
       // project.read('DataCard')

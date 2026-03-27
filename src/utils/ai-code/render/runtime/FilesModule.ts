@@ -1,4 +1,4 @@
-function runRender(code, dependencies) {
+function runRender(code, dependencies, fileName?: string) {
   const wrapCode = `
     (function(exports,require){
       ${code}
@@ -13,7 +13,28 @@ function runRender(code, dependencies) {
     return dependencies[packageName]
   }
 
-  eval(wrapCode)(exports, require)
+  try {
+    eval(wrapCode)(exports, require)
+  } catch (e: any) {
+    // 构造带有文件位置信息的运行时错误
+    const fileLabel = fileName ? `[${fileName}] ` : ''
+    const originalMessage = e?.message || String(e)
+
+    // 尝试从错误堆栈中提取行号（eval 内部行号，偏移 2 行的包装代码头）
+    let lineInfo = ''
+    const stackMatch = e?.stack?.match(/<anonymous>:(\d+):(\d+)/)
+    if (stackMatch) {
+      const evalLine = parseInt(stackMatch[1], 10)
+      // wrapCode 包装头占 2 行，所以实际代码行 = evalLine - 2
+      const codeLine = Math.max(1, evalLine - 2)
+      lineInfo = ` (第 ${codeLine} 行)`
+    }
+
+    const enrichedError: any = new Error(`${fileLabel}${originalMessage}${lineInfo}`)
+    enrichedError.originalError = e
+    enrichedError.fileName = fileName
+    throw enrichedError
+  }
 
   return exports.default
 }
@@ -96,7 +117,7 @@ class FilesModule {
     const suffix = fileName.split('.').pop();
 
     if (suffix === 'jsx' || suffix === 'js') {
-      const fileModule: any = runRender(decodeURIComponent(file.compiled), this.proxyDependencies(fileName));
+      const fileModule: any = runRender(decodeURIComponent(file.compiled), this.proxyDependencies(fileName), fileName);
       return this.cache[fileName] = fileModule;
     } else if (suffix === 'less') {
       this.importCallBack.less({ fileName, content: decodeURIComponent(file.compiled) });

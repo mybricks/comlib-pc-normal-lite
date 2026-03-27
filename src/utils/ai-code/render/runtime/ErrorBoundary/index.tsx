@@ -29,19 +29,21 @@ class ErrorBoundary extends Component<any, any> {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.log(11111)
     this.setState({ errorInfo });
     // 添加运行时错误到统一错误列表
     const { data } = this.props as any;
     if (data) {
       if (!data._errors) data._errors = [];
       const errorMessage = error?.toString ? error.toString() : (errorInfo ? errorInfo.componentStack : '未知运行时错误');
+      // 如果错误来自 eval（runRender 抛出的富化错误），携带 fileName
+      const fileName: string | undefined = (error as any)?.fileName;
       // 移除旧的运行时错误（没有 file 字段的），替换引用触发 useMemo 重新计算
       data._errors = [
         ...data._errors.filter(err => err.file),
         {
           message: errorMessage,
-          type: 'runtime'
+          type: 'runtime',
+          ...(fileName ? { file: fileName } : {}),
         }
       ];
     }

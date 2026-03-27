@@ -32,6 +32,8 @@ export interface ProjectConfig {
   getDesignerState?: () => { mode?: string; pages: string[]; popups: string[] } | undefined;
   /** 获取当前运行时报错列表 */
   getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
+  /** 获取本次组件加载后收集到的日志列表（每次重载重置） */
+  getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number }> | undefined;
 
 
   getFiles: () => any[];
@@ -271,22 +273,46 @@ export class Project {
     return errors.length > 0;
   }
 
+  /**
+   * 将本次载入的运行日志格式化为 Markdown 字符串，供 checkDesignStatus 拼接
+   */
+  exportLogsToMessage(maxCount = 30, maxArgLength = 50): string {
+    const allLogs = this.config.getLogs?.() ?? [];
+    const logs = allLogs.slice(-maxCount);
+    const truncatedCount = allLogs.length - logs.length;
+    if (logs.length === 0) {
+      return `\n## 运行日志\n  （本次载入暂无日志）\n`;
+    }
+    const logLines = logs.map((entry, i) => {
+      const argsStr = entry.args.map((a: any) => {
+        let s: string;
+        try { s = JSON.stringify(a); } catch { s = String(a); }
+        return s.length > maxArgLength ? s.slice(0, maxArgLength) + '…' : s;
+      }).join(', ');
+      return `  ${i + 1}. [${entry.type}] ${entry.method}(${argsStr})`;
+    }).join('\n');
+    const truncatedNote = truncatedCount > 0
+      ? `\n  （已省略最早的 ${truncatedCount} 条，仅展示最近 ${maxCount} 条）`
+      : '';
+    return `\n## 运行日志（按顺序）${truncatedNote}\n${logLines}\n`;
+  }
+
   async exportDesignerToMessage(): Promise<string> {
     const designModeKnowledge = `
 ## 页面渲染：
 通过 Route 注册的组件统一定义为页面；
-### 搭建态渲染方式
-  - 在搭建态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的组件；
+### 设计态渲染方式
+  - 在设计态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的组件；
   - 这意味着每个通过 Route 注册的 comRef 组件都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
-### 运行态渲染方式
-  - 在运行态中，只有当前激活路由对应的页面会被展示；
+### 调试态渲染方式
+  - 在调试态中，只有当前激活路由对应的页面会被展示；
 ## 接口请求
-搭建态会替换axios的内部实现，不允许请求真实接口，需要提供 mock 数据。
+设计态会替换axios的内部实现，不允许请求真实接口，需要提供 mock 数据。
 `;
 
     const state = this.config.getDesignerState?.();
     const mode = state?.mode ?? 'design';
-    const modeLabel = mode === 'debug' ? '调试态' : mode === 'runtime' ? '运行态' : '搭建态';
+    const modeLabel = mode === 'debug' ? '调试态' : mode === 'runtime' ? '调试态' : '设计态';
     const pageRefNames = state?.pages ?? [];
     const popupRefNames = state?.popups ?? [];
 
@@ -299,7 +325,7 @@ export class Project {
     } else if (pageRefNames.length === 0 && popupRefNames.length === 0) {
       canvasStatus = '当前代码暂无页面或弹窗组件，画布尚无可展示内容。';
     } else {
-      // 页面在前、弹窗在后，与搭建态画布实际渲染顺序一致
+      // 页面在前、弹窗在后，与设计态画布实际渲染顺序一致
       const allZones = [
         ...pageRefNames.map((name) => ({ name, kind: '页面' })),
         ...popupRefNames.map((name) => ({ name, kind: '弹窗/浮层' })),
@@ -316,7 +342,7 @@ ${canvasStatus}
 `    
     return [
       '# 设计器状态（实时更新）',
-      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「搭建态」和「运行态」，两种模式下展示的内容不一样',
+      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「调试态」，两种模式下展示的内容不一样',
       designModeKnowledge,
       curStatus
     ].join('\n');
@@ -339,12 +365,12 @@ ${canvasStatus}
   - 功能：生产级别的功能性；
   - 细节：在每个细节都精心完善；
   - 响应式：保证合理统一的间距，以及支持宽度变化自适应的代码；
-  - 当前每一个搭建态画布默认宽度为1200px，可以通过样式文件中使用 :frame { width: 1660px } 统一配置画布宽度；
+  - 当前每一个设计态画布默认宽度为1200px，可以通过样式文件中使用 :frame { width: 1660px } 统一配置画布宽度；
     - 如果是PC端界面，画布宽度配置常见的 1200、1660、1920 等宽度；
     - 如果是移动端界面，画布宽度建议配置414宽度；
 - 拆分逻辑
   - 精准识别到底是页面还是弹窗，对其进行拆分，如果是页面，需要使用Route渲染，如果是弹窗，需要使用popupRef；
-  - 我们特别希望在搭建态能够展示所有页面和弹窗，方便用户进行调试；
+  - 我们特别希望在设计态能够展示所有页面和弹窗，方便用户进行调试；
 - 静态资源：
   - 对于图标：为了保证视觉的统一与专业性，我们的共识是统一使用图标组件。
     - 如果没有图标组件，则使用 placehold.co，禁止使用 Emoji 或特殊字符，它们可能导致在不同设备上的显示差异。

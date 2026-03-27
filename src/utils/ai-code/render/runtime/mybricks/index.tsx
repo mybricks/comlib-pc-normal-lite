@@ -42,6 +42,18 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     data._designerState.mode = debugTarget ? 'debug' : _env.mode; // 'design' | 'runtime' | 'debug'
   }
 
+  // 每次组件重新载入时重置日志列表（createMyBricks 随 key 变化而重新调用）
+  if (data) {
+    data._logs = [];
+  }
+
+  /** 向 data._logs 追加一条日志记录（按打印顺序入栈） */
+  const pushDataLog = (entry: { type: string; method: string; args: any[] }) => {
+    if (data && Array.isArray(data._logs)) {
+      data._logs.push({ ...entry, timestamp: Date.now() });
+    }
+  };
+
 
   const ROUTE_TYPE = Symbol('Route')
 
@@ -387,7 +399,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     };
 
     if (_env.mode === 'design') {
-      // 运行态不做任何处理，保留类字段原始初始值
+      // 调试态不做任何处理，保留类字段原始初始值
       if (!popupRefOriginalsSet.has(Component)) {
         popupRefOriginalsSet.add(Component);
         popupRefRegistry.push(DialogRoot);
@@ -405,6 +417,17 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return DialogRoot
   };
 
+  // 将 logger 的调用同步收集到 data._logs（设计态、调试态均收集）
+  const capturedLogger = new Proxy(logger ?? {}, {
+    get(target, prop: string) {
+      const original = typeof target[prop] === 'function' ? target[prop] : (() => {});
+      return (...args: any[]) => {
+        original(...args);
+        pushDataLog({ type: 'logger', method: prop, args });
+      };
+    }
+  });
+
   return {
     appRef,
     comRef,
@@ -415,8 +438,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     useLocation,
     useNavigate,
     useParams,
-    logger,
-    makeAutoObservable
+    logger: capturedLogger,
+    makeAutoObservable,
+    /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 data._logs */
+    _pushDataLog: pushDataLog,
   }
 }
 

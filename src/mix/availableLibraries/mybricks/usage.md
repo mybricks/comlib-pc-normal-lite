@@ -4,7 +4,7 @@
 ## 使用指南
 - 所有页面都需要通过 Route + comRef 包装，无需导出；
 - 所有组件和模块都需要使用 comRef 包装，无需导出;
-- 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在搭建态进行展示，无需导出;
+- 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在设计态进行展示，无需导出;
 - 路由通过 Routes + Route 进行渲染；
 - 所有数据源（接口请求、静态数据）的声明和使用方式都需要通过 dataSource + setup 文件声明；
 - 必须维护一个 dataSource.js 文件用于存放正式环境数据；
@@ -40,7 +40,7 @@
 > 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
 
 #### PopupVisible装饰器
-PopupVisible 是一个属性装饰器，用于将浮层类组件在**搭建态**下默认保持**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
+PopupVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下默认保持**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
 
 #### 浮层使用
 
@@ -103,22 +103,22 @@ export default new MyDatasource()
 ```
 
 ### 环境声明（setup.js）
-`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（搭建态自动激活）**，其余环境根据用户需求按需来实现。
+`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）**，其余环境根据用户需求按需来实现。
 
-一共需要关心 搭建态 + 正式环境 + N套自定义环境：
-1. 搭建环境：使用mock定义，由于axios在搭建态无法调用，我们需要劫持动态数据的接口以保证搭建态的正常返回
+一共需要关心 设计态 + 正式环境 + N套自定义环境：
+1. 搭建环境：使用mock定义，由于axios在设计态无法调用，我们需要劫持动态数据的接口以保证设计态的正常返回
 2. 正式环境：使用 dataSource.js 中定义的静态数据和接口请求；
 3. N套自定义环境：用户需要时声明，比如特殊环境和特殊测试场景；
 
 比如下面的代码，虽然 dataSource.js 有两个方法，但是对于mock环境来说，只需要增量劫持：
-1. getConfig 返回的是静态数据，搭建态可以展示，无需spy；
-2. getUserById 在搭建态无法请求真实接口，所以需要mock一个接口返回，保证搭建态渲染；
+1. getConfig 返回的是静态数据，设计态可以展示，无需spy；
+2. getUserById 在设计态无法请求真实接口，所以需要mock一个接口返回，保证设计态渲染；
 
 ```js
 import { describe, spyOn } from 'mybricks/testing'
 import dataSource from './dataSource'
 
-// 必须：搭建态 mock 环境
+// 必须：设计态 mock 环境
 describe('mock', () => {
   spyOn(dataSource, 'getUserById').mockReturn({
     status: 200,
@@ -145,9 +145,9 @@ describe('无权限测试', () => {
 
 #### spyOn 使用原则
 - `spyOn(dataSource, 'method').mockReturn(value: Record<string, any>)`：可以替换该单个方法的返回值，**value 必须为 对象**；
-- 仅必要时使用，比如由于搭建态无法请求真实接口，需要劫持axios接口调用；
+- 仅必要时使用，比如由于设计态无法请求真实接口，需要劫持axios接口调用；
 - `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；
-- **必须声明 `mock` 环境**（搭建态自动激活）；
+- **必须声明 `mock` 环境**（设计态自动激活）；
 
 ### 路由使用
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。
