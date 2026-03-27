@@ -15,9 +15,11 @@ interface Config {
   onUpdate?: (params: { files: Array<{ fileName: string; content: string; language: string }> }) => ExecuteResult;
   focusComId?: string;
   hasAttachments?: boolean;
+  /** 本次请求是否成功修改了代码的共享标志，修改成功后设为 true */
+  codeModifiedFlag?: { value: boolean };
 }
 
-export default function developMyBricksModule(config: Config) {
+export default function developMyBricksModule(config: Config = {}) {
   const langs = "React、Less"
   const libTitles = `${langs}、mybricks`
   const allLibNamesStr = getAllLibraryNames().join(', ')
@@ -926,6 +928,9 @@ export default function developMyBricksModule(config: Config) {
 
           if (!result || result.mergeSuccess) {
             (window as any)._mybricksOnEdit_?.();
+            if (config.codeModifiedFlag) {
+              config.codeModifiedFlag.value = true;
+            }
           }
 
           if (result && !result.mergeSuccess && ToolRetryError) {

@@ -13,7 +13,20 @@ import {
   getJSXElementNameString
 } from "./utils";
 
-export default function ({ constituency }) {
+/** 从文件路径派生组件名：folder/index.jsx → folder 名；直接文件 → 文件名（去扩展名） */
+function deriveNameFromFilePath(filePath?: string): string {
+  if (!filePath) return 'root';
+  const parts = filePath.replace(/\\/g, '/').split('/');
+  const last = parts[parts.length - 1];
+  const stem = last.replace(/\.[^.]+$/, ''); // 去掉扩展名
+  if (stem === 'index' && parts.length > 1) {
+    return parts[parts.length - 2]; // 用父级文件夹名
+  }
+  return stem || 'root';
+}
+
+export default function ({ constituency, fileName }: { constituency: any; fileName?: string }) {
+  const fallbackName = deriveNameFromFilePath(fileName);
   return function () {
     const importRelyMap = new Map();
     /** 按组件声明缓存 { rootJSX, jsdoc }，每个 comRef 组件只计算一次 */
@@ -84,7 +97,7 @@ export default function ({ constituency }) {
               }
               const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
 
-              const pageRef = getPageRefForJSXPath(path, pageRefCache);
+              const pageRef = getPageRefForJSXPath(path, pageRefCache, fallbackName);
               if (pageRef) {
                 const pageTitle = pageRef.jsdoc?.summary ?? pageRef.name ?? lastSelector;
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", pageTitle);
@@ -94,7 +107,7 @@ export default function ({ constituency }) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
               }
 
-              const popupRef = getPopupRefForJSXPath(path, popupRefCache);
+              const popupRef = getPopupRefForJSXPath(path, popupRefCache, fallbackName);
               if (popupRef) {
                 const dialogTitle = popupRef.jsdoc?.summary ?? popupRef.name ?? lastSelector;
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", dialogTitle);
@@ -155,7 +168,7 @@ export default function ({ constituency }) {
   
               let zoneType = "zone";
 
-              const comRef = getComRefForJSXPath(path, componentJsdocCache);
+              const comRef = getComRefForJSXPath(path, componentJsdocCache, fallbackName);
               if (pageRef) {
                 zoneType = "page";
               }

@@ -607,6 +607,9 @@ ${text}
         const DEVELOP_MODULE_NAME = (developModule as any).toolName;
         const ANSWER_NAME = (answer as any).toolName;
 
+        // 每次请求共享的标志：developModule 成功修改代码后置 true，checkDesignStatus 消费后重置
+        const codeModifiedFlag = { value: false };
+
         const AgentModeConfig = {
           ...baseConfig,
           tools: [
@@ -614,8 +617,9 @@ ${text}
             developModule({
               hasAttachments,
               onUpdate: onUpdateFiles,
+              codeModifiedFlag,
             }),
-            checkDesignStatus({ project }),
+            checkDesignStatus({ project, onProgress, codeModifiedFlag }),
             syncMarkdownformybricksModule({
               onUpdate: (p) => {
                 const files = p.files;

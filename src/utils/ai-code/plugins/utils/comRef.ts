@@ -171,7 +171,8 @@ function isPopupRefCall(callee: any): boolean {
  */
 export function getComRefForJSXPath(
   jsxPath: any,
-  cache: Map<any, any>
+  cache: Map<any, any>,
+  fallbackName?: string
 ): any | null {
   // 向上找「包裹当前 JSX 的」comRef 组件定义（只认这两种写法）
   const componentPath = jsxPath.findParent((p: any) => {
@@ -200,7 +201,7 @@ export function getComRefForJSXPath(
         node.type === "ExportDefaultDeclaration"
           ? node.leadingComments
           : (componentPath.parentPath?.node?.leadingComments ?? node.leadingComments);
-      cached.name = node.type === "ExportDefaultDeclaration" ? "root" : node.id.name;
+      cached.name = node.type === "ExportDefaultDeclaration" ? (fallbackName ?? 'root') : node.id.name;
       if (Array.isArray(comments) && comments.length > 0) {
         const block = comments.find((c: any) => c.type === "CommentBlock");
         if (block && typeof block.value === "string") jsdoc = parseJSDocComment(block.value);
@@ -222,7 +223,8 @@ export function getComRefForJSXPath(
  */
 export function getPageRefForJSXPath(
   jsxPath: any,
-  cache: Map<any, any>
+  cache: Map<any, any>,
+  fallbackName?: string
 ): any | null {
   const componentPath = jsxPath.findParent((p: any) => {
     if (p.isVariableDeclarator()) {
@@ -248,7 +250,7 @@ export function getPageRefForJSXPath(
         node.type === "ExportDefaultDeclaration"
           ? node.leadingComments
           : (componentPath.parentPath?.node?.leadingComments ?? node.leadingComments);
-      cached.name = node.type === "ExportDefaultDeclaration" ? "root" : node.id.name;
+      cached.name = node.type === "ExportDefaultDeclaration" ? (fallbackName ?? 'root') : node.id.name;
       if (Array.isArray(comments) && comments.length > 0) {
         const block = comments.find((c: any) => c.type === "CommentBlock");
         if (block && typeof block.value === "string") jsdoc = parseJSDocComment(block.value);
@@ -269,7 +271,8 @@ export function getPageRefForJSXPath(
  */
 export function getPopupRefForJSXPath(
   jsxPath: any,
-  cache: Map<any, any>
+  cache: Map<any, any>,
+  fallbackName?: string
 ): any | null {
   const componentPath = jsxPath.findParent((p: any) => {
     if (p.isVariableDeclarator()) {
@@ -295,7 +298,7 @@ export function getPopupRefForJSXPath(
         node.type === "ExportDefaultDeclaration"
           ? node.leadingComments
           : (componentPath.parentPath?.node?.leadingComments ?? node.leadingComments);
-      cached.name = node.type === "ExportDefaultDeclaration" ? "root" : node.id.name;
+      cached.name = node.type === "ExportDefaultDeclaration" ? (fallbackName ?? 'root') : node.id.name;
       if (Array.isArray(comments) && comments.length > 0) {
         const block = comments.find((c: any) => c.type === "CommentBlock");
         if (block && typeof block.value === "string") jsdoc = parseJSDocComment(block.value);

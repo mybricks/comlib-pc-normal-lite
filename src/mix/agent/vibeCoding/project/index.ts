@@ -263,6 +263,14 @@ export class Project {
   //   return collectNodeAndDescendantNames(this.root);
   // }
 
+  /**
+   * 当前设计器是否有运行时错误
+   */
+  hasRuntimeErrors(): boolean {
+    const errors = this.config.getErrors?.() ?? [];
+    return errors.length > 0;
+  }
+
   async exportDesignerToMessage(): Promise<string> {
     const designModeKnowledge = `
 ## 页面渲染：

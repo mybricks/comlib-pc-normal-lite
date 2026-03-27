@@ -51,7 +51,7 @@ export function transformTsx(code, ctx?: import('../../mix/availableLibraries/ty
             isTSX: true
           }
         ],
-        babelPlugin({ constituency }),
+        babelPlugin({ constituency, fileName: ctx?.fileName }),
         ...validatorPlugins,
       ]
     }

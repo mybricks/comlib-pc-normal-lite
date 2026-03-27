@@ -72,7 +72,9 @@ export function createEnvRunner(): EnvRunner {
     return {
       mockReturn(value: any) {
         spiedMethods.push({ target, method, original });
-        target[method] = (..._args: any[]) => Promise.resolve(value);
+        target[method] = (..._args: any[]) => {
+          return Promise.resolve(value)
+        };
       },
       mockRestore() {
         target[method] = original;

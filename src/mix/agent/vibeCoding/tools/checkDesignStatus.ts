@@ -7,10 +7,13 @@ const NAME = 'checkDesignStatus';
 
 export interface CheckDesignStatusConfig {
   project: Project;
+  onProgress: any;
+  /** 本次请求是否成功修改了代码的共享标志 */
+  codeModifiedFlag?: { value: boolean };
 }
 
 export default function checkDesignStatus(config: CheckDesignStatusConfig): any {
-  const { project } = config;
+  const { project, onProgress, codeModifiedFlag } = config;
 
   return {
     name: NAME,
@@ -22,7 +25,7 @@ export default function checkDesignStatus(config: CheckDesignStatusConfig): any 
         setTimeout(async () => {
           const status = await project.exportDesignerToMessage();
 
-          const hasErrors = status.includes('报错');
+          const hasErrors = project.hasRuntimeErrors();
 
           const commands: any[] = [];
 
@@ -31,8 +34,10 @@ export default function checkDesignStatus(config: CheckDesignStatusConfig): any 
               commands.push({ toolName: developMyBricksModule.toolName });
             }
           } else {
-            if (!context.commands?.find((command: any) => command.name === syncMarkdownformybricksModule.toolName)) {
+            onProgress?.('complete')
+            if (codeModifiedFlag?.value && !context.commands?.find((command: any) => command.name === syncMarkdownformybricksModule.toolName)) {
               commands.push({ toolName: syncMarkdownformybricksModule.toolName });
+              codeModifiedFlag.value = false;
             }
           }
 
