@@ -1049,43 +1049,82 @@ export default function (props: Props, actions: Actions, ...args) {
                 title: "导出到 Figma",
                 type: "editorRender",
                 options: {
-                  render: () => (
-                    <div style={{ padding: '4px 0' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const fn = (window as any).elementToMybricksJsonWithInlineImages;
-                          if (typeof fn !== 'function') {
-                            console.warn("[导出页面] window.elementToMybricksJsonWithInlineImages 未定义");
-                            return;
+                  render: () => {
+                    const ExportFigmaBtn = () => {
+                      const [loading, setLoading] = React.useState(false);
+
+                      const handleClick = () => {
+                        if (loading) return;
+                        const fn = (window as any).elementToMybricksJsonWithInlineImages;
+                        if (typeof fn !== 'function') {
+                          console.warn("[导出页面] window.elementToMybricksJsonWithInlineImages 未定义");
+                          return;
+                        }
+                        const ele = focusArea?.ele;
+                        if (!ele) {
+                          console.warn("[导出页面] focusArea.ele 不存在");
+                          return;
+                        }
+                        const message = (window as any).antd?.message;
+                        setLoading(true);
+                        fn(ele, comId).then((result: any) => {
+                          const jsonStr = JSON.stringify(result, null, 2);
+                          return navigator.clipboard.writeText(jsonStr);
+                        }).then(
+                          () => {
+                            setLoading(false);
+                            if (message) message.success('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
+                            else alert('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
+                          },
+                          (err: any) => {
+                            setLoading(false);
+                            if (message) message.error('导出失败，请检查剪切板权限');
+                            else alert('导出失败，请检查剪切板权限');
+                            console.error("[导出页面] 复制失败", err);
                           }
-                          const ele = focusArea?.ele;
-                          if (!ele) {
-                            console.warn("[导出页面] focusArea.ele 不存在");
-                            return;
-                          }
-                          const message = (window as any).antd?.message;
-                          fn(ele, comId).then((result: any) => {
-                            const jsonStr = JSON.stringify(result, null, 2);
-                            return navigator.clipboard.writeText(jsonStr);
-                          }).then(
-                            () => {
-                              if (message) message.success('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
-                              else alert('内容已复制到剪切板，请在Figma打开MyBricks插件，粘贴后点击生成页面');
-                            },
-                            (err: any) => {
-                              if (message) message.error('导出失败，请检查剪切板权限');
-                              else alert('导出失败，请检查剪切板权限');
-                              console.error("[导出页面] 复制失败", err);
-                            }
-                          );
-                        }}
-                        style={figmaUiButtonStyle}
-                      >
-                        导出到 Figma
-                      </button>
-                    </div>
-                  ),
+                        );
+                      };
+
+                      return (
+                        <div style={{ padding: '4px 0' }}>
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={handleClick}
+                            style={{
+                              ...figmaUiButtonStyle,
+                              opacity: loading ? 0.6 : 1,
+                              cursor: loading ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {loading ? (
+                              <>
+                                <svg
+                                  width="12" height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  style={{
+                                    marginRight: 5,
+                                    animation: 'vibeui-spin 0.8s linear infinite',
+                                    display: 'inline-block',
+                                    verticalAlign: 'middle',
+                                  }}
+                                >
+                                  <style>{`@keyframes vibeui-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                                  <path d="M12 2a10 10 0 0 1 10 10" />
+                                </svg>
+                                导出中...
+                              </>
+                            ) : '导出到 Figma'}
+                          </button>
+                        </div>
+                      );
+                    };
+                    return <ExportFigmaBtn />;
+                  },
                 },
               },
               {
@@ -1163,18 +1202,22 @@ export default function (props: Props, actions: Actions, ...args) {
                             }
                           },
                           content: h('div', {style: {lineHeight: '1.8', fontSize: '14px'}},
-                            h('h3', {style: {marginTop: 0}}, '安装步骤'),
+                            h('div', {style: {marginBottom: 12, padding: '10px 12px', backgroundColor: 'var(--mybricks-background2, #f5f7fa)', borderRadius: 8}},
+                              h('div', {style: {fontSize: 13, color: 'var(--mybricks-font-color2, #666)', marginBottom: 6}}, '下载完成后，点击浏览器右上角的', h('b', null, '下载图标'), '，找到 ', h('b', null, 'VibeUI.zip'), ' 文件：'),
+                              h('img', {src: 'https://p66-ec.becukwai.com/udata/pkg/eshop/VibeUI/image001.png', style: {width: '100%', borderRadius: 6, border: '1px solid var(--mybricks-border-color, #e0e0e0)', display: 'block'}}),
+                            ),
+                            h('h3', {style: {marginTop: 12, marginBottom: 4}}, '安装步骤'),
                             h('ol', {style: {paddingLeft: 20}},
                               h('li', null, '解压下载的 ', h('b', null, 'VibeUI.zip')),
                               h('li', null, '打开 Figma，点击菜单 ', h('b', null, 'Plugins → Development → Import plugin from manifest…')),
                               h('li', null, '选择解压后文件夹中的 ', h('b', null, 'manifest.json'), ' 文件'),
                               h('li', null, '插件安装成功后，可在 ', h('b', null, 'Plugins → VibeUI'), ' 中找到并运行'),
                             ),
-                            h('h3', null, '使用说明'),
+                            h('h3', {style: {marginTop: 12, marginBottom: 4}}, '使用说明'),
                             h('ul', {style: {paddingLeft: 20}},
-                              h('li', null, '在 MyBricks 画布中选中页面，点击 ', h('b', null, '导出到 Figma'), '，内容将复制到剪切板'),
+                              h('li', null, '在 灵创 画布中选中页面，点击 ', h('b', null, '导出到 Figma'), '，内容将复制到剪切板'),
                               h('li', null, '打开 Figma，启动 VibeUI 插件，粘贴内容后点击 ', h('b', null, '生成页面')),
-                              h('li', null, '如需将 Figma 修改同步回 MyBricks，在插件中复制样式数据，回到 MyBricks 点击 ', h('b', null, '从 Figma 同步样式')),
+                              h('li', null, '如需将 Figma 修改同步回 灵创，在插件中复制样式数据，回到 灵创 点击 ', h('b', null, '从 Figma 同步样式')),
                             ),
                           ),
                         });
@@ -1254,7 +1297,8 @@ export default function (props: Props, actions: Actions, ...args) {
                 type: "themes",
                 value: {
                   get(params) {
-                    return context.projectConfig.themes ?? params.data.themes;
+                    const projectThemes = context.projectConfig.themes;
+                    return (projectThemes && projectThemes.length > 0) ? projectThemes : params.data.themes;
                   },
                   set(params, themes) {
                     params.data.themes = themes
