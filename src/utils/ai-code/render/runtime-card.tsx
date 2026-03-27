@@ -1,7 +1,8 @@
 import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef} from 'react'
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
-import {AIJsxRuntime} from './index'
+// import {AIJsxRuntime} from './index'
+import { AIJsxRuntime } from "./runtime"
 import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
@@ -254,8 +255,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
 
-    const hasCompiledCode = data.runtimeJsxCompiled && String(data.runtimeJsxCompiled).trim() !== ''
-
     const shouldRenderSender = !!window._render_comp_start_view_;
 
     const renderSender = useMemo(() => {
@@ -287,7 +286,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           />
         );
       }
-      if ((data.document && !data.runtimeJsxCompiled) || data.loading) {
+      if ((data.document && !data.files.length) || data.loading) {
         return (
           <div className={css.documentCard}>
             <div className={css.documentContent}>{data.document}</div>
@@ -302,7 +301,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       if (errorInfo) {
         return <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
-      if (hasCompiledCode) {
+      if (data.files.length) {
         return (
           <AIJsxRuntime
             env={env}
@@ -324,6 +323,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           />
         );
       }
+
       return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;
     })();
 

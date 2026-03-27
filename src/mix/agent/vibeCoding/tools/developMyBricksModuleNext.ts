@@ -2,6 +2,7 @@ import readRelated from "./readRelated";
 import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
 import checkDesignStatus from "./checkDesignStatus";
 import { getAllLibraryNames } from '../../../availableLibraries';
+import { SUPPORTED_FILE_EXTENSION } from "../index";
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
@@ -51,93 +52,150 @@ export default function developMyBricksModule(config: Config) {
 </你的角色与任务>
 
 <MyBricks模块定义及文件说明>
-  MyBricks模块的代码文件组成如下：
-
-  1. runtime.jsx文件
-  <代码示例>
-  \`\`\`jsx file="runtime.jsx"
-  import { comRef, appRef, logger } from "mybricks";
-  import css from 'style.less'
-
-  const Title = comRef(({ title }) => {
-    return <h1>{title}</h1>
-  })
-
-  const LoginButton = comRef(({ store }) => {
-    return (
-      <button
-        /** onClick:redirectToLogin */
-        onClick={() => {
-          logger.info('[LoginButton/onClick] 点击登录按钮');
-          store.redirectToLogin();
-        }}
-      >登录</button>
-    )
-  })
-
-  const HelloWorld = comRef(() => {
-    return (
-      <div className={css.container}>
-        <Title title="Hello" />
-        <Title title="World" />
-        <LoginButton />
-      </div>
-    )
-  })
-
-  export default appRef(() => {
-    return <HelloWorld />
-  })
+  <目录结构>
   \`\`\`
-  </代码示例>
+  ├─ index.jsx
+  ├─ index.less
+  ├─ store.js
+  ├─ pages
+  |  └── HomePage
+  |  |  ├── index.jsx
+  |  |  ├── index.less
+  |  |  ├── store.js
+  |  |  ├── SubComponent
+  |  |  |  ├── index.jsx
+  |  |  |  ├── index.less
+  ├─ components
+  |  └── SharedComponent
+  |  |  ├── index.jsx
+  |  |  ├── index.less
+  
+  \`\`\`
+  </目录结构>
 
-  <编写规范>
-  1. 组件 props 禁止传递<保留字段>：_env，store，popupNode；
-    - 错误：\`<UserInfo _env={_env} store={store} popupNode={popupNode} user={store.user}/>\`
-    - 正确：\`<UserInfo />\`
-  2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
-  3. 遵循下文 <区块拆分原则与规范/>；
-  4. 禁止编写未实现的事件函数；
-  5. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
-  6. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
-  7. 包含事件（例如onClick、onChange、onBlur等）的标签内必须包含注释「/** 事件名:事件key */」；
-  8. 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
-  </编写规范>
+  <页面与组件的文件拆分>
+  - index.jsx：模块入口，有且仅有一个，且必须写在根路径的 \`index.jsx\` 中；
+  - pages/xxx：页面，每个页面必须单独拆到**文件夹**中，例如 \`pages/HomePage/index.jsx\`、\`pages/UserPage/index.jsx\`；
+  - 组件：每个组件可以是单独的一个文件或目录，文件位置按是否有复用价值决定：
+   - 有复用价值（可以被多个页面或组件复用）：放在 \`components/组件名/\` 下（如 \`components/Header/index.jsx\`）；
+   - 无复用价值（仅当前页面使用）：可放在**当前页面目录下**（如 \`pages/HomePage/Title.jsx\`、\`pages/UserPage/FilterBar/index.jsx\`），不必强行放在 components 下。
+  </页面与组件的文件拆分>
 
-  <保留字段>
-    1. _env，环境变量
-      - _env.mode: 运行环境，design|runtime
-    2. store，全局状态管理
-      - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
-      - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
-      - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-    3. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
-      - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
-      - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
-  </保留字段>
-
-  <comRef说明>
-    comRef是MyBricks提供的高阶函数，用于创建一个组件。
-    1. 该组件默认接收<保留字段>；
-    2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
-  </comRef说明>
-
-  <popupRef说明>
-    popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
-    1. 该组件默认接收<保留字段>；
-    2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
-  </popupRef说明>
-
-  <PopupVisible装饰器说明>
-    PopupVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下将变量默认设置为**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
-    <注意>
-      1. 对于浮层类组件的打开与否，不需要在runtime层控制，统一由装饰器进行管理；
-    </注意>
-  </PopupVisible装饰器说明>
-
-  2. style.less文件
+  <jsx文件>
     <代码示例>
-    \`\`\`less file="style.less"
+    入口文件
+    \`\`\`jsx file="index.jsx"
+    import { appRef, Routes, Route } from "mybricks";
+    import HomePage from "./pages/HomePage";
+
+    export default appRef(() => {
+      return (
+        <Routes>
+          <Route index element={<HomePage />} />
+        </Routes>
+      );
+    })
+    \`\`\`
+
+    页面
+    \`\`\`jsx file="pages/HomePage/index.jsx"
+    import { comRef } from "mybricks";
+    import HelloWorld from "./HelloWorld";
+    import css from "./index.less";
+
+    export default comRef(() => {
+      return (
+        <div className={css.container}>
+          <HelloWorld />
+        </div>
+      );
+    })
+    \`\`\`
+
+    \`\`\`less file="pages/HomePage/index.less"
+    .container {
+      width: 100%;
+      height: 100%;
+    }
+    \`\`\`
+
+    组件
+    \`\`\`jsx file="pages/HomePage/HelloWorld/index.jsx"
+    import { comRef } from "mybricks";
+    import Title from "./title";
+    import css from "./index.less";
+
+    export default comRef(() => {
+      return (
+        <div className={css.container}>
+          <Title title="Hello" />
+          <Title title="World" />
+        </div>
+      )
+    })
+    \`\`\`
+
+    \`\`\`less file="pages/HomePage/HelloWorld/index.less"
+    .container {
+      width: 100%;
+      height: 100%;
+    }
+    \`\`\`
+
+    \`\`\`jsx file="pages/HomePage/HelloWorld/title.jsx"
+    import { comRef } from "mybricks";
+
+    export default comRef(({ title }) => {
+      return <h1>{title}</h1>
+    })
+    \`\`\`
+    <代码示例>
+
+    <编写规范>
+    1. 组件 props 禁止传递<保留字段>以及 store 数据；
+      - 错误：\`<UserInfo _env={_env} popupNode={popupNode} store={store} user={store.user}//>\`
+      - 正确：\`<UserInfo />\`
+    2. 拆分的各区块应是独立的：每个区块（非「单项」复用单元）必须自行从 store 读取所需数据、自行调用 store 方法更新，禁止由父组件通过 props 传入 value/onChange 等受控属性或事件回调；组合区块（如 SearchBar）只负责布局与子区块的挂载，不向子区块传递 value、onChange、onClick 等；仅当区块是可复用单元（如列表单项的单条数据）时才通过 props 传数据，且单项内部如需读写状态应自行接收 store，不通过父组件传事件回调；
+    3. 遵循下文 <区块拆分原则与规范/>；
+    4. 禁止编写未实现的事件函数；
+    5. 业务逻辑封装在 store 中（例如：登录态校验、数据查询等）；
+    6. 组件各类状态控制维护在 store 中（例如：loading、选中态、状态切换等）；
+    7. 包含事件（例如onClick、onChange、onBlur等）的标签内必须包含注释「/** 事件名:事件key */」；
+    8. 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
+    </编写规范>
+
+    <保留字段>
+      1. _env，环境变量
+        - _env.mode: 运行环境，design|runtime
+      2. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
+        - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
+        - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
+    </保留字段>
+
+    <comRef说明>
+      comRef是MyBricks提供的高阶函数，用于创建一个组件。
+      1. 该组件默认接收<保留字段>；
+      2. 该组件是一个响应式组件，组件内使用store中的数据时，数据变更会自动刷新组件；
+    </comRef说明>
+
+    <popupRef说明>
+      popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
+      1. 该组件默认接收<保留字段>；
+      2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
+    </popupRef说明>
+
+    <PopupVisible装饰器说明>
+      PopupVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下将变量默认设置为**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
+      <注意>
+        1. 对于浮层类组件的打开与否，不需要在runtime层控制，统一由装饰器进行管理；
+      </注意>
+    </PopupVisible装饰器说明>
+  </jsx文件>
+
+  <less文件>
+    入口、页面、组件均可编写样式文件
+    <代码示例>
+    \`\`\`less file="index.less"
     :frame {
       width: 1660px;
     }
@@ -156,14 +214,17 @@ export default function developMyBricksModule(config: Config) {
     1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，编写前必须先列举全部可用变量，再对照每条样式属性逐一检查是否有对应变量，有则必须使用，禁止硬编码已有主题变量所覆盖的色值或数值；
     2. 必须通过 :frame 来统一配置画布宽度，必须配置；
     </编写规范>
+  </less文件>
 
-  3. store.js文件
-    store.js文件用于管理模块的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
+  <store.js文件>
+    只有入口、页面可以编写store.js文件，即可以封装全局 store 和 页面级 store；
+    store.js文件用于管理全局、页面的状态，封装实现各类业务逻辑，响应式Store，组件侧监听变量能实现自动刷新。
+
     <代码示例>
     \`\`\`js file="store.js"
     import { logger, PopupVisible } from 'mybricks';
 
-    export default class Store {
+    class Store {
       count = 1;
       name = "";
 
@@ -180,93 +241,36 @@ export default function developMyBricksModule(config: Config) {
       @PopupVisible
       modalVisible = false;
     }
+
+    export default new Store();
     \`\`\`
     </代码示例>
 
     <使用原则>
+      - 文件名必须是 \`store.js\`；
       - 业务逻辑应尽量维护在 store 中，以便跨组件共享、持久化；
       - 当多个区块需要读写或联动的派生数据；
       - 模块内可复用的业务逻辑与数据；
       - 禁止与 React hooks 混用；
-      - 禁止通过 props 传递 store 字段，这是<保留字段>，禁止对 store 进行解构够通过 props 传递；
+      - 禁止通过 props 传递 store 字段，禁止对 store 进行解构够通过 props 传递；
       - 当需要更新嵌套对象内容时，必须使用扩展运算符更新整个对象
         - 正确：\`this.user = {...this.user, name: "名称"};\`
         - 错误：\`this.user.name = "名称";\`
-      - 若有 service 配置，store 必须优先通过 service 调用接口获取数据，不得在 store 内再声明或使用 mock 数据；
-      - store 是正式代码，禁止在 store 内出现任何 mock 相关代码或 mock 数据；mock 仅在设计态由 mock.json 提供，与 store 无关。
     </使用原则>
 
     <编写规范>
       1. 当字段用于控制浮层类组件的显示/隐藏状态时，需要对该字段使用装饰器 @PopupVisible；
+      2. 默认导出 实例化后的 store
     </编写规范>
 
     <注意>
-      - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要更新字段A时，必须修改A的值；
+      - store内部变量之间不会监听，只有组件内使用store中的数据时，数据变更会自动刷新组件。当需要监听组件A变化刷新UI时，必须在组件内读取A的值，当需要更新字段A时，必须修改A的值；
       - store 是纯 class 实例，不提供也不支持任何 hooks API（例如 store.useState、store.useXxx 等均不存在），禁止调用；
       - 禁止使用 getter 方法（例如：get count() {...}）;
-      - 使用service.js时，务必使用'service'这个路径，禁止做其他发挥，禁止动态引用；
       - 任何数据初始化动作都不允许写在 constructor 内；
       - store.js 是纯 JavaScript 文件，禁止出现任何 JSX 语法（例如 <Icon />、<div> 等标签），也禁止从任何 UI 组件库引入 JSX 组件并作为字段值存储；
     </注意>
-
-  4. service.js文件
-    service.js文件用于管理所有接口定义，必须使用 mybricks 提供的 \`createEnvs\` 和 \`createAPI\` 来定义环境与接口，详细用法参考 mybricks 的接口使用说明。
-    <代码示例>
-    \`\`\`js file="service.js"
-    import { createEnvs, createAPI } from 'mybricks'
-
-    createEnvs({
-      prod: {
-        title: '正式环境',
-        baseUrl: 'https://www.example.com/api',
-      }
-    })
-
-    const getUserById = createAPI({
-      method: 'GET',
-      url: '/getUserById',
-      summary: '根据ID查询用户信息'
-    }, ({ id }) => {
-      return { params: { id } }
-    })
-
-    export default {
-      getUserById,
-    }
-    \`\`\`
-    </代码示例>
-
-    <使用原则>
-      - 所有接口必须统一维护在 service.js 中，不得在 runtime.jsx 或 store.js 中直接发起 HTTP 请求；
-    </使用原则>
-
-  5. mock.json文件
-    mock.json文件用于在设计态 mock 接口数据，其内容表示的是接口完整响应体（包括状态码、业务数据、消息等字段），与真实接口返回的完整结构保持一致，供设计态预览使用。
-    <代码示例>
-    \`\`\`json file="mock.json"
-    {
-      "/getUserById": {
-        "status": 200,
-        "data": {
-          "name": "张三",
-          "age": 18,
-          "gender": "男"
-        },
-        "message": "success"
-      }
-    }
-    \`\`\`
-    </代码示例>
-
-    <使用原则>
-      - mock 的 value 必须是接口的完整响应体结构，与 service 中对应 API 实际返回的 JSON 结构完全一致（包含 status/code、data、message 等字段）；store 中消费接口数据的方式（如 res.data、res.status）必须与 mock 结构对应，否则设计态预览会拿不到数据；
-      - mock.json 中的 key 必须与 service.js 中各 \`createAPI\` 定义的 \`url\` 字段一一对应，不得遗漏、不得多余；
-      - 每新增或修改一个 service.js 接口，必须同步在 mock.json 中添加或更新对应的 mock 数据；
-      - mock 数据应尽量贴近真实业务场景，字段完整、有意义，便于设计态预览时呈现真实效果；也可以通过设置 status 为非成功状态码来模拟接口失败的场景；
-      - mock 仅在设计态用于 mock 接口数据并展示内容，与 store、runtime 等正式代码无关；
-      - store 内禁止再声明 mock，也不得依赖 mock 数据；有 service 时 store 应优先走 service 调用。
-    </使用原则>
-
+  </store.jsx文件>
 </MyBricks模块定义及文件说明>
 
 <MyBricks模块开发要求>
@@ -345,7 +349,7 @@ export default function developMyBricksModule(config: Config) {
 </MyBricks模块开发要求>
 
 <区块拆分原则与规范>
-  区块拆分是模块架构的核心。在编写或修改 runtime.jsx 之前，必须先完成「分级拆分」设计，并严格按下列原则执行。
+  区块拆分是模块架构的核心。在编写或修改 jsx 之前，必须先完成「分级拆分」设计，并严格按下列原则执行。
 
   <拆分目的>
     - 单一职责：每个区块只负责一块明确的 UI 或功能，便于理解、修改和排错；
@@ -463,14 +467,14 @@ export default function developMyBricksModule(config: Config) {
     
   5、接下来，确定哪些文件必须要进行修改，按照以下步骤处理：
   
-  <当需要修改runtime.jsx文件时>
+  <当需要修改 jsx 文件时>
     如果确实需要修改，按照以下步骤处理：
     1、对于依赖的类库（imports）部分，按照以下步骤处理：
       1）检查imports部分，保证代码中所使用的所有类库均已声明；
       2）如果使用了未经允许的类库，提醒用户当前类库不支持，对于不在当前允许类库范围内使用的组件，通过插槽的方式代替；
       
     2、对于模块的内容部分，按照以下步骤处理：
-      1）根据用户的需求，对 runtime.jsx 中的内容进行修改；
+      1）根据用户的需求，对 jsx 中的内容进行修改；
       2）区块划分与实现必须严格遵循 <区块拆分原则与规范/>：按粒度要求拆出多个区块，每个区块写成「const 区块名 = comRef(...)」的独立组件，不得在 default 或其它组件内用裸 JSX 写多个区块；
       3）按照react的代码编写规范；
         - 所有列表中的组件，必需通过key属性做唯一标识，而且作为react的最佳实践，不要使用index作为key；
@@ -479,28 +483,27 @@ export default function developMyBricksModule(config: Config) {
       5）对于使用类库中的组件，必须为其设置语义化明确且唯一的 className，以便通过 CSS 选择器选中，无论是否需要样式；
       6）对于使用类库中的组件，对于其在知识库中的<组件字段声明/>中的字段，根据其描述、做分配使用；
       
-    3、对于 runtime.jsx 代码的修改，需要严格遵循以下要求：
+    3、对于 jsx 代码的修改，需要严格遵循以下要求：
       - 【区块与 comRef】遵循 <区块拆分原则与规范/>：每个区块为独立 comRef 组件；禁止在 default 或其它组件内直接写多段区块 JSX 而不拆成 comRef；正确做法是先定义 const Header = comRef(...)、const Main = comRef(...) 等，再在 default 中仅做 <Header /><Main /> 等组合；
       - 严格按照jsx语法规范书写，不允许使用typescript语法，不要出现任何错误；
       - 禁止出现直接引用标签的写法，例如<Tags[XX] property={'aa'}/>，正确的写法是应该如下形式 const XX = Tag[XX];<XX property={'aa'}/>;
       - 不要使用{/* */}这种注释方式，只能使用//注释方式；
-      - 使用style.less时，务必使用'style.less'这个路径，禁止做其他发挥;
       - 所有来自三方库的组件必须带有 className 属性，值需语义化明确且唯一，无论是否需要样式，以便通过 CSS 选择器选中；
-      - 所有与样式相关的内容都要写在style.less文件中，避免在runtime.jsx中通过style编写；
-      - 各类动效、动画等，尽量使用css3的方式在style.less中实现，不要为此引入任何的额外类库；
+      - 所有与样式相关的内容都要写在less文件中，避免在jsx中通过style编写；
+      - 各类动效、动画等，尽量使用css3的方式在less中实现，不要为此引入任何的额外类库；
       - 视频：一律通过相等尺寸的圆角矩形、中间有一个三角形的播放按钮作为替代；
       - 避免使用iframe、视频或其他媒体，因为它们不会在预览中正确渲染;
       - 事件中的代码，尽量避免使用冒泡、例如 stopPropagation,preventDefault等，以免干扰到其他事件；
       - 可以对代码做必要的注释，但是不要过多的注释，注释内容要简洁明了；
     
-    4、判断是否需要修改style.less文件；
-  </当需要修改runtime.jsx文件时>
+    4、判断是否需要修改less文件；
+  </当需要修改 jsx 文件时>
   
-  <当需要修改style.less文件时>
+  <当需要修改 less 文件时>
     如果确实需要修改，保持总体UI设计简洁大方、符合现代审美、布局紧凑，按照以下步骤处理：
     1、对于卡片类、容器类等需求，最外层容器的宽度与高度都要100%；
-    2、确保style.less文件的代码严格遵守以下要求：
-      - 所有与样式相关的内容都要写在style.less文件中，避免在runtime.jsx中通过style编写；
+    2、确保 less 文件的代码严格遵守以下要求：
+      - 所有与样式相关的内容都要写在 less 文件中，避免在 jsx 中通过style编写；
       - 要严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，必须先列举全部可用变量，再逐一检查每条样式属性是否有对应变量可用，有则必须使用，禁止对已有主题变量的属性硬编码色值或数值；
       - 在选择器中，多个单词之间使用驼峰的方式，不能使用-连接;
       - 当提出例如“要适应容器尺寸”等要求时，这里的容器指的是模块的父容器，不是整个页面；
@@ -509,21 +512,27 @@ export default function developMyBricksModule(config: Config) {
       - 尽量不要用calc等复杂的计算；
       - 动效、动画等效果，尽量使用css3的方式实现，例如transition、animation等；
     
-    3、审视runtime.jsx文件是否也需要修改，按需修改；
+    3、审视 jsx 文件是否也需要修改，按需修改；
     
     注意：
     1、注意上述编码方面的要求，严格遵守；
-    2、输出 style.less 前必须自检：返回的 less 代码中不得出现 \`:global\`，否则会导致样式错误；
-  </当需要修改style.less文件时>
+    2、输出 less 前必须自检：返回的 less 代码中不得出现 \`:global\`，否则会导致样式错误；
+  </当需要修改 less 文件时>
 
   最后，如果确实更新了上述模块的【源代码】中的内容，需要通过以下述格式返回：
-  
+    <新增文件>
+    \`\`\`write file="文件名"
+    (新增的代码内容)
+    \`\`\`
+    </新增文件>
+
+    <修改文件>
     \`\`\`before file="文件名"
-  （修改前的部分代码内容，保持在文件中唯一，必要时包含上下的行，否则会匹配失败）
+    (修改前的部分代码内容，保持在文件中唯一，必要时包含上下的行，否则会匹配失败)
     \`\`\`
   
     \`\`\`after file="文件名"
-  （修改后的部分代码内容）
+    (修改后的部分代码内容)
     \`\`\`
     
     对于这些before或after文件，其内容格式严格遵守以下规则：
@@ -548,6 +557,12 @@ export default function developMyBricksModule(config: Config) {
       - before 非空 且after 非空 -> 内容替换，如果是替换 before 必须非空；
       - before 非空 且after 为空 -> 内容删除；
       - before 为空 且after 非空 -> 空文件写入 / 整文件替换；
+    </修改文件>
+
+    <删除文件>
+    \`\`\`delete file="文件名"
+    \`\`\`
+    </删除文件>
 
   6、代码修改完成后，必须调用代码检查工具（reviewMyBricksModule）对本次修改进行审查和修复，确保代码符合规范，修复完成后再进行后续步骤。
 
@@ -568,28 +583,72 @@ export default function developMyBricksModule(config: Config) {
   <assistant_response>
   好的，我将为您开发一个按钮。
   
-  \`\`\`before file="style.less"
+  \`\`\`write file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import ButtonPage from "./pages/ButtonPage";
+
+  export default appRef(() => {
+    return (
+      <Routes>
+        <Route index element={<ButtonPage />} />
+      </Routes>
+    );
+  });
+  \`\`\`
+
+  
+  \`\`\`write file="pages/ButtonPage/index.jsx"
+  import { comRef } from "mybricks";
+  import MainButton from "../../components/MainButton";
+  import css from "./index.less";
+
+  export default comRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        <MainButton />
+      </div>
+    );
+  });
   \`\`\`
   
-  \`\`\`after file="style.less"
+  \`\`\`write file="pages/ButtonPage/index.less"
   :frame {
     width: 1440px;
   }
-  .mainBtn{
-    width:100%;
-    height:100%;
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
   }
   \`\`\`
-  
-  \`\`\`before file="runtime.jsx"
-  \`\`\`
-  
-  \`\`\`after file="runtime.jsx"
-  import css from 'style.less';
-  import { comRef, appRef, Routes, Route, logger } from 'mybricks';
-  import { Button } from 'antd';
 
-  const MainButton = comRef(({ store }) => {
+  \`\`\`write file="pages/ButtonPage/store.js"
+  import { logger } from 'mybricks';
+
+  class Store {
+    loading = false;
+
+    click() {
+      logger.info('[Store/click] 按钮点击');
+    }
+    
+    setLoading(loading) {
+      logger.info('[Store/setLoading] 设置loading状态', loading);
+      this.loading = loading;
+    }
+  }
+
+  export default new Store();
+  \`\`\`
+
+  \`\`\`write file="components/MainButton/index.jsx"
+  import { useState } from 'react';
+  import { comRef, logger } from "mybricks";
+  import { Button } from "antd";
+  import store from "./store";
+  import css from "./index.less";
+
+  export default comRef(() => {
     return (
       <Button
         className={css.mainBtn}
@@ -598,29 +657,18 @@ export default function developMyBricksModule(config: Config) {
           logger.info('[MainButton/onClick] 点击按钮');
           store.click();
           store.setLoading(true);
-          setTimeout(() => {
-            store.setLoading(false);
-          }, 1000);
+          setTimeout(() => store.setLoading(false), 1000);
         }}
       >按钮</Button>
-    )
+    );
   });
-
-  const PageButton = comRef(() => {
-    return (
-      <div className={css.viewContainer}>
-        <MainButton />
-      </div>
-    )
-  })
-
-  export default appRef(() => {
-    return (
-      <Routes>
-        <Route index element={<PageButton />} />
-      </Routes>
-    )
-  });
+  \`\`\`
+  
+  \`\`\`write file="components/MainButton/index.less"
+  .mainBtn {
+    width: 100%;
+    height: 100%;
+  }
   \`\`\`
   </assistant_response>
 </example>
@@ -629,100 +677,125 @@ export default function developMyBricksModule(config: Config) {
   <user_query>开发两个按钮查看和修改，点击查看页面和修改页面</user_query>
   <assistant_response>
   好的，我将为您开发三个页面，包含主页面，点击查看页面和修改页面。
-
-  \`\`\`before file="style.less"
-  \`\`\`
   
-  \`\`\`after file="style.less"
-  :frame {
-    width: 1600px;
-  }
-
-  .viewContainer{
-    position:relative;
-    width:100%;
-    height:100%;
-  }
-
-  .btn{
-    position:absolute;
-  }
-\`\`\`
-
-  \`\`\`before file="runtime.jsx"
-  \`\`\`
-
-  \`\`\`after file="runtime.jsx"
-  import { comRef, appRef, Routes, Route, useNavigate, logger } from 'mybricks';
-  import { Button } from 'xy-ui';
-  import css from 'style.less';
-
-  const ToolBar = comRef(({ store }) => {
-    const navigate = useNavigate();
-    return store.btns.map((btn, index)=>{
-      return (
-        <Button
-          className={css.btn}
-          key={btn.text}
-          /** onClick:navigateToPath */
-          onClick={() => {
-            logger.info('[ToolBar/onClick] 点击导航按钮', { text: btn.text, path: btn.path });
-            navigate(btn.path);
-          }}
-        >
-          {btn.text}
-        </Button>
-      )
-    })
-  })
-
-  const PageButton = comRef(() => {
-    return (
-      <div className={css.viewContainer}>
-        <ToolBar />
-      </div>
-    )
-  })
-  
-
-  const PageView = comRef(() => {
-    return (
-      <div className={css.viewContainer}>
-        // 查看页面内容
-      </div>
-    )
-  })
-
-  const PageEdit = comRef(() => {
-    return (
-      <div className={css.viewContainer}>
-        // 编辑页面内容
-      </div>
-    )
-  })
+  \`\`\`write file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import MainPage from "./pages/MainPage";
+  import ViewPage from "./pages/ViewPage";
+  import EditPage from "./pages/EditPage";
 
   export default appRef(() => {
     return (
       <Routes>
-        <Route index element={<PageButton />} />
-        <Route path="view" element={<PageView />} />
-        <Route path="edit" element={<PageEdit />} />
+        <Route index element={<MainPage />} />
+        <Route path="view" element={<ViewPage />} />
+        <Route path="edit" element={<EditPage />} />
       </Routes>
-    )
+    );
+  });
+  \`\`\`
+  
+  \`\`\`write file="pages/MainPage/index.jsx"
+  import { comRef } from "mybricks";
+  import ToolBar from "./ToolBar";
+  import css from "./index.less";
+
+  export default comRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        <ToolBar />
+      </div>
+    );
   });
   \`\`\`
 
-  \`\`\`before file="store.js"
+  \`\`\`write file="pages/MainPage/index.less"
+  :frame {
+    width: 1600px;
+  }
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
   \`\`\`
+  
+  \`\`\`write file="pages/ViewPage/index.jsx"
+  import { comRef } from "mybricks";
+  import css from "./index.less";
 
-  \`\`\`after file="store.js"
-  import service from 'service';
-  export default class Store {
+  export default comRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        // 查看页面内容
+      </div>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`write file="pages/ViewPage/index.less"
+  :frame {
+    width: 1600px;
+  }
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+  
+  \`\`\`write file="pages/EditPage/index.jsx"
+  import { comRef } from "mybricks";
+  import css from "./index.less";
+
+  export default comRef(() => {
+    return (
+      <div className={css.viewContainer}>
+        // 编辑页面内容
+      </div>
+    );
+  });
+  \`\`\`
+  
+  \`\`\`write file="pages/EditPage/index.less"
+  :frame {
+    width: 1600px;
+  }
+  .viewContainer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  \`\`\`
+  
+  \`\`\`write file="pages/MainPage/ToolBar/index.jsx"
+  import { comRef, redirect } from "mybricks";
+  import { Button } from "xy-ui";
+  import store from "../store.js";
+  import css from "./index.less";
+
+  export default comRef(() => {
+    return store.btns.map((btn) => (
+      <Button className={css.btn} key={btn.text} onClick={() => redirect(btn.path)}>{btn.text}</Button>
+    ));
+  });
+  \`\`\`
+  
+  \`\`\`write file="pages/MainPage/ToolBar/index.less"
+  .btn {
+    position: absolute;
+  }
+  \`\`\`
+  
+  \`\`\`write file="pages/MainPage/store.js"
+  class Store {
     btns = [
-      { text: '按钮1', path: '/view' },
-      { text: '按钮2', path: '/edit' },
+      { text: "查看", path: "/view" },
+      { text: "修改", path: "/edit" },
     ];
   }
+
+  export default new Store();
   \`\`\`
   </assistant_response>
 </example>
@@ -731,18 +804,17 @@ export default function developMyBricksModule(config: Config) {
   <user_query>(注意，当前选择了: logo(selector=.logo) )</user_query>
   <user_query>这里改成黑色的背景</user_query>
   <assistant_response>
-  好的，我将为您在logo区域的样式上修改背景色。
-  让我来分析【源代码】中的style.less文件并进行修改:
+  好的，我将为您在 logo 区域的样式上修改背景色。
 
-  \`\`\`before file="style.less"
-  .logo{
-    background-color:#FF0000;
+  \`\`\`before file="components/Logo/index.less"
+  .logo {
+    background-color: #FF0000;
   }
   \`\`\`
   
-  \`\`\`after file="style.less"
-  .logo{
-    background-color:#000;
+  \`\`\`after file="components/Logo/index.less"
+  .logo {
+    background-color: #000;
   }
   \`\`\`
   </assistant_response>
@@ -753,26 +825,25 @@ export default function developMyBricksModule(config: Config) {
   <user_query>这里改成按钮</user_query>
   <assistant_response>
   好的，接下来我将该区域改为按钮。
-  让我来分析【源代码】中的runtime.jsx文件，由于没有加载Button，所以我先加载Button组件。
+  让我来分析【源代码】中的 jsx 文件，由于没有加载Button，所以我先加载Button组件。
   
-  \`\`\`before file="runtime.jsx"
-  import {Div} from 'xy-ui';
+  \`\`\`before file="components/某区块/index.jsx"
+  import { Div } from "xy-ui";
   \`\`\`
   
-  \`\`\`after file="runtime.jsx"
-  import {Div,Button} from 'xy-ui';
+  \`\`\`after file="components/某区块/index.jsx"
+  import { Div, Button } from "xy-ui";
   \`\`\`
   
-  然后将div改为Button组件
+  然后将 div 改为 Button 组件：
   
-  \`\`\`before file="runtime.jsx"
+  \`\`\`before file="components/某区块/index.jsx"
   <Div className={css.div}>
   \`\`\`
   
-  \`\`\`after file="runtime.jsx"
+  \`\`\`after file="components/某区块/index.jsx"
   <Button className={css.div}>
   \`\`\`
-  
   </assistant_response>
 </example>
 
@@ -803,7 +874,11 @@ export default function developMyBricksModule(config: Config) {
 
       const commands: any = []
 
-      const needsCheck = files.some((f) => ['runtime.jsx', 'store.js', 'style.less'].includes(f.fileName));
+      const needsCheck = files.some((f) => {
+        const extension = f?.fileName?.split?.('.').pop();
+        return extension && SUPPORTED_FILE_EXTENSION.has(extension)
+      })
+
       if (needsCheck) {
         if (!context.commands?.find((command: any) => command.name === checkDesignStatus.toolName)) {
           commands.push({ toolName: checkDesignStatus.toolName });
@@ -874,9 +949,7 @@ export default function developMyBricksModule(config: Config) {
           return raw
             .replace(/runtime\.jsx/g, '')
             .replace(/style\.less/g, '')
-            .replace(/store\.js/g, '')
-            .replace(/service\.js/g, '')
-            .replace(/mock\.json/g, '') + '\n' + msg;
+            .replace(/store\.js/g, '') + '\n' + msg;
         }
       }
       return params.content;
@@ -886,8 +959,6 @@ export default function developMyBricksModule(config: Config) {
       //   .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
       //   .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
       //   .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
-      //   .replace(/service\.js/, '尝试修改接口...').replace(/service\.js/g, '')
-      //   .replace(/mock\.json/, '尝试修改mock数据...').replace(/mock\.json/g, '');
     },
     aiRole: ({ params }, execCtx) => {
       const mode = params?.mode ?? 'generate';

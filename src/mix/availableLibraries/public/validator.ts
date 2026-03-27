@@ -29,7 +29,7 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
   ];
 
   function isAllowed(source: string): boolean {
-    return ALLOWED_LIBRARIES.some((lib) => source === lib);
+    return ALLOWED_LIBRARIES.some((lib) => source === lib) || source.startsWith(".");
   }
 
   return {

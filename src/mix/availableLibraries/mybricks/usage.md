@@ -15,16 +15,12 @@
 <保留字段>
   1. _env，环境变量
     - _env.mode: 运行环境，design|runtime
-  2. store，全局状态管理
-    - store 是 store.js 中 Store class 的实例，直接通过 store.xxx 访问属性、通过 store.method() 调用方法；
-    - 读取状态：直接使用 store.xxx（例如 store.count、store.loading），无需解构、无需 useState；
-    - 更新状态：直接调用 store 中定义的方法（例如 store.incCount()），不得在组件中自行 setState 或声明派生状态；
-  3. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
+  2. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
     - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
     - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
 </保留字段>
 
-组件 props 禁止传递<保留字段>：_env，store，popupNode；
+组件 props 禁止传递<保留字段>以及 store 数据；
 - 错误：\`<UserInfo _env={_env} store={store} popupNode={popupNode} user={store.user}/>\`
 - 正确：\`<UserInfo />\`
 

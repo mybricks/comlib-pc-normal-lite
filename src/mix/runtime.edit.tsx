@@ -3,6 +3,9 @@ import Runtime from './runtime';
 import context from './context';
 
 const dataCompatible = (data) => {
+  if (data._errors.length) {
+    data._errors = []
+  }
   if (!data._errors) {
     data._errors = [];
   }

@@ -3,6 +3,7 @@ import LowcodeView, {lowcodeViewEvents} from "./lowcodeView";
 import lowcodeViewCss from "./lowcodeView/index.lazy.less";
 import consoleViewCss from "./lowcodeView/console/index.lazy.less"
 import versionViewCss from "./lowcodeView/version/index.lazy.less"
+import treeViewCss from "./lowcodeView/tree/index.lazy.less"
 import context from "./context";
 import {ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP} from "./knowledges";
 import {parseLess, stringifyLess} from "./utils/transform/less";
@@ -871,7 +872,8 @@ export default function (props: Props, actions: Actions, ...args) {
         return [
           lowcodeViewCss,
           consoleViewCss,
-          versionViewCss
+          versionViewCss,
+          treeViewCss
         ]
       }
     },

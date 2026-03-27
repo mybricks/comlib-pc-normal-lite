@@ -6,6 +6,9 @@ import VersionPanel from "./version";
 import lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
 import { useDarkMode } from "../../utils/hooks";
+import TreeView from "./tree";
+import { filesJsonToTree } from "./filesToTree";
+import type { FileTreeNode } from "./filesToTree";
 
 const css = lazyCss.locals;
 
@@ -14,41 +17,16 @@ interface Params {
   model: any;
 }
 
-const FILES = [
-  // "model.json",
-  "runtime.jsx",
-  "style.less",
-  "store.js",
-  "service.js",
-  "mock.json",
-  "README.md",
-  // "config.js",
-  // "com.json"
-] as const;
-
-type FileName = typeof FILES[number];
-
-const FILES_MAP: Record<string, string> = {
-  "model.json": "modelConfig",
-  "style.less": "styleSource",
-  "runtime.jsx": "runtimeJsxSource",
-  "config.js": "configJsSource",
-  "com.json": "componentConfig",
-  "store.js": "storeJsSource",
-  "service.js": "serviceJsSource",
-  "README.md": "runtimeMdSource",
-  "mock.json": "mockJsonSource",
-};
-
 export const lowcodeViewEvents = new Events<{
   'viewCode': [number, number];
 }>();
 
 export default function LowcodeView(params: Params) {
-  const [selectedFileName, setSelectedFileName] = useState<FileName>(FILES[0]);
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
-
   const componentId = params.model?.runtime?.id;
+  const files = params.data.files;
+
+  const [selectFile, setSelectFile] = useState<{ path: string, source: string, fileName: string } | null>(null);
 
   // 从 context 读取当前组件的调试状态（强制刷新用的 tick）
   const [, setTick] = useState(0);
@@ -58,6 +36,12 @@ export default function LowcodeView(params: Params) {
   useEffect(() => {
     if (!componentId) return;
     const off = context.getComDebugStateEvents(componentId).on('change', () => forceUpdate(), false);
+    const file = files.find((file) => file.fileName === "index.jsx")
+    setSelectFile({
+      path: 'index.jsx',
+      source: decodeURIComponent(file.source),
+      fileName: file.fileName
+    })
     return () => off();
   }, [componentId]);
 
@@ -71,8 +55,19 @@ export default function LowcodeView(params: Params) {
   }, [componentId]);
 
   const coderOptions = useMemo(() => {
-    const path = `file:///${componentId}/${selectedFileName}`;
-    if (selectedFileName === "runtime.jsx" || selectedFileName === "store.js" || selectedFileName === "service.js") {
+    if (!selectFile) {
+      return {}
+    }
+    const { fileName } = selectFile;
+    const suffix = fileName.split('.').pop();
+
+    if (!suffix) {
+      return {}
+    }
+
+    const path = `file:///${componentId}/${fileName}`;
+
+    if (['jsx', 'js'].includes(suffix)) {
       return {
         path,
         language: 'typescript',
@@ -86,38 +81,33 @@ export default function LowcodeView(params: Params) {
         preview: false,
         isTsx: true
       };
-    }
-    // if (selectedFileName === "config.js") {
-    //   return {
-    //     path,
-    //     language: 'javascript',
-    //   };
-    // }
-    // .md 文件需用 Monaco 的 language id: 'markdown'（不能用 'md'）
-    if (selectedFileName === "README.md") {
+    } else if (suffix === 'md') {
       return {
         path,
         language: "markdown",
         minimap: { enabled: false },
       };
-    }
-    if (FILES.includes(selectedFileName)) {
+    } else {
       return {
         path,
-        language: selectedFileName.split(".").pop()
-      };
+        language: suffix
+      }
     }
-    return {};
-  }, [selectedFileName, componentId]);
+  }, [selectFile, componentId]);
 
-  // 当前选中文件显示的内容：有未保存修改则用修改内容，否则从 data 读取
   const code = useMemo(() => {
-    if (selectedFileName in modifiedContent) {
-      return modifiedContent[selectedFileName];
+    if (!selectFile) {
+      return ""
     }
-    const raw = params.data[FILES_MAP[selectedFileName]];
-    return raw != null ? decodeURIComponent(raw) : "";
-  }, [selectedFileName, modifiedContent, params.data]);
+
+    const { fileName } = selectFile;
+
+    if (fileName in modifiedContent) {
+      return modifiedContent[fileName]
+    }
+
+    return selectFile.source
+  }, [selectFile])
 
   const codeIns = useRef<HandlerType>(null);
 
@@ -129,8 +119,9 @@ export default function LowcodeView(params: Params) {
     const off = lowcodeViewEvents.on('viewCode', async ([start, end]) => {
       // [TODO] 闪烁问题
       // 切到runtime代码
-      setSelectedFileName("runtime.jsx");
+      // setSelectedFileName("runtime.jsx");
       setBottomTab('source');
+      console.log("[files]", files)
 
       // 等待编辑器就绪
       let editor = codeIns.current?.editor;
@@ -189,28 +180,35 @@ export default function LowcodeView(params: Params) {
   }, [])
 
   const handleEditorChange = useCallback((value: string) => {
+    if (!selectFile) {
+      return
+    }
     setModifiedContent((prev) => ({
       ...prev,
-      [selectedFileName]: value,
+      [selectFile.fileName]: value,
     }));
-  }, [selectedFileName]);
+  }, [selectFile]);
 
   const handleSave = useCallback(() => {
-    const dataKey = FILES_MAP[selectedFileName];
-    if (dataKey && params.data && selectedFileName in modifiedContent) {
-      context.updateFile(params.model.runtime.id, { fileName: selectedFileName, content: modifiedContent[selectedFileName] });
+    if (!selectFile) {
+      return
+    }
+
+    const { fileName } = selectFile;
+
+    if (fileName in modifiedContent) {
+      context.updateFile(params.model.runtime.id, { fileName, content: modifiedContent[fileName] });
       setModifiedContent((prev) => {
         const next = { ...prev };
-        delete next[selectedFileName];
+        delete next[fileName];
         return next;
       });
-      // 编辑器保存后记录/更新编辑器版本快照
       context.addVersion(params.model.runtime.id, "editor")
     }
-  }, [selectedFileName, modifiedContent, params.data]);
+  }, [selectFile, modifiedContent, params.data]);
 
   // 仅当当前聚焦的文件有未保存修改时，保存按钮可用
-  const hasUnsavedChanges = selectedFileName in modifiedContent;
+  const hasUnsavedChanges = selectFile && (selectFile.fileName in modifiedContent);
 
   const editorOptions = useMemo(() => ({
     fontSize: 12,
@@ -223,54 +221,18 @@ export default function LowcodeView(params: Params) {
   }), []);
 
   // 按需覆盖：仅当某 data 字段变化时，只清除对应文件的未保存内容，其它文件保留
-  const clearFileIfDataChanged = useCallback((fileName: FileName) => {
-    setModifiedContent((prev) => {
-      if (!(fileName in prev)) {
-        return {
-          ...prev,
-        };
-      }
-      const next = { ...prev };
-      delete next[fileName];
-      return next;
-    });
-  }, []);
-
-  // useEffect(() => {
-  //   clearFileIfDataChanged("model.json");
-  // }, [params.data?.modelConfig]);
-
-  useEffect(() => {
-    clearFileIfDataChanged("style.less");
-  }, [params.data?.styleSource]);
-
-  useEffect(() => {
-    clearFileIfDataChanged("runtime.jsx");
-  }, [params.data?.runtimeJsxSource]);
-
-  useEffect(() => {
-    clearFileIfDataChanged("README.md");
-  }, [params.data?.runtimeMdSource]);
-
-  // useEffect(() => {
-  //   clearFileIfDataChanged("config.js");
-  // }, [params.data?.configJsSource]);
-
-  // useEffect(() => {
-  //   clearFileIfDataChanged("com.json");
-  // }, [params.data?.componentConfig]);
-
-  useEffect(() => {
-    clearFileIfDataChanged("store.js");
-  }, [params.data?.storeJsSource]);
-
-  useEffect(() => {
-    clearFileIfDataChanged("service.js");
-  }, [params.data?.serviceJsSource]);
-
-  useEffect(() => {
-    clearFileIfDataChanged("mock.json");
-  }, [params.data?.mockJsonSource]);
+  // const clearFileIfDataChanged = useCallback((fileName: FileName) => {
+  //   setModifiedContent((prev) => {
+  //     if (!(fileName in prev)) {
+  //       return {
+  //         ...prev,
+  //       };
+  //     }
+  //     const next = { ...prev };
+  //     delete next[fileName];
+  //     return next;
+  //   });
+  // }, []);
 
   const isDark = useDarkMode();
   const editorTheme = isDark ? 'vs-dark' : 'light';
@@ -315,7 +277,7 @@ export default function LowcodeView(params: Params) {
       </div>
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
-        <div className={css['file-list']}>
+        {/* <div className={css['file-list']}>
           {FILES.map((fileName) => (
             <div
               key={fileName}
@@ -325,6 +287,16 @@ export default function LowcodeView(params: Params) {
               {fileName in modifiedContent ? "*" : ""}{fileName}
             </div>
           ))}
+        </div> */}
+        <div className={css['file-list']}>
+          <TreeView defaultCurrent="/index.jsx">
+            <FilesTree
+              nodes={filesJsonToTree(files)}
+              onSelect={(file) => {
+                setSelectFile(file)
+              }}
+            />
+          </TreeView>
         </div>
         <div className={css['code-container']}>
           <Editor
@@ -336,12 +308,6 @@ export default function LowcodeView(params: Params) {
             theme={editorTheme}
             wrapperClassName={css['coder']}
             onChange={handleEditorChange}
-            // onMount={(editor, monaco) => {
-            //   console.log("[@编辑器初始化]", {
-            //     editor,
-            //     monaco
-            //   })
-            // }}
           >
           </Editor>
         </div>
@@ -360,4 +326,45 @@ export default function LowcodeView(params: Params) {
       )}
     </div>
   )
+}
+
+const FileIcon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>;
+
+const FilesTree = ({
+  nodes,
+  onSelect
+}: {
+  nodes: FileTreeNode[];
+  onSelect: (params: { path: string; source: string; fileName: string }) => void;
+}) => {
+  return (
+    <>
+      {nodes.map((node) => {
+        const isFile = node.type === "file";
+        return (
+          <TreeView.Item
+            key={node.fileName}
+            id={node.fileName}
+            onSelect={isFile ? () => {
+              console.log("[ (node as any).fileName]",  (node as any).fileName)
+              onSelect({
+                path: node.name,
+                source: decodeURIComponent((node as any).source ?? ""),
+                fileName: (node as any).fileName,
+              });
+            } : undefined}
+            leadingVisual={isFile ? FileIcon : <TreeView.DirectoryIcon />}
+            contentText={node.name}
+            hasSubTree={!isFile}
+          >
+            {isFile ? null : (
+              <TreeView.SubTree>
+                <FilesTree nodes={(node as any).children} onSelect={onSelect} />
+              </TreeView.SubTree>
+            )}
+          </TreeView.Item>
+        );
+      })}
+    </>
+  );
 }
