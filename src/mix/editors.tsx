@@ -254,10 +254,17 @@ const genStyleValue = (params) => {
   const {comId} = params;
   return {
     set(params, value) {
+      const loc = params.focusArea?.dataset.loc
+      const cn = JSON.parse(loc)
+      const lessPath = cn.files?.less ?? 'style.less'
 
       const deletions: string[] | null = (window as any).__mybricks_style_deletions
       const aiComParams = context.getAiComParams(comId);
-      const cssObj = parseLess(decodeURIComponent(aiComParams.data.styleSource));
+      const lessFile = lessPath
+        ? aiComParams.data.files?.find((f: {fileName: string; source: string}) => f.fileName === lessPath)
+        : undefined;
+      const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
+      const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
 
       // const activeZoneSelector: string | undefined = (window as any).__mybricks_active_zone_selector
       // const fullSelector = activeZoneSelector ?? params.selector;
@@ -325,7 +332,7 @@ const genStyleValue = (params) => {
       }
 
       const cssStr = stringifyLess(cssObj);
-      context.updateFile(comId, {fileName: 'style.less', content: cssStr})
+      context.updateFile(comId, {fileName: lessPath, content: cssStr})
       // 编辑器保存后记录/更新编辑器版本快照
       context.addVersion(comId, "editor")
     }
