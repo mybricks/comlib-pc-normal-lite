@@ -1,4 +1,5 @@
 import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef} from 'react'
+import ReactDom from 'react-dom';
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
 // import {AIJsxRuntime} from './index'
@@ -353,6 +354,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             dependencies={{
               ...(getDependencies?.() ?? {}),
               'react': React,
+              'react-dom': ReactDom,
               '@ant-design/icons': icons,
             }}
             inMybricksGeoWebview={!!canvasContainer}
