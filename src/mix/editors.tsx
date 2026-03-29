@@ -1339,14 +1339,14 @@ export default function (props: Props, actions: Actions, ...args) {
                   }
                 }
               },
-              {
-                type: '_resizer',
-                options: {margin: false},
-                set(params, value) {
-                  ///TODO
-                  console.log("[page _resizer set]", { params, value })
-                },
-              }
+              // {
+              //   type: '_resizer',
+              //   options: {margin: false},
+              //   set(params, value) {
+              //     ///TODO
+              //     console.log("[page _resizer set]", { params, value })
+              //   },
+              // }
             ]
           }
         ];
