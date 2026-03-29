@@ -353,33 +353,38 @@ export default function LowcodeView(params: Params) {
       </div>
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
-        <div className={css['file-list']}>
-          <TreeView
-            defaultCurrent={selectFile?.fileName ?? "index.jsx"}
-            expandIds={treeExpandIds}
-            isDark={isDark}
-          >
-            <FilesTree
-              nodes={filesJsonToTree(files)}
-              onSelect={(file) => {
-                setSelectFile(file)
-              }}
-            />
-          </TreeView>
-        </div>
-        <div className={css['code-container']}>
-          <Editor
-            ref={codeIns}
-            key={coderOptions.path}
-            value={code}
-            {...coderOptions}
-            options={editorOptions}
-            theme={editorTheme}
-            wrapperClassName={css['coder']}
-            onChange={handleEditorChange}
-          >
-          </Editor>
-        </div>
+        {files.length === 0 ? (
+          <div className={css['code-empty']}>暂无代码文件</div>
+        ) : (
+          <>
+            <div className={css['file-list']}>
+              <TreeView
+                defaultCurrent={selectFile?.fileName ?? "index.jsx"}
+                expandIds={treeExpandIds}
+                isDark={isDark}
+              >
+                <FilesTree
+                  nodes={filesJsonToTree(files)}
+                  onSelect={(file) => {
+                    setSelectFile(file)
+                  }}
+                />
+              </TreeView>
+            </div>
+            <div className={css['code-container']}>
+              <Editor
+                ref={codeIns}
+                key={coderOptions.path}
+                value={code}
+                {...coderOptions}
+                options={editorOptions}
+                theme={editorTheme}
+                wrapperClassName={css['coder']}
+                onChange={handleEditorChange}
+              />
+            </div>
+          </>
+        )}
       </div>
       {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}
       {isDebugging && (
