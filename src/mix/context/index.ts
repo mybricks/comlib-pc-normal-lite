@@ -518,6 +518,7 @@ class Context {
 
     this.getAiComEvents(id)?.emit('fileChange', { fileName, content, type });
     (window as any)._mybricksOnEdit_?.();
+    aiComParams?.notify?.edit();
   }
 }
 

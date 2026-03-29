@@ -318,6 +318,7 @@ export default appRef(() => {
       return `${params.content}\n\n${excuteMessage}`;
     },
     async stream(params: any, context) {
+      config.onProgress?.("complete")
       const { status, replaceContent } = params;
       const { ToolRetryError } = context ?? {};
       const files = (params?.files ?? []) as RxFile[];
