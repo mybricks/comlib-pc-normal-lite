@@ -435,9 +435,11 @@ class Context {
           try {
             const prefix = fileName.replace(/[^0-9a-zA-Z_]/g, '_');
             const rawCss = transformLess(`.__mybricks_ai_module_id__ {${content}}`);
+            // 替换编译后 CSS 中所有的类名选择器（除 __mybricks_ai_module_id__ 自身），
+            // 使每个 less 文件的类名都带文件路径前缀，实现跨文件样式隔离。
             const css = rawCss.replace(
-              /(.__mybricks_ai_module_id__\s+)(\.)([-a-zA-Z_][-a-zA-Z0-9_]*)/g,
-              `$1.${prefix}-$3`
+              /\.((?!__mybricks_ai_module_id__)[a-zA-Z_][-a-zA-Z0-9_]*)/g,
+              `.${prefix}-$1`
             );
             updateFileContent({
               fileName,
