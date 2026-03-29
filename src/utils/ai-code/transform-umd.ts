@@ -160,7 +160,7 @@ export function transformLess(code, prefix = "") {
                 (match, className, offset) => {
                   if (isInGlobal(offset)) {
                     cssModule.classMap[className] = className
-                    return className
+                    return match
                   }
                   const hashedName = `${prefix ? `${prefix}-` : ""}${className}`;
                   cssModule.classMap[className] = hashedName;

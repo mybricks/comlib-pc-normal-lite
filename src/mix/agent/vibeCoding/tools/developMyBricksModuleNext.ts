@@ -277,6 +277,7 @@ export default function developMyBricksModule(config: Config = {}) {
       - store 是纯 class 实例，不提供也不支持任何 hooks API（例如 store.useState、store.useXxx 等均不存在），禁止调用；
       - 禁止使用 getter 方法（例如：get count() {...}）;
       - 任何数据初始化动作都不允许写在 constructor 内；
+      - 禁止在 React 函数组件内直接调用 store 的数据初始化方法（如 store.init()、store.fetchData() 等），这会在每次渲染时重复执行，极易导致死循环；如需初始化，必须放在 useEffect 内执行；
       - store.js 是纯 JavaScript 文件，禁止出现任何 JSX 语法（例如 <Icon />、<div> 等标签），也禁止从任何 UI 组件库引入 JSX 组件并作为字段值存储；
     </注意>
   </store.jsx文件>
@@ -492,7 +493,6 @@ export default function developMyBricksModule(config: Config = {}) {
       - 要严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，必须先列举全部可用变量，再逐一检查每条样式属性是否有对应变量可用，有则必须使用，禁止对已有主题变量的属性硬编码色值或数值；
       - 在选择器中，多个单词之间使用驼峰的方式，不能使用-连接;
       - 当提出例如“要适应容器尺寸”等要求时，这里的容器指的是模块的父容器，不是整个页面；
-      - 禁止使用 CSS Modules 的 :global 语法；
       - 所有容器类的样式必须包含position:relative；
       - 尽量不要用calc等复杂的计算；
       - 动效、动画等效果，尽量使用css3的方式实现，例如transition、animation等；
@@ -501,7 +501,6 @@ export default function developMyBricksModule(config: Config = {}) {
     
     注意：
     1、注意上述编码方面的要求，严格遵守；
-    2、输出 less 前必须自检：返回的 less 代码中不得出现 \`:global\`，否则会导致样式错误；
   </当需要修改 less 文件时>
 
   最后，如果确实更新了上述模块的【源代码】中的内容，需要通过以下述格式返回：
