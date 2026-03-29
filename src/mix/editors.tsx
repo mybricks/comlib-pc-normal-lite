@@ -810,20 +810,10 @@ export default function (props: Props, actions: Actions, ...args) {
     type: "themes",
     value: {
       get(params) {
-        if (context.projectConfig?.themes && context.projectConfig.themes.length > 0) {
-          return {
-            themes: {
-              activeThemeId: context.projectConfig.themes?.[0]?.id,
-              themes: context.projectConfig.themes
-            }
-          }
-        }
-        return  params.data.themes;
+        const projectThemes = context.projectConfig.themes;
+        return (projectThemes && projectThemes.length > 0) ? projectThemes : params.data.themes;
       },
       set(params, themes) {
-        if (context.projectConfig?.themes && context.projectConfig.themes.length > 0) {
-          return
-        }
         params.data.themes = themes;
       }
     }
