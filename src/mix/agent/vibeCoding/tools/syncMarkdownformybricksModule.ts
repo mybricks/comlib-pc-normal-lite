@@ -340,7 +340,7 @@ export default appRef(() => {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
-          const result = await config.onUpdate?.({ files: files.map(({ fileName, content }) => ({ fileName, content })) });
+          const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
           const msg = result ? formatUpdateResult(result) : '';
 
           if (msg) {
