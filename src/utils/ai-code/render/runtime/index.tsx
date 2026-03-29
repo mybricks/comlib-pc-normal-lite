@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useCssApi } from "./hooks";
 import FilesModule from "./FilesModule";
 import ErrorBoundary from "./ErrorBoundary";
@@ -42,30 +42,42 @@ interface AIJsxRuntimeParams {
 
   /** 日志 */
   logger: any
+
+  /** 渲染运行时错误视图（由父组件提供，对应 RuntimeErrorView） */
+  renderRuntimeError?: (props: { title: string; desc: string; errors: any[]; comId?: string }) => React.ReactNode
+
+  /** 是否在 mybricks geo webview 中 */
+  inMybricksGeoWebview?: boolean
 }
 
-const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
-  const {
-    id,
-    env,
-    data,
-    dependencies,
-    placeholder,
-    logger
-  } = params
-  const cssApi = useCssApi({ id, env })
+interface BootstrapProps {
+  env: AIJsxRuntimeParams['env']
+  data: any
+  dependencies: Record<string, any>
+  logger: any
+  cssApi: { set: (args: { fileName: string; content: string }) => void }
+  placeholder: React.ReactNode
+  renderRuntimeError?: (props: { title: string; desc: string; errors: any[]; comId?: string }) => React.ReactNode
+}
 
-  // 保存 envRunner 实例，供 useEffect 监听 _activeDebugEnv 时重新激活环境
+/**
+ * BootstrapReactComponent：所有初始化逻辑（eval + activate + getModule + 渲染）都在这里。
+ *
+ * 置于 ErrorBoundary 内部，任何阶段 throw 的错误都由 ErrorBoundary.componentDidCatch 统一捕获，
+ * 无需手动 try/catch + 写 data._errors。
+ */
+const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError }: BootstrapProps) => {
   const envRunnerRef = useRef<any>(null);
 
-  const filesModule = useMemo(() => {
-    const mybricks = createMyBricks({
-      logger,
-      env,
-      data
-    })
+  // 所有初始化：eval dataSource.js → eval setup.js → build FilesModule → getModule('index.jsx')
+  // 任何一步 throw，ErrorBoundary 捕获，渲染 RuntimeErrorView
+  const initErrorRef = useRef<Error | null>(null);
 
-    const collectDebugLogs = mybricks._collectDebugLogs;
+  const ReactComponent = useMemo(() => {
+    initErrorRef.current = null;
+    try {
+    const mybricks = createMyBricks({ logger, env, data });
+    const collectDebugLogs = (mybricks as any)._collectDebugLogs;
 
     // 包装 DataSource：通过 Proxy 拦截用户子类实例的所有方法调用，将调用记录写入 data._logs
     class DataSourceWithLog extends DataSource {
@@ -89,79 +101,56 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
 
     const mybricksWithDataSource = Object.assign(mybricks, { DataSource: DataSourceWithLog });
 
-    // 创建独立的 EnvRunner 实例，每次 eval 天然隔离
+    // 创建独立的 EnvRunner 实例，每次 useMemo 重建天然隔离
     const envRunner = createEnvRunner();
-    // 提升到 ref，供 useEffect 监听 _activeDebugEnv 变化时重新 activate
     envRunnerRef.current = envRunner;
     const mybricksTesting = {
       describe: envRunner.describe.bind(envRunner),
       spyOn: envRunner.spyOn.bind(envRunner),
     };
 
-    // 1. 先独立 eval dataSource.js，得到单例实例
-    //    不走 FilesModule 路径解析，确保 setup.js 和 index.jsx 共用同一个实例
+    // 1. eval dataSource.js，直接 throw → ErrorBoundary 捕获
     let dataSourceInstance: any = null;
-    try {
-      const dsFile = (data.files as any[]).find(f => f.fileName === 'dataSource.js');
-      if (dsFile?.compiled) {
-        const exports: any = { default: null };
-        const wrapCode = `(function(exports,require){${decodeURIComponent(dsFile.compiled)}})`
-        eval(wrapCode)(exports, (pkg: string) => pkg === 'mybricks' ? mybricksWithDataSource : undefined);
-        dataSourceInstance = exports.default;
-      }
-    } catch (e) {
-      console.warn('[AIJsxRuntime] dataSource.js eval 失败', e);
+    const dsFile = (data.files as any[]).find(f => f.fileName === 'dataSource.js');
+    if (dsFile?.compiled) {
+      const exports: any = { default: null };
+      const wrapCode = `(function(exports,require){${decodeURIComponent(dsFile.compiled)}})`;
+      eval(wrapCode)(exports, (pkg: string) => pkg === 'mybricks' ? mybricksWithDataSource : undefined);
+      dataSourceInstance = exports.default;
     }
 
-    // 2. eval setup.js，显式注入 dataSource 实例，激活对应环境
+    // 2. eval setup.js，直接 throw → ErrorBoundary 捕获
     if (dataSourceInstance) {
-      try {
-        const setupFile = (data.files as any[]).find(f => f.fileName === 'setup.js');
-        if (setupFile?.compiled) {
-          const dsExportForSetup = { default: dataSourceInstance, __esModule: true };
-          const wrapCode = `(function(exports,require){${decodeURIComponent(setupFile.compiled)}})`
-          eval(wrapCode)({ default: null }, (pkg: string) => {
-            if (pkg === 'mybricks/testing') return mybricksTesting;
-            if (pkg === 'dataSource' || pkg === './dataSource') return dsExportForSetup;
-            return undefined;
-          });
-          // 收集 describe 注册的所有环境名，供 @debug 钩子返回给搭建态展示
-          if (!env.runtime) {
-            data._debugEnvs = envRunner.getEnvNames();
-          }
-          // 优先用用户上次选择的环境，回退到默认值（设计态 mock，运行态 prod）
-          const envToActivate = env.runtime
-            ? 'prod'
-            : (data._activeDebugEnv ?? 'mock');
-          envRunner.activate(envToActivate);
+      const setupFile = (data.files as any[]).find(f => f.fileName === 'setup.js');
+      if (setupFile?.compiled) {
+        const dsExportForSetup = { default: dataSourceInstance, __esModule: true };
+        const wrapCode = `(function(exports,require){${decodeURIComponent(setupFile.compiled)}})`;
+        eval(wrapCode)({ default: null }, (pkg: string) => {
+          if (pkg === 'mybricks/testing') return mybricksTesting;
+          if (pkg === 'dataSource' || pkg === './dataSource') return dsExportForSetup;
+          return undefined;
+        });
+        // 收集 describe 注册的所有环境名，供 @debug 钩子返回给搭建态展示
+        if (!env.runtime) {
+          data._debugEnvs = envRunner.getEnvNames();
         }
-      } catch (e) {
-        console.warn('[AIJsxRuntime] setup.js 激活失败', e);
+        // 优先用用户上次选择的环境，回退到默认值（设计态 mock，运行态 prod）
+        const envToActivate = env.runtime ? 'prod' : (data._activeDebugEnv ?? 'mock');
+        envRunner.activate(envToActivate);
       }
     }
 
-    // 3. 构建 FilesModule，将 dataSource 单例注入为具名依赖，跳过文件路径解析
-    //    包装为 { default, __esModule: true }，兼容 import X from 'dataSource' 的 interop
-    //    同时注册所有可能的相对路径变体，确保任意深度的文件 require 都命中同一实例
-    const dsExport = dataSourceInstance
-      ? { default: dataSourceInstance, __esModule: true }
-      : null;
+    // 3. 构建 FilesModule，将 dataSource 单例注入为具名依赖
+    const dsExport = dataSourceInstance ? { default: dataSourceInstance, __esModule: true } : null;
     const dataSourceDeps: Record<string, any> = {};
     if (dsExport) {
-      // 非相对路径（直接引用）
       dataSourceDeps['dataSource'] = dsExport;
-      // 从 filesMap 中推导所有可能的相对路径
-      const dsFileName = 'dataSource.js';
       const allFiles: string[] = (data.files as any[]).map(f => f.fileName);
       allFiles.forEach(f => {
-        // 对每个文件计算其 require('dataSource.js') 时对应的相对路径 key
-        const parts = f.split('/');
-        const depth = parts.length - 1; // 该文件所在目录层级
+        const depth = f.split('/').length - 1;
         if (depth === 0) {
-          // 根目录文件：'./dataSource' 或 'dataSource'
           dataSourceDeps['./dataSource'] = dsExport;
         } else {
-          // 子目录文件：'../../dataSource'（根据深度）
           const ups = Array(depth).fill('..').join('/');
           dataSourceDeps[`${ups}/dataSource`] = dsExport;
         }
@@ -177,90 +166,67 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
       }),
       importCallBack: {
         less({ fileName, content }) {
-          cssApi.set({ fileName, content })
+          cssApi.set({ fileName, content });
         }
       }
-    })
+    });
 
-    return fm;
-  }, [])
-
-  /**
-   * 监听 data._activeDebugEnv 变化，重新激活对应环境（无需重新 eval setup.js）。
-   * 用户在搭建态通过 @setDebugEnv 切换环境时，engines 会调用 notifyChanged 触发重渲，
-   * data._activeDebugEnv 发生变化，此 effect 随即执行，切换 spyOn/axios 配置生效。
-   */
-  useEffect(() => {
-    if (!env.runtime && envRunnerRef.current && data._activeDebugEnv) {
-      envRunnerRef.current.activate(data._activeDebugEnv);
-    }
-  }, [data._activeDebugEnv]);
-
-  /**
-   * 监听 data._activeDebugEnv 变化，重新激活对应环境（无需重新 eval setup.js）。
-   * 用户在搭建态通过 @setDebugEnv 切换环境时，engines 调用 notifyChanged 触发重渲，
-   * data._activeDebugEnv 发生变化，此 effect 随即执行，切换 spyOn/axios 配置生效。
-   *
-   * 【注意】不能在 useMemo 里切换：useMemo 在第一次渲染时已经 activate 了初始环境，
-   * 之后 _activeDebugEnv 变化只会触发 re-render，useMemo([], []) 不会重跑，
-   * 必须用 useEffect 监听变化后单独调用 activate。
-   */
-  useEffect(() => {
-    if (!env.runtime && envRunnerRef.current && data._activeDebugEnv) {
-      envRunnerRef.current.activate(data._activeDebugEnv);
-    }
-  }, [data._activeDebugEnv]);
-
-  /**
-   * 【重要】eval 失败时招技异常并直接写入 data._errors。
-   *
-   * 为什么必须在这里 catch：
-   *   - eval 在 useMemo 里调用，发生在 React 渲染周期之前（非 JSX render 阶段），
-   *     ErrorBoundary.componentDidCatch 只能捕获 render 阶段的异常，
-   *     因此 eval 抛出的错误不会被 ErrorBoundary 捕获，必须在此手动写入 data._errors。
-   */
-  const ReactComponent = useMemo(() => {
-    try {
-      return filesModule.getModule('index.jsx')
+    // 4. getModule('index.jsx')
+    return fm.getModule('index.jsx');
     } catch (e: any) {
-      // eval 失败（运行时错误），直接写入 data._errors
-      if (data) {
-        if (!data._errors) data._errors = [];
-        const errorMessage = e?.message || String(e);
-        const fileName: string | undefined = e?.fileName;
-        data._errors = [
-          ...((data._errors as any[]).filter((err: any) => err.file)),
-          {
-            message: errorMessage,
-            type: 'runtime',
-            ...(fileName ? { file: fileName } : {}),
-          }
-        ];
-      }
-      console.log('data', data._errors)
+      initErrorRef.current = e;
       return undefined;
     }
-  }, [])
+  }, []);
+
+  if (initErrorRef.current) {
+    const e = initErrorRef.current;
+    const title = '组件运行时错误';
+    const desc = (e as any)?.message || String(e);
+    if (renderRuntimeError) {
+      return <>{renderRuntimeError({ title, desc, errors: [{ message: desc, type: 'runtime' }] })}</>;
+    }
+    return <div style={{ color: 'red', padding: 8 }}>{desc}</div>;
+  }
 
   if (typeof ReactComponent !== 'function') {
     const CustomView = typeof window !== 'undefined' && (window as any)._renderCompView_;
     if (CustomView) {
-      if (typeof CustomView === 'function') {
-        return <CustomView />;
-      }
-      if (React.isValidElement(CustomView)) {
-        return CustomView;
-      }
+      if (typeof CustomView === 'function') return <CustomView />;
+      if (React.isValidElement(CustomView)) return CustomView;
     }
-    return placeholder;
+    return <>{placeholder}</>;
   }
-  
+
+  return <ReactComponent />;
+};
+
+const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
+  const {
+    id,
+    env,
+    data,
+    dependencies,
+    placeholder,
+    logger,
+    renderRuntimeError,
+  } = params;
+  const cssApi = useCssApi({ id, env });
+
   return (
-    <ErrorBoundary data={data}>
-      <ReactComponent />
+    <ErrorBoundary data={data} renderRuntimeError={renderRuntimeError} comId={id}>
+      <BootstrapReactComponent
+        env={env}
+        data={data}
+        dependencies={dependencies}
+        logger={logger}
+        cssApi={cssApi}
+        placeholder={placeholder}
+        renderRuntimeError={renderRuntimeError}
+      />
     </ErrorBoundary>
-  )
-}
+  );
+};
 
 export { AIJsxRuntime }
 export type { AIJsxRuntimeParams }

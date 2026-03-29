@@ -95,11 +95,7 @@ export function createEnvRunner(collectDebugLogs?: (entry: { type: string; metho
       console.warn(`[mybricks/testing] Environment "${name}" not found.`);
       return;
     }
-    try {
-      fn();
-    } catch (e) {
-      console.error(`[mybricks/testing] Error in describe("${name}") callback:`, e);
-    }
+    fn();
   }
 
   function getEnvNames() {

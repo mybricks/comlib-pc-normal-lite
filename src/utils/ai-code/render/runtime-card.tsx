@@ -7,7 +7,17 @@ import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
 
-/** 统一错误面板：编译失败、generate.error、eval 失败等共用同一套样式 */
+/** 运行时错误面板（ErrorBoundary 内部使用） */
+export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+  return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
+};
+
+/** 编译失败错误面板（外层 genAIRuntime 使用） */
+export const CompileErrorView = ({ title = '编译失败', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+  return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
+};
+
+/** 统一错误面板基础交互组件：编译失败、generate.error、eval 失败等共用同一套样式 */
 export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
   const onRetry = useCallback(() => {
     let message = '';
@@ -199,55 +209,28 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     }, []);
 
     /**
-     * 【重要】首次挂载时清除纯 runtime 类型的旧错误，让组件重新走渲染流程并重新收集错误。
-     *
-     * 为什么用 useEffect（空依赖）而不是在 useMemo/render 里直接清除：
-     *   - useMemo 每次渲染都执行，若在里面清空 data._errors，
-     *     下方 AIJsxRuntime 渲染阶段收集到的新 runtime 错误会在下次渲染的 useMemo 里被再次清空，
-     *     导致错误永远无法被展示（清除 → 收集 → 清除 的死循环）。
-     *   - useEffect（空依赖）只在组件挂载后执行一次，时机在首次渲染之后，
-     *     保证新一轮渲染能收集到真实的 runtime 错误并正常展示。
-     *
-     * 只清除「全部为 runtime」的情况：若有 compile 错误则保留，不允许渲染。
-     */
-    useEffect(() => {
-      if (data._errors && Array.isArray(data._errors) && data._errors.length > 0) {
-        const hasNonRuntimeError = data._errors.some((e) => e.type !== 'runtime');
-        if (!hasNonRuntimeError) {
-          data._errors = [];
-        }
-      }
-    }, []);
-
-    /**
-     * 【重要】errorInfo 只负责「读取并格式化」data._errors，禁止在此处修改 data._errors。
-     * 若需要在渲染前重置错误，请在 useEffect（空依赖）里处理，见上方注释。
+     * 【重要】errorInfo 只响应 compile 错误（type !== 'runtime'），用于阻断渲染并展示编译失败面板。
+     * runtime 错误由 ErrorBoundary 在内部捕获并渲染 RuntimeErrorView，不在此处处理。
      */
     const errorInfo = useMemo(() => {
-      // 使用统一的错误列表
-      if (data._errors && Array.isArray(data._errors) && data._errors.length > 0) {
-        // 按优先级排序：runtime > compile，同类型按时间（数组顺序）
-        const sortedErrors = [...data._errors].sort((a, b) => {
-          if (a.type === 'runtime' && b.type !== 'runtime') return -1;
-          if (a.type !== 'runtime' && b.type === 'runtime') return 1;
-          return 0;
-        });
-        
-        const firstError = sortedErrors[0];
+      // 只取 compile 错误（有 file 字段且 type 不是 runtime）
+      const compileErrors = data._errors && Array.isArray(data._errors)
+        ? data._errors.filter((e: any) => e.type !== 'runtime')
+        : [];
+
+      if (compileErrors.length > 0) {
+        const firstError = compileErrors[0];
         const fileLabel = firstError.file ? ` (${firstError.file})` : '';
-        const titleMap = {
+        const titleMap: Record<string, string> = {
           'runtime.jsx': 'JSX 编译失败',
           'style.less': 'Less 编译失败',
           'store.js': 'Store 执行失败',
         };
-        const title = firstError.type === 'runtime' 
-          ? '组件运行时错误' 
-          : (titleMap[firstError.file] || '编译失败');
-        
+        const title = titleMap[firstError.file] || '编译失败';
         return {
           title: title + fileLabel,
           desc: firstError.message,
-          errors: data._errors, // 保留所有错误，供错误面板展示
+          errors: compileErrors,
         };
       }
 
@@ -337,7 +320,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         );
       }
       if (errorInfo) {
-        return <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
+        return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
       if (data.files.length) {
         return (
@@ -349,7 +332,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             inputs={inputs}
             outputs={outputs}
             placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-            renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} comId={id} />}
+            renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
             dependencies={{
               ...(getDependencies?.() ?? {}),
               'react': React,

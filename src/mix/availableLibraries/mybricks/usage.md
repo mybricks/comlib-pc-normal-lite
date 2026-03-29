@@ -144,6 +144,7 @@ describe('无权限测试', () => {
 ```
 
 #### spyOn 使用原则
+- spyOn的有且只有一个使用方式，就是 `mockReturn`，不得使用任何其他不存在的方法；
 - `spyOn(dataSource, 'method').mockReturn(value: Record<string, any>)`：可以替换该单个方法的返回值，**value 必须为 对象**；
 - 仅必要时使用，比如由于设计态无法请求真实接口，需要劫持axios接口调用；
 - `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；

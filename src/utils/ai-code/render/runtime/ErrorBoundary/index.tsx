@@ -1,17 +1,4 @@
 import React, { Component } from 'react';
-import css from './index.less';
-
-interface ErrorInfo {
-  title: string,
-  desc?: string
-}
-
-const ErrorTip = ({ title, desc }: ErrorInfo) => {
-  return <div className={css.error}>
-    <div className={css.title}>{title}</div>
-    <div className={css.desc}>{desc}</div>
-  </div>
-}
 
 class ErrorBoundary extends Component<any, any> {
   constructor(props) {
@@ -29,64 +16,73 @@ class ErrorBoundary extends Component<any, any> {
   }
 
   componentDidCatch(error, errorInfo) {
+    console.log('erirs', error, errorInfo)
     this.setState({ errorInfo });
     // 添加运行时错误到统一错误列表
-    const { data } = this.props as any;
+    const { data, onError } = this.props as any;
     if (data) {
       if (!data._errors) data._errors = [];
       const errorMessage = error?.toString ? error.toString() : (errorInfo ? errorInfo.componentStack : '未知运行时错误');
       // 如果错误来自 eval（runRender 抛出的富化错误），携带 fileName
       const fileName: string | undefined = (error as any)?.fileName;
-      // 移除旧的运行时错误（没有 file 字段的），替换引用触发 useMemo 重新计算
+
+      // 移除旧的运行时错误，写入本次错误
       data._errors = [
-        ...data._errors.filter(err => err.file),
+        ...data._errors.filter((err: any) => err.type !== 'runtime'),
         {
           message: errorMessage,
           type: 'runtime',
           ...(fileName ? { file: fileName } : {}),
         }
       ];
+
+      console.log('捕获到运行时错误:', data._errors);
     }
+    onError?.();
   }
 
   componentDidMount() {
-    // 组件成功挂载，清除之前的运行时错误
+    // 组件成功挂载（本次渲染无错），清除旧的 runtime 错误。
+    // 此钩子在 componentDidCatch 之前执行，不会误清本次新写入的错误。
     const { data } = this.props as any;
-    if (data && data._errors.length) {
-      data._errors = data._errors.filter(err => err.file);
+    if (data?._errors?.length) {
+      data._errors = data._errors.filter((err: any) => err.type !== 'runtime');
     }
   }
 
   componentDidUpdate(prevProps, prevState) {
-    // 如果从错误状态恢复（比如重新渲染修复了bug），清除运行时错误
+    // 从错误状态恢复（重新渲染修复了 bug），清除 runtime 错误
     if (prevState.hasError && !this.state.hasError) {
       const { data } = this.props as any;
-      if (data && data._errors.length) {
-        data._errors = data._errors.filter(err => err.file);
-      }
-    }
-    // 如果props变化导致组件成功渲染，也清除运行时错误
-    if (!this.state.hasError && prevProps !== this.props) {
-      const { data } = this.props as any;
-      if (data && data._errors.length) {
-        data._errors = data._errors.filter(err => err.file);
+      if (data?._errors?.length) {
+        data._errors = data._errors.filter((err: any) => err.type !== 'runtime');
       }
     }
   }
 
   render() {
-    // @ts-ignore
-    const errorTip = this.state?.error?.toString ? this.state.error.toString() : (this.state.errorInfo ? this.state.errorInfo.componentStack : null);
-  
+    if (this.state.hasError) {
+      const { data, renderRuntimeError, comId } = this.props as any;
+      // 取出当前 runtime 错误列表供视图展示
+      const runtimeErrors = data?._errors?.filter((e: any) => e.type === 'runtime') ?? [];
+      const firstError = runtimeErrors[0];
+      const title = '组件运行时错误';
+      const desc = firstError?.message ?? (
+        (this.state.error as any)?.toString
+          ? (this.state.error as any).toString()
+          : ((this.state.errorInfo as any)?.componentStack ?? '未知运行时错误')
+      );
 
-    console.log('errorTip', errorTip);
-    if (errorTip) {
-      return <ErrorTip title={'组件渲染错误'} desc={errorTip} />
+      if (renderRuntimeError) {
+        return renderRuntimeError({ title, desc, errors: runtimeErrors, comId });
+      }
+      // 兜底：直接渲染文本
+      return <div style={{ color: 'red', padding: 8 }}>{desc}</div>;
     }
 
     // @ts-ignore
-    return this.props.children; 
+    return this.props.children;
   }
 }
 
-export default ErrorBoundary
+export default ErrorBoundary;
