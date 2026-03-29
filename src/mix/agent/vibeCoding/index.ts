@@ -373,6 +373,7 @@ export default function ({ context }) {
 
       let planAgent;
       let updateFile = false;
+      let complete;
 
       const onProgress = (status) => {
         const { focusArea } = focus;
@@ -384,14 +385,20 @@ export default function ({ context }) {
           } else if (status === "error") {
             // context.cancelAIPending(focus.comId);
           }
-          params?.onProgress?.(status);
+          if (!complete) {
+            complete = true;
+            params?.onProgress?.(status);
+          }
         } else {
           if (status === "start") {
             // context.startAIPendingVersion(focus.comId, planAgent);
             actions.lock(lockId, focusArea);
           } else if (status === "complete") {
             // context.addVersion(focus.comId, "ai", planAgent);
-            actions.unlock(lockId, focusArea);
+            if (!complete) {
+              complete = true;
+              actions.unlock(lockId, focusArea);
+            }
           } else if (status === "error") {
             // context.cancelAIPending(focus.comId);
             actions.unlock(lockId, focusArea);
@@ -589,6 +596,7 @@ ${text}
             }),
             checkDesignStatus({ project, onProgress, codeModifiedFlag }),
             syncMarkdownformybricksModule({
+              onProgress,
               onUpdate: (p) => {
                 const files = p.files;
                 const summary = files.find((f) => f.fileName === "summary.md")
