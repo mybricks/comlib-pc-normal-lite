@@ -17,6 +17,7 @@ export default function syncMarkdownformybricksModule(config) {
 返回前置工具对于组件内容修改的摘要信息
     `,
     getPrompts: () => {
+      config.onProgress?.("complete")
       return `
 <你的角色与任务>
 你是 MyBricks 模块文档专家。你的任务是根据当前模块的 runtime.jsx 源码，生成或更新对应的 README.md 说明文档。同时返回前置工具对于组件内容修改的摘要信息。
@@ -318,7 +319,6 @@ export default appRef(() => {
       return `${params.content}\n\n${excuteMessage}`;
     },
     async stream(params: any, context) {
-      config.onProgress?.("complete")
       const { status, replaceContent } = params;
       const { ToolRetryError } = context ?? {};
       const files = (params?.files ?? []) as RxFile[];

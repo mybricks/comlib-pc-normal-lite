@@ -382,12 +382,12 @@ export default function ({ context }) {
             // context.startAIPendingVersion(focus.comId, planAgent);
           } else if (status === "complete") {
             // context.addVersion(focus.comId, "ai", planAgent);
+            if (!complete) {
+              complete = true;
+              params?.onProgress?.(status);
+            }
           } else if (status === "error") {
             // context.cancelAIPending(focus.comId);
-          }
-          if (!complete) {
-            complete = true;
-            params?.onProgress?.(status);
           }
         } else {
           if (status === "start") {
