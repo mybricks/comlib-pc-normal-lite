@@ -110,7 +110,9 @@ const Item = (props: ItemProps) => {
       setCurrent(props.id);
     } else {
       // 无法选中，展开
-      setIsExpanded(true);
+      setIsExpanded((isExpanded) => {
+        return !isExpanded
+      })
     }
     event.stopPropagation();
   }
