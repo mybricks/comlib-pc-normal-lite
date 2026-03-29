@@ -170,7 +170,11 @@ class Context {
       const rollbackVersion = versions[index];
 
       Object.entries(rollbackVersion.dataSnapshot).forEach(([key, value]) => {
-        data[key] = value;
+        if (key === "files") {
+          data[key] = [...value]
+        } else {
+          data[key] = value;
+        }
       });
 
       const aiVersion = versions.slice(index + 1).find((version) => {
@@ -185,6 +189,7 @@ class Context {
 
       this.versionStateMap[comId] = versions.slice(0, index + 1);
       this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
+      this.getAiComEvents(comId)?.emit('fileChange', null);
       (window as any)._mybricksOnEdit_?.({ autoSave: true });
     }
   }
@@ -516,7 +521,7 @@ class Context {
       }
     }
 
-    this.getAiComEvents(id)?.emit('fileChange', { fileName, content, type });
+    this.getAiComEvents(id)?.emit('fileChange', null);
     (window as any)._mybricksOnEdit_?.();
     aiComParams?.notify?.edit();
   }
