@@ -17,16 +17,19 @@ type TreeViewProps = {
   children: React.ReactNode;
   /** 需要强制展开的目录 id 列表 */
   expandIds?: string[];
+  isDark?: boolean;
 }
 
 const TreeViewContext = createContext<{
   current: string;
   setCurrent: React.Dispatch<React.SetStateAction<string>>;
   expandIds: Set<string>;
+  isDark: boolean;
 }>({
   current: "",
   setCurrent: () => {},
   expandIds: new Set(),
+  isDark: false,
 })
 
 const TreeView = (props: TreeViewProps) => {
@@ -43,15 +46,25 @@ const TreeView = (props: TreeViewProps) => {
     }
   }, [props.defaultCurrent]);
 
+  const dark = props.isDark ?? false;
+  const cssVars = {
+    '--tree-item-toggle': dark ? "#9198a1" : "#59636e",
+    '--tree-directory-icon': dark ? '#9198a1' : '#54aeff',
+    '--tree-item-visual': dark ? ' #9198a1' : '#59636e',
+    '--tree-item-text': dark ? '#f0f6fc' : '#1f2328',
+    '--tree-item-leval-line': dark ? '#3d444db3' : '#d1d9e0b3'
+  } as React.CSSProperties;
+
   return (
     <TreeViewContext.Provider
       value={{
         current,
         setCurrent,
         expandIds,
+        isDark: dark,
       }}
     >
-      <ul className={css.treeView}>
+      <ul className={css.treeView} style={cssVars}>
         {props.children}
       </ul>
     </TreeViewContext.Provider>
