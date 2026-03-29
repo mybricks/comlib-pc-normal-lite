@@ -891,14 +891,14 @@ export default function (props: Props, actions: Actions, ...args) {
         console.error("[@getDocs syncTheme error]", e);
       }
       try {
-        const {runtimeMdCompiled} = params.data;
-        if (runtimeMdCompiled) {
+        const mdCompiled = params.data.files.find((file) => file.fileName === "README.md")?.compiled;
+        if (mdCompiled) {
           const focusElement = params.focusArea.ele;
           // [TODO] 需要一个新的属性，组件名
           const parentElement = focusElement.closest('[data-widget-name]');
           if (parentElement) {
             const widgetName = parentElement.getAttribute('data-widget-name');
-            const docs = runtimeMdCompiled[widgetName];
+            const docs = mdCompiled[widgetName];
             if (docs) {
               result['title'] = docs.title;
               result['summary'] = docs.summary;
