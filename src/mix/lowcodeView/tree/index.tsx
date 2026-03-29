@@ -47,10 +47,11 @@ const TreeView = (props: TreeViewProps) => {
   }, [props.defaultCurrent]);
 
   const dark = props.isDark ?? false;
+  // #9198a1
   const cssVars = {
-    '--tree-item-toggle': dark ? "#9198a1" : "#59636e",
-    '--tree-directory-icon': dark ? '#9198a1' : '#54aeff',
-    '--tree-item-visual': dark ? ' #9198a1' : '#59636e',
+    '--tree-item-toggle': dark ? "#999" : "#59636e",
+    '--tree-directory-icon': dark ? '#999' : '#54aeff',
+    '--tree-item-visual': dark ? ' #999' : '#59636e',
     '--tree-item-text': dark ? '#f0f6fc' : '#1f2328',
     '--tree-item-leval-line': dark ? '#3d444db3' : '#d1d9e0b3'
   } as React.CSSProperties;
@@ -300,9 +301,9 @@ const mapValues = <T extends Record<string, unknown>, V>(obj: T, fn: (value: T[k
   )
 }
 
-const FileDirectoryOpenFillIcon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"/></svg>;
+const FileDirectoryOpenFillIcon = <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"/></svg>;
 
-const FileDirectoryFillIcon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>;
+const FileDirectoryFillIcon = <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"/></svg>;
 
 const ChevronDownIcon = <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 12 12"><path d="M6 8.825c-.2 0-.4-.1-.5-.2l-3.3-3.3c-.3-.3-.3-.8 0-1.1.3-.3.8-.3 1.1 0l2.7 2.7 2.7-2.7c.3-.3.8-.3 1.1 0 .3.3.3.8 0 1.1l-3.2 3.2c-.2.2-.4.3-.6.3Z"/></svg>;
 

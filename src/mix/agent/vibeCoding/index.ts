@@ -29,6 +29,7 @@ export type { ReplaceResultItem };
 export type { FileUpdateResult, UpdateComponentFilesResult };
 
 export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md'])
+export const SUPPORTED_FILE_LANGUAGE = new Set(['write', 'delete', 'before', 'after'])
 
 /**
  * 将指定组件的若干源文件（model.json / runtime.jsx / style.less / config.js / com.json）
@@ -45,7 +46,7 @@ function updateComponentFiles(
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
   const pendingWrites: Array<{ fileName: string; content: string }> = [];
 
-  const fileNames = [...new Set(files.filter((f) => SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '')).map((f) => f.fileName))];
+  const fileNames = [...new Set(files.filter((f) => (SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '') && SUPPORTED_FILE_LANGUAGE.has(f.language))).map((f) => f.fileName))];
 
   const currentFilesMap = (aiComParams.data.files ?? []).reduce((pre, cur) => {
     pre[cur.fileName] = cur;
@@ -410,6 +411,14 @@ export default function ({ context }) {
         //     actions.unlock(lockId, comName);
         //   }
         // }
+
+        if (status === "start") {
+          (window as any).__vibeCodingCallbacks__?.onStart?.();
+        } else if (status === "complete") {
+          (window as any).__vibeCodingCallbacks__?.onComplete?.();
+        } else if (status === "error") {
+          (window as any).__vibeCodingCallbacks__?.onError?.();
+        }
       }
 
       const onUpdateFiles = (p) => {
