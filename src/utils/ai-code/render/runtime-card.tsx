@@ -170,16 +170,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
   ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // 组件渲染后注册全局桥接方法，始终指向最后渲染的组件
-    useEffect(() => {
-      (window as any)._focusAndSendToVibeAgent_ = (params: any) => {
-        (window as any)._showAIDialog_?.(id);
-        setTimeout(() => {
-          (window as any)._sendToFocusVibeAgent_?.(params);
-        }, 500);
-      };
-    }, [id]);
-
     // 设计态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
     useEffect(() => {
       if (env.runtime) return;
