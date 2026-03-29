@@ -69,9 +69,12 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
 ### 数据源使用
 所有正式数据（接口请求、静态数据）必须维护在 `dataSource.js` 文件中。
 
-通过继承 `DataSource` 基类并 `export default new MyDatasource()` 来声明数据源：
+通过继承 `DataSource` 基类并 `export default new MyDatasource()` 来声明数据源；
 
-注意：如果用户没有提供接口信息，不要创造一个不存在的接口，而是思考哪些应该属于接口信息，用静态数据来return返回，为以后开发留下坑位。
+怎么声明数据源：
+1. 判断用户是否提供接口信息，对于提供了接口信息的，使用 `this.axios` 发起请求；
+2. 对于未提供接口信息的，思考哪些应该属于接口信息，用静态数据来return返回，为以后开发留下坑位，保障运行态也能看见数据；
+
 
 ```js DataSource 说明
 // DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
@@ -107,8 +110,8 @@ export default new MyDatasource()
 ### 环境声明（setup.js）
 `setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）**，其余环境根据用户需求按需来实现。
 
-一共需要关心 设计态 + 正式环境 + N套自定义环境：
-1. 搭建环境：使用mock定义，由于axios在设计态无法调用，我们需要劫持动态数据的接口以保证设计态的正常返回
+一共需要关心 设计态 + 运行态（正式环境 + N套自定义环境）：
+1. 搭建环境：使用 mock 定义，由于axios在设计态无法调用，我们需要劫持动态数据的接口以保证设计态的正常返回
 2. 正式环境：使用 dataSource.js 中定义的静态数据和接口请求；
 3. N套自定义环境：用户需要时声明，比如特殊环境和特殊测试场景；
 
