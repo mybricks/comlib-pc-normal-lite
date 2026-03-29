@@ -172,6 +172,7 @@ class Context {
 
       this.versionStateMap[comId] = versions.slice(0, index + 1);
       this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
+      (window as any)._mybricksOnEdit_?.({ autoSave: true });
     }
   }
   // ─────────────────────────────────────────────────────────────────────────────
