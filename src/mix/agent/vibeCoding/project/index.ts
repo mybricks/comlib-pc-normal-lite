@@ -304,15 +304,16 @@ export class Project {
 ### 设计态渲染方式
   - 在设计态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的组件；
   - 这意味着每个通过 Route 注册的 comRef 组件都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
-### 调试态渲染方式
-  - 在调试态中，只有当前激活路由对应的页面会被展示；
+### 运行态渲染方式
+  - 在运行态中，只有当前激活路由对应的页面会被展示；
+  
 ## 接口请求
 设计态会替换axios的内部实现，不允许请求真实接口，需要提供 mock 数据。
 `;
 
     const state = this.config.getDesignerState?.();
     const mode = state?.mode ?? 'design';
-    const modeLabel = mode === 'debug' ? '调试态' : mode === 'runtime' ? '调试态' : '设计态';
+    const modeLabel = mode === 'debug' ? '运行态' : mode === 'runtime' ? '运行态' : '设计态';
     const pageRefNames = state?.pages ?? [];
     const popupRefNames = state?.popups ?? [];
 
@@ -336,13 +337,15 @@ ${zonesList}`;
     }
 
     const curStatus = `
+## 设计态渲染情况
+${canvasStatus}
+
 ## 当前状态
 状态：${modeLabel}
-${canvasStatus}
 `    
     return [
       '# 设计器状态（实时更新）',
-      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「调试态」，两种模式下展示的内容不一样',
+      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「运行态」，两种模式下展示的内容不一样',
       designModeKnowledge,
       curStatus
     ].join('\n');

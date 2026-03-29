@@ -424,7 +424,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return DialogRoot
   };
 
-  // 将 logger 的调用同步收集到 data._logs（设计态、调试态均收集）
+  // 将 logger 的调用同步收集到 data._logs（设计态、运行态均收集）
   const capturedLogger = new Proxy(logger ?? {}, {
     get(target, prop: string) {
       const original = typeof target[prop] === 'function' ? target[prop] : (() => {});

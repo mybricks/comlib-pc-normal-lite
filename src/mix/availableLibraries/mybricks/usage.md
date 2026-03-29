@@ -71,6 +71,8 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
 
 通过继承 `DataSource` 基类并 `export default new MyDatasource()` 来声明数据源：
 
+注意：如果用户没有提供接口信息，不要创造一个不存在的接口，而是思考哪些应该属于接口信息，用静态数据来return返回，为以后开发留下坑位。
+
 ```js DataSource 说明
 // DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
 class DataSource {

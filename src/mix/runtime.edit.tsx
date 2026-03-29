@@ -68,7 +68,7 @@ export default (props: any) => {
   }, [env, isPageDebug, debugTarget?.pageIndex]);
 
   // key 变化时 React 会完整卸载再挂载：
-  // - 编辑态 ↔ 页面调试态切换时，store/state 完全隔离，互不影响
+  // - 编辑态 ↔ 页面运行态切换时，store/state 完全隔离，互不影响
   // - 不同页面之间切换时同样强制重建，避免上一页状态污染
   const runtimeKey = `${isPageDebug
     ? `page-debug-${debugTarget.pageIndex}`

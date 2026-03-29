@@ -18,8 +18,9 @@ export default function checkDesignStatus(config: CheckDesignStatusConfig): any 
   return {
     name: NAME,
     displayName: '查看当前状态',
-    description: `查看设计态的情况，将会告知当前渲染是否正常渲染，是否有报错，以及渲染了几个页面和弹窗。
-在任何代码修改后都应该检查设计态是否正常，我们特别希望在设计态能够展示所有页面和弹窗，方便用户进行调试`,
+    description: `查看当前渲染情况，包含所处环境（设计态/运行态）、渲染页面和弹窗情况（渲染了几个页面和弹窗）、运行日志（用于排查问题）、报错信息（如果有）。
+在任何代码修改后都应该检查渲染情况是否正常。
+同时，我们特别希望在设计态能够展示所有页面和弹窗，方便用户进行调试。`,
     execute(_params: any, context: any) {
       return new Promise<any>((resolve) => {
         setTimeout(async () => {
