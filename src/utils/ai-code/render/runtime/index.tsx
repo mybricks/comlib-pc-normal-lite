@@ -55,7 +55,7 @@ interface BootstrapProps {
   data: any
   dependencies: Record<string, any>
   logger: any
-  cssApi: { set: (args: { fileName: string; content: string }) => void }
+  cssApi: { set: (args: { fileName: string; content: string; old?: boolean }) => void }
   placeholder: React.ReactNode
   renderRuntimeError?: (props: { title: string; desc: string; errors: any[]; comId?: string }) => React.ReactNode
 }
@@ -165,8 +165,8 @@ const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, plac
         ...dataSourceDeps,
       }),
       importCallBack: {
-        less({ fileName, content }) {
-          cssApi.set({ fileName, content });
+        less({ fileName, content, old }) {
+          cssApi.set({ fileName, content, old });
         }
       }
     });

@@ -470,8 +470,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     makeAutoObservable,
     /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 data._logs */
     _collectDebugLogs: collectDebugLogs,
-    logger,
-    makeAutoObservable,
     PopupVisible,
   }
 }

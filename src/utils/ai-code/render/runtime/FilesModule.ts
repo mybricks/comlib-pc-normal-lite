@@ -50,7 +50,7 @@ class FilesModule {
   cache = {}
   /** 导入文件的回调 */
   importCallBack: {
-    less: (params: { fileName: string; content: string;}) => void;
+    less: (params: { fileName: string; content: string; old?: boolean}) => void;
   } = {
     less: () => {}
   }
@@ -122,13 +122,27 @@ class FilesModule {
       const fileModule: any = runRender(decodeURIComponent(file.compiled), this.proxyDependencies(fileName), fileName);
       return this.cache[fileName] = fileModule;
     } else if (suffix === 'less') {
-      this.importCallBack.less({ fileName, content: decodeURIComponent(file.compiled) });
-      const prefix = replaceToUnderline(fileName)
-      return this.cache[fileName] = new Proxy({}, {
-        get(_, key: string) {
-          return `${prefix}-${key}`;
-        }
-      });
+      const compiled = decodeURIComponent(file.compiled);
+
+      try {
+        const cssModule = JSON.parse(compiled);
+        const { cssContent, classMap } = cssModule;
+        this.importCallBack.less({ fileName, content: cssContent });
+        return this.cache[fileName] = new Proxy({}, {
+          get(_, key: string) {
+            return classMap[key] || key;
+          }
+        }); 
+      } catch {
+        // [TEMP] 兼容3.29版本
+        this.importCallBack.less({ fileName, content: compiled, old: true });
+        const prefix = replaceToUnderline(fileName)
+        return this.cache[fileName] = new Proxy({}, {
+          get(_, key: string) {
+            return `${prefix}-${key}`;
+          }
+        });
+      }
     }
   }
 

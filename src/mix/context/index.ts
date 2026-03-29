@@ -434,19 +434,13 @@ class Context {
         case 'less':
           try {
             const prefix = fileName.replace(/[^0-9a-zA-Z_]/g, '_');
-            const rawCss = transformLess(`.__mybricks_ai_module_id__ {${content}}`);
-            // 替换编译后 CSS 中所有的类名选择器（除 __mybricks_ai_module_id__ 自身），
-            // 使每个 less 文件的类名都带文件路径前缀，实现跨文件样式隔离。
-            const css = rawCss.replace(
-              /\.((?!__mybricks_ai_module_id__)[a-zA-Z_][-a-zA-Z0-9_]*)/g,
-              `.${prefix}-$1`
-            );
+            const cssModule = transformLess(`.__mybricks_ai_module_id__ {${content}}`, prefix);
             updateFileContent({
               fileName,
               files,
               content: {
                 source: encodeURIComponent(content),
-                compiled: encodeURIComponent(css)
+                compiled: encodeURIComponent(JSON.stringify(cssModule))
               }
             });
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);

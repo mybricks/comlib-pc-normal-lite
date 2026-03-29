@@ -103,25 +103,96 @@ export function transformTsx(code, ctx?: import('../../mix/availableLibraries/ty
 //   }) as any
 // }
 
-export function transformLess(code) {
-  let res = '';
-
-  if (!code || code.length === 0) {
-    return ''
+export function transformLess(code, prefix = "") {
+  const cssModule = {
+    cssContent: "",
+    classMap: {}
   }
 
-  window.less.render(code, {}, (error, result) => {
+  if (!code || code.length === 0) {
+    return cssModule
+  }
+
+  window.less.render(code, {
+    javascriptEnabled: true,
+    plugins: [
+      {
+        install: function (less, pluginManager) {
+          pluginManager.addPreProcessor({
+            process: function (src, _extra) {
+              // 在预处理阶段收集类名
+              // 先收集所有 :global(...) 和 :global { ... } 的范围，跳过其中的类名
+              const globalRanges: Array<[number, number]> = []
+
+              // :global(.a .b) 形式
+              const parenRegex = /:global\s*\(/g
+              let pm: RegExpExecArray | null
+              while ((pm = parenRegex.exec(src)) !== null) {
+                let depth = 1
+                let i = pm.index + pm[0].length
+                while (i < src.length && depth > 0) {
+                  if (src[i] === '(') depth++
+                  else if (src[i] === ')') depth--
+                  i++
+                }
+                globalRanges.push([pm.index, i])
+              }
+
+              // :global { ... } 形式
+              const braceRegex = /:global\s*\{/g
+              let bm: RegExpExecArray | null
+              while ((bm = braceRegex.exec(src)) !== null) {
+                let depth = 1
+                let i = bm.index + bm[0].length
+                while (i < src.length && depth > 0) {
+                  if (src[i] === '{') depth++
+                  else if (src[i] === '}') depth--
+                  i++
+                }
+                globalRanges.push([bm.index, i])
+              }
+
+              const isInGlobal = (index: number) =>
+                globalRanges.some(([start, end]) => index >= start && index < end)
+
+              let processed = src.replace(
+                /\.([a-zA-Z][a-zA-Z0-9_-]*)/g,
+                (match, className, offset) => {
+                  if (isInGlobal(offset)) {
+                    cssModule.classMap[className] = className
+                    return className
+                  }
+                  const hashedName = `${prefix ? `${prefix}-` : ""}${className}`;
+                  cssModule.classMap[className] = hashedName;
+                  return `.${hashedName}`;
+                },
+              )
+
+              // Remove :global(...) wrapper, keep inner content
+              processed = processed.replace(/:global\s*\(([^)]*)\)/g, '$1')
+
+              // Remove :global { ... } wrapper, keep inner block content
+              processed = processed.replace(/:global\s*\{([\s\S]*?)\}/g, (match, inner) => {
+                // Unwrap: remove the outer braces but keep the inner rules
+                return inner
+              })
+
+              return processed
+            },
+          })
+        },
+      },
+    ],
+  }, (error, result) => {
     if (error) {
       console.error(error)
-      res = ''
-
       throw new Error(`Less 代码编译失败: ${error.message}`)
     } else {
-      res = result?.css
+      cssModule.cssContent = result?.css
     }
   })
 
-  return res;
+  return cssModule;
 }
 
 export function updateRender({ data, success }, renderCode): void {
