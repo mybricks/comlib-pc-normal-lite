@@ -15,18 +15,29 @@ const css = lazyCss.locals;
 type TreeViewProps = {
   defaultCurrent: string;
   children: React.ReactNode;
+  /** 需要强制展开的目录 id 列表 */
+  expandIds?: string[];
+  isDark?: boolean;
 }
 
 const TreeViewContext = createContext<{
   current: string;
-  setCurrent: React.Dispatch<React.SetStateAction<string>>
+  setCurrent: React.Dispatch<React.SetStateAction<string>>;
+  expandIds: Set<string>;
+  isDark: boolean;
 }>({
   current: "",
   setCurrent: () => {},
+  expandIds: new Set(),
+  isDark: false,
 })
 
 const TreeView = (props: TreeViewProps) => {
   const [current, setCurrent] = useState(props.defaultCurrent);
+  const expandIds = React.useMemo(
+    () => new Set(props.expandIds ?? []),
+    [props.expandIds]
+  );
 
   // 当外部 defaultCurrent 变化时（如文件被删除后回退选择），同步更新内部 current
   useEffect(() => {
@@ -35,14 +46,25 @@ const TreeView = (props: TreeViewProps) => {
     }
   }, [props.defaultCurrent]);
 
+  const dark = props.isDark ?? false;
+  const cssVars = {
+    '--tree-item-toggle': dark ? "#9198a1" : "#59636e",
+    '--tree-directory-icon': dark ? '#9198a1' : '#54aeff',
+    '--tree-item-visual': dark ? ' #9198a1' : '#59636e',
+    '--tree-item-text': dark ? '#f0f6fc' : '#1f2328',
+    '--tree-item-leval-line': dark ? '#3d444db3' : '#d1d9e0b3'
+  } as React.CSSProperties;
+
   return (
     <TreeViewContext.Provider
       value={{
         current,
-        setCurrent
+        setCurrent,
+        expandIds,
+        isDark: dark,
       }}
     >
-      <ul className={css.treeView}>
+      <ul className={css.treeView} style={cssVars}>
         {props.children}
       </ul>
     </TreeViewContext.Provider>
@@ -66,13 +88,20 @@ const ItemContext = createContext({
 })
 
 const Item = (props: ItemProps) => {
-  const { current, setCurrent } = useContext(TreeViewContext)
+  const { current, setCurrent, expandIds } = useContext(TreeViewContext)
   const { level } = useContext(ItemContext);
   // const [slots, rest] = useSlots(props.children, {
   //   leadingVisual: LeadingVisual,
   // })
   // const { hasSubTree, subTree, childrenWithoutSubTree } = useSubTree(rest);
   const [isExpanded, setIsExpanded] = useState(false); // 默认不展开
+
+  // 外部要求展开时强制展开
+  useEffect(() => {
+    if (expandIds.has(props.id)) {
+      setIsExpanded(true);
+    }
+  }, [expandIds, props.id]);
   
   const handleItemCLick = (event: React.MouseEvent<HTMLLIElement, MouseEvent>) => {
     if (props.onSelect) {

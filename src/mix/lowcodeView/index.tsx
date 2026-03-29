@@ -18,7 +18,7 @@ interface Params {
 }
 
 export const lowcodeViewEvents = new Events<{
-  'viewCode': [number, number];
+  'viewCode': {fileName: string, codeLine: [number, number]};
 }>();
 
 export default function LowcodeView(params: Params) {
@@ -41,6 +41,7 @@ export default function LowcodeView(params: Params) {
   const files: Array<{ fileName: string; source: string; compiled?: string }> = data.files ?? [];
 
   const [selectFile, setSelectFile] = useState<{ path: string, source: string, fileName: string } | null>(null);
+  const [treeExpandIds, setTreeExpandIds] = useState<string[]>([]);
 
   // 从 context 读取当前组件的调试状态（强制刷新用的 tick）
   const [, setTick] = useState(0);
@@ -170,31 +171,53 @@ export default function LowcodeView(params: Params) {
     let lastEditor;
     let timeOut;
 
-    const off = lowcodeViewEvents.on('viewCode', async ([start, end]) => {
+    const off = lowcodeViewEvents.on('viewCode', async ({ fileName, codeLine: [start, end]}) => {
       // [TODO] 闪烁问题
       // 切到runtime代码
       // setSelectedFileName("runtime.jsx");
       setBottomTab('source');
+      const file = files.find(f => f.fileName === fileName)
 
-      // 等待编辑器就绪
-      let editor = codeIns.current?.editor;
-      while (!editor) {
-        await new Promise(res => setTimeout(res, 100))
-        editor = codeIns.current?.editor
+      if (!file) {
+        return
       }
 
-      // 如果编辑器实例发生变化（key 导致重新挂载），重置 decorationsCollection
-      if (editor !== lastEditor) {
-        decorationsCollection = undefined;
-        lastEditor = editor;
+      setSelectFile({
+        path: file.fileName,
+        source: decodeURIComponent(file.source),
+        fileName: file.fileName,
+      })
+
+      // 计算父目录路径列表，展开目录并滚动到目标文件
+      const segments = file.fileName.split('/').filter(Boolean);
+      if (segments.length > 1) {
+        const parentPaths: string[] = [];
+        for (let i = 1; i < segments.length; i++) {
+          parentPaths.push(segments.slice(0, i).join('/'));
+        }
+        setTreeExpandIds(prev => {
+          const set = new Set(prev);
+          parentPaths.forEach(p => set.add(p));
+          return Array.from(set);
+        });
       }
 
       clearTimeout(timeOut);
-      let isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
 
-      while (!isRuntime) {
-        await new Promise(res => setTimeout(res, 100))
-        isRuntime = editor.getModel()!.uri.path.endsWith('runtime.jsx')
+      // 等待编辑器就绪，且 model 已切换到目标文件
+      // 必须同时满足两个条件，避免拿到旧 editor 或旧 model
+      let editor = codeIns.current?.editor;
+      let modelPath = editor?.getModel()?.uri.path ?? '';
+      while (!editor || !modelPath.endsWith(fileName)) {
+        await new Promise(res => setTimeout(res, 50))
+        editor = codeIns.current?.editor
+        modelPath = editor?.getModel()?.uri.path ?? ''
+      }
+
+      // editor 实例发生变化（key 导致重新挂载），重置 decorationsCollection
+      if (editor !== lastEditor) {
+        decorationsCollection = undefined;
+        lastEditor = editor;
       }
 
       const currentDeltaDecoration = {
@@ -230,7 +253,7 @@ export default function LowcodeView(params: Params) {
     return () => {
       off();
     }
-  }, [])
+  }, [componentId])
 
   const handleEditorChange = useCallback((value: string) => {
     if (!selectFile) {
@@ -330,29 +353,38 @@ export default function LowcodeView(params: Params) {
       </div>
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
-        <div className={css['file-list']}>
-          <TreeView defaultCurrent={selectFile?.fileName ?? "index.jsx"}>
-            <FilesTree
-              nodes={filesJsonToTree(files)}
-              onSelect={(file) => {
-                setSelectFile(file)
-              }}
-            />
-          </TreeView>
-        </div>
-        <div className={css['code-container']}>
-          <Editor
-            ref={codeIns}
-            key={coderOptions.path}
-            value={code}
-            {...coderOptions}
-            options={editorOptions}
-            theme={editorTheme}
-            wrapperClassName={css['coder']}
-            onChange={handleEditorChange}
-          >
-          </Editor>
-        </div>
+        {files.length === 0 ? (
+          <div className={css['code-empty']}>暂无代码文件</div>
+        ) : (
+          <>
+            <div className={css['file-list']}>
+              <TreeView
+                defaultCurrent={selectFile?.fileName ?? "index.jsx"}
+                expandIds={treeExpandIds}
+                isDark={isDark}
+              >
+                <FilesTree
+                  nodes={filesJsonToTree(files)}
+                  onSelect={(file) => {
+                    setSelectFile(file)
+                  }}
+                />
+              </TreeView>
+            </div>
+            <div className={css['code-container']}>
+              <Editor
+                ref={codeIns}
+                key={coderOptions.path}
+                value={code}
+                {...coderOptions}
+                options={editorOptions}
+                theme={editorTheme}
+                wrapperClassName={css['coder']}
+                onChange={handleEditorChange}
+              />
+            </div>
+          </>
+        )}
       </div>
       {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}
       {isDebugging && (
@@ -370,7 +402,7 @@ export default function LowcodeView(params: Params) {
   )
 }
 
-const FileIcon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>;
+const FileIcon = <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/></svg>;
 
 const FilesTree = ({
   nodes,

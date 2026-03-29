@@ -45,53 +45,54 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
 
   return (
     <div className={css['version-panel']}>
-      <div className={css['version-list']}>
-        {versions.length === 0 && (
-          <div className={css['version-empty']}>暂无版本记录</div>
-        )}
-        {versions.map((version, index) => {
-          const isCurrent = index === 0;
-          const itemCls = [
-            css['version-item'],
-            isCurrent ? css['version-item-current'] : '',
-          ].filter(Boolean).join(' ');
+      {versions.length === 0 ? (
+        <div className={css['version-empty']}>暂无版本记录</div>
+      ) : (
+        <div className={css['version-list']}>
+          {versions.map((version, index) => {
+            const isCurrent = index === 0;
+            const itemCls = [
+              css['version-item'],
+              isCurrent ? css['version-item-current'] : '',
+            ].filter(Boolean).join(' ');
 
-          const dotCls = [
-            css['version-dot'],
-            css[`version-dot-${version.type}`]
-          ].filter(Boolean).join(' ');
+            const dotCls = [
+              css['version-dot'],
+              css[`version-dot-${version.type}`]
+            ].filter(Boolean).join(' ');
 
-          const tagCls = [
-            css['version-type-tag'],
-            css[`version-type-tag-${version.type}`],
-          ].join(' ');
+            const tagCls = [
+              css['version-type-tag'],
+              css[`version-type-tag-${version.type}`],
+            ].join(' ');
 
-          return (
-            <div key={version.id} className={itemCls}>
-              <div className={css['version-info']}>
-                <div className={css['version-main-row']}>
-                  <div className={dotCls} />
-                  <span className={css['version-label']}>{version.label}</span>
-                  <span className={tagCls}>{TYPE_LABEL[version.type]}</span>
-                  <span className={css['version-time']}>{version.timestamp}</span>
+            return (
+              <div key={version.id} className={itemCls}>
+                <div className={css['version-info']}>
+                  <div className={css['version-main-row']}>
+                    <div className={dotCls} />
+                    <span className={css['version-label']}>{version.label}</span>
+                    <span className={tagCls}>{TYPE_LABEL[version.type]}</span>
+                    <span className={css['version-time']}>{version.timestamp}</span>
+                  </div>
+                  {version.summary && (
+                    <div className={css['version-summary']}>{version.summary}</div>
+                  )}
                 </div>
-                {version.summary && (
-                  <div className={css['version-summary']}>{version.summary}</div>
+                {!isCurrent && (
+                  <button
+                    type="button"
+                    className={css['version-rollback-btn']}
+                    onClick={() => handleRollback(version)}
+                  >
+                    回滚
+                  </button>
                 )}
               </div>
-              {!isCurrent && (
-                <button
-                  type="button"
-                  className={css['version-rollback-btn']}
-                  onClick={() => handleRollback(version)}
-                >
-                  回滚
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

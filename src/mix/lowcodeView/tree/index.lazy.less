@@ -1,12 +1,12 @@
 .treeView {
   list-style: none;
   padding: 0px;
-  margin: 0px;
+  margin: 0px !important;
 
   &:hover {
     .itemLevelLineContainer {
       .itemLevelLine {
-        border-color: #d1d9e0b3;
+        border-color: var(--tree-item-leval-line);
       }
     }
   }
@@ -53,6 +53,7 @@
       align-items: center;
       width: 16px;
       justify-content: center;
+      color: var(--tree-item-toggle);
   
       &:hover {
         background-color: #818b981a;
@@ -71,6 +72,7 @@
         text-overflow: ellipsis;
         flex: 1 1 auto;
         width: 0px;
+        color: var(--tree-item-text);
       }
     }
   }
@@ -92,12 +94,14 @@
 .itemVisual {
   display: flex;
   align-items: center;
+  color: var(--tree-item-visual);
 }
 
 .directoryIcon {
   display: flex;
   align-items: center;
-  color: #54aeff;
+  // color: #54aeff;
+  color: var(--tree-directory-icon);
 }
 
 .subTree {

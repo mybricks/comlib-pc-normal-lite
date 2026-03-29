@@ -8,7 +8,8 @@
 
 .lowcode-view {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
 
   .file-list {
@@ -16,7 +17,7 @@
     height: 100%;
     position: relative;
     overflow: auto;
-    padding: 10px;
+    padding: 0px 10px 10px 10px;
     width: 250px;
 
     .file-item {
@@ -54,7 +55,15 @@
     }
   }
 
-
+  .code-empty {
+    color: var(--mybricks-text-color-disabled);
+    font-size: 12px;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .lowcode-view-toolbar {
@@ -147,16 +156,16 @@
   }
 
   .lowcode-view-toolbar-button-nosave {
-    background: var(--mybricks-bg-color-main);
-    // color: #FFF;
+    background: var(--mybricks-color-primary);
+    // background: var(--mybricks-bg-color-main);
+    color: #FFF;
     font-weight: bold;
   }
 }
 
 /* Monaco 行高亮装饰：类名由 JS 传入 */
 :global(.highlighted-line) {
-  // [TODO] 不透明度 0.15
-  background-color: #0078d426;
+  background-color: #0078d426 !important;
 }
 :global(.highlighted-line-decoration) {
   background-color: #0078d4;

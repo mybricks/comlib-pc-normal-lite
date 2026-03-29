@@ -427,7 +427,12 @@ class Context {
           break;
         case 'less':
           try {
-            const css = transformLess(`.__mybricks_ai_module_id__ {${content}}`)
+            const prefix = fileName.replace(/[^0-9a-zA-Z_]/g, '_');
+            const rawCss = transformLess(`.__mybricks_ai_module_id__ {${content}}`);
+            const css = rawCss.replace(
+              /(.__mybricks_ai_module_id__\s+)(\.)([-a-zA-Z_][-a-zA-Z0-9_]*)/g,
+              `$1.${prefix}-$3`
+            );
             updateFileContent({
               fileName,
               files,
