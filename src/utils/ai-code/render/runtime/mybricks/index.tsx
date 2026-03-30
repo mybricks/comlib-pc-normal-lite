@@ -6,12 +6,178 @@ import React, {
   useRef,
   useState,
   useReducer,
-  useCallback
+  useCallback,
+  useEffect
 } from 'react';
-import { makeAutoObservable } from 'mobx';
-import { observer } from 'mobx-react-lite';
 import css from './index.less';
 import { debugLogs } from '../../../../../mix/context/debugLogs';
+
+// ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
+// 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
+// 组件渲染时自动收集读取了哪些 observable 属性，属性变更时只通知订阅了该属性的组件重渲染。
+
+/** 订阅回调类型 */
+type Listener = () => void;
+
+/**
+ * 全局追踪上下文。
+ * 当 observer 包裹的组件正在渲染时，此变量指向一个 Set，
+ * 用于收集本次渲染所读取到的所有属性监听集合（依赖收集）。
+ * 渲染结束后恢复为 null，避免污染其他执行路径。
+ */
+let currentTracker: Set<Set<Listener>> | null = null;
+
+/**
+ * 轻量版 makeAutoObservable（对标 MobX 同名 API）。
+ *
+ * ⚠️ 关键设计：原地修改（in-place mutation），不返回新对象。
+ * MobX 的 makeAutoObservable(this) 不捕获返回值，依赖原地修改 this。
+ * 因此我们用 Object.defineProperty 将每个数据属性替换为 getter/setter，
+ * 使 this 本身就具备响应式能力，无需依赖 Proxy 返回新对象。
+ *
+ * 工作流程：
+ * 1. 遍历对象自身所有数据属性，将每个属性的当前值存入私有变量。
+ * 2. 用 defineProperty 重写该属性为 getter/setter：
+ *    - getter：若当前处于 observer 追踪上下文，注册依赖；返回当前值。
+ *    - setter：值变更时通知所有订阅该属性的监听器。
+ * 3. 遍历原型链方法，将其绑定到 this（确保 action 内 this.xxx = val 能触发 setter）。
+ *
+ * 用法（与 MobX 完全一致）：
+ *   class Store {
+ *     count = 0;
+ *     constructor() { makeAutoObservable(this); }
+ *     inc() { this.count++; }
+ *   }
+ *   export default new Store();
+ */
+function makeAutoObservable<T extends object>(target: T): T {
+  // 每个属性维护独立的监听器集合，key → Set<Listener>
+  const listenerMap = new Map<string, Set<Listener>>();
+
+  /** 懒初始化：首次访问某属性时才创建对应的监听器 Set */
+  const getListeners = (key: string): Set<Listener> => {
+    if (!listenerMap.has(key)) listenerMap.set(key, new Set());
+    return listenerMap.get(key)!;
+  };
+
+  // 只处理对象自身的数据属性（不含方法、不含继承属性）
+  const ownKeys = Object.getOwnPropertyNames(target);
+  for (const key of ownKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, key)!;
+    // 跳过已经是 getter/setter 的属性、函数属性
+    if (typeof descriptor.value === 'function') continue;
+    if (!('value' in descriptor)) continue;
+
+    // 将原始值存入闭包私有变量
+    let internalValue = descriptor.value;
+
+    // 用 getter/setter 原地替换该属性，使 this 本身具备响应式
+    Object.defineProperty(target, key, {
+      enumerable: descriptor.enumerable ?? true,
+      configurable: true,
+      get() {
+        // 依赖收集：若当前有 observer 追踪上下文，注册此属性的监听 Set
+        if (currentTracker) {
+          currentTracker.add(getListeners(key));
+        }
+        return internalValue;
+      },
+      set(newValue) {
+        if (internalValue === newValue) return; // 值未变化，跳过
+        internalValue = newValue;
+        // 派发更新：快照后通知所有订阅者，防止迭代中集合被修改
+        const listeners = listenerMap.get(key);
+        if (listeners) {
+          [...listeners].forEach(fn => fn());
+        }
+      }
+    });
+  }
+
+  // 将原型链方法绑定到 target，确保 action 方法内 this.xxx 能触发上面定义的 setter
+  const proto = Object.getPrototypeOf(target);
+  if (proto && proto !== Object.prototype) {
+    for (const key of Object.getOwnPropertyNames(proto)) {
+      if (key === 'constructor') continue;
+      const descriptor = Object.getOwnPropertyDescriptor(proto, key)!;
+      if (typeof descriptor.value === 'function') {
+        // 绑定到 target 自身，覆盖原型方法，确保 this 指向响应式对象
+        (target as any)[key] = descriptor.value.bind(target);
+      }
+    }
+  }
+
+  return target;
+}
+
+/**
+ * 轻量版 observer HOC（对标 mobx-react-lite 的 observer）。
+ *
+ * 作用：将一个函数组件包裹为"响应式组件"。
+ * 每次渲染时自动追踪组件读取了哪些 observable 属性，
+ * 当这些属性发生变化时自动触发组件重渲染。
+ *
+ * 实现原理：
+ * 1. 渲染前将 currentTracker 指向本次收集 Set。
+ * 2. 执行组件函数，期间所有 observable 的 get 操作会把各自的监听 Set 注册进来。
+ * 3. 渲染后（useEffect）将 forceUpdate 订阅到所有收集到的监听 Set。
+ * 4. 卸载或下次渲染前清理旧订阅，防止内存泄漏和重复触发。
+ */
+function observer<P extends object>(Component: React.FC<P>): React.FC<P> {
+  const ObserverWrapper: React.FC<P> = (props) => {
+    // 用 useReducer 实现 forceUpdate（比 useState 更轻量）
+    const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+    // 保存当前订阅的清理函数，每次重渲染前先取消旧订阅
+    const cleanupRef = useRef<(() => void) | null>(null);
+
+    // 本次渲染所依赖的 observable 属性监听 Set 集合
+    const trackedSets = new Set<Set<Listener>>();
+
+    /**
+     * 将 forceUpdate 订阅到本次渲染收集到的所有监听 Set。
+     * 先清理旧订阅，再添加新订阅，实现精确的依赖更新。
+     */
+    const subscribe = () => {
+      if (cleanupRef.current) cleanupRef.current();
+
+      const handler: Listener = () => forceUpdate();
+      trackedSets.forEach(set => set.add(handler));
+
+      // 记录清理函数，下次订阅或卸载时调用
+      cleanupRef.current = () => {
+        trackedSets.forEach(set => set.delete(handler));
+      };
+    };
+
+    // ── 渲染阶段：开启依赖追踪 ──
+    const prevTracker = currentTracker;  // 保存外层追踪上下文（支持嵌套 observer）
+    currentTracker = trackedSets;
+    let rendered: React.ReactElement | null = null;
+    try {
+      rendered = (Component as any)(props);
+    } finally {
+      // 无论渲染成功与否，都必须恢复外层追踪上下文
+      currentTracker = prevTracker;
+    }
+
+    // ── 提交阶段：订阅依赖 ──
+    // useEffect 无依赖数组 = 每次渲染后都重新订阅，确保依赖始终最新
+    useEffect(() => {
+      subscribe();
+      // 组件卸载时清理所有订阅，防止内存泄漏
+      return () => {
+        if (cleanupRef.current) cleanupRef.current();
+      };
+    });
+
+    return rendered;
+  };
+
+  ObserverWrapper.displayName = `Observer(${Component.displayName ?? Component.name ?? 'Component'})`;
+  return ObserverWrapper;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface CreateMyBricksProps {
   /** 组件ID */
