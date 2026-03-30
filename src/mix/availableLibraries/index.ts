@@ -47,10 +47,16 @@ export const BUILTIN_LIBRARY_NAMES = BUILTIN_LIBS.map((lib) => lib.name)
 function getEffectiveValidators(): import('./types').LibraryValidator[] {
   const effectiveNames = getAllLibraryNames()
   const addonNames = getAddonLibraryNames()
-  // 生效的附加库（内置预设或项目配置）对应的内置 LibraryMeta validator
-  const addonValidators = PRESET_ADDON_LIBS
-    .filter((lib) => addonNames.includes(lib.name) && lib.validator)
-    .map((lib) => lib.validator!) as import('./types').LibraryValidator[]
+  // 生效的附加库（内置预设或项目配置）对应的 validator
+  const projectLibs = context.projectConfig?.availableLibraries ?? []
+  const isProjectConfigured = projectLibs.length > 0
+  const addonValidators: import('./types').LibraryValidator[] = isProjectConfigured
+    ? projectLibs
+        .filter((lib) => lib.validator)
+        .map((lib) => lib.validator!) as import('./types').LibraryValidator[]
+    : PRESET_ADDON_LIBS
+        .filter((lib) => addonNames.includes(lib.name) && lib.validator)
+        .map((lib) => lib.validator!) as import('./types').LibraryValidator[]
 
   return [
     createPublicValidator(effectiveNames),
@@ -217,11 +223,12 @@ export function getAllLibraryResources(): Array<{ name: string; resources: impor
  * 将 projectConfig.availableLibraries 中的单条记录转换为 LibraryMeta 格式。
  * readme → usage，其余字段对齐。
  */
-function toLibraryMeta(lib: { name: string; version: string; readme: string }): import('./types').LibraryMeta {
+function toLibraryMeta(lib: { name: string; version: string; readme: string; validator?: import('./types').LibraryValidator }): import('./types').LibraryMeta {
   return {
     name: lib.name,
     version: lib.version ?? '',
     usage: lib.readme ?? '',
+    validator: lib.validator,
   }
 }
 
