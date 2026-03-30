@@ -199,6 +199,7 @@ interface CreateMyBricksProps {
 
 const createMyBricks = (props: CreateMyBricksProps) => {
   const { comId, env, data, logger } = props;
+  const mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
@@ -319,6 +320,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
     useLayoutEffect(() => {
       setContainer({ container: containerRef.current! })
+
+      if (mdCompiled && containerRef.current) {
+        const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+        const widgetName = firstWidget?.getAttribute('data-widget-name');
+        const docs = widgetName && mdCompiled[widgetName];
+        const title = docs?.title;
+        if (title) {
+          containerRef.current!.setAttribute("data-zone-title", title);
+        }
+      }
     }, [])
 
     return (

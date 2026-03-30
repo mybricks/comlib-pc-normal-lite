@@ -487,6 +487,19 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
       INLINE_TEXT_TAGS.indexOf((el.children[0].tagName || '').toLowerCase()) !== -1;
     if (!hasElementChildren || hasSingleInlineTextChild) {
       style.layoutMode = 'HORIZONTAL';
+      // 若单行 inline 子元素在浏览器中实际跨越多个行（getClientRects().length > 1），
+      // 说明 block 内含文本 + inline 子元素的内容因容器宽度不足而换行。
+      // 此时加上 layoutWrap='WRAP'，让 Figma Auto Layout 也能按宽度自动换行，
+      // 避免两段文本在 Figma 中横排在同一行。
+      if (hasSingleInlineTextChild) {
+        try {
+          var _inlineChild = el.children[0];
+          var _inlineCrs = _inlineChild.getClientRects();
+          if (_inlineCrs && _inlineCrs.length > 1) {
+            style.layoutWrap = 'WRAP';
+          }
+        } catch (_eWrap) {}
+      }
       // 动态读取 text-align，而不是无脑居中，兼容 div 的左对齐和 button 的居中
       var textAlign = (d(['text-align', 'textAlign']) || computed.textAlign || '').toString().toLowerCase();
       var alignMap = { left: 'MIN', right: 'MAX', center: 'CENTER', justify: 'MIN', start: 'MIN', end: 'MAX' };

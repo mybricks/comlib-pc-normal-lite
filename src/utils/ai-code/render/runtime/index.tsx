@@ -173,7 +173,7 @@ const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, 
     });
 
     // 4. getModule('index.jsx')
-    return fm.getModule('index.jsx');
+    return fm.getModule('index.jsx')?.default;
     } catch (e: any) {
       initErrorRef.current = e;
       return undefined;

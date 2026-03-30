@@ -38,7 +38,7 @@ function runRender(code, dependencies, fileName?: string) {
     throw enrichedError
   }
 
-  return exports.default
+  return exports
 }
 
 class FilesModule {
@@ -85,10 +85,7 @@ class FilesModule {
           }
         })
 
-        return {
-          __esModule: true,
-          default: that.getModule(currentPath.join('/')),
-        }
+        return that.getModule(currentPath.join('/'))
       }
     })
   }
@@ -128,20 +125,27 @@ class FilesModule {
         const cssModule = JSON.parse(compiled);
         const { cssContent, classMap } = cssModule;
         this.importCallBack.less({ fileName, content: cssContent });
-        return this.cache[fileName] = new Proxy({}, {
-          get(_, key: string) {
-            return classMap[key] || key;
-          }
-        }); 
+
+        return {
+          __esModule: true,
+          default: this.cache[fileName] = new Proxy({}, {
+            get(_, key: string) {
+              return classMap[key] || key;
+            }
+          })
+        }
       } catch {
         // [TEMP] 兼容3.29版本
         this.importCallBack.less({ fileName, content: compiled, old: true });
         const prefix = replaceToUnderline(fileName)
-        return this.cache[fileName] = new Proxy({}, {
-          get(_, key: string) {
-            return `${prefix}-${key}`;
-          }
-        });
+        return {
+          __esModule: true,
+          default: this.cache[fileName] = new Proxy({}, {
+            get(_, key: string) {
+              return `${prefix}-${key}`;
+            }
+          })
+        }
       }
     }
   }
