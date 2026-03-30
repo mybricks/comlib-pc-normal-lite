@@ -48,7 +48,19 @@ export class DataSource {
         const isBodyless = method === 'GET' || method === 'DELETE';
         const cfg = isBodyless ? (dataOrConfig ?? {}) : (config ?? {});
         const body = isBodyless ? undefined : dataOrConfig;
-        // 确保路径以 /api 开头，与 1.js createAPI 的 url.startsWith("/api") 判断一致
+
+        // 绝对 URL（带域名）：直接透传给 httpRequest，由 VSCode extension host 转发
+        if (/^https?:\/\//.test(url)) {
+          return vsCodeMessage.call('httpRequest', {
+            method,
+            url,
+            headers: cfg.headers,
+            body: body ?? cfg.data,
+            params: cfg.params,
+          }).then((res: any) => res?.data ?? res);
+        }
+
+        // 相对路径：确保路径以 /api 开头，通过代理端口转发
         const path = url.startsWith('/api') ? url : `/api${url.startsWith('/') ? url : `/${url}`}`;
 
         return getDebugPort().then((port) => {

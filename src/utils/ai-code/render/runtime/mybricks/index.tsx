@@ -11,8 +11,11 @@ import React, {
 import { makeAutoObservable } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import css from './index.less';
+import { debugLogs } from '../../../../../mix/context/debugLogs';
 
 interface CreateMyBricksProps {
+  /** 组件ID */
+  comId: string
   /** 环境 */
   env: {
     runtime: boolean
@@ -29,18 +32,16 @@ interface CreateMyBricksProps {
 }
 
 const createMyBricks = (props: CreateMyBricksProps) => {
-  const { env, data, logger } = props;
+  const { comId, env, data, logger } = props;
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
   const debugTarget: any =
     env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
 
-  /** 向 data._logs 追加一条日志记录（按打印顺序入栈） */
+  /** 向 debugLogs 追加一条日志记录（按打印顺序入栈） */
   const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
-    if (data && Array.isArray(data._logs)) {
-      data._logs.push({ ...entry, timestamp: Date.now() });
-    }
+    debugLogs.append(comId, { ...entry, timestamp: Date.now() });
   };
 
 
@@ -413,7 +414,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return DialogRoot
   };
 
-  // 将 logger 的调用同步收集到 data._logs（设计态、运行态均收集）
+  // 将 logger 的调用同步收集到 debugLogs（设计态、运行态均收集）
   const capturedLogger = new Proxy(logger ?? {}, {
     get(target, prop: string) {
       const original = typeof target[prop] === 'function' ? target[prop] : (() => {});
@@ -457,7 +458,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     useParams,
     logger: capturedLogger,
     makeAutoObservable,
-    /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 data._logs */
+    /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 debugLogs */
     _collectDebugLogs: collectDebugLogs,
     PopupVisible,
   }

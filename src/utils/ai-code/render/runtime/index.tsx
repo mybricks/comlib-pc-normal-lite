@@ -3,6 +3,7 @@ import { useCssApi } from "./hooks";
 import FilesModule from "./FilesModule";
 import ErrorBoundary from "./ErrorBoundary";
 import { createMyBricks } from "./mybricks";
+import { debugLogs } from "../../../../mix/context/debugLogs";
 import { createEnvRunner } from "./mybricks/mybricks-testing";
 import { DataSource } from "./mybricks/data-source";
 
@@ -51,6 +52,7 @@ interface AIJsxRuntimeParams {
 }
 
 interface BootstrapProps {
+  id: string
   env: AIJsxRuntimeParams['env']
   data: any
   dependencies: Record<string, any>
@@ -67,7 +69,7 @@ interface BootstrapProps {
  * 置于 ErrorBoundary 内部，任何阶段 throw 的错误都由 ErrorBoundary.componentDidCatch 统一捕获，
  * 无需手动 try/catch + 写 data._errors。
  */
-const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError, activeEnv }: BootstrapProps) => {
+const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError, activeEnv }: BootstrapProps) => {
   const envRunnerRef = useRef<any>(null);
 
   // 所有初始化：eval dataSource.js → eval setup.js → build FilesModule → getModule('index.jsx')
@@ -77,10 +79,10 @@ const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, plac
   const ReactComponent = useMemo(() => {
     initErrorRef.current = null;
     try {
-    const mybricks = createMyBricks({ logger, env, data });
+    const mybricks = createMyBricks({ comId: id, logger, env, data });
     const collectDebugLogs = (mybricks as any)._collectDebugLogs;
 
-    // 包装 DataSource：通过 Proxy 拦截用户子类实例的所有方法调用，将调用记录写入 data._logs
+    // 包装 DataSource：通过 Proxy 拦截用户子类实例的所有方法调用，将调用记录写入 debugLogs
     class DataSourceWithLog extends DataSource {
       constructor() {
         super();
@@ -234,7 +236,7 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
   // 组件生命周期
   useEffect(() => {
     // 重置日志
-    data._logs = [];
+    debugLogs.clear(id);
 
     // 同步当前模式到 data，供 Agent 读取
     // mode: 'design' | 'runtime_mock' | 'runtime_prod'
@@ -246,6 +248,7 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
   return (
     <ErrorBoundary data={data} renderRuntimeError={renderRuntimeError} comId={id}>
       <BootstrapReactComponent
+        id={id}
         key={runtimeKey}
         env={env}
         data={data}

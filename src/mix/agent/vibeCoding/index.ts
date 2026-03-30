@@ -11,6 +11,7 @@ import { createProject, buildProjectJson } from "./project";
 import { CodeBase } from "./codeBase";
 import { multiReplaceFile, buildFocusInfo } from "../utils";
 import type { ReplaceResultItem } from "../utils/editReplace";
+import { debugLogs } from "../../context/debugLogs";
 import {
   type ComponentFileItem,
   type FileUpdateResult,
@@ -474,7 +475,7 @@ export default function ({ context }) {
         getThemesContent: () => themesContent,
         getDesignerState: () => aiComParams?.data?._designerState,
         getErrors: () => aiComParams?.data?._errors,
-        getLogs: () => aiComParams?.data?._logs,
+        getLogs: () => debugLogs.get(focus.comId),
       });
 
       // project.read('DataCard')
