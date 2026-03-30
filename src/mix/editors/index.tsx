@@ -8,9 +8,12 @@ import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
 import { genStyleValue, genResizer } from './styleProxy';
 import type { Props, Actions } from './types';
+import { registerResourcesCode } from './registerResourcesCode'
 
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
+
+  registerResourcesCode(props.id, props.name)
 
   const comId = props.model?.runtime?.id || props.id;
   const focusAreaConfigs = buildFocusAreaConfigs(props.data, comId);
