@@ -380,6 +380,7 @@ export default function ({ context }) {
         if (!focusArea) {
           if (status === "start") {
             // context.startAIPendingVersion(focus.comId, planAgent);
+            params?.onProgress?.(status);
           } else if (status === "complete") {
             // context.addVersion(focus.comId, "ai", planAgent);
             if (!complete) {
@@ -388,6 +389,7 @@ export default function ({ context }) {
             }
           } else if (status === "error") {
             // context.cancelAIPending(focus.comId);
+            params?.onProgress?.(status);
           }
         } else {
           if (status === "start") {
