@@ -126,21 +126,26 @@ class FilesModule {
         const { cssContent, classMap } = cssModule;
         this.importCallBack.less({ fileName, content: cssContent });
 
-        return {
-          __esModule: true,
-          default: this.cache[fileName] = new Proxy({}, {
-            get(_, key: string) {
-              return classMap[key] || key;
+        const proxy = new Proxy({}, {
+          get(_, key: string) {
+            if (key === 'default') {
+              return proxy
             }
-          })
+            return classMap[key] || key;
+          }
+        })
+
+        return this.cache[fileName] = {
+          __esModule: true,
+          default: proxy
         }
       } catch {
         // [TEMP] 兼容3.29版本
         this.importCallBack.less({ fileName, content: compiled, old: true });
         const prefix = replaceToUnderline(fileName)
-        return {
+        return this.cache[fileName] = {
           __esModule: true,
-          default: this.cache[fileName] = new Proxy({}, {
+          default: new Proxy({}, {
             get(_, key: string) {
               return `${prefix}-${key}`;
             }
