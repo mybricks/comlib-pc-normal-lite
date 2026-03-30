@@ -1,3 +1,5 @@
+import { tramsform } from "./codeTransform";
+
 /**
  * 代码结构生成器
  * 负责将组件数据按照代码结构生成并组织文件
@@ -22,10 +24,6 @@ interface Config {
   type: "application" | "component"
 }
 
-/**
- * 生成代码文件结构
- * 只导出三个核心文件：runtime.jsx, style.less, store.js
- */
 export function generateCodeStructure(data: ComponentData, config: Config): FileItem[] {
   const files: FileItem[] = [];
 
@@ -35,9 +33,16 @@ export function generateCodeStructure(data: ComponentData, config: Config): File
       return
     }
 
+    let code = decodeURIComponent(source);
+
+    const suffix = fileName.split('.').pop()
+    if(suffix === 'jsx' || suffix === 'js') {
+      code = tramsform(code)
+    }
+
     files.push({
       fileName,
-      content: decodeURIComponent(source)
+      content: code
     })
   })
 
