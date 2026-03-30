@@ -55,6 +55,26 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return index ? '/' : (path.startsWith("/") ? path : `/${path}`)
   }
 
+  /**
+   * 将路由 pattern 与实际 pathname 做匹配，支持动态参数路由（:param）
+   * 返回 null 表示不匹配，否则返回 { params } 对象
+   */
+  const matchPath = (pattern: string, pathname: string): { params: Record<string, string> } | null => {
+    const keys: string[] = []
+    const regexStr = pattern
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')  // 转义正则特殊字符（除 * 和 :param）
+      .replace(/:([^/]+)/g, (_, key) => {
+        keys.push(key)
+        return '([^/]+)'
+      })
+      .replace(/\*/g, '.*')
+    const regex = new RegExp(`^${regexStr}$`)
+    const match = pathname.match(regex)
+    if (!match) return null
+    const params = Object.fromEntries(keys.map((k, i) => [k, match[i + 1]]))
+    return { params }
+  }
+
   interface AppContextValue {
     state: 'collect_routes' | 'runtime'
     registerRoute: (route: string) => void
@@ -227,7 +247,15 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       const currentPath = transformPath({ index: null, path: routerContext.currentPath })
       const propPath = transformPath({ index, path })
 
-      if (currentPath === propPath) {
+      const matched = matchPath(propPath, currentPath)
+      if (matched) {
+        if (Object.keys(matched.params).length > 0) {
+          return (
+            <RouterContext.Provider value={{ ...routerContext, params: matched.params }}>
+              {element}
+            </RouterContext.Provider>
+          )
+        }
         return element;
       }
     }
