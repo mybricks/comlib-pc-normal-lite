@@ -312,7 +312,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             ? { width: data.frameStyle.width }
             : { minWidth: 1200, width: 'fit-content' }
           ),
-          minHeight: 600,
+          // minHeight: 600,
           transform: 'scale(1)',
           height: 'fit-content',
           display: 'flex',
