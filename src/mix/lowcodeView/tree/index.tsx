@@ -49,9 +49,9 @@ const TreeView = (props: TreeViewProps) => {
   const dark = props.isDark ?? false;
   // #9198a1
   const cssVars = {
-    '--tree-item-toggle': dark ? "#999" : "#59636e",
-    '--tree-directory-icon': dark ? '#999' : '#54aeff',
-    '--tree-item-visual': dark ? ' #999' : '#59636e',
+    '--tree-item-toggle': dark ? "#999" : "#999",
+    '--tree-directory-icon': dark ? '#999' : '#999',
+    '--tree-item-visual': dark ? ' #999' : '#999',
     '--tree-item-text': dark ? '#f0f6fc' : '#1f2328',
     '--tree-item-leval-line': dark ? '#3d444db3' : '#d1d9e0b3'
   } as React.CSSProperties;
