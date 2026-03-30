@@ -36,17 +36,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const debugTarget: any =
     env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
 
-  // 将当前模式写入 data._designerState，供 Agent 实时读取
-  if (data) {
-    if (!data._designerState) data._designerState = { pages: [], popups: [] };
-    data._designerState.mode = debugTarget ? 'debug' : _env.mode; // 'design' | 'runtime' | 'debug'
-  }
-
-  // 每次组件重新载入时重置日志列表（createMyBricks 随 key 变化而重新调用）
-  if (data) {
-    data._logs = [];
-  }
-
   /** 向 data._logs 追加一条日志记录（按打印顺序入栈） */
   const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
     if (data && Array.isArray(data._logs)) {

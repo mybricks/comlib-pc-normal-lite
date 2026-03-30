@@ -57,6 +57,7 @@ interface BootstrapProps {
   logger: any
   cssApi: { set: (args: { fileName: string; content: string; old?: boolean }) => void }
   placeholder: React.ReactNode
+  activeEnv: string
   renderRuntimeError?: (props: { title: string; desc: string; errors: any[]; comId?: string }) => React.ReactNode
 }
 
@@ -66,7 +67,7 @@ interface BootstrapProps {
  * 置于 ErrorBoundary 内部，任何阶段 throw 的错误都由 ErrorBoundary.componentDidCatch 统一捕获，
  * 无需手动 try/catch + 写 data._errors。
  */
-const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError }: BootstrapProps) => {
+const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError, activeEnv }: BootstrapProps) => {
   const envRunnerRef = useRef<any>(null);
 
   // 所有初始化：eval dataSource.js → eval setup.js → build FilesModule → getModule('index.jsx')
@@ -134,9 +135,7 @@ const BootstrapReactComponent = ({ env, data, dependencies, logger, cssApi, plac
         if (!env.runtime) {
           data._debugEnvs = envRunner.getEnvNames();
         }
-        // 优先用用户上次选择的环境，回退到默认值（设计态 mock，运行态 prod）
-        const envToActivate = env.runtime ? 'prod' : (data._activeDebugEnv ?? 'mock');
-        envRunner.activate(envToActivate);
+        envRunner.activate(activeEnv);
       }
     }
 
@@ -213,11 +212,44 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
   } = params;
   const cssApi = useCssApi({ id, env });
 
+  const activeEnv = useMemo(() => {
+    return env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
+  }, [data._activeDebugEnv, env.edit])
+
+  const runtimeKey = useMemo(() => {
+    if (env.edit) {
+      return `${id}_edit`
+    }
+
+    return `${id}_runtime_${activeEnv}`
+  }, [activeEnv, env.edit, id])
+
+  useEffect(() => {
+    return () => {
+      // 切换搭建/调试态，重置，默认就是走线上
+      data._activeDebugEnv = 'prod'
+    }
+  }, [])
+
+  // 组件生命周期
+  useEffect(() => {
+    // 重置日志
+    data._logs = [];
+
+    // 同步当前模式到 data，供 Agent 读取
+    // mode: 'design' | 'runtime_mock' | 'runtime_prod'
+    if (!data._designerState) data._designerState = { pages: [], popups: [] };
+    
+    data._designerState.mode = env.edit ? 'design' : activeEnv;
+  }, [runtimeKey, activeEnv, env.edit])
+
   return (
     <ErrorBoundary data={data} renderRuntimeError={renderRuntimeError} comId={id}>
       <BootstrapReactComponent
+        key={runtimeKey}
         env={env}
         data={data}
+        activeEnv={activeEnv}
         dependencies={dependencies}
         logger={logger}
         cssApi={cssApi}

@@ -1015,11 +1015,10 @@ export default function (props: Props, actions: Actions, ...args) {
      * 切换调试环境：引擎调用此钩子后，将 value 写入 data._activeDebugEnv，
      * 并触发 notifyChanged 重渲，AIJsxRuntime 的 useEffect 监听到变化后重新 activate 对应环境。
      */
-    '@setDebugEnv'(ctx, value: string) {
+    '@setDebugEnv'(ctx, option: { label: string; value: string; }) {
       const aiComParams = context.getAiComParams(ctx.id);
       if (!aiComParams?.data) return;
-      aiComParams.data._activeDebugEnv = value;
-      console.log('_activeDebugEnv', value)
+      aiComParams.data._activeDebugEnv = option?.value ?? 'prod';
       context.getAiCom(ctx.id)?.actions?.notifyChanged?.();
     },
     '@viewCode'(params) {

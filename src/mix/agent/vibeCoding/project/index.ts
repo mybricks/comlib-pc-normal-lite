@@ -313,7 +313,8 @@ export class Project {
 
     const state = this.config.getDesignerState?.();
     const mode = state?.mode ?? 'design';
-    const modeLabel = mode === 'debug' ? '运行态' : mode === 'runtime' ? '运行态' : '设计态';
+    const modeLabel = mode === 'design' ? '设计态' : `运行态(${mode}环境)`
+    
     const pageRefNames = state?.pages ?? [];
     const popupRefNames = state?.popups ?? [];
 
