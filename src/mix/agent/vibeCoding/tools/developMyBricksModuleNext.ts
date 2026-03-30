@@ -349,6 +349,7 @@ export default function developMyBricksModule(config: Config = {}) {
       - 所有圆角 → \`var(--border-radius)\`
       - 所有边框颜色 → \`var(--border-color)\`
       绝不允许在代码中出现 \`color: #1890ff\`、\`background: #f5f5f5\` 等与主题变量值相同的硬编码写法；
+    9. 不使用 :before、:after 等伪类选择器来实现dom；
   </设计风格与主题变量使用说明>
 
   注意：
