@@ -34,14 +34,17 @@ export function generateCodeStructure(data: ComponentData, config: Config): File
     }
 
     let code = decodeURIComponent(source);
+    let name = fileName;
 
     const suffix = fileName.split('.').pop()
     if(suffix === 'jsx' || suffix === 'js') {
       code = tramsform(code)
+    } else if (suffix === 'less') {
+      name = name.replace('.less', '.module.less')
     }
 
     files.push({
-      fileName,
+      fileName: name,
       content: code
     })
   })
