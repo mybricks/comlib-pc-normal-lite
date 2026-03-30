@@ -1,10 +1,7 @@
-import codeTransform from './codeTransform';
-
 /**
  * 代码结构生成器
  * 负责将组件数据按照代码结构生成并组织文件
  */
-
 export interface FileItem {
   /** 文件名（包含相对路径，如 runtime.jsx） */
   fileName: string;
@@ -13,14 +10,12 @@ export interface FileItem {
 }
 
 export interface ComponentData {
-  /** 运行时 JSX 源码 */
-  runtimeJsxSource?: string;
-  /** 样式源码（LESS） */
-  styleSource?: string;
-  /** Store 源码 */
-  storeJsSource?: string;
-  /** 其他元数据 */
-  [key: string]: any;
+  files: {
+    /** 文件名 */
+    fileName: string;
+    /** 文件源码（经过 base64 编码） */
+    source: string;
+  }[]
 }
 
 interface Config {
@@ -34,90 +29,17 @@ interface Config {
 export function generateCodeStructure(data: ComponentData, config: Config): FileItem[] {
   const files: FileItem[] = [];
 
-    const { runtimeJsxSource, storeJsSource, serviceJsSource, styleSource } = data;
-
-    const codeFiles = codeTransform({
-      runtime: decodeURIComponent(runtimeJsxSource || ""),
-      store: decodeURIComponent(storeJsSource || ""),
-      service: decodeURIComponent(serviceJsSource || ""),
-      style: decodeURIComponent(styleSource || ""),
-    }, config).map((file) => {
-      return {
-        fileName: `${file.path}`,
-        content: file.content,
-      }
-    })
-
-    files.push(...codeFiles);
-
-    // files.push(...utilsFiles.map((file) => {
-    //   return {
-    //     fileName: `utils/${file.path}`,
-    //     content: file.content,
-    //   }
-    // }))
-
-    return files;
-
-  // const files: FileItem[] = [];
-
-  // // 1. 生成 runtime.jsx
-  // if (data.runtimeJsxSource) {
-  //   files.push({
-  //     fileName: 'runtime.jsx',
-  //     content: decodeURIComponent(data.runtimeJsxSource),
-  //   });
-  // }
-
-  // // 2. 生成 style.less
-  // if (data.styleSource) {
-  //   files.push({
-  //     fileName: 'style.less',
-  //     content: decodeURIComponent(data.styleSource),
-  //   });
-  // }
-
-  // // 3. 生成 store.js
-  // if (data.storeJsSource) {
-  //   files.push({
-  //     fileName: 'store.js',
-  //     content: decodeURIComponent(data.storeJsSource),
-  //   });
-  // }
-
-  // return files;
-}
-
-/**
- * 验证文件结构
- */
-export function validateFileStructure(files: FileItem[]): {
-  valid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
-
-  // 检查必需文件
-  const hasRuntime = files.some((f) => f.fileName === 'runtime.jsx');
-  const hasStyle = files.some((f) => f.fileName === 'style.less');
-
-  if (!hasRuntime) {
-    errors.push('缺少必需文件: runtime.jsx');
-  }
-
-  if (!hasStyle) {
-    errors.push('缺少必需文件: style.less');
-  }
-
-  // 检查文件路径合法性
-  files.forEach((file) => {
-    if (!file.fileName || file.fileName.includes('..')) {
-      errors.push(`非法文件路径: ${file.fileName}`);
+  data.files.forEach((file) => {
+    const { fileName, source } = file;
+    if (fileName === "setup.js") {
+      return
     }
-  });
 
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+    files.push({
+      fileName,
+      content: decodeURIComponent(source)
+    })
+  })
+
+  return files;
 }
