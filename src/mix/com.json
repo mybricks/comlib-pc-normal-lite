@@ -9,7 +9,7 @@
   "runtime": "./runtime.tsx",
   "runtime.edit": "./runtime.edit.tsx",
   "ai": "./ai.ts",
-  "editors": "./editors.tsx",
+  "editors": "./editors/index.tsx",
   "data": "./data.json",
   "slots": [],
   "docs": ""
