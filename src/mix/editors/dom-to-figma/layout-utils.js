@@ -129,7 +129,11 @@ function applyUniformMarginAsGap(parentNode, childNodes, layoutMode) {
   }
 }
 
-/** 有自动布局时用前两个子节点的实际位置反推间距，避免 margin 未采集到时 itemSpacing 为 0 导致子元素粘在一起 */
+/**
+ * 有自动布局时用子节点的实际位置反推间距。
+ * 只有所有相邻节点对的间距一致时，才写入 itemSpacing；
+ * 若间距不均匀，说明这个 flex 容器本不应保留 Auto Layout，不写入（让调用方降级）。
+ */
 function ensureItemSpacingFromPositions(parentNode, childNodes, layoutMode) {
   if (childNodes.length < 2) return;
   // 跳过绝对定位节点（如 ::before/::after 伪元素），只取真正参与 flex 流的节点
@@ -139,22 +143,31 @@ function ensureItemSpacingFromPositions(parentNode, childNodes, layoutMode) {
     if (fs.positionType !== 'absolute') flowNodes.push(childNodes[fi]);
   }
   if (flowNodes.length < 2) return;
-  var a = flowNodes[0].style || {};
-  var b = flowNodes[1].style || {};
   var isVertical = layoutMode === 'VERTICAL';
-  var actualGap;
-  if (isVertical) {
-    var aBottom = (a.y != null && a.height != null) ? a.y + a.height : null;
-    if (aBottom != null && b.y != null) actualGap = Math.round(b.y - aBottom);
-  } else {
-    var aRight = (a.x != null && a.width != null) ? a.x + a.width : null;
-    if (aRight != null && b.x != null) actualGap = Math.round(b.x - aRight);
+
+  function getPairGap(sa, sb) {
+    if (isVertical) {
+      var aBottom = (sa.y != null && sa.height != null) ? sa.y + sa.height : null;
+      if (aBottom != null && sb.y != null) return Math.round(sb.y - aBottom);
+    } else {
+      var aRight = (sa.x != null && sa.width != null) ? sa.x + sa.width : null;
+      if (aRight != null && sb.x != null) return Math.round(sb.x - aRight);
+    }
+    return null;
   }
-  if (actualGap != null && actualGap > 0) {
-    var sty = parentNode.style || {};
-    var current = sty.itemSpacing || 0;
-    if (actualGap > current) sty.itemSpacing = actualGap;
+
+  var firstGap = getPairGap(flowNodes[0].style || {}, flowNodes[1].style || {});
+  if (firstGap == null || firstGap <= 0) return;
+
+  // 验证所有相邻对的间距是否与第一对一致，不一致则间距不均匀，不设 itemSpacing
+  for (var gi = 1; gi < flowNodes.length - 1; gi++) {
+    var g = getPairGap(flowNodes[gi].style || {}, flowNodes[gi + 1].style || {});
+    if (g == null || g !== firstGap) return;
   }
+
+  var sty = parentNode.style || {};
+  var current = sty.itemSpacing || 0;
+  if (firstGap > current) sty.itemSpacing = firstGap;
 }
 
 

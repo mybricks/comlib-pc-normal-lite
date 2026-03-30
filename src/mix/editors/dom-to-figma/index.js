@@ -156,9 +156,29 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
   var globalFont = getGlobalFont(root, rootComputed, cssRuleMap);
 
   function walk(el, parentRect) {
-    const rect = getDesignRect(el, geo);
+    var rect = getDesignRect(el, geo);
     const computed = window.getComputedStyle(el);
     const tag = (el.tagName || '').toLowerCase();
+
+    // inline 元素（如 span）在 flex-wrap 或行内布局中可能跨越多个浏览器行，
+    // getBoundingClientRect() 返回联合包围盒，导致 y 位置错误（偏到第一行顶部）。
+    // 改用 getClientRects() 中面积最大的单行矩形，取其准确的行内位置和尺寸。
+    var _elDisplayForMultiline = computed.display;
+    if (_elDisplayForMultiline === 'inline' || _elDisplayForMultiline === 'inline-block' || _elDisplayForMultiline === 'inline-flex') {
+      try {
+        var _crs = el.getClientRects();
+        if (_crs && _crs.length > 1) {
+          var _maxArea = 0;
+          var _primaryVR = null;
+          for (var _ri = 0; _ri < _crs.length; _ri++) {
+            var _vr = _crs[_ri];
+            var _vArea = (_vr.width || 0) * (_vr.height || 0);
+            if (_vArea > _maxArea) { _maxArea = _vArea; _primaryVR = _vr; }
+          }
+          if (_primaryVR) rect = getDesignRect(_primaryVR, geo);
+        }
+      } catch (_eInline) {}
+    }
 
     // [debug] input 节点全流程追踪（最早入口）
     if (tag === 'input') {
@@ -496,11 +516,14 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
               var hasPadding = s.paddingTop || s.paddingRight || s.paddingBottom || s.paddingLeft;
               // 若子节点中有绝对定位节点，其 x/y 不参与流式排布，不应影响间距计算结论，保留 layoutMode
               var hasAbsoluteChild = childNodes.some(function(c) { return c.style && c.style.positionType === 'absolute'; });
+              // 多个流中子节点（>1）且算不出均匀间距 → 说明子节点间距本就不均匀，
+              // 不能用 Auto Layout，即使有对齐/内边距也要降级为绝对定位，保留真实坐标
+              var multiFlowChildren = childNodes.filter(function(c) { return !(c.style && c.style.positionType === 'absolute'); }).length > 1;
               if (_isMenuNode2) {
               }
               if (_isRadioWrapperNode2) {
               }
-              if (hasAlignment || hasPadding || hasAbsoluteChild) {
+              if ((hasAlignment || hasPadding || hasAbsoluteChild) && !multiFlowChildren) {
                 node.style.itemSpacing = 0;
               } else {
                 delete node.style.layoutMode;
