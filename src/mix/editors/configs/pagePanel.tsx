@@ -99,10 +99,14 @@ export function buildPagePanel(props: Props) {
               type: 'themes',
               value: {
                 get(params: any) {
+                  if (params.data._themesModified) {
+                    return params.data.themes;
+                  }
                   const projectThemes = context.projectConfig.themes;
                   return (projectThemes && projectThemes.length > 0) ? projectThemes : params.data.themes;
                 },
                 set(params: any, themes: any) {
+                  params.data._themesModified = true;
                   params.data.themes = themes;
                 },
               },

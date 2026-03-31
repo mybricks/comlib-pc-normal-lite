@@ -2,6 +2,7 @@ import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo,
 import ReactDom from 'react-dom';
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
+import dayjs from "dayjs";
 // import {AIJsxRuntime} from './index'
 import { AIJsxRuntime } from "./runtime"
 import {copyToClipboard} from './../index'
@@ -325,6 +326,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
             renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
             dependencies={{
+              'dayjs': dayjs,
               ...(getDependencies?.() ?? {}),
               'react': React,
               'react-dom': ReactDom,

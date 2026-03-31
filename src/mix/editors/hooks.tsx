@@ -121,7 +121,7 @@ export function buildHooks(props: Props) {
           pageIndex,
           style: {
             transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`,
-            width: params.data?.frameStyle?.width ?? pageBCR.width,
+            width: params.data?.frameStyle?.width ?? page.offsetWidth,
           },
           rootStyle: {
             width: layoutWidth - paddingLeft - paddingRight,

@@ -213,6 +213,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
 
   const ROUTE_TYPE = Symbol('Route')
+  const DESIGNPOPUP_TYPE = Symbol('DesignPopup')
 
   const isDesign = () => {
     return _env.mode === 'design';
@@ -404,8 +405,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     if (appCtx.state === 'collect_routes') {
       React.Children.forEach(children, (child) => {
         if (React.isValidElement(child) && (child.type as any).__type === ROUTE_TYPE) {
-          const { path, index } = child.props;
-          appCtx.registerRoute(transformPath({ index, path }));
+          const { path, index, element } = child.props;
+          if (element && element.type && element.type.__type !== DESIGNPOPUP_TYPE) {
+            /**
+             * 1. 如果element渲染弹窗，忽略
+             */
+            appCtx.registerRoute(transformPath({ index, path }));
+          }
         }
       });
     }
@@ -543,6 +549,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     };
   };
 
+  const DesignPopup = () => null;
+  DesignPopup.__type = DESIGNPOPUP_TYPE
+
   const popupRef = (Component: any) => {
     const ObservedComponent = observer(Component);
     const DialogRoot = (props) => {
@@ -613,9 +622,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           }
         }
       }
-      return () => null;
-    }
 
+      return DesignPopup
+    }
     return DialogRoot
   };
 

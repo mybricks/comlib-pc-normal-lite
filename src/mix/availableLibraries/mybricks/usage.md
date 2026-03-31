@@ -19,8 +19,7 @@
   1. _env，环境变量
     - _env.mode: 运行环境，design|runtime
   2. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
-    - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
-    - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
+    - 值为真实 DOM 元素；是浮层类组件（例如常见的弹窗、抽屉等）的挂载节点，且必须挂载到 popupNode 上；
 </保留字段>
 
 组件 props 禁止传递<保留字段>以及 store 数据；
@@ -38,6 +37,7 @@
   2. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；
 
 > 对于浮层类组件，如弹窗、抽屉等，控制浮层的显示/打开/弹出/隐藏状态的变量必须维护在 store 中，这类状态禁止设置一个固定的值；
+> 浮层类组件不是路由页面，禁止将其注册为 \`Route\`；浮层必须使用 \`popupRef\` 包裹，作为普通子组件挂载在所属页面或组件内；
 
 #### PopupVisible装饰器
 PopupVisible 是一个属性装饰器，用于将浮层类组件在**设计态**下默认保持**打开状态**，这样设计者才能选中浮层内部的元素进行编辑；
@@ -55,6 +55,7 @@ export default class Store {
 ```
 
 在runtime.jsx中
+原生实现
 ```jsx
 import ReactDOM from 'react-dom';
 import { popupRef } from 'mybricks'
@@ -63,6 +64,21 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
   return ReactDOM.createPortal(<div className={css.mask} style={{ display: store.modalVisible ? 'block' : 'none' }}>
 
   </div>, popupNode)
+})
+```
+
+基于三方库
+```jsx
+import { popupRef } from 'mybricks'
+import { Modal } from 'lib'
+
+const ConfirmModal = popupRef(({ store, popupNode }) => {
+  return (
+    <Modal
+      visible={store.modalVisible}
+      getContainer={() => popupNode}
+    />
+  )
 })
 ```
 
