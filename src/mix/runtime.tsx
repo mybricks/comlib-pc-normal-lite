@@ -6,6 +6,7 @@ import {StyleProvider} from '@ant-design/cssinjs'
 import {ConfigProvider} from "antd";
 import zhCN from 'antd/locale/zh_CN'
 import context from './context'
+import * as G6 from '@antv/g6'
 
 const SUPPORTED_LOGS = {
   log: true,
@@ -35,7 +36,7 @@ export default genAIRuntime({
 
     const builtinDefs: PropertyDescriptorMap = {
       '@antv/g6': {
-        get() { return (window as any).G6 },
+        get() { return { ...G6, default: G6 } },
         enumerable: true,
         configurable: true,
       },
