@@ -409,6 +409,7 @@ export default function developMyBricksModule(config: Config = {}) {
           - FilterBar（有筛选状态 → 独立 comRef）
           - UserList（有列表数据与分页 → 独立 comRef）
             - UserRow（列表单项含多字段与操作 → 独立 comRef）
+          - EditModal（修改数据弹窗）
   </典型拆分示例>
 </区块拆分原则与规范>
 
@@ -661,22 +662,20 @@ export default function developMyBricksModule(config: Config = {}) {
 </example>
 
 <example>
-  <user_query>开发两个按钮查看和修改，点击查看页面和修改页面</user_query>
+  <user_query>开发一个按钮查看，点击查看详情</user_query>
   <assistant_response>
-  好的，我将为您开发三个页面，包含主页面，点击查看页面和修改页面。
+  好的，我将为您开发两个页面，包含主页面和查看详情页。
   
   \`\`\`write file="index.jsx"
   import { appRef, Routes, Route } from "mybricks";
   import MainPage from "./pages/MainPage";
   import ViewPage from "./pages/ViewPage";
-  import EditPage from "./pages/EditPage";
 
   export default appRef(() => {
     return (
       <Routes>
         <Route index element={<MainPage />} />
         <Route path="view" element={<ViewPage />} />
-        <Route path="edit" element={<EditPage />} />
       </Routes>
     );
   });
@@ -731,30 +730,6 @@ export default function developMyBricksModule(config: Config = {}) {
   }
   \`\`\`
   
-  \`\`\`write file="pages/EditPage/index.jsx"
-  import { comRef } from "mybricks";
-  import css from "./index.less";
-
-  export default comRef(() => {
-    return (
-      <div className={css.viewContainer}>
-        // 编辑页面内容
-      </div>
-    );
-  });
-  \`\`\`
-  
-  \`\`\`write file="pages/EditPage/index.less"
-  :frame {
-    width: 1600px;
-  }
-  .viewContainer {
-    position: relative;
-    width: 100%;
-    height: 100%;
-  }
-  \`\`\`
-  
   \`\`\`write file="pages/MainPage/ToolBar/index.jsx"
   import { comRef, redirect } from "mybricks";
   import { Button } from "xy-ui";
@@ -784,7 +759,6 @@ export default function developMyBricksModule(config: Config = {}) {
 
     btns = [
       { text: "查看", path: "/view" },
-      { text: "修改", path: "/edit" },
     ];
   }
 

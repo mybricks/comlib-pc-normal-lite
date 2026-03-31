@@ -1,7 +1,9 @@
 .container {
   // [TODO] popup暂时不支持调试
-  [data-zone-kind="popup"]:after {
-    display: none;
+  [data-zone-kind="popup"] {
+    &::before {
+      display: none;
+    }
   }
 }
 
