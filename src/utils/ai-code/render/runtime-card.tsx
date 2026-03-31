@@ -326,11 +326,11 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
             renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
             dependencies={{
+              'dayjs': dayjs,
               ...(getDependencies?.() ?? {}),
               'react': React,
               'react-dom': ReactDom,
               '@ant-design/icons': icons,
-              'dayjs': dayjs
             }}
             inMybricksGeoWebview={!!canvasContainer}
           />
