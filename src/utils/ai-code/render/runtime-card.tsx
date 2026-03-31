@@ -2,6 +2,7 @@ import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo,
 import ReactDom from 'react-dom';
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
+import dayjs from "dayjs";
 // import {AIJsxRuntime} from './index'
 import { AIJsxRuntime } from "./runtime"
 import {copyToClipboard} from './../index'
@@ -329,6 +330,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               'react': React,
               'react-dom': ReactDom,
               '@ant-design/icons': icons,
+              'dayjs': dayjs
             }}
             inMybricksGeoWebview={!!canvasContainer}
           />
