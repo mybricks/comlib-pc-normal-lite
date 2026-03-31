@@ -25,6 +25,10 @@ export function buildExportCodeConfig(props: Props) {
           return (projectThemes && projectThemes.length > 0) ? projectThemes : params.data.themes;
         },
         set(params: any, themes: any) {
+          if(context.projectConfig.themes && context.projectConfig.themes.length > 0) {
+            context.projectConfig.themes = themes;
+            return
+          }
           params.data.themes = themes;
         },
       },
