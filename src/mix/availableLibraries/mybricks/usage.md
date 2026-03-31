@@ -19,8 +19,7 @@
   1. _env，环境变量
     - _env.mode: 运行环境，design|runtime
   2. popupNode，浮层挂载目标 DOM 节点，type PopupNode = HTMLElement
-    - 值为真实 DOM 元素；浮层须挂到 popupNode，例如 getContainer={() => popupNode} 或 createPortal(..., popupNode)；
-    - 通常三方库会有 prop 支持；当原生html实现时，可使用 react-dom 提供的 createPortal 方法实现挂载；
+    - 值为真实 DOM 元素；是浮层类组件（例如常见的弹窗、抽屉等）的挂载节点，且必须挂载到 popupNode 上；
 </保留字段>
 
 组件 props 禁止传递<保留字段>以及 store 数据；
@@ -55,6 +54,7 @@ export default class Store {
 ```
 
 在runtime.jsx中
+原生实现
 ```jsx
 import ReactDOM from 'react-dom';
 import { popupRef } from 'mybricks'
@@ -63,6 +63,21 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
   return ReactDOM.createPortal(<div className={css.mask} style={{ display: store.modalVisible ? 'block' : 'none' }}>
 
   </div>, popupNode)
+})
+```
+
+基于三方库
+```jsx
+import { popupRef } from 'mybricks'
+import { Modal } from 'lib'
+
+const ConfirmModal = popupRef(({ store, popupNode }) => {
+  return (
+    <Modal
+      visible={store.modalVisible}
+      getContainer={() => popupNode}
+    />
+  )
 })
 ```
 
