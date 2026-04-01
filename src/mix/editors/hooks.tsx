@@ -1,11 +1,17 @@
 import React from 'react';
-import LowcodeView, { lowcodeViewEvents } from '../lowcodeView';
+import LowcodeView, {lowcodeViewEvents} from '../lowcodeView';
 import lowcodeViewCss from '../lowcodeView/index.lazy.less';
 import consoleViewCss from '../lowcodeView/console/index.lazy.less';
 import versionViewCss from '../lowcodeView/version/index.lazy.less';
 import treeViewCss from '../lowcodeView/tree/index.lazy.less';
+
+import * as lowcodeViewCssNS from '../lowcodeView/index.lazy.less';
+import * as consoleViewCssNS from '../lowcodeView/console/index.lazy.less';
+import * as versionViewCssNS from '../lowcodeView/version/index.lazy.less';
+import * as treeViewCssNS from '../lowcodeView/tree/index.lazy.less';
+
 import context from '../context';
-import type { Props } from './types';
+import type {Props} from './types';
 
 export function buildHooks(props: Props) {
   return {
@@ -16,7 +22,7 @@ export function buildHooks(props: Props) {
         if (!data._errors) data._errors = [];
         data._errors = [
           ...data._errors.filter((e: any) => e.file),
-          { message: err.message, type: 'runtime' },
+          {message: err.message, type: 'runtime'},
         ];
         context.getAiCom(props.id)?.actions?.notifyChanged?.();
       }
@@ -30,7 +36,35 @@ export function buildHooks(props: Props) {
         return <LowcodeView {...params} />;
       },
       useCSS() {
-        return [lowcodeViewCss, consoleViewCss, versionViewCss, treeViewCss];
+        function transform(ns) {
+          console.log(ns)
+
+
+          if (ns.default?.locals) {
+            return ns.default.locals
+          } else {
+            return ns
+          }
+        }
+
+        return [
+          {
+            css: transform(lowcodeViewCssNS),
+            use: lowcodeViewCss
+          },
+          {
+            css: transform(consoleViewCssNS),
+            use: consoleViewCss
+          },
+          {
+            css: transform(versionViewCssNS),
+            use: versionViewCss
+          },
+          {
+            css: transform(treeViewCssNS),
+            use: treeViewCss
+          },
+        ]
       },
     },
 
@@ -87,7 +121,8 @@ export function buildHooks(props: Props) {
           varTitle: '主色调',
           value: {
             get: (_p: any) => 'red',
-            set: (_p: any, _v: any) => {},
+            set: (_p: any, _v: any) => {
+            },
           },
         },
       ];
@@ -132,14 +167,14 @@ export function buildHooks(props: Props) {
 
       const data = context.getAiComParams(params.id)?.data;
       const envNames: string[] = data?._debugEnvs ?? [];
-      const debugEnvOptions: { label: string; value: string }[] = [{ label: '正式环境', value: 'prod' }];
+      const debugEnvOptions: { label: string; value: string }[] = [{label: '正式环境', value: 'prod'}];
 
       if (envNames.includes('mock')) {
-        debugEnvOptions.push({ label: '测试环境', value: 'mock' });
+        debugEnvOptions.push({label: '测试环境', value: 'mock'});
       }
       envNames.forEach(name => {
         if (name !== 'mock' && name !== 'prod') {
-          debugEnvOptions.push({ label: name, value: name });
+          debugEnvOptions.push({label: name, value: name});
         }
       });
 
@@ -157,10 +192,10 @@ export function buildHooks(props: Props) {
       const dataLoc = params.focusArea.ele.closest('[data-loc]')?.getAttribute('data-loc');
       if (dataLoc) {
         const loc = JSON.parse(dataLoc);
-        const { codeLine, files } = loc;
+        const {codeLine, files} = loc;
         if (codeLine && files?.jsx) {
-          const { start, end } = codeLine;
-          lowcodeViewEvents.emit('viewCode', { fileName: files.jsx, codeLine: [start, end] });
+          const {start, end} = codeLine;
+          lowcodeViewEvents.emit('viewCode', {fileName: files.jsx, codeLine: [start, end]});
         } else {
           console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
         }
