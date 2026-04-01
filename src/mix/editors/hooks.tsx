@@ -45,7 +45,7 @@ export function buildHooks(props: Props) {
         }
 
         const genUse = (css) => {
-          return css?.use || css
+          return css
         }
 
         return [
