@@ -54,13 +54,14 @@ export default class Store {
 }
 ```
 
-在runtime.jsx中
+在jsx中
 原生实现
 ```jsx
 import ReactDOM from 'react-dom';
+import store from './store';
 import { popupRef } from 'mybricks'
 
-const ConfirmModal = popupRef(({ store, popupNode }) => {
+const ConfirmModal = popupRef(({ popupNode }) => {
   return ReactDOM.createPortal(<div className={css.mask} style={{ display: store.modalVisible ? 'block' : 'none' }}>
 
   </div>, popupNode)
@@ -70,9 +71,10 @@ const ConfirmModal = popupRef(({ store, popupNode }) => {
 基于三方库
 ```jsx
 import { popupRef } from 'mybricks'
+import store from './store';
 import { Modal } from 'lib'
 
-const ConfirmModal = popupRef(({ store, popupNode }) => {
+const ConfirmModal = popupRef(({ popupNode }) => {
   return (
     <Modal
       visible={store.modalVisible}
@@ -177,12 +179,13 @@ describe('无权限测试', () => {
 ```jsx
 import { comRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
 import { Button } from 'xy-ui';
+import store from './store';
 import css from 'style.less';
 
 /**
  * @summary 工具条
  */
-const ToolBar = comRef(({ store }) => {
+const ToolBar = comRef(() => {
   const navigate = useNavigate();
   const location = useLocation(); // { pathname, search, hash, state }
   return store.btns.map((btn) => (
@@ -201,7 +204,7 @@ const PageButton = comRef(() => (
 /**
  * @summary 用户详情（路由: user/:id）
  */
-const UserDetail = comRef(({ store }) => {
+const UserDetail = comRef(() => {
   const { id } = useParams(); // 读取动态段参数
   const user = store.users.find((u) => String(u.id) === id);
   return <div>{user?.name}</div>;
@@ -267,3 +270,30 @@ class Store {
 
 export default new Store();
 ```
+
+### 在项目、组件、页面内使用主题变量
+对于<设计风格与主题变量>，在组件侧，提供了 `useDesignToken` hook。
+`useDesignToken` 是一个 React Hook，用于在组件中获取当前主题的设计变量（Design Token），返回的DesignToken包含当前主题所有设计变量的对象。通过该 Hook，组件可以动态适配不同的主题配置，确保视觉风格的一致性。
+通常，三方库会提供配置变量的能力，需根据三方库的说明来配置主题变量。
+
+#### 使用方法
+```jsx
+import { comRef, useDesignToken } from 'mybricks';
+
+export default comRef(() => {
+  const token = useDesignToken();
+
+  return <div>{token.colorPrimary}</div>;
+});
+```
+
+#### 命名转换规则
+
+CSS 变量与 JavaScript 对象属性遵循 **kebab-case → camelCase** 的自动转换：
+
+| CSS 变量 | Token 属性 |
+|----------|-----------|
+| `--color-primary` | `colorPrimary` |
+| `--color-success` | `colorSuccess` |
+| `--border-radius-base` | `borderRadiusBase` |
+| `--font-size-lg` | `fontSizeLg` |
