@@ -3,14 +3,14 @@ import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
 import context from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
-import lazyCss from "./index.lazy.less";
+import * as css from "./index.lazy.less";
 import { Events } from "../../utils";
 import { useDarkMode } from "../../utils/hooks";
 import TreeView from "./tree";
 import { filesJsonToTree } from "./filesToTree";
 import type { FileTreeNode } from "./filesToTree";
 
-const css = lazyCss.locals;
+//const css = lazyCss.locals;
 
 interface Params {
   data: any;
