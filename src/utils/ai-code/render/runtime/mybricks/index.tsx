@@ -312,6 +312,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     container: document.body
   });
 
+  /**
+   * antd.Drawer 关闭后会设置transformX(100%)
+   */
+  const pageStyle = isDesign() ? {} : {
+    overflow: 'hidden'
+  }
+
   const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
     const { path = '/', children } = params;
     const { activeThemeId, themes } = data.themes;
@@ -351,6 +358,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          ...pageStyle,
           ...env._debugTarget?.style,
           ...theme?.vars?.reduce((pre, cur) => {
             pre[cur.propertyName] = cur.value;
