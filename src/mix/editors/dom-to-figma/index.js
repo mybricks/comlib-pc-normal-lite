@@ -283,6 +283,7 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         // 判断 DOM 里是否单行：用 lineHeight 判断（单行高度约等于一个 lineHeight），fallback 到 height < fontSize * 2
         var _h = node.style.height;
         var _fs = node.style.fontSize;
+
         if (_h != null && _fs != null && _fs > 0) {
           var _lhRaw = computed && computed.lineHeight;
           var _lh = (_lhRaw && _lhRaw !== 'normal') ? parseFloat(_lhRaw) : null;
@@ -290,6 +291,19 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
             node.style.singleLine = _h <= _lh * 1.2;
           } else {
             node.style.singleLine = _h < _fs * 2;
+          }
+          // 将 lineHeight 写入 JSON，让 Figma 使用与 DOM 一致的行高，
+          // 避免 Figma 按自身字体度量重新计算（如 fontSize=48 的 -apple-system 默认行高≈67px）
+          if (_lh != null && !Number.isNaN(_lh) && _lh > 0) {
+            node.style.lineHeight = _lh;
+          } else if (node.style.singleLine) {
+            // line-height: normal 的单行文本：DOM 元素高度 = 有效行高（减去 padding）
+            var _ptop2 = parseFloat(computed && computed.paddingTop) || 0;
+            var _pbot2 = parseFloat(computed && computed.paddingBottom) || 0;
+            var _effLh2 = _h - _ptop2 - _pbot2;
+            if (_effLh2 > 0) {
+              node.style.lineHeight = _effLh2;
+            }
           }
         }
         // 判断是否容器约束宽度：用 Range 测量文字内容的自然渲染宽度，若内容宽度 < 元素宽度 × 0.9
@@ -436,6 +450,23 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
       if (pseudoBefore) childNodes.unshift(pseudoBefore);
       var pseudoAfter = getPseudoTextNode(el, '::after', geo, parentRect, rect, cssRuleMap, globalFont);
       if (pseudoAfter) childNodes.push(pseudoAfter);
+      // ant-checkbox-inner / ant-radio-inner：使用 Auto Layout 双轴居中显示选中标记（pseudo-after）。
+      // pseudo-after 不带绝对定位，让 Auto Layout 自动居中；其余 input 等子节点已是绝对定位，不受影响。
+      if (pseudoAfter && el.className && typeof el.className === 'string' && /ant-checkbox-inner|ant-radio-inner/.test(el.className)) {
+        if (node.style) {
+          node.style.layoutMode = node.style.layoutMode || 'HORIZONTAL';
+          node.style.primaryAxisAlignItems = 'CENTER';
+          node.style.counterAxisAlignItems = 'CENTER';
+          node.style.itemSpacing = 0;
+          node.style.layoutSizingHorizontal = 'FIXED';
+          node.style.layoutSizingVertical = 'FIXED';
+          // 勾形（rotation 非零）视觉重心偏上，加 2px 底部 padding 补偿
+          var _isCheckmark = pseudoAfter.style && pseudoAfter.style.rotation != null && pseudoAfter.style.rotation !== 0;
+          if (_isCheckmark) {
+            node.style.paddingBottom = 2;
+          }
+        }
+      }
       if (childNodes.length) {
         var layoutMode = node.style && (node.style.layoutMode === 'VERTICAL' || node.style.layoutMode === 'HORIZONTAL') ? node.style.layoutMode : null;
         if (layoutMode) {

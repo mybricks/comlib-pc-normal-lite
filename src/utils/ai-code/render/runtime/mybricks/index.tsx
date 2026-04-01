@@ -314,6 +314,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     container: document.body
   });
 
+  /**
+   * antd.Drawer 关闭后会设置transformX(100%)
+   */
+  const pageStyle = isDesign() ? {} : {
+    overflow: 'hidden'
+  }
+
   const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
     const { path = '/', children } = params;
     const { activeThemeId, themes } = data.themes;
@@ -353,6 +360,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          ...pageStyle,
           ...env._debugTarget?.style,
           ...theme?.vars?.reduce((pre, cur) => {
             pre[cur.propertyName] = cur.value;
@@ -662,6 +670,22 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     };
   }
 
+  const cssVarToToken = (cssVar) => {
+    return cssVar
+      .replace(/^--/, '')
+      .replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  }
+
+  const useDesignToken = () => {
+    const { activeThemeId, themes } = data.themes;
+    const theme = themes.find((theme) => theme.id === activeThemeId);
+    return theme?.vars?.reduce((pre, cur) => {
+      const key = cssVarToToken(cur.propertyName);
+      pre[key] = cur.value;
+      return pre;
+    }, {}) || {}
+  }
+
   return {
     appRef,
     comRef,
@@ -677,6 +701,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 debugLogs */
     _collectDebugLogs: collectDebugLogs,
     PopupVisible,
+    useDesignToken,
   }
 }
 

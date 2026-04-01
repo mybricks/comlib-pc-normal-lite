@@ -172,7 +172,34 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   const rotation = num(computed.transform);
   if (computed.transform && computed.transform !== 'none') {
     const angle = parseTransformRotation(computed.transform);
-    if (angle != null) style.rotation = angle;
+    if (angle != null) {
+      style.rotation = -angle; // CSS 顺时针为正，Figma 逆时针为正，需取反
+
+      // getBoundingClientRect 返回旋转后的 AABB，Figma 需要「未旋转」的尺寸与中心对齐的 x/y。
+      // AABB 中心 = 元素旋转中心（transform-origin: 50% 50%），以此反推未旋转尺寸与正确 x/y。
+      if (angle !== 0 && rect.width != null && rect.height != null) {
+        const angleRad = (angle * Math.PI) / 180;
+        const cosA = Math.abs(Math.cos(angleRad));
+        const sinA = Math.abs(Math.sin(angleRad));
+        // det = cos²θ - sin²θ = cos(2θ)，趋近 0（θ≈45°）时无法区分 W/H，跳过修正
+        const det = cosA * cosA - sinA * sinA;
+        if (Math.abs(det) > 0.01) {
+          const aabbW = rect.width;
+          const aabbH = rect.height;
+          const origW = (aabbW * cosA - aabbH * sinA) / det;
+          const origH = (aabbH * cosA - aabbW * sinA) / det;
+          if (origW > 0 && origH > 0) {
+            // x/y 此时是 AABB 相对父节点的偏移（已由上方 lines 162-163 计算）
+            const cx = style.x + aabbW / 2;
+            const cy = style.y + aabbH / 2;
+            style.x = Math.round(cx - origW / 2);
+            style.y = Math.round(cy - origH / 2);
+            style.width = origW;
+            style.height = origH;
+          }
+        }
+      }
+    }
   }
 
   var opacityVal = d(['opacity']) || computed.opacity;

@@ -16,13 +16,13 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noImplicitAny": false,
     "noEmit": true,
     "jsx": "react",
-    "baseUrl": "."
+    "rootDirs": ["."]
   },
   "exclude": [
     "./node_modules"

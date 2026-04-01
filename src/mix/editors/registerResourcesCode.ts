@@ -6,20 +6,28 @@ export function registerResourcesCode(comId: string, comName: string) {
     (window as any)._forApp_ = {};
   }
   const forApp = (window as any)._forApp_;
-  forApp[comId] = { id: comId, name: comName, getFiles: (type: 'application' | 'component') => {
-    const aiComParams = context.getAiComParams(comId);
-    if (!aiComParams?.data) return null;
-    return generateCodeStructure(aiComParams.data, { type });
-  }};
+  forApp[comId] = {
+    id: comId,
+    name: comName,
+    getFiles: (type: 'application' | 'component') => {
+      const aiComParams = context.getAiComParams(comId);
+      if (!aiComParams?.data) return null;
+      return generateCodeStructure(aiComParams.data, { type, previous: true });
+    },
+    getData: () => {
+      const aiComParams = context.getAiComParams(comId);
+      return aiComParams?.data
+    }
+  };
   forApp._getResourcesCode_ = (type: 'application' | 'component') => {
-    const result: Array<{ id: string; name: string; files: any[] }> = [];
+    const result: Array<{ id: string; name: string; files: any[]; data: any }> = [];
     for (const key of Object.keys(forApp)) {
       if (key.startsWith('_')) continue;
       try {
         const instance = forApp[key];
         const files = instance.getFiles(type);
         if (files) {
-          result.push({ id: instance.id, name: instance.name, files });
+          result.push({ id: instance.id, name: instance.name, files, data: instance.getData() });
         }
       } catch (e) {
         console.error('[_getResourcesCode_] 实例导出失败', key, e);

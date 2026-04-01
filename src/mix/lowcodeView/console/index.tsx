@@ -3,9 +3,10 @@ import { Console } from "console-feed";
 import context from "../../context";
 import { LogMessage } from "../../context";
 import { useDarkMode } from "../../../utils/hooks";
-import lazyCss from "./index.lazy.less";
+import * as lazyCss from "./index.lazy.less";
+import { getLazyCss } from "../utils/css";
 
-const css = lazyCss.locals;
+const css = getLazyCss(lazyCss)
 
 interface ConsoleLogPanelProps {
   componentId: string;

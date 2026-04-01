@@ -114,16 +114,16 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
           onClick={() => handleExport('application')}
           style={buttonStyle}
         >
-          {loadingType === 'application' ? '导出中...' : '导出页面'}
+          {loadingType === 'application' ? '导出中...' : '导出'}
         </button>
-        <button
+        {/* <button
           type="button"
           disabled={loading}
           onClick={() => handleExport('component')}
           style={buttonStyle}
         >
           {loadingType === 'component' ? '导出中...' : '导出组件'}
-        </button>
+        </button> */}
       </div>
       {isVSCode && outputDir && (
         <div
