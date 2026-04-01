@@ -25,6 +25,21 @@ var parseTransformRotation = _nbcp.parseTransformRotation || parseTransformRotat
 var buildInlineTextStyle = _nbsb.buildInlineTextStyle || buildInlineTextStyle;
 var hasClassPrefix = _nbdh.hasClassPrefix || hasClassPrefix;
 
+// 内联字体栈解析函数：style-builder.js 里有同名定义，但打包后 node-builder 作用域内不一定可见。
+// 用局部变量形式引用，优先用外部已有的定义，否则 fallback 到内联实现，避免 ReferenceError。
+var _parseFontFamilyStack = (typeof parseFontFamilyStack === 'function') ? parseFontFamilyStack : function(stackStr) {
+  if (!stackStr || !String(stackStr).trim()) return [];
+  return String(stackStr).split(',').map(function(s){ return s.trim().replace(/^['"]|['"]$/g, ''); }).filter(Boolean);
+};
+var _resolveFontFamilyFromStack = (typeof resolveFontFamilyFromStack === 'function') ? resolveFontFamilyFromStack : function(stackStr) {
+  var _syskw = /^(-apple-system|blinkmacsystemfont|system-ui|arial|helvetica\s*neue|helvetica|sans-serif|serif|monospace|Segoe\s+UI|Roboto|SF\s+UI\s+Text)$/i;
+  var list = _parseFontFamilyStack(stackStr);
+  for (var _i = 0; _i < list.length; _i++) {
+    if (list[_i] && !_syskw.test(list[_i])) return list[_i];
+  }
+  return 'PingFang SC';
+};
+
 /**
  * 绝对/固定定位的叶子 text：导出宽高常为整盒，浏览器用 flex 将一行字居中，Figma 需 textAlignVertical。
  * 如 ant Pagination 的 .ant-pagination-item-ellipsis（•••）。
@@ -302,6 +317,62 @@ function isShowingPlaceholder(el) {
  * @param {object|null} globalFont
  * @returns {object|null}
  */
+
+/**
+ * 扫描页面所有可访问样式表（document.styleSheets + shadowRoot.styleSheets），
+ * 提取与 el 匹配的伪元素 CSS 属性对象。
+ * 作用：Shadow DOM 下 getComputedStyle(el, pseudo) 可能因外部样式表不在 shadow 作用域
+ * 而返回 content:'none'，此函数作为兜底从原始样式规则里读取真实值。
+ * @param {Element} el
+ * @param {string} pseudo  '::before' 或 '::after'
+ * @returns {Object|null}  如 { content: '"*"', color: '#ff4d4f', 'font-size': '14px' }
+ */
+function _getPseudoPropsFromSheets(el, pseudo) {
+  if (!el || typeof el.matches !== 'function') return null;
+  var result = {};
+  try {
+    var sheets = [];
+    if (typeof document !== 'undefined' && document.styleSheets) {
+      for (var _i = 0; _i < document.styleSheets.length; _i++) sheets.push(document.styleSheets[_i]);
+    }
+    // shadow root 的样式表（如果 el 在 shadow DOM 内）
+    try {
+      var _rn = el.getRootNode && el.getRootNode();
+      if (_rn && _rn !== document && _rn.styleSheets) {
+        for (var _j = 0; _j < _rn.styleSheets.length; _j++) sheets.push(_rn.styleSheets[_j]);
+      }
+    } catch (_) {}
+    for (var _si = 0; _si < sheets.length; _si++) {
+      var _rules;
+      try { _rules = sheets[_si].cssRules; } catch (_) { continue; } // CORS 跨域样式表跳过
+      if (!_rules) continue;
+      for (var _ri = 0; _ri < _rules.length; _ri++) {
+        var _rule = _rules[_ri];
+        var _selText = _rule.selectorText;
+        if (!_selText || _selText.indexOf(pseudo) === -1) continue;
+        // 支持 "a::before, b::before" 多选择器规则
+        var _selParts = _selText.split(',');
+        var _matched = false;
+        for (var _pi = 0; _pi < _selParts.length; _pi++) {
+          var _part = _selParts[_pi].trim();
+          if (_part.indexOf(pseudo) === -1) continue;
+          var _base = _part.replace(pseudo, '').trim();
+          if (!_base) continue;
+          try { if (el.matches(_base)) { _matched = true; break; } } catch (_) {}
+        }
+        if (!_matched) continue;
+        var _st = _rule.style;
+        if (!_st) continue;
+        for (var _li = 0; _li < _st.length; _li++) {
+          var _prop = _st[_li];
+          result[_prop] = _st.getPropertyValue(_prop);
+        }
+      }
+    }
+  } catch (_) {}
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, globalFont) {
   try {
     // MyBricks 标注标记（[data-zone-docs-events]:before）是编辑器专用黄色圆点，不应导出到 Figma
@@ -314,16 +385,60 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
 
     var ps = window.getComputedStyle(el, pseudo);
     var content = ps.content;
-    // content 为 none / normal 时完全无渲染内容，直接跳过
-    if (!content || content === 'none' || content === 'normal') return null;
+    var _dbgCls = (el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0,3).join(' ') : String(el.className || '');
+    console.log('[pseudo-debug] el:', _dbgCls, '| pseudo:', pseudo, '| getComputedStyle content:', JSON.stringify(content));
+    // content 为 none / normal 时：getComputedStyle 在 Shadow DOM 下可能读不到外部样式表的伪元素规则，
+    // 用 _getPseudoPropsFromSheets 扫描所有可访问样式表作为兜底；若仍无内容则跳过。
+
+    if (!content || content === 'none' || content === 'normal') {
+      var _fallbackProps = _getPseudoPropsFromSheets(el, pseudo);
+      console.log('[pseudo-debug] fallback sheet scan result:', _fallbackProps);
+      if (!_fallbackProps || !_fallbackProps['content']) return null;
+      var _fc = _fallbackProps['content'];
+      if (!_fc || _fc === 'none' || _fc === 'normal') return null;
+      ps = Object.assign(
+        { display: 'inline', visibility: 'visible', opacity: '1', 'font-size': '14px' },
+        _fallbackProps,
+        // 同时提供 camelCase 别名，供 ps.fontSize / ps.color 等后续读取
+        {
+          fontSize: _fallbackProps['font-size'] || '14px',
+          color: _fallbackProps['color'] || '',
+          fontWeight: _fallbackProps['font-weight'] || '400',
+          fontFamily: _fallbackProps['font-family'] || '',
+          marginLeft: _fallbackProps['margin-left'] || '0',
+          marginRight: _fallbackProps['margin-right'] || '0',
+          marginInlineStart: _fallbackProps['margin-inline-start'] || _fallbackProps['margin-left'] || '0',
+          marginInlineEnd: _fallbackProps['margin-inline-end'] || _fallbackProps['margin-right'] || '0',
+        }
+      );
+      content = _fc;
+      console.log('[pseudo-debug] using fallback, content now:', JSON.stringify(content));
+    }
     // 过滤 display:none 或 visibility:hidden 或 opacity:0 的伪元素（如 Ant Design 动画层）
-    if (ps.display === 'none' || ps.visibility === 'hidden') return null;
-    if (parseFloat(ps.opacity) === 0) return null;
+    if (ps.display === 'none' || ps.visibility === 'hidden') {
+      console.log('[pseudo-debug] skipped: display/visibility hidden, el:', _dbgCls);
+      return null;
+    }
+    if (parseFloat(ps.opacity) === 0) {
+      console.log('[pseudo-debug] skipped: opacity 0, el:', _dbgCls);
+      return null;
+    }
     // content: '""' 或去引号 trim 后为空 / 无可见字符 → 尝试图形型伪元素（border/background 分割线等）
     if (content === '""') return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
-    // 去掉首尾引号，如 "\":\"" → ":"，再 trim 过滤空白（如 Ant Design button ::after 的 content: " "）
-    var text = content.replace(/^["']|["']$/g, '').trim();
-    if (!text || !/\S/.test(text)) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
+    // 去掉首尾引号，如 "\":\"" → ":"。不做 trim，保留空格内容。
+    // 注意：Shadow DOM 下 getComputedStyle 有时返回不带引号的原始值（如 '*' 而非 '"*"'），
+    // replace 在无引号时不做任何改变，text 仍能得到正确内容，不需要特殊处理。
+    var text = content.replace(/^["']|["']$/g, '');
+    console.log('[pseudo-debug] stripped text:', JSON.stringify(text), '| el:', _dbgCls);
+    if (!text) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
+    // 纯空白内容（如 content: " "）：有背景色或可见边框说明是图形占位符（如 radio 圆点），走图形分支；
+    // 否则保留空格作为真实文本节点输出。
+    if (!/\S/.test(text)) {
+      var _bg = ps.backgroundColor || '';
+      var _hasBg = _bg && _bg !== 'transparent' && _bg !== 'rgba(0, 0, 0, 0)';
+      var _hasBorder = ps.borderStyle && ps.borderStyle !== 'none' && parseFloat(ps.borderWidth || 0) > 0;
+      if (_hasBg || _hasBorder) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
+    }
 
     var fontSize = parseFloat(ps.fontSize) || 14;
     var color = ps.color;
@@ -369,19 +484,21 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
 
     if (globalFont) {
       var fw = parseFloat(ps.fontWeight) || 400;
-      var ff = ps.fontFamily ? resolveFontFamilyFromStack(ps.fontFamily) : '';
+      var ff = ps.fontFamily ? _resolveFontFamilyFromStack(ps.fontFamily) : '';
       if (ff && ff !== globalFont.fontFamily) pseudoStyle.fontFamily = ff;
       if (fw !== globalFont.fontWeight) pseudoStyle.fontWeight = fw;
     }
 
-    return {
+    var _pseudoReturnNode = {
       type: 'text',
       name: pseudo === '::before' ? 'pseudo-before' : 'pseudo-after',
       content: text,
       style: pseudoStyle,
     };
+    console.log('[pseudo-debug] RETURN node:', _pseudoReturnNode.name, '| content:', _pseudoReturnNode.content, '| el:', _dbgCls);
+    return _pseudoReturnNode;
   } catch (e) {
-    console.warn('[pseudo] catch error', { pseudo, tag: el && el.tagName, error: String(e) });
+    console.warn('[pseudo] catch error', { pseudo, tag: el && el.tagName, error: String(e), stack: e && e.stack });
     return null;
   }
 }
@@ -580,6 +697,31 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
               'rotation=' + psRotation,
               'figmaCenter=(' + (shapeStyle.x + shapeStyle.width / 2).toFixed(3) + ',' + (shapeStyle.y + shapeStyle.height / 2).toFixed(3) + ')'
             );
+          }
+        }
+      }
+    }
+
+    // radio-inner / checkbox-inner::after：不论 transform 类型（scale / rotate / none），
+    // 均由 index.js walk 层设置的 Auto Layout（primaryAxisAlignItems/counterAxisAlignItems: CENTER）居中。
+    // 此处无条件删除绝对定位坐标，并将纯 scale 变换应用到尺寸（如 scale(0.375) 使 16px → 6px 小圆点）。
+    var _elClsAutoCenter = String((el && el.className) || '');
+    if (/checkbox-inner|radio-inner/i.test(_elClsAutoCenter) && pseudo === '::after') {
+      delete shapeStyle.x;
+      delete shapeStyle.y;
+      delete shapeStyle.positionType;
+      if (ps.transform && ps.transform !== 'none') {
+        var _acMatM = ps.transform.match(/matrix\(([^)]+)\)/);
+        if (_acMatM) {
+          var _acParts = _acMatM[1].split(',').map(function(s) { return parseFloat(s.trim()); });
+          // 均匀纯 scale：b≈0, c≈0, a≈d, 0 < a < 0.99
+          if (_acParts.length >= 4 &&
+              Math.abs(_acParts[1]) < 0.01 && Math.abs(_acParts[2]) < 0.01 &&
+              Math.abs(_acParts[0] - _acParts[3]) < 0.01 &&
+              _acParts[0] > 0 && _acParts[0] < 0.99) {
+            var _scaleFactor = _acParts[0];
+            shapeStyle.width = Math.max(1, Math.round(safeW * _scaleFactor));
+            shapeStyle.height = Math.max(1, Math.round(safeH * _scaleFactor));
           }
         }
       }
