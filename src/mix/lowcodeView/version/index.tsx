@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import context from "../../context";
 import type { VersionSnapshot } from "../../context";
-import * as css from "./index.lazy.less";
+import * as lazyCss from "./index.lazy.less";
+import { getLazyCss } from "../utils/css";
 
-//const css = lazyCss.locals;
+const css = getLazyCss(lazyCss)
 
 interface VersionPanelProps {
   componentId: string;

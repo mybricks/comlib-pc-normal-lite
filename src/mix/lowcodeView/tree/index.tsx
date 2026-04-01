@@ -8,9 +8,10 @@ import React, {
   useCallback,
   useEffect
 } from "react";
+import { getLazyCss } from "../utils/css";
 
-import * as css from "./index.lazy.less";
-//const css = lazyCss.locals;
+import * as lazyCss from "./index.lazy.less";
+const css = getLazyCss(lazyCss)
 
 type TreeViewProps = {
   defaultCurrent: string;

@@ -44,22 +44,26 @@ export function buildHooks(props: Props) {
           }
         }
 
+        const genUse = (css) => {
+          return css?.use || css
+        }
+
         return [
           {
             css: transform(lowcodeViewCssNS),
-            use: lowcodeViewCss
+            use: genUse(lowcodeViewCss)
           },
           {
             css: transform(consoleViewCssNS),
-            use: consoleViewCss
+            use: genUse(consoleViewCss)
           },
           {
             css: transform(versionViewCssNS),
-            use: versionViewCss
+            use: genUse(versionViewCss)
           },
           {
             css: transform(treeViewCssNS),
-            use: treeViewCss
+            use: genUse(treeViewCss)
           },
         ]
       },
