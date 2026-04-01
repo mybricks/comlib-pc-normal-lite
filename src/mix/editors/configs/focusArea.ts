@@ -1,5 +1,4 @@
 import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from '../../knowledges';
-import { MYBRICKS_KNOWLEDGES_MAP } from '../../context/constants';
 import { genStyleValue, genResizer } from '../styleProxy';
 
 /**
@@ -21,8 +20,6 @@ export function buildFocusAreaConfigs(data: any, comId: string): Record<string, 
     let knowledge: any = null;
     if (source === 'antd') {
       knowledge = ANTD_KNOWLEDGES_MAP[component.toUpperCase()];
-    } else if (source === 'mybricks') {
-      knowledge = MYBRICKS_KNOWLEDGES_MAP[component.toUpperCase()];
     } else if (source === '@ant-design/icons') {
       knowledge = ANTD_ICONS_KNOWLEDGES_MAP[component.toUpperCase()];
     }

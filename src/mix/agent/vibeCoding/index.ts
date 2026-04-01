@@ -211,12 +211,12 @@ export default function ({ context }) {
         return result
       }
 
-      const focusArea = actions?.getFocusArea?.();
+      const activeFocusArea = actions?.getFocusArea?.();
 
       let focusInfo = "";
 
-      if (focusArea) {
-        focusInfo = buildFocusInfo(focusArea.elemenet);
+      if (activeFocusArea) {
+        focusInfo = buildFocusInfo(activeFocusArea.elemenet);
       }
 
       const themesContent = (() => {
