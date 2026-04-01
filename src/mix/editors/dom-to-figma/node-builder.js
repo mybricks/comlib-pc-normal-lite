@@ -304,6 +304,8 @@ function isShowingPlaceholder(el) {
  */
 function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, globalFont) {
   try {
+    // MyBricks 标注标记（[data-zone-docs-events]:before）是编辑器专用黄色圆点，不应导出到 Figma
+    if (el && el.hasAttribute && el.hasAttribute('data-zone-docs-events')) return null;
     // elRect 无效时无法估算位置，直接跳过（getDesignRect 返回的是 left/top/width/height，不是 x/y）
     if (!elRect || typeof elRect.left !== 'number' || typeof elRect.top !== 'number' ||
         isNaN(elRect.left) || isNaN(elRect.top) || isNaN(elRect.width) || isNaN(elRect.height)) {
@@ -400,11 +402,6 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     // display:none 或 visibility:hidden 或 opacity:0 → 不可见，跳过（如 checkbox 勾选动画层）
     if (ps.display === 'none' || ps.visibility === 'hidden') return null;
     if (parseFloat(ps.opacity) === 0) return null;
-
-    // TODO: checkbox/radio 勾形伪元素（ant-checkbox-inner::after、ant-radio-inner::after 等）暂不支持。
-    // 特征：宿主 class 含 "checkbox-inner" 或 "radio-inner"，且有 border 构成勾形/圆形选中标记。
-    var elClass = (el && el.className) ? String(el.className) : '';
-    if (/checkbox-inner|radio-inner/i.test(elClass)) return null;
 
     var bBottom = parseFloat(ps.borderBottomWidth) || 0;
     var bTop    = parseFloat(ps.borderTopWidth)    || 0;
@@ -516,15 +513,35 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
       positionType: 'absolute',
     };
 
-    // transform: rotate() → rotation + 位置修正
+    // transform: rotate() / translateX() / translateY() → rotation + 位置修正
     // CSS transform 矩阵 matrix(a,b,c,d,tx,ty) 综合了 transform-origin 平移、rotate 及 translate
     // 直接用矩阵将「元素中心」变换到视觉中心，反推 Figma 的 x/y，使 Figma 按中心旋转时与 CSS 匹配
     if (ps.transform && ps.transform !== 'none') {
       var psRotation = parseTransformRotation(ps.transform);
-      if (psRotation != null && psRotation !== 0) {
-        shapeStyle.rotation = psRotation;
-        var _matMatch = ps.transform.match(/matrix\(([^)]+)\)/);
-        if (_matMatch) {
+      var _matMatch = ps.transform.match(/matrix\(([^)]+)\)/);
+      // 纯平移（如 left:50%; transform:translateX(-50%) 水平居中）同样需要修正坐标，
+      // 不能只判断 rotation !== 0，还需检测矩阵中 tx/ty 是否非零
+      var _hasMeaningfulTranslate = false;
+      if (_matMatch) {
+        var _txCheckParts = _matMatch[1].split(',').map(function(s) { return parseFloat(s.trim()); });
+        if (_txCheckParts.length >= 6) {
+          _hasMeaningfulTranslate = Math.abs(_txCheckParts[4]) > 0.5 || Math.abs(_txCheckParts[5]) > 0.5;
+        }
+      }
+      if ((psRotation != null && psRotation !== 0) || _hasMeaningfulTranslate) {
+        // CSS rotation 顺时针为正，Figma rotation 逆时针为正，需取反
+        if (psRotation != null && psRotation !== 0) shapeStyle.rotation = -psRotation;
+
+        // checkbox-inner / radio-inner 的选中标记（::after）：
+        // CSS 通过 top:50%; left:~22%; transform:rotate(45deg) translate(-50%,-50%) 实现视觉居中。
+        // 直接用父容器尺寸居中，比反推矩阵更简洁准确。
+        var _elClassForCenter = String((el && el.className) || '');
+        if (/checkbox-inner|radio-inner/i.test(_elClassForCenter)) {
+          // 由父容器 walk 层用 Auto Layout 居中，不在这里设绝对定位坐标
+          delete shapeStyle.x;
+          delete shapeStyle.y;
+          delete shapeStyle.positionType;
+        } else if (_matMatch) {
           var _mParts = _matMatch[1].split(',').map(function(s) { return parseFloat(s.trim()); });
           if (_mParts.length >= 6) {
             var _ma = _mParts[0], _mb = _mParts[1], _mc = _mParts[2], _md = _mParts[3];
@@ -543,23 +560,21 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
               _mty = _mty + _oy * (1 - _md) - _mb * _ox;
             }
 
-            // 元素在宿主 CSS 坐标系（padding-edge 相对）中的预变换中心
-            // safeX/safeY 已正确处理 psLeft/psRight/psTop/psBottom 所有情况，但包含 hostBorder 偏移
-            // 转回 CSS padding-box 坐标系：减去 hostBorder
-            var _preCx = (safeX - hostBorderLeft) + w / 2;
-            var _preCy = (safeY - hostBorderTop) + h / 2;
-            // 应用含 origin 修正的矩阵，得到 CSS 视觉中心（仍在 padding-box 坐标系内）
-            var _postCx = _ma * _preCx + _mc * _preCy + _mtx;
-            var _postCy = _mb * _preCx + _md * _preCy + _mty;
-            // 转回 Figma 坐标系（border-edge 相对）：加上 hostBorder
+            // M_full（含 origin 修正）将元素局部坐标（相对自身 border-box 左上角）映射为位移量。
+            // 视觉中心 = 元素 Figma 位置(safeX, safeY) + M_full × 局部中心(w/2, h/2)
+            // 注意：不能将父坐标系的中心传入矩阵，CSS transform 只作用于局部坐标。
+            var _localCx = w / 2;
+            var _localCy = h / 2;
+            var _visualCx = safeX + (_ma * _localCx + _mc * _localCy + _mtx);
+            var _visualCy = safeY + (_mb * _localCx + _md * _localCy + _mty);
             // 令 Figma 矩形中心 = CSS 视觉中心，推算 x/y（Figma rotation 绕矩形中心旋转）
             // 必须用 shapeStyle.width/height（即 Figma 实际尺寸，已 Math.round）做中心计算，
             // 否则 h=1.5 → safeH=2 导致 Figma 中心比预期偏 0.25px
-            shapeStyle.x = _postCx + hostBorderLeft - shapeStyle.width / 2;
-            shapeStyle.y = _postCy + hostBorderTop - shapeStyle.height / 2;
+            shapeStyle.x = _visualCx - shapeStyle.width / 2;
+            shapeStyle.y = _visualCy - shapeStyle.height / 2;
             console.log('[pseudo-transform]', pseudo,
               'ox=' + _ox, 'oy=' + _oy,
-              'postCx=' + _postCx.toFixed(3), 'postCy=' + _postCy.toFixed(3),
+              'visualCx=' + _visualCx.toFixed(3), 'visualCy=' + _visualCy.toFixed(3),
               'figmaX=' + shapeStyle.x.toFixed(3), 'figmaY=' + shapeStyle.y.toFixed(3),
               'figmaW=' + shapeStyle.width, 'figmaH=' + shapeStyle.height,
               'rotation=' + psRotation,
