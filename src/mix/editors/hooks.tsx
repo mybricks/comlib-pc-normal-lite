@@ -37,9 +37,6 @@ export function buildHooks(props: Props) {
       },
       useCSS() {
         function transform(ns) {
-          console.log(ns)
-
-
           if (ns.default?.locals) {
             return ns.default.locals
           } else {
