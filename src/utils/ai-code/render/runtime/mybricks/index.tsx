@@ -182,6 +182,8 @@ function observer<P extends object>(Component: React.FC<P>): React.FC<P> {
 interface CreateMyBricksProps {
   /** 组件ID */
   comId: string
+  /** 运行模式标识（对应外层 runtimeMode） */
+  runtimeMode?: string
   /** 环境 */
   env: {
     runtime: boolean
@@ -198,7 +200,7 @@ interface CreateMyBricksProps {
 }
 
 const createMyBricks = (props: CreateMyBricksProps) => {
-  const { comId, env, data, logger } = props;
+  const { comId, runtimeMode, env, data, logger } = props;
   const mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
@@ -208,7 +210,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   /** 向 debugLogs 追加一条日志记录（按打印顺序入栈） */
   const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
-    debugLogs.append(comId, { ...entry, timestamp: Date.now() });
+    debugLogs.append(comId, { ...entry, timestamp: Date.now(), mode: runtimeMode });
   };
 
 

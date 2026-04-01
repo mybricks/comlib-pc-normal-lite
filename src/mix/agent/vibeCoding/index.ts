@@ -238,6 +238,7 @@ export default function ({ context }) {
         getDesignerState: () => aiComParams?.data?._designerState,
         getErrors: () => aiComParams?.data?._errors,
         getLogs: () => debugLogs.get(focus.comId),
+        snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
       });
 
       const hasAttachments = Array.isArray(params.attachments) && params.attachments?.length > 0;

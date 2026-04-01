@@ -3,7 +3,6 @@ import { useCssApi } from "./hooks";
 import FilesModule from "./FilesModule";
 import ErrorBoundary from "./ErrorBoundary";
 import { createMyBricks } from "./mybricks";
-import { debugLogs } from "../../../../mix/context/debugLogs";
 import { createEnvRunner } from "./mybricks/mybricks-testing";
 import { DataSource } from "./mybricks/data-source";
 
@@ -49,6 +48,8 @@ interface AIJsxRuntimeParams {
 
   /** 是否在 mybricks geo webview 中 */
   inMybricksGeoWebview?: boolean
+  /** 运行模式标识（由外层 runtime-card 计算并写入 data.runtimeMode，快照用于 Agent） */
+  runtimeMode?: string
 }
 
 interface BootstrapProps {
@@ -60,6 +61,7 @@ interface BootstrapProps {
   cssApi: { set: (args: { fileName: string; content: string; old?: boolean }) => void }
   placeholder: React.ReactNode
   activeEnv: string
+  runtimeMode: string
   renderRuntimeError?: (props: { title: string; desc: string; errors: any[]; comId?: string }) => React.ReactNode
 }
 
@@ -69,7 +71,7 @@ interface BootstrapProps {
  * 置于 ErrorBoundary 内部，任何阶段 throw 的错误都由 ErrorBoundary.componentDidCatch 统一捕获，
  * 无需手动 try/catch + 写 data._errors。
  */
-const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError, activeEnv }: BootstrapProps) => {
+const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, placeholder, renderRuntimeError, activeEnv, runtimeMode }: BootstrapProps) => {
   const envRunnerRef = useRef<any>(null);
 
   // 所有初始化：eval dataSource.js → eval setup.js → build FilesModule → getModule('index.jsx')
@@ -79,7 +81,7 @@ const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, 
   const ReactComponent = useMemo(() => {
     initErrorRef.current = null;
     try {
-    const mybricks = createMyBricks({ comId: id, logger, env, data });
+    const mybricks = createMyBricks({ comId: id, runtimeMode, logger, env, data });
     const collectDebugLogs = (mybricks as any)._collectDebugLogs;
 
     // 包装 DataSource：通过 Proxy 拦截用户子类实例的所有方法调用，将调用记录写入 debugLogs
@@ -211,6 +213,7 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
     placeholder,
     logger,
     renderRuntimeError,
+    runtimeMode: externalRuntimeMode,
   } = params;
   const cssApi = useCssApi({ id, env });
 
@@ -218,13 +221,8 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
     return env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
   }, [data._activeDebugEnv, env.edit])
 
-  const runtimeKey = useMemo(() => {
-    if (env.edit) {
-      return `${id}_edit`
-    }
-
-    return `${id}_runtime_${activeEnv}`
-  }, [activeEnv, env.edit, id])
+  // 若外层已传入 runtimeMode（runtime-card），直接使用；否则内部计算兜底
+  const runtimeMode = externalRuntimeMode ?? (env.edit ? `${id}_edit` : `${id}_runtime_${activeEnv}`);
 
   useEffect(() => {
     return () => {
@@ -233,26 +231,15 @@ const AIJsxRuntime = (params: AIJsxRuntimeParams) => {
     }
   }, [])
 
-  // 组件生命周期
-  useEffect(() => {
-    // 重置日志
-    debugLogs.clear(id);
-
-    // 同步当前模式到 data，供 Agent 读取
-    // mode: 'design' | 'runtime_mock' | 'runtime_prod'
-    if (!data._designerState) data._designerState = { pages: [], popups: [] };
-    
-    data._designerState.mode = env.edit ? 'design' : activeEnv;
-  }, [runtimeKey, activeEnv, env.edit])
-
   return (
     <ErrorBoundary data={data} renderRuntimeError={renderRuntimeError} comId={id}>
       <BootstrapReactComponent
         id={id}
-        key={runtimeKey}
+        key={runtimeMode}
         env={env}
         data={data}
         activeEnv={activeEnv}
+        runtimeMode={runtimeMode}
         dependencies={dependencies}
         logger={logger}
         cssApi={cssApi}

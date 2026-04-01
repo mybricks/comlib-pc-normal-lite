@@ -1,4 +1,5 @@
 import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef} from 'react'
+import { debugLogs } from '../../../mix/context/debugLogs'
 import ReactDom from 'react-dom';
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
@@ -200,6 +201,16 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       return () => observer.disconnect();
     }, []);
 
+    // 计算 runtimeMode：唯一标识当前运行模式（设计态 / runtime_mock / runtime_prod）
+    const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
+    const runtimeMode = env.edit ? `${id}_edit` : `${id}_runtime_${activeEnv}`;
+
+    // runtimeMode 变化时：写入 data.runtimeMode，并清除该组件同 runtimeMode 的历史日志
+    useEffect(() => {
+      data.runtimeMode = runtimeMode;
+      debugLogs.clearByMode(id, runtimeMode);
+    }, [runtimeMode]);
+
     /**
      * 【重要】errorInfo 只响应 compile 错误（type !== 'runtime'），用于阻断渲染并展示编译失败面板。
      * runtime 错误由 ErrorBoundary 在内部捕获并渲染 RuntimeErrorView，不在此处处理。
@@ -323,6 +334,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             data={data}
             inputs={inputs}
             outputs={outputs}
+            runtimeMode={runtimeMode}
             placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
             renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
             dependencies={{

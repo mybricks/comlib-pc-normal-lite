@@ -29,11 +29,13 @@ export interface ProjectConfig {
   /** 获取主题配置全文 */
   getThemesContent: () => string;
   /** 获取设计器运行时状态（由渲染层写入） */
-  getDesignerState?: () => { mode?: string; pages: string[]; popups: string[] } | undefined;
+  getDesignerState?: () => { pages: string[]; popups: string[] } | undefined;
   /** 获取当前运行时报错列表 */
   getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
   /** 获取本次组件加载后收集到的日志列表（每次重载重置） */
-  getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number }> | undefined;
+  getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number; mode?: string }> | undefined;
+  /** createProject 时快照的 runtimeMode（`${id}_edit` / `${id}_runtime_mock` 等），用于过滤日志和固定设计器状态描述 */
+  snapshotRuntimeMode?: string;
 
 
   getFiles: () => any[];
@@ -218,14 +220,12 @@ export class Project {
   // private root: ProjectNode;
   /** 通过 read(name) 展开的组件名集合 */
   private expandedNames = new Set<string>();
+  /** createProject 时快照的 runtimeMode，用于固定 exportDesignerToMessage / exportLogsToMessage 的视角 */
+  private snapshotRuntimeMode: string | undefined;
 
   constructor(config: ProjectConfig) {
     this.config = config;
-    // const rootNode = config.projectJson?.[0];
-    // if (!rootNode) {
-    //   throw new Error('[Project] projectJson 需至少包含一个根节点');
-    // }
-    // this.root = rootNode;
+    this.snapshotRuntimeMode = config.snapshotRuntimeMode;
   }
 
   /**
@@ -278,8 +278,12 @@ export class Project {
    */
   exportLogsToMessage(maxCount = 30, maxArgLength = 50): string {
     const allLogs = this.config.getLogs?.() ?? [];
-    const logs = allLogs.slice(-maxCount);
-    const truncatedCount = allLogs.length - logs.length;
+    // 若有快照 runtimeMode，只展示该模式下的日志；否则展示全部
+    const filtered = this.snapshotRuntimeMode
+      ? allLogs.filter((entry) => entry.mode === this.snapshotRuntimeMode)
+      : allLogs;
+    const logs = filtered.slice(-maxCount);
+    const truncatedCount = filtered.length - logs.length;
     if (logs.length === 0) {
       return `\n## 运行日志\n  （本次载入暂无日志）\n`;
     }
@@ -315,8 +319,14 @@ export class Project {
 `;
 
     const state = this.config.getDesignerState?.();
-    const mode = state?.mode ?? 'design';
-    const modeLabel = mode === 'design' ? '设计态' : `运行态(${mode}环境)`
+    // 优先使用创建时快照的 runtimeMode 推断模式；否则回退到实时状态
+    let mode: string;
+    if (this.snapshotRuntimeMode) {
+      mode = this.snapshotRuntimeMode.endsWith('_edit') ? 'design' : (state?.mode ?? 'design');
+    } else {
+      mode = state?.mode ?? 'design';
+    }
+    const modeLabel = mode === 'design' ? '设计态' : `运行态(${mode.replace(/^.*_runtime_/, '')}环境)`;
     
     const pageRefNames = state?.pages ?? [];
     const popupRefNames = state?.popups ?? [];
