@@ -373,7 +373,10 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         node.type = 'frame';
         node.content = undefined;
         node.children = _pseudoChildren;
-        node.style = { x: node.style && node.style.x, y: node.style && node.style.y, width: node.style && node.style.width, layoutMode: 'HORIZONTAL', itemSpacing: 0, counterAxisAlignItems: 'CENTER', layoutSizingHorizontal: 'HUG', layoutSizingVertical: 'HUG' };
+        // 保留原始 DOM height：对于有明确 CSS height 的元素（如 ant-form-item-label > label { height: 32px }），
+        // DOM 高度是设计值而非 flex-stretch 副产品，应用 FIXED 保证导入 Figma 后尺寸正确。
+        var _origFrameHeight = node.style && node.style.height;
+        node.style = { x: node.style && node.style.x, y: node.style && node.style.y, width: node.style && node.style.width, height: (_origFrameHeight != null) ? _origFrameHeight : undefined, layoutMode: 'HORIZONTAL', itemSpacing: 0, counterAxisAlignItems: 'CENTER', layoutSizingHorizontal: 'HUG', layoutSizingVertical: (_origFrameHeight != null) ? 'FIXED' : 'HUG' };
         var _dbgUpgradeCls = (el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0,3).join(' ') : '';
       }
     }
