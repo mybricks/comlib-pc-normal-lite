@@ -49,6 +49,7 @@ class Context {
     'debugTarget': any;
     'fileChange': any;
     'runtimeError': Error | null
+    'compileError': any[]
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
@@ -519,6 +520,8 @@ class Context {
           console.error("[@parsemd error]", e);
         }
       }
+
+      this.getAiComEvents(id).emit("compileError", aiComParams.data._errors)
     }
 
     this.getAiComEvents(id)?.emit('fileChange', null);

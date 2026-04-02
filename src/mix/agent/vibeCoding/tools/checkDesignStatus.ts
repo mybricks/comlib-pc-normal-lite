@@ -7,13 +7,13 @@ const NAME = 'checkDesignStatus';
 
 export interface CheckDesignStatusConfig {
   project: Project;
-  onProgress: any;
   /** 本次请求是否成功修改了代码的共享标志 */
   codeModifiedFlag?: { value: boolean };
+  setLock: (type: 'lock' | 'unlock') => void;
 }
 
 export default function checkDesignStatus(config: CheckDesignStatusConfig): any {
-  const { project, onProgress, codeModifiedFlag } = config;
+  const { project, setLock, codeModifiedFlag } = config;
 
   return {
     name: NAME,
@@ -31,12 +31,13 @@ export default function checkDesignStatus(config: CheckDesignStatusConfig): any 
 
           const commands: any[] = [];
 
+          setLock('unlock')
+
           if (hasErrors) {
             if (!context.commands?.find((command: any) => command.name === developMyBricksModule.toolName)) {
               commands.push({ toolName: developMyBricksModule.toolName });
             }
           } else {
-            onProgress?.('complete')
             if (codeModifiedFlag?.value && !context.commands?.find((command: any) => command.name === syncMarkdownformybricksModule.toolName)) {
               commands.push({ toolName: syncMarkdownformybricksModule.toolName });
               codeModifiedFlag.value = false;

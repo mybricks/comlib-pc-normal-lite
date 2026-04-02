@@ -17,9 +17,10 @@ interface Config {
   hasAttachments?: boolean;
   /** 本次请求是否成功修改了代码的共享标志，修改成功后设为 true */
   codeModifiedFlag?: { value: boolean };
+  setLock: (type: 'lock' | 'unlock') => void;
 }
 
-export default function developMyBricksModule(config: Config = {}) {
+export default function developMyBricksModule(config: Config) {
   const langs = "React、Less"
   const libTitles = `${langs}、mybricks`
   const allLibNamesStr = getAllLibraryNames().join(', ')
@@ -47,6 +48,7 @@ export default function developMyBricksModule(config: Config = {}) {
 !IMPORTANT: 所有涉及代码的生成/修改都必须包含该工具的调用。
 `,
     getPrompts: () => {
+      config.setLock('lock')
       return `
 <你的角色与任务>
   你是MyBricks模块开发专家同时也是一名资深的前端开发专家、架构师，技术资深、逻辑严谨、实事求是，同时具备专业的审美和设计能力。
@@ -882,6 +884,7 @@ export default function developMyBricksModule(config: Config = {}) {
           return raw
             .replace(/action\.json/g, actionReason)
         } else {
+          config.setLock('unlock')
           const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
           const msg = result ? formatUpdateResult(result) : '';
 

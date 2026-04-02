@@ -153,6 +153,7 @@ export default function ({ context }) {
     goal: '根据用户需要，开发可运行在MyBricks平台的模块',
     backstory: `基于React + Less`,
     request({ rxai, params, focus }: any) {
+      const { focusArea } = focus;
       const aiCom = context.getAiCom(focus.comId);
       const { aiComParams, actions } = aiCom;
 
@@ -161,38 +162,47 @@ export default function ({ context }) {
       let updateFile = false;
       let complete;
 
-      const onProgress = (status) => {
-        const { focusArea } = focus;
-        if (!focusArea) {
-          if (status === "start") {
-            params?.onProgress?.(status);
-          } else if (status === "complete") {
-            if (!complete) {
-              complete = true;
-              params?.onProgress?.(status);
-            }
-          } else if (status === "error") {
-            params?.onProgress?.(status);
-          }
-        } else {
-          if (status === "start") {
-            actions.lock(lockId, focusArea);
-          } else if (status === "complete") {
-            if (!complete) {
-              complete = true;
-              actions.unlock(lockId, focusArea);
-            }
-          } else if (status === "error") {
-            actions.unlock(lockId, focusArea);
-          }
-        }
+      let compileError: any = null
+      let runtimeError: any = null
 
+      const events = context.getAiComEvents(focus.comId);
+      const offCompileError = events.on("compileError", (error) => {
+        compileError = error?.length ? error : null
+      })
+      const offRuntimeError = events.on("runtimeError", (error) => {
+        runtimeError = error
+      })
+
+      let lockType;
+
+      const setLock = (type: "lock" | "unlock") => {
+        if (lockType === type) {
+          return
+        }
+        lockType = type
+        if (!focusArea || (compileError || runtimeError)) {
+          // 组件，没有选区或者有报错
+          params?.onProgress?.(type === "lock" ? "start" : "complete");
+        } else {
+          // 区域
+          actions[type](lockId, focusArea);
+        }
+      }
+
+      const onProgress = (status) => {
         if (status === "start") {
           (window as any).__vibeCodingCallbacks__?.onStart?.();
+          setLock("lock");
         } else if (status === "complete") {
           (window as any).__vibeCodingCallbacks__?.onComplete?.();
+          setLock("unlock");
+          offCompileError();
+          offRuntimeError();
         } else if (status === "error") {
           (window as any).__vibeCodingCallbacks__?.onError?.();
+          setLock("unlock");
+          offCompileError();
+          offRuntimeError();
         }
       }
 
@@ -242,6 +252,8 @@ export default function ({ context }) {
       });
 
       const hasAttachments = Array.isArray(params.attachments) && params.attachments?.length > 0;
+
+      onProgress("start");
 
       return new Promise((resolve, reject) => {
         // 基础配置（放在 Promise 内，以便 emits 能正确使用 resolve/reject）
@@ -316,10 +328,11 @@ ${text}
               hasAttachments,
               onUpdate: onUpdateFiles,
               codeModifiedFlag,
+              setLock
             }),
-            checkDesignStatus({ project, onProgress, codeModifiedFlag }),
+            checkDesignStatus({ project, setLock, codeModifiedFlag }),
             syncMarkdownformybricksModule({
-              onProgress,
+              setLock,
               onUpdate: (p) => {
                 const files = p.files;
                 const summary = files.find((f) => f.fileName === "summary.md")
@@ -358,7 +371,6 @@ ${text}
           onPlan: (plan) => {
             planAgent = plan;
             params?.onPlan?.(plan);
-            onProgress("start");
           }
         };
 
