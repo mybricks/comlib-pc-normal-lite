@@ -63,7 +63,8 @@ function inlineImageFillsInTree(obj) {
       if (fill && fill.type === 'IMAGE' && fill.url && !fill.content) {
         promises.push(
           fetchImageAsBase64DataUrl(fill.url).then(function (dataUrl) {
-            style.fills[i] = { type: 'IMAGE', content: dataUrl };
+            // 保留原 fill 上的所有字段（如 scaleMode、scalingFactor），仅替换 content，清除 url
+            style.fills[i] = Object.assign({}, fill, { content: dataUrl, url: undefined });
           }).catch(function (err) {
             console.warn('[image fill] 内联失败', fill.url, err && err.message);
           })

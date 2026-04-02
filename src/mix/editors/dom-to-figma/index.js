@@ -223,10 +223,6 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
     const nodeType = inferNodeType(el, computed, tag);
     const style = buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont);
 
-    // [debug] 追踪 input 节点处理路径
-    if (tag === 'input') {
-    }
-
     const node = {
       type: nodeType,
       name: el.getAttribute('aria-label') || (el.className && typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : null) || tag,
@@ -235,6 +231,12 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
       content: undefined,
       children: undefined,
     };
+    // inferNodeType 只读 computed.display，但 buildStyleJSON 优先读 decl（cssRuleMap 声明）。
+    // 当 decl.display 为 flex 时 style 会有 layoutMode，但 computed.display 可能仍为 inline，
+    // 导致 type='group' + layoutMode 同时出现。Figma Group 不支持 Auto Layout，需升级为 frame。
+    if (node.type === 'group' && node.style && node.style.layoutMode) {
+      node.type = 'frame';
+    }
     // 标记 radio-button-wrapper-checked（className 字段只存第一个 class，需从 DOM 全类名单独判断）
     if (el.className && typeof el.className === 'string' && el.className.indexOf('ant-radio-button-wrapper-checked') !== -1) {
       node._checkedWrapper = true;

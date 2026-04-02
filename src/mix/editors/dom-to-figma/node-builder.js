@@ -22,6 +22,9 @@ var cssColorToRgba = _nbcp.cssColorToRgba || cssColorToRgba;
 var cssColorToHex = _nbcp.cssColorToHex || cssColorToHex;
 var parseBoxShadow = _nbcp.parseBoxShadow || parseBoxShadow;
 var parseTransformRotation = _nbcp.parseTransformRotation || parseTransformRotation;
+var parseLinearGradientFromBgImage = _nbcp.parseLinearGradientFromBgImage || (typeof parseLinearGradientFromBgImage !== 'undefined' ? parseLinearGradientFromBgImage : null);
+var parseRadialGradientFromBgImage = _nbcp.parseRadialGradientFromBgImage || (typeof parseRadialGradientFromBgImage !== 'undefined' ? parseRadialGradientFromBgImage : null);
+var parseUrlFromBgImage = _nbcp.parseUrlFromBgImage || (typeof parseUrlFromBgImage !== 'undefined' ? parseUrlFromBgImage : null);
 var buildInlineTextStyle = _nbsb.buildInlineTextStyle || buildInlineTextStyle;
 var hasClassPrefix = _nbdh.hasClassPrefix || hasClassPrefix;
 
@@ -385,14 +388,11 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
 
     var ps = window.getComputedStyle(el, pseudo);
     var content = ps.content;
-    var _dbgCls = (el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0,3).join(' ') : String(el.className || '');
-    console.log('[pseudo-debug] el:', _dbgCls, '| pseudo:', pseudo, '| getComputedStyle content:', JSON.stringify(content));
     // content 为 none / normal 时：getComputedStyle 在 Shadow DOM 下可能读不到外部样式表的伪元素规则，
     // 用 _getPseudoPropsFromSheets 扫描所有可访问样式表作为兜底；若仍无内容则跳过。
 
     if (!content || content === 'none' || content === 'normal') {
       var _fallbackProps = _getPseudoPropsFromSheets(el, pseudo);
-      console.log('[pseudo-debug] fallback sheet scan result:', _fallbackProps);
       if (!_fallbackProps || !_fallbackProps['content']) return null;
       var _fc = _fallbackProps['content'];
       if (!_fc || _fc === 'none' || _fc === 'normal') return null;
@@ -412,15 +412,12 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
         }
       );
       content = _fc;
-      console.log('[pseudo-debug] using fallback, content now:', JSON.stringify(content));
     }
     // 过滤 display:none 或 visibility:hidden 或 opacity:0 的伪元素（如 Ant Design 动画层）
     if (ps.display === 'none' || ps.visibility === 'hidden') {
-      console.log('[pseudo-debug] skipped: display/visibility hidden, el:', _dbgCls);
       return null;
     }
     if (parseFloat(ps.opacity) === 0) {
-      console.log('[pseudo-debug] skipped: opacity 0, el:', _dbgCls);
       return null;
     }
     // content: '""' 或去引号 trim 后为空 / 无可见字符 → 尝试图形型伪元素（border/background 分割线等）
@@ -429,7 +426,6 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
     // 注意：Shadow DOM 下 getComputedStyle 有时返回不带引号的原始值（如 '*' 而非 '"*"'），
     // replace 在无引号时不做任何改变，text 仍能得到正确内容，不需要特殊处理。
     var text = content.replace(/^["']|["']$/g, '');
-    console.log('[pseudo-debug] stripped text:', JSON.stringify(text), '| el:', _dbgCls);
     if (!text) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
     // 纯空白内容（如 content: " "）：有背景色或可见边框说明是图形占位符（如 radio 圆点），走图形分支；
     // 否则保留空格作为真实文本节点输出。
@@ -495,7 +491,6 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
       content: text,
       style: pseudoStyle,
     };
-    console.log('[pseudo-debug] RETURN node:', _pseudoReturnNode.name, '| content:', _pseudoReturnNode.content, '| el:', _dbgCls);
     return _pseudoReturnNode;
   } catch (e) {
     console.warn('[pseudo] catch error', { pseudo, tag: el && el.tagName, error: String(e), stack: e && e.stack });
@@ -530,8 +525,12 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
     var bgColor = ps.backgroundColor;
     var bgNotEmpty = bgColor && bgColor !== 'transparent' && bgColor !== 'rgba(0, 0, 0, 0)';
 
-    // 既无 border 也无背景色 → 不可见，跳过
-    if (!hasBorder && !bgNotEmpty) return null;
+    // 读取 background-image（URL 或渐变，如 ant-steps 连接线用 url() 绘制）
+    var bgImage = ps.backgroundImage;
+    var hasBgImage = bgImage && bgImage !== 'none' && bgImage !== '';
+
+    // 既无 border 也无背景色也无背景图 → 不可见，跳过
+    if (!hasBorder && !bgNotEmpty && !hasBgImage) return null;
 
     // --- 坐标估算 ---
     // 伪元素是 position:absolute，解析 top/right/bottom/left 值（px 值才可用，auto 则忽略）
@@ -689,14 +688,6 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
             // 否则 h=1.5 → safeH=2 导致 Figma 中心比预期偏 0.25px
             shapeStyle.x = _visualCx - shapeStyle.width / 2;
             shapeStyle.y = _visualCy - shapeStyle.height / 2;
-            console.log('[pseudo-transform]', pseudo,
-              'ox=' + _ox, 'oy=' + _oy,
-              'visualCx=' + _visualCx.toFixed(3), 'visualCy=' + _visualCy.toFixed(3),
-              'figmaX=' + shapeStyle.x.toFixed(3), 'figmaY=' + shapeStyle.y.toFixed(3),
-              'figmaW=' + shapeStyle.width, 'figmaH=' + shapeStyle.height,
-              'rotation=' + psRotation,
-              'figmaCenter=(' + (shapeStyle.x + shapeStyle.width / 2).toFixed(3) + ',' + (shapeStyle.y + shapeStyle.height / 2).toFixed(3) + ')'
-            );
           }
         }
       }
@@ -727,11 +718,36 @@ function getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect) {
       }
     }
 
-    // background-color → fills
+    // background-color / background-image → fills
     if (bgNotEmpty) {
       var bgRgba = cssColorToRgba(bgColor);
       if (bgRgba) shapeStyle.fills = [bgRgba];
       else shapeStyle.fills = [];
+    } else if (hasBgImage) {
+      // background-image（URL 或渐变）：渐变走解析路径；URL 走 IMAGE fill，与普通元素一致，
+      // 供 inlineImageFillsInTree 自动 fetch 并转为 base64。
+      var _parsedGrad = null;
+      try {
+        if (bgImage.indexOf('linear-gradient') !== -1) {
+          _parsedGrad = parseLinearGradientFromBgImage && parseLinearGradientFromBgImage(bgImage, shapeStyle.width, shapeStyle.height);
+        } else if (bgImage.indexOf('radial-gradient') !== -1) {
+          _parsedGrad = parseRadialGradientFromBgImage && parseRadialGradientFromBgImage(bgImage);
+        }
+      } catch (_ge) {}
+      if (_parsedGrad) {
+        shapeStyle.fills = [_parsedGrad];
+      } else {
+        var _bgUrl = parseUrlFromBgImage ? parseUrlFromBgImage(bgImage) : null;
+        if (_bgUrl) {
+          var _bgRepeat = (ps.backgroundRepeat || '').toLowerCase();
+          var _isTile = _bgRepeat && _bgRepeat !== 'no-repeat';
+          var _imgFill = { type: 'IMAGE', url: _bgUrl };
+          if (_isTile) _imgFill.scaleMode = 'TILE';
+          shapeStyle.fills = [_imgFill];
+        } else {
+          shapeStyle.fills = [];
+        }
+      }
     } else {
       shapeStyle.fills = [];
     }

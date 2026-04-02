@@ -27,10 +27,8 @@ function getM(node, side) {
  * @param {object} parentStyle
  * @param {object} childStyle
  * @param {string} layoutMode 'HORIZONTAL' | 'VERTICAL'
- * @param {string} [dbgParent] 调试用：父节点 name/class
- * @param {string} [dbgChild] 调试用：子节点 name/class
  */
-function pruneChildMarginsAfterGapMerge(parentStyle, childStyle, layoutMode, dbgParent, dbgChild) {
+function pruneChildMarginsAfterGapMerge(parentStyle, childStyle, layoutMode) {
   if (!childStyle) return;
   var spacing = parentStyle && parentStyle.itemSpacing != null ? parentStyle.itemSpacing : 0;
   var thresh = spacing + 1;
@@ -59,28 +57,6 @@ function pruneChildMarginsAfterGapMerge(parentStyle, childStyle, layoutMode, dbg
     if (childStyle.marginRight != null) delete childStyle.marginRight;
     if (childStyle.marginBottom != null) delete childStyle.marginBottom;
     if (childStyle.marginLeft != null) delete childStyle.marginLeft;
-  }
-  var _dp = dbgParent != null ? String(dbgParent) : '';
-  var _dc = dbgChild != null ? String(dbgChild) : '';
-  var _wantDbg =
-    (parentStyle && parentStyle.layoutWrap === 'WRAP') ||
-    _dp.indexOf('filterArea') >= 0 ||
-    _dc.indexOf('filterActions') >= 0;
-  if (_wantDbg) {
-    try {
-      console.log('[mb-d2f:pruneChildMargin]', _dp || '?', '→', _dc || '?', {
-        layoutMode: layoutMode,
-        itemSpacing: spacing,
-        thresh: thresh,
-        before: { marginLeft: ml0, marginRight: mr0 },
-        after: { marginLeft: childStyle.marginLeft, marginRight: childStyle.marginRight },
-        preservedLargeMainMargin:
-          (layoutMode === 'HORIZONTAL' &&
-            ((ml0 != null && ml0 > thresh && childStyle.marginLeft === ml0) ||
-              (mr0 != null && mr0 > thresh && childStyle.marginRight === mr0))) ||
-          false,
-      });
-    } catch (_eDbg) {}
   }
 }
 

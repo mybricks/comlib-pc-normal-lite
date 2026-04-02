@@ -174,7 +174,6 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     const angle = parseTransformRotation(computed.transform);
     if (angle != null) {
       style.rotation = -angle; // CSS 顺时针为正，Figma 逆时针为正，需取反
-
       // getBoundingClientRect 返回旋转后的 AABB，Figma 需要「未旋转」的尺寸与中心对齐的 x/y。
       // AABB 中心 = 元素旋转中心（transform-origin: 50% 50%），以此反推未旋转尺寸与正确 x/y。
       if (angle !== 0 && rect.width != null && rect.height != null) {
@@ -196,6 +195,46 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
             style.y = Math.round(cy - origH / 2);
             style.width = origW;
             style.height = origH;
+          }
+        }
+      }
+    }
+  } else {
+    // CSS Transforms Level 2 独立属性：rotate / scale / translate。
+    // 部分浏览器中 getComputedStyle(el).transform 对这类属性返回 'none'，
+    // 需要单独读取 computed.rotate 作为兜底。
+    // rotate 属性格式：'-90deg' | '0.5turn' | '1rad' 等
+    var _rotateRaw = (computed && computed.rotate) || '';
+    if (_rotateRaw && _rotateRaw !== 'none') {
+      var _rotateAngle = null;
+      if (_rotateRaw.endsWith('deg')) {
+        _rotateAngle = parseFloat(_rotateRaw);
+      } else if (_rotateRaw.endsWith('rad')) {
+        _rotateAngle = parseFloat(_rotateRaw) * 180 / Math.PI;
+      } else if (_rotateRaw.endsWith('turn')) {
+        _rotateAngle = parseFloat(_rotateRaw) * 360;
+      }
+      if (_rotateAngle != null && !isNaN(_rotateAngle) && _rotateAngle !== 0) {
+        style.rotation = -_rotateAngle; // CSS 顺时针为正，Figma 逆时针为正
+        // 同样需要修正 AABB → 未旋转尺寸与 x/y
+        if (rect.width != null && rect.height != null) {
+          const _rRad = (_rotateAngle * Math.PI) / 180;
+          const _rCosA = Math.abs(Math.cos(_rRad));
+          const _rSinA = Math.abs(Math.sin(_rRad));
+          const _rDet = _rCosA * _rCosA - _rSinA * _rSinA;
+          if (Math.abs(_rDet) > 0.01) {
+            const _rAabbW = rect.width;
+            const _rAabbH = rect.height;
+            const _rOrigW = (_rAabbW * _rCosA - _rAabbH * _rSinA) / _rDet;
+            const _rOrigH = (_rAabbH * _rCosA - _rAabbW * _rSinA) / _rDet;
+            if (_rOrigW > 0 && _rOrigH > 0) {
+              const _rCx = style.x + _rAabbW / 2;
+              const _rCy = style.y + _rAabbH / 2;
+              style.x = Math.round(_rCx - _rOrigW / 2);
+              style.y = Math.round(_rCy - _rOrigH / 2);
+              style.width = _rOrigW;
+              style.height = _rOrigH;
+            }
           }
         }
       }
@@ -688,19 +727,6 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   if (typeof _mLRaw === 'string' && _mLRaw.trim() === 'auto' &&
       typeof _mRRaw === 'string' && _mRRaw.trim() === 'auto') {
     style._marginAutoH = true;
-  }
-
-  if (el.className && typeof el.className === 'string' && el.className.indexOf('filterActions') !== -1) {
-    try {
-      console.log('[mb-d2f:filterActions:buildStyle]', {
-        className: el.className,
-        marginLeftPx: mL,
-        marginRightPx: mR,
-        rawDeclaredML: _mLRaw,
-        computedMarginLeft: computed.marginLeft,
-        computedMarginRight: computed.marginRight,
-      });
-    } catch (_eFa3) {}
   }
 
   // position: absolute/fixed → 消费端需让该节点脱离 Auto Layout 流式排布，统一标记为 'absolute'
