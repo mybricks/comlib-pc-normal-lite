@@ -57,7 +57,7 @@ export class DataSource {
             headers: cfg.headers,
             body: body ?? cfg.data,
             params: cfg.params,
-          }).then((res: any) => res?.data ?? res);
+          })
         }
 
         // 相对路径：确保路径以 /api 开头，通过代理端口转发
@@ -70,7 +70,7 @@ export class DataSource {
             headers: cfg.headers,
             body: body ?? cfg.data,
             params: cfg.params,
-          }).then((res: any) => res?.data ?? res);
+          });
         });
       };
 
