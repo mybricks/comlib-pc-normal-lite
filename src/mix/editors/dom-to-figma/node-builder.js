@@ -428,12 +428,17 @@ function getPseudoTextNode(el, pseudo, geo, parentRect, elRect, cssRuleMap, glob
     var text = content.replace(/^["']|["']$/g, '');
     if (!text) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
     // 纯空白内容（如 content: " "）：有背景色或可见边框说明是图形占位符（如 radio 圆点），走图形分支；
-    // 否则保留空格作为真实文本节点输出。
+    // 有 margin 说明是 margin 载体（如 ant-form-item-label::after margin-right:8px 用于撑开与右侧输入框的间距），保留；
+    // 三者均无则真正无意义，直接跳过。
     if (!/\S/.test(text)) {
       var _bg = ps.backgroundColor || '';
       var _hasBg = _bg && _bg !== 'transparent' && _bg !== 'rgba(0, 0, 0, 0)';
       var _hasBorder = ps.borderStyle && ps.borderStyle !== 'none' && parseFloat(ps.borderWidth || 0) > 0;
       if (_hasBg || _hasBorder) return getPseudoShapeNode(el, pseudo, ps, geo, parentRect, elRect);
+      var _mEnd   = parseFloat(ps.marginInlineEnd   || ps.marginRight) || 0;
+      var _mStart = parseFloat(ps.marginInlineStart || ps.marginLeft)  || 0;
+      if (_mEnd <= 0 && _mStart <= 0) return null;
+      // 有有效 margin，fall-through 到后续文本节点生成逻辑，保留间距载体
     }
 
     var fontSize = parseFloat(ps.fontSize) || 14;

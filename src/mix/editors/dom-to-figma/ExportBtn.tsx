@@ -53,6 +53,8 @@ export function ExportFigmaBtn({ buttonStyle, focusArea, comId }: Props) {
     // 双 rAF：第一帧让 React flush loading 状态，第二帧让浏览器完成绘制，之后再执行同步 DOM 遍历
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+      // 先清空剪切板，防止导出失败时用户误用旧 JSON
+      navigator.clipboard.writeText('').catch(() => {});
       fn(ele, comId)
         .then((result: any) => {
           const jsonStr = JSON.stringify(result, null, 2);
