@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import Editor, { HandlerType } from "@mybricks/coder/dist/umd";
+import Editor, { HandlerType, Monaco, StandaloneCodeEditor } from "@mybricks/coder/dist/umd";
 import context from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
@@ -19,8 +19,32 @@ interface Params {
 }
 
 export const lowcodeViewEvents = new Events<{
-  'viewCode': {fileName: string, codeLine: [number, number]};
+  'viewCode': {fileName: string, codeLine?: [number, number]};
 }>();
+
+// 从编辑器某一行的某列，提取相对路径引用（./xxx 或 ../xxx）
+// 返回 { importPath, startColumn, endColumn } 或 null
+const getRelativeImportAtPosition = ({
+  column,
+  lineContent
+}) => {
+  // [TODO] 判断不够健壮
+  const relativePathRegex = /(?:from\s+|import\s+)["'](\.[^"']+)["']/;
+  const match = relativePathRegex.exec(lineContent);
+  if (!match) return null;
+
+  const importPath = match[1];
+  const pathStartIndex = lineContent.indexOf(importPath, match.index);
+  const startColumn = pathStartIndex + 1;
+  const endColumn = startColumn + importPath.length;
+
+  // 如果提供了列，判断是否在路径范围内
+  if (column !== undefined && (column < startColumn || column > endColumn)) {
+    return null;
+  }
+
+  return { importPath, startColumn, endColumn };
+};
 
 export default function LowcodeView(params: Params) {
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
@@ -172,7 +196,7 @@ export default function LowcodeView(params: Params) {
     let lastEditor;
     let timeOut;
 
-    const off = lowcodeViewEvents.on('viewCode', async ({ fileName, codeLine: [start, end]}) => {
+    const off = lowcodeViewEvents.on('viewCode', async ({ fileName, codeLine }) => {
       // [TODO] 闪烁问题
       // 切到runtime代码
       // setSelectedFileName("runtime.jsx");
@@ -221,33 +245,36 @@ export default function LowcodeView(params: Params) {
         lastEditor = editor;
       }
 
-      const currentDeltaDecoration = {
-        range: {
-          startLineNumber: start,
-          startColumn: 1,
-          endLineNumber: end,
-          endColumn: 1,
-        },
-        options: {
-          isWholeLine: true,
-          className: 'highlighted-line',
-          linesDecorationsClassName: 'highlighted-line-decoration',
+      if (codeLine) {
+        const [start, end] = codeLine;
+        const currentDeltaDecoration = {
+          range: {
+            startLineNumber: start,
+            startColumn: 1,
+            endLineNumber: end,
+            endColumn: 1,
+          },
+          options: {
+            isWholeLine: true,
+            className: 'highlighted-line',
+            linesDecorationsClassName: 'highlighted-line-decoration',
+          }
         }
-      }
+        
+        if (!decorationsCollection) {
+          decorationsCollection = editor.createDecorationsCollection([currentDeltaDecoration]);
+        } else {
+          decorationsCollection.clear();
+          decorationsCollection.append([currentDeltaDecoration])
+        }
 
-      if (!decorationsCollection) {
-        decorationsCollection = editor.createDecorationsCollection([currentDeltaDecoration]);
-      } else {
-        decorationsCollection.clear();
-        decorationsCollection.append([currentDeltaDecoration])
+        editor.revealLineInCenter(start)
+        editor.setPosition({ lineNumber: start, column: 1 })
       }
-
-      editor.revealLineInCenter(start)
-      editor.setPosition({ lineNumber: start, column: 1 })
       editor.focus()
 
       timeOut = setTimeout(() => {
-        decorationsCollection.clear();
+        decorationsCollection?.clear();
       }, 3000)
     }, true)
 
@@ -310,6 +337,107 @@ export default function LowcodeView(params: Params) {
   //     return next;
   //   });
   // }, []);
+
+  const mountRef = useRef<any>(null)
+
+  const handleEditorMount = (editor: StandaloneCodeEditor, monaco: Monaco) => {
+    if (mountRef.current) {
+      mountRef.current();
+      mountRef.current = null;
+    }
+    const model = editor.getModel();
+    const decorationsCollection = editor.createDecorationsCollection([]);
+    let relativePath = "";
+
+    const onMouseMove = editor.onMouseMove(({ event, target }) => {
+      if (!event.metaKey) {
+        decorationsCollection.clear()
+        relativePath = ""
+        return
+      }
+
+      const position = target?.position;
+      if (!position) return;
+
+      const result = getRelativeImportAtPosition({ column: position.column, lineContent: model!.getLineContent(position.lineNumber)});
+      if (!result) {
+        decorationsCollection.clear();
+        relativePath = "";
+        return;
+      }
+
+      const { importPath, startColumn, endColumn } = result;
+      relativePath = importPath;
+
+      decorationsCollection.set([{
+        range: new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn),
+        options: {
+          inlineClassName: 'import-path-link',
+        }
+      }]);
+    });
+
+    const onMouseDown = editor.onMouseDown(({ event, target }) => {
+      if (!event.metaKey) {
+        decorationsCollection.clear();
+        relativePath = ""
+        return
+      }
+
+      const position = target?.position;
+
+      // 点击时如果 move 没有设置 relativePath，则重新计算
+      if (!relativePath && position) {
+        const result = getRelativeImportAtPosition({ column: position.column, lineContent: model!.getLineContent(position.lineNumber)});
+        if (result) {
+          relativePath = result.importPath;
+        }
+      }
+
+      const { fileName } = selectFile!;
+
+      let currentPath = fileName.split('/');
+      currentPath = currentPath.slice(0, currentPath.length - 1)
+      const targetPath = relativePath.split('/');
+
+      targetPath.forEach((path) => {
+        if (path === ".") {
+        } else if (path === "..") {
+          currentPath.pop();
+        } else {
+          currentPath.push(path)
+        }
+      })
+
+      const selectFileName = currentPath.join('/')
+      const filesMap = files.reduce((pre, cur) => {
+        pre[cur.fileName] = cur
+        return pre;
+      }, {})
+
+      const candidates = [selectFileName, `${selectFileName}.jsx`, `${selectFileName}.js`, `${selectFileName}/index.jsx`, `${selectFileName}/index.js`];
+      let file;
+      let resolvedFileName = selectFileName;
+      for (const candidate of candidates) {
+        file = filesMap[candidate];
+        if (file) {
+          resolvedFileName = candidate;
+          break;
+        }
+      }
+
+      if (file) {
+        lowcodeViewEvents.emit('viewCode', {
+          fileName: resolvedFileName,
+        })
+      }
+    })
+
+    mountRef.current = () => {
+      onMouseMove.dispose()
+      onMouseDown.dispose()
+    }
+  }
 
   const isDark = useDarkMode();
   const editorTheme = isDark ? 'vs-dark' : 'light';
@@ -382,6 +510,7 @@ export default function LowcodeView(params: Params) {
                 theme={editorTheme}
                 wrapperClassName={css['coder']}
                 onChange={handleEditorChange}
+                onMount={handleEditorMount}
               />
             </div>
           </>
