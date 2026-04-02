@@ -185,8 +185,6 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
     }
 
     var _tc = (el.textContent || '').trim();
-    if (_tc.indexOf('快手本地生活 · 商家中心') !== -1) {
-    }
 
     // Skip invisible or zero-size
     // display:contents 元素自身无盒模型（width/height 均为 0），但其子节点参与布局，需透传遍历
@@ -359,6 +357,7 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
       // 对 text 节点检测伪元素：若 ::before/::after 有内容，升级为 frame，原文本 + 伪元素作为子节点
       var _pseudoBefore = getPseudoTextNode(el, '::before', geo, parentRect, rect, cssRuleMap, globalFont);
       var _pseudoAfter = getPseudoTextNode(el, '::after', geo, parentRect, rect, cssRuleMap, globalFont);
+      var _upgradeCls2 = (el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0,3).join(' ') : '';
       if (_pseudoBefore || _pseudoAfter) {
         // 浅拷贝 style，避免直接修改原始对象（可能被冻结导致 object is not extensible）
         var _textStyle = node.style ? Object.assign({}, node.style) : {};
@@ -374,7 +373,8 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         node.type = 'frame';
         node.content = undefined;
         node.children = _pseudoChildren;
-        node.style = { x: node.style && node.style.x, y: node.style && node.style.y, width: node.style && node.style.width, layoutMode: 'HORIZONTAL', itemSpacing: 0, counterAxisAlignItems: 'CENTER', layoutSizingVertical: 'HUG' };
+        node.style = { x: node.style && node.style.x, y: node.style && node.style.y, width: node.style && node.style.width, layoutMode: 'HORIZONTAL', itemSpacing: 0, counterAxisAlignItems: 'CENTER', layoutSizingHorizontal: 'HUG', layoutSizingVertical: 'HUG' };
+        var _dbgUpgradeCls = (el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0,3).join(' ') : '';
       }
     }
 
@@ -527,7 +527,6 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
                 }
               }
             }
-            console.log("是否为统一margin间距",childrenHaveUniformMargin(childNodes, layoutMode),childNodes,layoutMode)
             if (childrenHaveUniformMargin(childNodes, layoutMode)) {
               applyUniformMarginAsGap(node, childNodes, layoutMode);
             }
@@ -625,27 +624,7 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
           }
           if (_wrapSpacing2 > 0) node.style.counterAxisSpacing = _wrapSpacing2;
         }
-        if (node.className === 'filterArea' && node.style) {
-          try {
-            console.log('[mb-d2f:filterArea:summary]', {
-              layoutMode: node.style.layoutMode,
-              layoutWrap: node.style.layoutWrap,
-              itemSpacing: node.style.itemSpacing,
-              counterAxisSpacing: node.style.counterAxisSpacing,
-              children: childNodes.map(function (c) {
-                var s = c && c.style;
-                return {
-                  name: c && c.name,
-                  className: c && c.className,
-                  x: s && s.x,
-                  y: s && s.y,
-                  marginLeft: s && s.marginLeft,
-                  marginRight: s && s.marginRight,
-                };
-              }),
-            });
-          } catch (_eFa2) {}
-        }
+       
       }
       // 表格行（display: table-row / <tr>）的 border-bottom 需下移到子单元格
       // 因为 Figma 中子 frame 背景会遮盖父 frame 的底部边框，浏览器表格模型不存在这个问题
@@ -739,6 +718,8 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         node.children = undefined;
       }
     }
+    var _dbgReturnCls = (el.className && typeof el.className === 'string') ? el.className.split(' ').slice(0,3).join(' ') : '';
+
     return node;
   }
   var rootDesignRect = getDesignRect(dom, geo);
