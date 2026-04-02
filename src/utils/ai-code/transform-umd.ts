@@ -53,7 +53,8 @@ export function transformTsx(code, ctx?: import('../../mix/availableLibraries/ty
         ],
         babelPlugin({ constituency, fileName: ctx?.fileName }),
         ...validatorPlugins,
-      ]
+      ],
+      retainLines: true,
     }
 
     if (!window.Babel) {

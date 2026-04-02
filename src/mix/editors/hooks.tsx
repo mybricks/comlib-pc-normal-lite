@@ -13,19 +13,28 @@ import * as treeViewCssNS from '../lowcodeView/tree/index.lazy.less';
 import context from '../context';
 import type {Props} from './types';
 
+const errorSet = new Set();
+
 export function buildHooks(props: Props) {
   return {
-    '@error': (err: any) => {
-      const aiComParams = context.getAiComParams(props.id);
-      if (aiComParams?.data) {
-        const data = aiComParams.data;
-        if (!data._errors) data._errors = [];
-        data._errors = [
-          ...data._errors.filter((e: any) => e.file),
-          {message: err.message, type: 'runtime'},
-        ];
-        context.getAiCom(props.id)?.actions?.notifyChanged?.();
-      }
+    '@error': (err: Error) => {
+      console.log("[@error - message]", err.message)
+      console.log("[@error - stack]", err.stack)
+
+      const events = context.getAiComEvents(props.id);
+      events.emit('runtimeError', err)
+
+      
+      // const aiComParams = context.getAiComParams(props.id);
+      // if (aiComParams?.data) {
+      //   const data = aiComParams.data;
+      //   if (!data._errors) data._errors = [];
+      //   data._errors = [
+      //     ...data._errors.filter((e: any) => e.file),
+      //     {message: err.message, type: 'runtime'},
+      //   ];
+      //   context.getAiCom(props.id)?.actions?.notifyChanged?.();
+      // }
     },
 
     '@lowcode': {

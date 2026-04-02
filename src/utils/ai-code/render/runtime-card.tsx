@@ -1,4 +1,4 @@
-import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef} from 'react'
+import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import { debugLogs } from '../../../mix/context/debugLogs'
 import ReactDom from 'react-dom';
 import * as antd from "antd";
@@ -9,6 +9,7 @@ import { AIJsxRuntime } from "./runtime"
 import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
+import context from '../../../mix/context';
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
 export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
@@ -20,21 +21,30 @@ export const CompileErrorView = ({ title = '编译失败', desc = '', errors = [
   return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
 };
 
+/** 运行时错误面板，由 @error 捕获 */
+export const ErrorView = ({ error, comId }) => {
+  return <RuntimeCardErrorView title={"组件运行时错误"} desc={error.message} error={error} comId={comId} source="@error" />;
+}
+
 /** 统一错误面板基础交互组件：编译失败、generate.error、eval 失败等共用同一套样式 */
-export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [], comId, source = '', error }: { title?: string; desc?: string; errors?: any[]; comId?: string; source?: string; error?: Error }) => {
   const onRetry = useCallback(() => {
     let message = '';
-    
-    // 如果有多条错误，组合所有错误信息
-    if (errors && errors.length > 0) {
-      message = '当前组件出现了以下错误：\n';
-      errors.forEach((err, idx) => {
-        const fileLabel = err.file ? `[${err.file}] ` : '[运行时] ';
-        message += `${idx + 1}. ${fileLabel}${err.message}\n`;
-      });
+
+    if (source === "@error" && error) {
+      message = `当前组件运行时出错：${error.message}，以下是错误堆栈信息：\n` + error.stack?.split("\n").slice(0, 2).join("\n")
     } else {
-      // 没有 errors 数组，使用传入的 title 和 desc
-      message = `当前组件出错了，${desc || title || '未知错误'}`;
+      // 如果有多条错误，组合所有错误信息
+      if (errors && errors.length > 0) {
+        message = '当前组件出现了以下错误：\n';
+        errors.forEach((err, idx) => {
+          const fileLabel = err.file ? `[${err.file}] ` : '[运行时] ';
+          message += `${idx + 1}. ${fileLabel}${err.message}\n`;
+        });
+      } else {
+        // 没有 errors 数组，使用传入的 title 和 desc
+        message = `当前组件出错了，${desc || title || '未知错误'}`;
+      } 
     }
     
     (window as any)._showAIDialog_?.(comId);
@@ -59,6 +69,13 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
                 <strong>{err.file || '运行时'}</strong>: {err.message}
               </div>
             ))}
+          </details>
+        )}
+        {source === "@error" && error && (
+          <details className={css.errorDetails}>
+            <div className={css.errorItem}>
+              {error.stack}
+            </div>
           </details>
         )}
         <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
@@ -171,6 +188,19 @@ interface AIRuntimeProps {
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
     const containerRef = useRef<HTMLDivElement>(null);
+
+    const [runtimeError, setRuntimeError] = useState<any>(null);
+
+    useEffect(() => {
+      const offError = context.getAiComEvents(id).on("runtimeError", (err) => {
+        console.log("[err]", err)
+        setRuntimeError(err)
+      }, true)
+
+      return () => {
+        offError?.()
+      }
+    }, [])
 
     // 设计态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
     useEffect(() => {
@@ -325,6 +355,11 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       if (errorInfo) {
         return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
+
+      if (runtimeError) {
+        return <ErrorView error={runtimeError} comId={id}/>
+      }
+
       if (data.files.length) {
         return (
           <AIJsxRuntime

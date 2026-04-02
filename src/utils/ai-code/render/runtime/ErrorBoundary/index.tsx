@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import context from '../../../../../mix/context';
 
 class ErrorBoundary extends Component<any, any> {
   constructor(props) {
@@ -22,21 +23,26 @@ class ErrorBoundary extends Component<any, any> {
     const { data, onError } = this.props as any;
     if (data) {
       if (!data._errors) data._errors = [];
-      const errorMessage = error?.toString ? error.toString() : (errorInfo ? errorInfo.componentStack : '未知运行时错误');
+      // const errorMessage = error?.toString ? error.toString() : (errorInfo ? errorInfo.componentStack : '未知运行时错误');
       // 如果错误来自 eval（runRender 抛出的富化错误），携带 fileName
-      const fileName: string | undefined = (error as any)?.fileName;
+      // const fileName: string | undefined = (error as any)?.fileName;
 
       // 移除旧的运行时错误，写入本次错误
-      data._errors = [
-        ...data._errors.filter((err: any) => err.type !== 'runtime'),
-        {
-          message: errorMessage,
-          type: 'runtime',
-          ...(fileName ? { file: fileName } : {}),
-        }
-      ];
+      // data._errors = [
+      //   ...data._errors.filter((err: any) => err.type !== 'runtime'),
+      //   {
+      //     message: errorMessage,
+      //     type: 'runtime',
+      //     ...(fileName ? { file: fileName } : {}),
+      //   }
+      // ];
 
-      console.log('捕获到运行时错误:', data._errors);
+      context.getAiComEvents(this.props.comId).emit("runtimeError", error)
+
+      console.log('捕获到运行时错误:', {
+        error,
+        errorInfo
+      });
     }
     onError?.();
   }
@@ -44,19 +50,19 @@ class ErrorBoundary extends Component<any, any> {
   componentDidMount() {
     // 组件成功挂载（本次渲染无错），清除旧的 runtime 错误。
     // 此钩子在 componentDidCatch 之前执行，不会误清本次新写入的错误。
-    const { data } = this.props as any;
-    if (data?._errors?.length) {
-      data._errors = data._errors.filter((err: any) => err.type !== 'runtime');
-    }
+    // const { data } = this.props as any;
+    // if (data?._errors?.length) {
+    //   data._errors = data._errors.filter((err: any) => err.type !== 'runtime');
+    // }
   }
 
   componentDidUpdate(prevProps, prevState) {
     // 从错误状态恢复（重新渲染修复了 bug），清除 runtime 错误
     if (prevState.hasError && !this.state.hasError) {
-      const { data } = this.props as any;
-      if (data?._errors?.length) {
-        data._errors = data._errors.filter((err: any) => err.type !== 'runtime');
-      }
+      // const { data } = this.props as any;
+      // if (data?._errors?.length) {
+      //   data._errors = data._errors.filter((err: any) => err.type !== 'runtime');
+      // }
     }
   }
 

@@ -48,6 +48,7 @@ class Context {
   aiComEvents: Record<string, Events<{
     'debugTarget': any;
     'fileChange': any;
+    'runtimeError': Error | null
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
@@ -269,6 +270,9 @@ class Context {
       // 自动同步调试状态到 comDebugStateMap
       events.on('debugTarget', (debugTarget: any) => {
         this.setComDebugging(id, !!debugTarget);
+      }, false);
+      events.on('fileChange', () => {
+        events.emit('runtimeError', null);
       }, false);
     }
     return events;

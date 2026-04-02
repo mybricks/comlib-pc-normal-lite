@@ -1,9 +1,11 @@
 import { replaceToUnderline } from "./utils";
 
 function runRender(code, dependencies, fileName?: string) {
+  // 注入 sourceURL，让 error.stack 中显示文件名而非 <anonymous>
+  const sourceUrlComment = fileName ? `\n//# sourceURL=${fileName}` : ''
   const wrapCode = `
     (function(exports,require){
-      ${code}
+      ${code}${sourceUrlComment}
     })
   `
 
