@@ -3,6 +3,7 @@ import { debugLogs } from '../../../mix/context/debugLogs'
 import ReactDom from 'react-dom';
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
+import { StyleProvider } from '@ant-design/cssinjs'
 import dayjs from "dayjs";
 // import {AIJsxRuntime} from './index'
 import { AIJsxRuntime } from "./runtime"
@@ -362,25 +363,27 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
 
       if (data.files.length) {
         return (
-          <AIJsxRuntime
-            env={env}
-            logger={resolvedLogger}
-            id={id}
-            data={data}
-            inputs={inputs}
-            outputs={outputs}
-            runtimeMode={runtimeMode}
-            placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-            renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
-            dependencies={{
-              'dayjs': dayjs,
-              ...(getDependencies?.() ?? {}),
-              'react': React,
-              'react-dom': ReactDom,
-              '@ant-design/icons': icons,
-            }}
-            inMybricksGeoWebview={!!canvasContainer}
-          />
+          <StyleProvider hashPriority='low'>
+            <AIJsxRuntime
+              env={env}
+              logger={resolvedLogger}
+              id={id}
+              data={data}
+              inputs={inputs}
+              outputs={outputs}
+              runtimeMode={runtimeMode}
+              placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
+              renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
+              dependencies={{
+                'dayjs': dayjs,
+                ...(getDependencies?.() ?? {}),
+                'react': React,
+                'react-dom': ReactDom,
+                '@ant-design/icons': icons,
+              }}
+              inMybricksGeoWebview={!!canvasContainer}
+            />
+          </StyleProvider>
         );
       }
 

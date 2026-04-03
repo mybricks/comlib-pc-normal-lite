@@ -9,7 +9,7 @@ const useCssApi = ({ id, env }) => {
     return {
       set(props: { content: string, fileName: string, old?: boolean }) {
         const { content, fileName, old } = props;
-        const myContent = content.replaceAll(STYLE_REPLACE_ID, id)
+        const myContent = content.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
 
         if (old) {
           // [TEMP] 兼容3.29版本
