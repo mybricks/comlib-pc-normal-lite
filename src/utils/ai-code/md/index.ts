@@ -106,3 +106,83 @@ const parsemd = (md: string): ParsedSummary => {
 }
 
 export { parsemd }
+
+// ─── requirement.md parser ────────────────────────────────────────────────────
+
+/** 单个功能点 */
+export type RequirementFeature = {
+  title: string
+  type?: string
+  related?: string
+  body: string
+}
+
+/** requirement.md 解析结果 */
+export type ParsedRequirement = {
+  title?: string
+  desc?: string
+  overview?: string
+  features: RequirementFeature[]
+}
+
+/**
+ * 解析 requirement.md 为结构化数据。
+ * 格式约定：
+ * - 顶部 YAML front matter（---...---）含 title、desc 字段
+ * - # 概述：概述文本（可含 flowchart LR; ... 单行流程图）
+ * - # 功能点列表：每个 ## 子标题为一个功能点
+ *   - 紧跟 type: new/edit 和 related: xxx 纯文本行（非列表）
+ */
+export const parseRequirement = (md: string): ParsedRequirement => {
+  const result: ParsedRequirement = { features: [] }
+
+  // 1. 提取并剥离 YAML front matter
+  let body = md.trim()
+  const fmMatch = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
+  if (fmMatch) {
+    const fm = fmMatch[1]
+    const titleMatch = fm.match(/^title\s*:\s*(.+)$/m)
+    const descMatch = fm.match(/^desc\s*:\s*(.+)$/m)
+    if (titleMatch) result.title = titleMatch[1].trim()
+    if (descMatch) result.desc = descMatch[1].trim()
+    body = body.slice(fmMatch[0].length).trim()
+  }
+
+  // 2. 按 # 一级标题切分
+  const h1Sections = body.split(/(?=^# )/m)
+
+  for (const section of h1Sections) {
+    const h1Match = section.match(/^# (.+)\n/)
+    if (!h1Match) continue
+    const h1Title = h1Match[1].trim()
+    const h1Body = section.slice(h1Match[0].length)
+
+    if (h1Title === '概述') {
+      result.overview = h1Body.trim()
+      continue
+    }
+
+    if (h1Title === '功能点列表') {
+      // 按 ## 二级标题切分功能点
+      const h2Sections = h1Body.split(/(?=^## )/m)
+      for (const h2sec of h2Sections) {
+        const h2Match = h2sec.match(/^## (.+)\n/)
+        if (!h2Match) continue
+        const featureTitle = h2Match[1].trim()
+        const featureBody = h2sec.slice(h2Match[0].length)
+
+        const typeMatch = featureBody.match(/^type\s*:\s*(.+)$/m)
+        const relatedMatch = featureBody.match(/^related\s*:\s*(.+)$/m)
+
+        result.features.push({
+          title: featureTitle,
+          type: typeMatch?.[1].trim(),
+          related: relatedMatch?.[1].trim(),
+          body: featureBody.trim(),
+        })
+      }
+    }
+  }
+
+  return result
+}

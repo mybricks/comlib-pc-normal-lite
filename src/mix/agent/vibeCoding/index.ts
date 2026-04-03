@@ -11,6 +11,7 @@ import {
   type UpdateComponentFilesResult,
 } from "./tools/utils/files";
 import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
+import syncMeta from './tools/syncMeta'
 import checkDesignStatus from "./tools/checkDesignStatus";
 import { uuid } from "../../../utils";
 
@@ -331,7 +332,7 @@ ${text}
               setLock
             }),
             checkDesignStatus({ project, setLock, codeModifiedFlag }),
-            syncMarkdownformybricksModule({
+            syncMeta({
               setLock,
               onUpdate: (p) => {
                 const files = p.files;

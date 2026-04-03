@@ -1,4 +1,6 @@
 import React, { useState, useCallback } from 'react';
+import { MarkdownViewModal } from '../markdown-view';
+import { RequirementViewModal } from '../requirement-view';
 import { generateCodeStructure } from './structure-generator';
 import { exportCode, isExportSupported } from './export';
 import context from '../../mix/context';
@@ -58,10 +60,10 @@ export function ViewDocsBtn({ comId }: ViewDocsBtnProps) {
         onClick={() => setVisible(true)}
         style={buttonStyle}
       >
-        查看文档
+        查看PRD文档
       </button>
       {visible && (
-        <ReadmeModal
+        <MarkdownViewModal
           content={readmeContent}
           onClose={() => setVisible(false)}
         />
@@ -70,82 +72,40 @@ export function ViewDocsBtn({ comId }: ViewDocsBtnProps) {
   );
 }
 
-// ─── README 弹窗 ─────────────────────────────────────────────────────────────
+// ─── 查看需求按钮 ────────────────────────────────────────────────────────────
 
-interface ReadmeModalProps {
-  content: string;
-  onClose: () => void;
-}
+export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
+  const [visible, setVisible] = useState(false);
 
-function ReadmeModal({ content, onClose }: ReadmeModalProps) {
-  const renderPrd = typeof window !== 'undefined' && (window as any)._render_comp_prd;
+  const requirementCompiled = React.useMemo(() => {
+    try {
+      const aiComParams = context.getAiComParams(comId);
+      const files = aiComParams?.data?.files as any[] | undefined;
+      if (!files) return null;
+      const reqFile = files.find((f: any) => f.fileName === 'requirement.md');
+      return reqFile?.compiled ?? null;
+    } catch {
+      return null;
+    }
+  }, [comId]);
+
+  if (!requirementCompiled) return null;
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        backgroundColor: 'rgba(0, 0, 0, 0.45)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'relative',
-          width: 680,
-          maxWidth: '90vw',
-          maxHeight: '80vh',
-          backgroundColor: 'var(--mybricks-bg-color, #fff)',
-          borderRadius: 8,
-          boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
+    <div style={{ padding: '4px 0' }}>
+      <button
+        type="button"
+        onClick={() => setVisible(true)}
+        style={buttonStyle}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            zIndex: 1,
-            width: 24,
-            height: 24,
-            border: 'none',
-            background: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--mybricks-text-color-secondary, #999)',
-            fontSize: 16,
-            padding: 0,
-            borderRadius: 4,
-          }}
-          title="关闭"
-        >
-          ✕
-        </button>
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '24px 28px',
-          }}
-        >
-          {renderPrd
-            ? renderPrd({ content, showTitle: true, title: 'README' })
-            : <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--mybricks-text-color-main)' }}>{content}</pre>
-          }
-        </div>
-      </div>
+        查看需求文档
+      </button>
+      {visible && (
+        <RequirementViewModal
+          compiled={requirementCompiled}
+          onClose={() => setVisible(false)}
+        />
+      )}
     </div>
   );
 }

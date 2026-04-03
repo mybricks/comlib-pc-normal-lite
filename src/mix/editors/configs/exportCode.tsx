@@ -1,20 +1,26 @@
 import React from 'react';
-import ExportCodePanel, { ViewDocsBtn } from '../../../utils/code-export/render';
+import ExportCodePanel, { ViewRequirementBtn } from '../../../utils/code-export/render';
 import context from '../../context';
 import type { Props } from '../types';
 
 export function buildExportCodeConfig(props: Props) {
+  
+
   return [
+    {
+      title: '',
+      type: 'editorRender',
+      ifVisible: () => {
+        const hasRequirement = (props.data?.files as any[])?.some((f: any) => f.fileName === 'requirement.md' && f.compiled);
+        return hasRequirement
+      },
+      options: {
+        render: () => <ViewRequirementBtn comId={props.id} />,
+      },
+    },
     {
       title: '导出',
       items: [
-        {
-          title: '文档',
-          type: 'editorRender',
-          options: {
-            render: () => <ViewDocsBtn comId={props.id} />,
-          },
-        },
         {
           title: '代码',
           type: 'editorRender',

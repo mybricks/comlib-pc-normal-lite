@@ -182,6 +182,22 @@ const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, 
     }
   }, []);
 
+  console.log('data.files', data)
+
+  // const readmeContent = useMemo(() => {
+  //   try {
+  //     const readmeFile = (data.files as any[]).find(
+  //       f => f.fileName === 'README.md' || f.fileName === 'readme.md'
+  //     );
+  //     console.log('readmeFile', readmeFile)
+  //     return decodeURIComponent(readmeFile?.source ?? '');
+  //   } catch (error) {
+  //     return '';
+  //   }
+  // }, [data.files]);
+
+  // const renderPrd = typeof window !== 'undefined' && (window as any)._render_comp_prd;
+
   if (initErrorRef.current) {
     const e = initErrorRef.current;
     const title = '组件运行时错误';
@@ -201,7 +217,11 @@ const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, 
     return <>{placeholder}</>;
   }
 
-  return <ReactComponent />;
+  return (
+    <>
+      <ReactComponent />
+    </>
+  );
 };
 
 const AIJsxRuntime = (params: AIJsxRuntimeParams) => {

@@ -3,7 +3,7 @@ import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
 import { deepClone } from "../utils/normal";
-import { parsemd } from "../../utils/ai-code/md";
+import { parsemd, parseRequirement } from "../../utils/ai-code/md";
 
 export interface LogMessage {
   method: 'log' | 'info' | 'warn' | 'error';
@@ -518,6 +518,21 @@ class Context {
           })
         } catch (e) {
           console.error("[@parsemd error]", e);
+        }
+      }
+
+      if (fileName === "requirement.md") {
+        try {
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+              compiled: parseRequirement(content),
+            }
+          })
+        } catch (e) {
+          console.error("[@parseRequirement error]", e);
         }
       }
 
