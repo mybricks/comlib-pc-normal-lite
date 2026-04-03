@@ -1,4 +1,4 @@
-export { generateCodeStructure, validateFileStructure } from './structure-generator';
+export { generateCodeStructure } from './structure-generator';
 export type { FileItem, ComponentData } from './structure-generator';
 
 export { exportCode, isExportSupported } from './export';

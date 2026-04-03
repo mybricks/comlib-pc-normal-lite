@@ -1,160 +1,158 @@
 import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
+import { getValidatorPlugins } from '../../mix/availableLibraries'
 
-export function getComponentFromJSX(jsxCode, libs: { mybricksSdk }, dependencies = {}): Promise<Function> {
-  return new Promise((resolve, reject) => {
-    transformTsx(jsxCode).then(code => {
-      try {
-        const rtn: any = runRender(code, {
-            'react': React,
-            '@ant-design/icons': window['icons'],
-            'dayjs': window['dayjs'] ?? window['moment'],
-            'mybricks': libs.mybricksSdk,
-            ...dependencies,
+export function transformTsx(code, ctx?: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
+  let transformCode
+  const constituency: any = [];
+
+  try {
+    const validatorPlugins = getValidatorPlugins(ctx ?? { fileName: 'runtime.jsx' })
+
+    const options = {
+      presets: [
+        [
+          "env",
+          {
+            "modules": "commonjs"//umd->commonjs
           }
-        )
-        resolve(rtn)
-      } catch (ex) {
-        reject(ex)
-        return
-      }
-    }).catch(ex => {
-      reject(ex)
-    })
-  })
-}
-
-export function transformTsx(code): Promise<{ transformCode: string, constituency: any }> {
-  return new Promise((resolve, reject) => {
-    let transformCode
-    const constituency: any = [];
-
-    try {
-      const options = {
-        presets: [
-          [
-            "env",
-            {
-              "modules": "commonjs"//umd->commonjs
-            }
-          ],
-          'react'
         ],
-        plugins: [
-          ['proposal-decorators', {legacy: true}],
-          'proposal-class-properties',
-          [
-            'transform-typescript',
-            {
-              isTSX: true
-            }
-          ],
-          babelPlugin({ constituency })
-        ]
-      }
-
-      if (!window.Babel) {
-        loadBabel()
-        reject('当前环境 BaBel编译器 未准备好')
-      } else {
-        transformCode = window.Babel.transform(code, options).code
-      }
-
-    } catch (error) {
-      console.error("[@transformTsx error]", error);
-      reject(error)
-    }
-
-    return resolve({ transformCode, constituency })
-  })
-}
-
-export function transformLess(code): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let res = ''
-    try {
-      if (window?.less) {
-
-        if (!code || code.length === 0) {
-          return resolve('')
-        }
-
-        window.less.render(code, {}, (error, result) => {
-          if (error) {
-            console.error(error)
-            res = ''
-
-            reject(`Less 代码编译失败: ${error.message}`)
-          } else {
-            res = result?.css
+        'react'
+      ],
+      plugins: [
+        ['proposal-decorators', {legacy: true}],
+        'proposal-class-properties',
+        [
+          'transform-typescript',
+          {
+            isTSX: true
           }
-        })
-      } else {
-        loadLess() // 重试
-        reject('当前环境无 Less 编译器，请联系应用负责人')
-      }
-    } catch (error) {
-      reject(error)
+        ],
+        babelPlugin({ constituency, fileName: ctx?.fileName }),
+        ...validatorPlugins,
+      ],
+      retainLines: true,
     }
 
-    return resolve(res)
-  }) as any
+    if (!window.Babel) {
+      loadBabel()
+      throw new Error('当前环境 BaBel编译器 未准备好')
+    } else {
+      transformCode = window.Babel.transform(code, options).code
+    }
+
+  } catch (error) {
+    console.error("[@transformTsx error]", error);
+    throw error
+  }
+
+  return { transformCode, constituency }
 }
 
-export function updateRender({ data, success }, renderCode) {
-  const writeSource = () => {
-    data.runtimeJsxSource = encodeURIComponent(renderCode);
-  };
-  transformTsx(renderCode).then(({ transformCode, constituency }) => {
-    data.runtimeJsxCompiled = encodeURIComponent(transformCode);
-    writeSource();
-    data.runtimeJsxConstituency = constituency;
-    // 清除 runtime.jsx 编译错误以及旧的 React 渲染时 runtime 错误（即将用新代码重新渲染）
-    if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
-    data._errors = data._errors.filter(err => err.file);
-    success?.();
-  }).catch(e => {
-    console.error("[@transformTsx error]", e);
-    writeSource();
-    // 添加编译错误到统一错误列表
-    if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'runtime.jsx');
-    data._errors.push({
-      file: 'runtime.jsx',
-      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-      type: 'compile'
-    });
-    success?.();
-  });
+export function transformLess(code, prefix = "") {
+  const cssModule = {
+    cssContent: "",
+    classMap: {}
+  }
+
+  if (!code || code.length === 0) {
+    return cssModule
+  }
+
+  window.less.render(code, {
+    javascriptEnabled: true,
+    plugins: [
+      {
+        install: function (less, pluginManager) {
+          pluginManager.addPreProcessor({
+            process: function (src, _extra) {
+              // 在预处理阶段收集类名
+              // 先收集所有 :global(...) 和 :global { ... } 的范围，跳过其中的类名
+              const globalRanges: Array<[number, number]> = []
+
+              // :global(.a .b) 形式
+              const parenRegex = /:global\s*\(/g
+              let pm: RegExpExecArray | null
+              while ((pm = parenRegex.exec(src)) !== null) {
+                let depth = 1
+                let i = pm.index + pm[0].length
+                while (i < src.length && depth > 0) {
+                  if (src[i] === '(') depth++
+                  else if (src[i] === ')') depth--
+                  i++
+                }
+                globalRanges.push([pm.index, i])
+              }
+
+              // :global { ... } 形式
+              const braceRegex = /:global\s*\{/g
+              let bm: RegExpExecArray | null
+              while ((bm = braceRegex.exec(src)) !== null) {
+                let depth = 1
+                let i = bm.index + bm[0].length
+                while (i < src.length && depth > 0) {
+                  if (src[i] === '{') depth++
+                  else if (src[i] === '}') depth--
+                  i++
+                }
+                globalRanges.push([bm.index, i])
+              }
+
+              const isInGlobal = (index: number) =>
+                globalRanges.some(([start, end]) => index >= start && index < end)
+
+              let processed = src.replace(
+                /\.([a-zA-Z][a-zA-Z0-9_-]*)/g,
+                (match, className, offset) => {
+                  if (isInGlobal(offset)) {
+                    cssModule.classMap[className] = className
+                    return match
+                  }
+                  const hashedName = `${prefix ? `${prefix}-` : ""}${className}`;
+                  cssModule.classMap[className] = hashedName;
+                  return `.${hashedName}`;
+                },
+              )
+
+              // Remove :global(...) wrapper, keep inner content
+              processed = processed.replace(/:global\s*\(([^)]*)\)/g, '$1')
+
+              // Remove :global { ... } wrapper, keep inner block content
+              processed = processed.replace(/:global\s*\{([\s\S]*?)\}/g, (match, inner) => {
+                // Unwrap: remove the outer braces but keep the inner rules
+                return inner
+              })
+
+              return processed
+            },
+          })
+        },
+      },
+    ],
+  }, (error, result) => {
+    if (error) {
+      console.error(error)
+      throw new Error(`Less 代码编译失败: ${error.message}`)
+    } else {
+      cssModule.cssContent = result?.css
+    }
+  })
+
+  return cssModule;
 }
 
-export function updateStyle({ id, data, success }, styleCode) {
-  const writeSource = () => {
-    data.styleSource = encodeURIComponent(styleCode);
-  };
-  transformLess(`.__mybricks_ai_module_id__ {${styleCode}}`).then(css => {
-    data.styleCompiled = encodeURIComponent(css);
-    writeSource();
-    // 清除 style.less 相关错误
-    if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'style.less');
-    success?.();
-  }).catch(e => {
-    console.error("[@transformLess error]", e);
-    writeSource();
-    // 添加编译错误到统一错误列表
-    if (!data._errors) data._errors = [];
-    data._errors = data._errors.filter(err => err.file !== 'style.less');
-    data._errors.push({
-      file: 'style.less',
-      message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
-      type: 'compile'
-    });
-    success?.();
-  });
-}
+function extractFrameStyle(css: string): { width?: number } | undefined {
+  const match = css.match(/:frame\s*\{([^}]*)\}/);
+  if (!match) return undefined;
 
+  const block = match[1];
+  // 仅匹配纯 px 整数/小数，排除 min-width / max-width 以及 %、auto、fit-content 等非 px 值
+  const widthMatch = block.match(/(?<![a-z-])width:\s*(\d+(?:\.\d+)?)px\b/);
+
+  if (!widthMatch) return undefined;
+
+  return { width: Number(widthMatch[1]) };
+}
 
 async function requireFromCdn(cdnUrl) {
   return new Promise((resolve, reject) => {
@@ -183,27 +181,6 @@ async function loadBabel() {
   }
 
   await requireFromCdn('https://f2.beckwai.com/udata/pkg/eshop/fangzhou/asset/babel/standalone/7.24.7/babel.min.js')
-}
-
-
-function runRender(code, dependencies) {
-  const wrapCode = `
-          (function(exports,require){
-            ${code}
-          })
-        `
-
-  const exports = {
-    default: null
-  }
-
-  const require = (packageName) => {
-    return dependencies[packageName]
-  }
-
-  eval(wrapCode)(exports, require)
-
-  return exports.default
 }
 
 export function uuid(pre = 'u_', len = 6) {

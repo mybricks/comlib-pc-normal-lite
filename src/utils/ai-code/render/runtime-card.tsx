@@ -1,34 +1,59 @@
-import React, {FunctionComponent, ReactElement, useCallback, useMemo} from 'react'
+import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import { debugLogs } from '../../../mix/context/debugLogs'
+import ReactDom from 'react-dom';
 import * as antd from "antd";
 import * as icons from "@ant-design/icons"
-import {AIJsxRuntime} from './index'
+import dayjs from "dayjs";
+// import {AIJsxRuntime} from './index'
+import { AIJsxRuntime } from "./runtime"
 import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
+import context from '../../../mix/context';
 
-/** 统一错误面板：编译失败、generate.error、eval 失败等共用同一套样式 */
-export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [] }: { title?: string; desc?: string; errors?: any[] }) => {
+/** 运行时错误面板（ErrorBoundary 内部使用） */
+export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+  return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
+};
+
+/** 编译失败错误面板（外层 genAIRuntime 使用） */
+export const CompileErrorView = ({ title = '编译失败', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+  return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
+};
+
+/** 运行时错误面板，由 @error 捕获 */
+export const ErrorView = ({ error, comId }) => {
+  return <RuntimeCardErrorView title={"组件运行时错误"} desc={error.message} error={error} comId={comId} source="@error" />;
+}
+
+/** 统一错误面板基础交互组件：编译失败、generate.error、eval 失败等共用同一套样式 */
+export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [], comId, source = '', error }: { title?: string; desc?: string; errors?: any[]; comId?: string; source?: string; error?: Error }) => {
   const onRetry = useCallback(() => {
     let message = '';
-    
-    // 如果有多条错误，组合所有错误信息
-    if (errors && errors.length > 0) {
-      message = '当前组件出现了以下错误：\n';
-      errors.forEach((err, idx) => {
-        const fileLabel = err.file ? `[${err.file}] ` : '[运行时] ';
-        message += `${idx + 1}. ${fileLabel}${err.message}\n`;
-      });
+
+    if (source === "@error" && error) {
+      message = `当前组件运行时出错：${error.message}，以下是错误堆栈信息：\n` + error.stack?.split("\n").slice(0, 2).join("\n")
     } else {
-      // 没有 errors 数组，使用传入的 title 和 desc
-      message = `当前组件出错了，${desc || title || '未知错误'}`;
+      // 如果有多条错误，组合所有错误信息
+      if (errors && errors.length > 0) {
+        message = '当前组件出现了以下错误：\n';
+        errors.forEach((err, idx) => {
+          const fileLabel = err.file ? `[${err.file}] ` : '[运行时] ';
+          message += `${idx + 1}. ${fileLabel}${err.message}\n`;
+        });
+      } else {
+        // 没有 errors 数组，使用传入的 title 和 desc
+        message = `当前组件出错了，${desc || title || '未知错误'}`;
+      } 
     }
     
+    (window as any)._showAIDialog_?.(comId);
     setTimeout(() => {
       if ((window as any)._sendToFocusVibeAgent_) {
         (window as any)._sendToFocusVibeAgent_({ message });
       }
     }, 500)
-  }, [title, desc, errors]);
+  }, [title, desc, errors, comId]);
 
   return (
     <div className={css.runtimeCardErrorView}>
@@ -46,7 +71,14 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [] 
             ))}
           </details>
         )}
-        <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+        {source === "@error" && error && (
+          <details className={css.errorDetails}>
+            <div className={css.errorItem}>
+              {error.stack}
+            </div>
+          </details>
+        )}
+        <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
       </div>
     </div>
   );
@@ -58,13 +90,15 @@ const GenerateLoadingView = ({
   content = '',
   error = false,
   errorMessage = '',
-}: { fileName?: string; content?: string; error?: boolean; errorMessage?: string }) => {
+  comId,
+}: { fileName?: string; content?: string; error?: boolean; errorMessage?: string; comId?: string }) => {
   const onRetry = useCallback(() => {
     const message = errorMessage || '未知错误';
+    (window as any)._showAIDialog_?.(comId);
     if ((window as any)._sendToFocusVibeAgent_) {
       (window as any)._sendToFocusVibeAgent_({ message });
     }
-  }, [errorMessage]);
+  }, [errorMessage, comId]);
 
   return (
     <div className={css.generateRoot}>
@@ -74,7 +108,7 @@ const GenerateLoadingView = ({
             <span className={css.generateErrorIcon}>!</span>
             <div className={css.generateErrorTitle}>生成失败</div>
             <pre className={css.generateErrorDesc}>{errorMessage || '未知错误'}</pre>
-            <button className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+            <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
           </div>
         ) : (
           <>
@@ -139,8 +173,10 @@ interface AIRuntimeProps {
   /** 建议的例子 */
   examples: string[],
   /** 组件运行时的依赖 */
-  dependencies?: Record<string, any>,
+  getDependencies?: () => Record<string, any>,
   wrapper?: FunctionComponent<{ children: ReactElement, env: any, canvasContainer: any }>,
+  /** logger 对象或 logger 工厂函数（接受组件 id 返回 logger 对象） */
+  logger: any | ((id: string) => any);
 }
 
 // const mybricks = {
@@ -149,39 +185,85 @@ interface AIRuntimeProps {
 //   }
 // }
 
-export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: AIRuntimeProps) =>
-  ({env, data, inputs, outputs, slots, logger, id}: RuntimeParams<any>) => {
-    // useMemo(() => {
-    //   if (env.edit) {
-    //     data._editors = void 0
-    //   }
-    // }, [])
+export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
+  ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    const errorInfo = useMemo(() => {
-      // 使用统一的错误列表
-      if (data._errors && Array.isArray(data._errors) && data._errors.length > 0) {
-        // 按优先级排序：runtime > compile，同类型按时间（数组顺序）
-        const sortedErrors = [...data._errors].sort((a, b) => {
-          if (a.type === 'runtime' && b.type !== 'runtime') return -1;
-          if (a.type !== 'runtime' && b.type === 'runtime') return 1;
-          return 0;
+    const [runtimeError, setRuntimeError] = useState<any>(null);
+
+    useEffect(() => {
+      const offError = context.getAiComEvents(id).on("runtimeError", (err) => {
+        console.log("[err]", err)
+        setRuntimeError(err)
+      }, true)
+
+      return () => {
+        offError?.()
+      }
+    }, [])
+
+    // 设计态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
+    useEffect(() => {
+      if (env.runtime) return;
+      const el = containerRef.current;
+      if (!el || !data) return;
+
+      const collect = () => {
+        const zones = el.querySelectorAll('[data-zone-type="page"]');
+        const pages: string[] = [];
+        const popups: string[] = [];
+        zones.forEach((zone) => {
+          const kind = (zone as HTMLElement).dataset.zoneKind;
+          const widgetEl = zone.querySelector('[data-widget-name]');
+          const name = (widgetEl as HTMLElement)?.dataset?.widgetName ?? 'Unknown';
+          if (kind === 'popup') popups.push(name);
+          else pages.push(name);
         });
-        
-        const firstError = sortedErrors[0];
+        if (!data._designerState) data._designerState = { pages: [], popups: [] };
+        data._designerState.pages = pages;
+        data._designerState.popups = popups;
+      };
+
+      collect();
+
+      const observer = new MutationObserver(collect);
+      observer.observe(el, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    }, []);
+
+    // 计算 runtimeMode：唯一标识当前运行模式（设计态 / runtime_mock / runtime_prod）
+    const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
+    const runtimeMode = env.edit ? `${id}_edit` : `${id}_runtime_${activeEnv}`;
+
+    // runtimeMode 变化时：写入 data.runtimeMode，并清除该组件同 runtimeMode 的历史日志
+    useEffect(() => {
+      data.runtimeMode = runtimeMode;
+      debugLogs.clearByMode(id, runtimeMode);
+    }, [runtimeMode]);
+
+    /**
+     * 【重要】errorInfo 只响应 compile 错误（type !== 'runtime'），用于阻断渲染并展示编译失败面板。
+     * runtime 错误由 ErrorBoundary 在内部捕获并渲染 RuntimeErrorView，不在此处处理。
+     */
+    const errorInfo = useMemo(() => {
+      // 只取 compile 错误（有 file 字段且 type 不是 runtime）
+      const compileErrors = data._errors && Array.isArray(data._errors)
+        ? data._errors.filter((e: any) => e.type !== 'runtime')
+        : [];
+
+      if (compileErrors.length > 0) {
+        const firstError = compileErrors[0];
         const fileLabel = firstError.file ? ` (${firstError.file})` : '';
-        const titleMap = {
+        const titleMap: Record<string, string> = {
           'runtime.jsx': 'JSX 编译失败',
           'style.less': 'Less 编译失败',
           'store.js': 'Store 执行失败',
         };
-        const title = firstError.type === 'runtime' 
-          ? '组件运行时错误' 
-          : (titleMap[firstError.file] || '编译失败');
-        
+        const title = titleMap[firstError.file] || '编译失败';
         return {
           title: title + fileLabel,
           desc: firstError.message,
-          errors: data._errors, // 保留所有错误，供错误面板展示
+          errors: compileErrors,
         };
       }
 
@@ -214,24 +296,52 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
 
+    // 兼容老版本数据：data.files 不存在时，从旧字段迁移
+    if (data && !Array.isArray(data.files)) {
+      data.files = [];
+      const migrate = (fileName: string, compiled: string) => {
+        if (compiled) data.files.push({ fileName, compiled });
+      };
+      migrate('index.jsx', data.runtimeJsxCompiled);
+      migrate('index.less', data.styleCompiled);
+      migrate('config.js', data.configJsCompiled);
+      migrate('store.js', data.storeJsCompiled);
+      migrate('service.js', data.serviceJsCompiled);
+    }
+
+    const shouldRenderSender = !!window._render_comp_start_view_;
+
+    const renderSender = useMemo(() => {
+      if (window._render_comp_start_view_) {
+        return (
+          <div className={css.tip}>
+            {window._render_comp_start_view_({ comId: id })}
+          </div>
+        )
+      }
+    }, [shouldRenderSender])
+
+    const resolvedLogger = typeof logger === 'function' ? logger({ id, mode: env.runtime ? 'runtime' : 'design'}) : logger;
+
     // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
-    if (data.generate) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
+    // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
+    // 3. error：Less/Babel 编译失败或 generate 的 error，统一错误样式
+    // 4. runtime：编译成功，渲染组件
+    // 5. placeholder：等待中，展示提示词
+    const innerContent = (() => {
+      if (data.generate) {
+        return (
           <GenerateLoadingView
             fileName={data.generateFileName ?? ''}
             content={data.generateContent ?? ''}
             error={!!data.generateError}
             errorMessage={data.generateErrorMessage ?? ''}
+            comId={id}
           />
-        </Wrapper>
-      );
-    }
-
-    // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
-    if ((data.document && !data.files.length) || data.loading) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
+        );
+      }
+      if ((data.document && !data.files.length) || data.loading) {
+        return (
           <div className={css.documentCard}>
             <div className={css.documentContent}>{data.document}</div>
             {data.loading && (
@@ -240,49 +350,48 @@ export const genAIRuntime = ({title, orgName, examples, dependencies, wrapper}: 
               </div>
             )}
           </div>
-        </Wrapper>
-      );
-    }
+        );
+      }
+      if (errorInfo) {
+        return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
+      }
 
-    // 3. error：Less/Babel 编译失败或 generate 的 error，统一错误样式
-    if (errorInfo) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
-          <RuntimeCardErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} />
-        </Wrapper>
-      );
-    }
+      if (runtimeError) {
+        return <ErrorView error={runtimeError} comId={id}/>
+      }
 
-    // 4. runtime：编译成功，渲染组件
-    if (data.files.length) {
-      return (
-        <Wrapper env={env} canvasContainer={canvasContainer}>
+      if (data.files.length) {
+        return (
           <AIJsxRuntime
             env={env}
-            logger={logger}
+            logger={resolvedLogger}
             id={id}
-            styleCode={data.styleCompiled}
-            renderCode={data.runtimeJsxCompiled}
             data={data}
             inputs={inputs}
             outputs={outputs}
-            placeholder={<IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-            renderError={(props) => <RuntimeCardErrorView title={props.title} desc={props.desc} />}
+            runtimeMode={runtimeMode}
+            placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
+            renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
             dependencies={{
-              ...(dependencies ?? {}),
+              'dayjs': dayjs,
+              ...(getDependencies?.() ?? {}),
               'react': React,
+              'react-dom': ReactDom,
               '@ant-design/icons': icons,
             }}
             inMybricksGeoWebview={!!canvasContainer}
           />
-        </Wrapper>
-      );
-    }
+        );
+      }
 
-    // 5. placeholder：等待中，展示提示词
+      return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;
+    })();
+
     return (
-      <Wrapper env={env} canvasContainer={canvasContainer}>
-        <IdlePlaceholder title={title} orgName={orgName} examples={examples} />
-      </Wrapper>
+      <div ref={containerRef} className={css.container} style={{ display: 'contents' }}>
+        <Wrapper env={env} canvasContainer={canvasContainer}>
+          {innerContent}
+        </Wrapper>
+      </div>
     );
   }

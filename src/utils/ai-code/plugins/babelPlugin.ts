@@ -8,29 +8,66 @@ import {
   findRelyAndSource,
   getComRefForJSXPath,
   getPageRefForJSXPath,
+  getPopupRefForJSXPath,
   getEvents,
   getJSXElementNameString
 } from "./utils";
 
-export default function ({ constituency }) {
+/** 从文件路径派生组件名：folder/index.jsx → folder 名；直接文件 → 文件名（去扩展名） */
+function deriveNameFromFilePath(filePath?: string): string {
+  if (!filePath) return 'root';
+  const parts = filePath.replace(/\\/g, '/').split('/');
+  const last = parts[parts.length - 1];
+  const stem = last.replace(/\.[^.]+$/, ''); // 去掉扩展名
+  if (stem === 'index' && parts.length > 1) {
+    return parts[parts.length - 2]; // 用父级文件夹名
+  }
+  return stem || 'root';
+}
+
+export default function ({ constituency, fileName }: { constituency: any; fileName?: string }) {
+  const fallbackName = deriveNameFromFilePath(fileName);
   return function () {
     const importRelyMap = new Map();
     /** 按组件声明缓存 { rootJSX, jsdoc }，每个 comRef 组件只计算一次 */
     const componentJsdocCache = new Map<any, any>();
     /** 按组件声明缓存 pageRef 的 { rootJSX, jsdoc, name }，每个 pageRef 只计算一次 */
     const pageRefCache = new Map<any, any>();
+    /** 按组件声明缓存 popupRef 的 { rootJSX, jsdoc, name }，每个 popupRef 只计算一次 */
+    const popupRefCache = new Map<any, any>();
 
     /** 遍历时 comRef 的 jsdoc 栈，子元素通过栈顶读到当前组件的 jsdoc */
-    const jsdocStack: any[] = [];
+    // const jsdocStack: any[] = [];
+
+    const popupRefDeclarators = new Map();
+
+    // [TODO] 未来可能从多文件导入less
+    const lessMap = new Map();
 
     return {
       visitor: {
         ImportDeclaration(path) {
           try {
-            const { node } = path;
+            const { node } = path;     
             node.specifiers.forEach((specifier) => {
               if (types.isImportSpecifier(specifier) || types.isImportDefaultSpecifier(specifier)) {
                 importRelyMap.set(specifier.local.name, node.source.value);
+
+                if (node.source.value.endsWith('.less') && fileName) {
+                  let currentPath = fileName.split('/');
+                  currentPath = currentPath.slice(0, currentPath.length - 1)
+                  const targetPath = node.source.value.split('/');
+                  targetPath.forEach((path) => {
+                    if (path === ".") {
+                    } else if (path === "..") {
+                      currentPath.pop();
+                    } else {
+                      currentPath.push(path)
+                    }
+                  })
+                  const lessFilePath = currentPath.join('/');
+                  lessMap.set("less", lessFilePath);
+                }
               }
             })
           } catch { }
@@ -43,6 +80,15 @@ export default function ({ constituency }) {
               const relyName = path.node.init?.object?.loc?.identifierName;
               importRelyMap.set(name, relyName);
             }
+            if (
+              types.isIdentifier(id) &&
+              types.isCallExpression(init) &&
+              types.isIdentifier(init.callee) &&
+              init.callee.name === 'popupRef'
+            ) {
+              const componentName = id.name;
+              popupRefDeclarators.set(path.node, componentName);
+            }
           } catch { }
         },
         JSXElement: {
@@ -52,6 +98,14 @@ export default function ({ constituency }) {
               const dataLocValueObject: any = {
                 jsx: { start: node.start, end: node.end },
                 tag: { end: node.openingElement.end },
+                codeLine: {
+                  start: node.loc.start.line,
+                  end: node.loc.end.line
+                },
+                files: {
+                  jsx: fileName,
+                  less: lessMap.get("less")
+                }
               };
               const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
               const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
@@ -66,19 +120,31 @@ export default function ({ constituency }) {
               }
               const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
 
-              const pageRef = getPageRefForJSXPath(path, pageRefCache);
+              const pageRef = getPageRefForJSXPath(path, pageRefCache, fallbackName);
               if (pageRef) {
                 const pageTitle = pageRef.jsdoc?.summary ?? pageRef.name ?? lastSelector;
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", pageTitle);
-                pushDataAttr(node.openingElement.attributes, "title", pageTitle);
+                // pushDataAttr(node.openingElement.attributes, "title", pageTitle);
+                pushDataAttr(node.openingElement.attributes, "data-widget-name", pageRef.name);
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
+              }
+
+              const popupRef = getPopupRefForJSXPath(path, popupRefCache, fallbackName);
+              if (popupRef) {
+                const dialogTitle = popupRef.jsdoc?.summary ?? popupRef.name ?? lastSelector;
+                pushDataAttr(node.openingElement.attributes, "data-zone-title", dialogTitle);
+                pushDataAttr(node.openingElement.attributes, "data-widget-name", popupRef.name);
               }
 
               const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
   
               if (source === "html") {
-                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+                if (cnList.length > 0) {
+                  pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+                } else {
+                  pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
+                }
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-library-source", source);
               }
@@ -125,18 +191,19 @@ export default function ({ constituency }) {
   
               let zoneType = "zone";
 
-              const comRef = getComRefForJSXPath(path, componentJsdocCache);
+              const comRef = getComRefForJSXPath(path, componentJsdocCache, fallbackName);
               if (pageRef) {
                 zoneType = "page";
               }
 
               if (comRef) {
-                jsdocStack.push(comRef.jsdoc);
+                // jsdocStack.push(comRef.jsdoc);
 
                 zoneType = "com";
                 // pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
                 pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
 
+                pushDataAttr(node.openingElement.attributes, "data-widget-name", comRef.name);
 
   
                 // const events = comRef.jsdoc?.events;
@@ -146,44 +213,65 @@ export default function ({ constituency }) {
               }
 
               const events = getEvents(node);
-              const jsdoc = jsdocStack[jsdocStack.length - 1];
+              // const jsdoc = jsdocStack[jsdocStack.length - 1];);
 
-              const eventsMap = (jsdoc?.events || []).reduce((pre, cur) => {
-                pre[cur.key] = cur;
-                return pre;
-              }, {});
+              // const eventsMap = (jsdoc?.events || []).reduce((pre, cur) => {
+              //   pre[cur.key] = cur;
+              //   return pre;
+              // }, {});
 
-              const dataZoneDocsEvents = events.map((event) => {
-                return eventsMap[event] || {
-                  key: event,
-                  name: event,
-                  description: ""
-                }
-              })
+              // const dataZoneDocsEvents = events.map((event) => {
+              //   return eventsMap[event] || {
+              //     key: event,
+              //     name: event,
+              //     description: ""
+              //   }
+              // })
 
-              if (dataZoneDocsEvents.length > 0) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(dataZoneDocsEvents.length));
+              if (events.length > 0) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
+                // 用于展示事件小黄点
+                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
               }
 
-              if (comRef) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({...comRef.jsdoc, events: dataZoneDocsEvents}));
-              } else {
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({events: dataZoneDocsEvents}));
-              }
+              // if (comRef) {
+              //   pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({...comRef.jsdoc, events: dataZoneDocsEvents}));
+              // } else {
+              //   pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify({events: dataZoneDocsEvents}));
+              // }
   
               if (zoneType !== "page") {
                 pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
               }
               pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
+
+              let foundDeclaratorPath: any = null;
+              path.findParent(p => {
+                if (p.isJSXElement()) {
+                  return true; // 遇到父级 JSX 即停，说明当前节点不是顶层
+                }
+                if (p.isVariableDeclarator() && popupRefDeclarators.has(p.node)) {
+                  foundDeclaratorPath = p;
+                  return true;
+                }
+                return false;
+              });
+              const popupName = foundDeclaratorPath
+                ? popupRefDeclarators.get(foundDeclaratorPath.node)
+                : null;
+
+              if (popupName) {
+                pushDataAttr(node.openingElement.attributes, "data-widge-name", popupName);
+              }
             } catch {}
           },
           exit(path) {
-            try {
-              const comRef = getComRefForJSXPath(path, componentJsdocCache);
-              if (comRef) {
-                jsdocStack.pop();
-              }
-            } catch {}
+            // try {
+            //   const comRef = getComRefForJSXPath(path, componentJsdocCache);
+            //   if (comRef) {
+            //     jsdocStack.pop();
+            //   }
+            // } catch {}
           }
         },
         Program: {

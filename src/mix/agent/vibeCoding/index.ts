@@ -1,21 +1,18 @@
-import classLibrarySelection from "./tools/loadExtraComponentDocs"
-import developMyBricksModule from "./tools/developMyBricksModule";
 import developModule from "./tools/developMyBricksModuleNext";
 import readRelated from "./tools/readRelated";
-import explore from "./tools/explore";
-import read from "./tools/read";
-import grep from "./tools/grep";
-import glob from "./tools/glob";
 import answer from "./tools/answer";
-import { createProject, buildProjectJson } from "./project";
-import { CodeBase } from "./codeBase";
+import { createProject } from "./project";
 import { multiReplaceFile, buildFocusInfo } from "../utils";
 import type { ReplaceResultItem } from "../utils/editReplace";
+import { debugLogs } from "../../context/debugLogs";
 import {
   type ComponentFileItem,
   type FileUpdateResult,
   type UpdateComponentFilesResult,
-} from "./tools/developMyBricksModuleNext";
+} from "./tools/utils/files";
+import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
+import checkDesignStatus from "./tools/checkDesignStatus";
+import { uuid } from "../../../utils";
 
 /** 单文件项：fileName + content */
 export type { ComponentFileItem };
@@ -25,11 +22,9 @@ export type { ReplaceResultItem };
 
 export type { FileUpdateResult, UpdateComponentFilesResult };
 
-const SUPPORTED_FILE_EXTENSION_MAP = {
-  'jsx': true,
-  'less': true,
-  'js': true,
-}
+export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md'])
+export const SUPPORTED_FILE_LANGUAGE = new Set(['write', 'delete', 'before', 'after'])
+
 /**
  * 将指定组件的若干源文件写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
  * 文件列表为动态（任意 fileName），使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
@@ -41,25 +36,31 @@ function updateComponentFiles(
 ): UpdateComponentFilesResult {
   const aiComParams = context.getAiComParams(comId);
   const fileResults: FileUpdateResult[] = [];
-
-  /** 按 fileName 分组：同一 fileName 可能出现多次（内容替换时为 before/after 一对），此处只得到待处理的文件名列表，每个文件名下会收集该文件的所有条目做整文件替换或片段替换 */
-  const fileNames = [...new Set(files.filter((f) => SUPPORTED_FILE_EXTENSION_MAP[f.fileName.split('.').pop() ?? '']).map((f) => f.fileName))];
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
   const pendingWrites: Array<{ fileName: string; content: string }> = [];
 
-  const currentFilesMap = aiComParams.data.files.reduce((pre, cur) => {
+  const fileNames = [...new Set(files.filter((f) => (SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '') && SUPPORTED_FILE_LANGUAGE.has(f.language))).map((f) => f.fileName))];
+
+  const currentFilesMap = (aiComParams.data.files ?? []).reduce((pre, cur) => {
     pre[cur.fileName] = cur;
     return pre;
   }, {})
+
+  const deleteFileNames = new Set();
 
   for (const fileName of fileNames) {
     const matchedFiles = files.filter((f) => f.fileName === fileName);
     if (matchedFiles.length === 0) continue;
 
-    /** 动态文件下用 fileName 作为 data 的 key，与 context.updateFile(comId, { fileName, content }) 一致 */
     const dataKey = fileName;
 
     if (matchedFiles.length === 1) {
+
+      if (matchedFiles[0].language === "delete") {
+        deleteFileNames.add(matchedFiles[0].fileName);
+        continue;
+      }
+
       fileResults.push({
         fileName,
         dataKey,
@@ -102,208 +103,44 @@ function updateComponentFiles(
     }
   }
 
-  const success = fileResults.every((r) => r.success);
-  if (success) {
-    for (const { fileName, content } of pendingWrites) {
-      context.updateFile(comId, { fileName, content });
-    }
+  const mergeSuccess = fileResults.every((r) => r.success);
+  if (mergeSuccess) {
+    pendingWrites.map(({ fileName, content }) =>
+      context.updateFile(comId, { fileName, content })
+    )
     aiComParams.data.document = '';
   }
+
+  deleteFileNames.forEach((fileName) => {
+    context.updateFile(comId, { fileName, type: "delete" })
+  })
+
+  // 收集编译/校验错误（来自 data._errors，只取本次涉及文件的错误）
+  const updatedFileNames = new Set(pendingWrites.map((f) => f.fileName));
+  const rawErrors: Array<{ file: string; message: string; type?: string }> =
+    aiComParams.data._errors ?? [];
+  const compileErrors = rawErrors
+    .filter((e) => updatedFileNames.has(e.file))
+    .map((e) => ({
+      file: e.file,
+      message: e.message,
+      type: (e.type === 'validate' ? 'validate' : 'compile') as 'compile' | 'validate',
+    }));
+
+  const compileSuccess = compileErrors.length === 0;
+
+
+  console.log("[aiCom]", aiComParams);
 
   return {
     comId,
     fileResults,
-    success,
+    mergeSuccess,
+    compileErrors,
+    compileSuccess,
+    success: mergeSuccess && compileSuccess,
+    updateFile: !!(mergeSuccess && pendingWrites.length)
   };
-}
-
-/**
- * 创建批量更新组件文件的处理器
- * 支持多组件并发更新，当所有核心文件接收完成后统一提交
- */
-function createBatchUpdateComponentFiles(context: any) {
-  const CORE_FILES = ['com.json', 'model.json', 'style.less', 'runtime.jsx'];
-  const componentFileBuffer: Record<string, Record<string, string>> = {};
-  const processedFileKeys = new Set<string>();
-
-  type FileItem = {
-    fileName: string;
-    content: string;
-    isComplete: boolean;
-    language?: string;
-  };
-
-  /**
-   * 处理单个组件的文件更新
-   * 当组件的所有核心文件都收集完成后，触发实际更新
-   */
-  function handleComponentFileUpdate(comId: string, fileName: string, content: string) {
-    // 初始化组件缓冲区并设置加载状态
-    if (!componentFileBuffer[comId]) {
-      componentFileBuffer[comId] = {};
-      const aiComParams = context.getAiComParams(comId);
-      if (aiComParams?.data?.document) {
-        aiComParams.data.loading = true;
-      }
-    }
-
-    // 缓存文件内容
-    componentFileBuffer[comId][fileName] = content;
-
-    // 检查是否所有核心文件都已接收
-    const receivedFiles = Object.keys(componentFileBuffer[comId]);
-    const hasAllCoreFiles = CORE_FILES.every((file) => receivedFiles.includes(file));
-    if (!hasAllCoreFiles) return;
-
-    // 转换为文件列表格式并更新组件
-    const files = receivedFiles.map((name) => ({
-      fileName: name,
-      content: componentFileBuffer[comId][name],
-    }));
-    updateComponentFiles(files, comId, context);
-
-    // 清理加载状态和缓冲区
-    const aiComParams = context.getAiComParams(comId);
-    if (aiComParams?.data) {
-      delete aiComParams.data.loading;
-    }
-    delete componentFileBuffer[comId];
-  }
-
-  /**
-   * 解析文件名，提取组件ID和基础文件名
-   * 格式: filename@componentId.ext -> { comId, baseFileName }
-   */
-  function parseFileName(fileName: string) {
-    const match = fileName.match(/^(.+)@([^.]+)(\..+)$/);
-    return match
-      ? { comId: match[2], baseFileName: `${match[1]}${match[3]}` }
-      : null;
-  }
-
-  /**
-   * 规范化输入文件数据为统一格式
-   */
-  function normalizeFileItems(
-    rawFiles: Array<Record<string, unknown>> | Record<string, any> | undefined
-  ): FileItem[] {
-    if (!rawFiles) return [];
-
-    const items: FileItem[] = [];
-
-    if (Array.isArray(rawFiles)) {
-      // 处理数组格式
-      rawFiles.forEach((file) => {
-        const fileName = (file.fileName as string) ?? '';
-        if (fileName) {
-          items.push({
-            fileName,
-            content: (file.content as string) ?? '',
-            isComplete: (file.isComplete as boolean) ?? false,
-            language: (file.language as string) ?? '',
-          });
-        }
-      });
-    } else if (typeof rawFiles === 'object') {
-      // 处理对象格式
-      Object.entries(rawFiles).forEach(([key, fileOrArr]) => {
-        const fileArray = Array.isArray(fileOrArr) ? fileOrArr : [fileOrArr];
-        fileArray.forEach((file: any) => {
-          const fileName = (file?.fileName ?? key) as string;
-          if (fileName) {
-            items.push({
-              fileName,
-              content: (file?.content ?? '') as string,
-              isComplete: (file?.isComplete ?? false) as boolean,
-              language: (file?.language ?? '') as string,
-            });
-          }
-        });
-      });
-    }
-
-    return items;
-  }
-
-  /**
-   * 按组件和文件名分组文件项
-   */
-  function groupFilesByComponent(items: FileItem[]) {
-    const groups = new Map<string, { comId: string; baseFileName: string; items: FileItem[] }>();
-
-    items.forEach((item) => {
-      const parsed = parseFileName(item.fileName);
-      if (!parsed) return;
-
-      const key = `${parsed.comId}|${parsed.baseFileName}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          comId: parsed.comId,
-          baseFileName: parsed.baseFileName,
-          items: [],
-        });
-      }
-      groups.get(key)!.items.push(item);
-    });
-
-    return groups;
-  }
-
-  /**
-   * 从文件项组中提取最终内容
-   * 支持 before/after 模式和单文件模式
-   */
-  function extractFinalContent(items: FileItem[]): string | null {
-    const hasBeforeAfterMode = items.some(
-      (item) => item.language === 'before' || item.language === 'after'
-    );
-
-    if (hasBeforeAfterMode) {
-      // before/after 替换模式
-      const beforeComplete = items.some(
-        (item) => item.language === 'before' && item.isComplete
-      );
-      const afterItem = items.find(
-        (item) => item.language === 'after' && item.isComplete
-      );
-      return beforeComplete && afterItem ? afterItem.content : null;
-    } else {
-      // 单文件完整替换模式
-      const singleItem = items.find(
-        (item) => item.isComplete && item.content.length > 0
-      );
-      return singleItem?.content ?? null;
-    }
-  }
-
-  /**
-   * 批量更新组件文件的主函数
-   */
-  function batchUpdateComponentFiles(
-    rawFiles: Array<Record<string, unknown>> | Record<string, any> | undefined
-  ) {
-    const fileItems = normalizeFileItems(rawFiles);
-    const fileGroups = groupFilesByComponent(fileItems);
-
-    fileGroups.forEach((group, groupKey) => {
-      // 跳过已处理的文件
-      if (processedFileKeys.has(groupKey)) return;
-
-      const { comId, baseFileName, items } = group;
-      const finalContent = extractFinalContent(items);
-
-      // 内容未就绪，跳过
-      if (finalContent === null) return;
-
-      // 标记为已处理
-      processedFileKeys.add(groupKey);
-
-      // 触发组件文件更新
-      handleComponentFileUpdate(comId, baseFileName, finalContent);
-    });
-  }
-
-  return batchUpdateComponentFiles;
 }
 
 export default function ({ context }) {
@@ -315,79 +152,103 @@ export default function ({ context }) {
     goal: '根据用户需要，开发可运行在MyBricks平台的模块',
     backstory: `基于React + Less`,
     request({ rxai, params, focus }: any) {
-      // const aiComParams = context.getAiComParams(focus.comId);
+      const { focusArea } = focus;
       const aiCom = context.getAiCom(focus.comId);
       const { aiComParams, actions } = aiCom;
 
-      let comName = "root";
+      let lockId = uuid();
+      let planAgent;
+      let updateFile = false;
+      let complete;
 
-      console.log("[@request - params]", params);
-      console.log("[@request - focus]", focus);
-      console.log("[aiCom]", aiCom);
-      console.log("[aiComParams]", aiComParams);
+      let compileError: any = null
+      let runtimeError: any = null
 
-      // 判断是否作为工具被调用（被上级agent调用）
-      const asSubAgentTool = !!params.asTool;
+      const events = context.getAiComEvents(focus.comId);
+      const offCompileError = events.on("compileError", (error) => {
+        compileError = error?.length ? error : null
+      })
+      const offRuntimeError = events.on("runtimeError", (error) => {
+        runtimeError = error
+      })
 
-      const onProgress = (status) => {
-        console.log("[@comName]", comName);
-        console.log("[@status]", status);
-        if (comName === "root") {
-          params?.onProgress?.(status);
+      let lockType;
+
+      const setLock = (type: "lock" | "unlock") => {
+        if (lockType === type) {
+          return
+        }
+        lockType = type
+        if (!focusArea || (compileError || runtimeError)) {
+          // 组件，没有选区或者有报错
+          params?.onProgress?.(type === "lock" ? "start" : "complete");
         } else {
-          if (status === "start") {
-            actions.lock(comName);
-          } else if (status === "complete") {
-            actions.unlock(comName);
-          } else if (status === "error") {
-            actions.unlock(comName);
-          }
+          // 区域
+          actions[type](lockId, focusArea);
         }
       }
 
-      const focusArea = actions?.getFocusArea?.();
+      const onProgress = (status) => {
+        if (status === "start") {
+          (window as any).__vibeCodingCallbacks__?.onStart?.();
+          setLock("lock");
+        } else if (status === "complete") {
+          (window as any).__vibeCodingCallbacks__?.onComplete?.();
+          setLock("unlock");
+          offCompileError();
+          offRuntimeError();
+        } else if (status === "error") {
+          (window as any).__vibeCodingCallbacks__?.onError?.();
+          setLock("unlock");
+          offCompileError();
+          offRuntimeError();
+        }
+      }
+
+      const onUpdateFiles = (p) => {
+        const result = updateComponentFiles(p.files ?? [], focus.comId, context);
+        if (result.updateFile) {
+          if (!updateFile) {
+            // 插入记录
+            updateFile = true
+            context.addVersion(focus.comId, "ai", planAgent);
+          } else {
+            // 更新记录
+            context.updateVersion(focus.comId, planAgent);
+          }
+        }
+        return result
+      }
+
+      const activeFocusArea = actions?.getFocusArea?.();
 
       let focusInfo = "";
 
-      if (focusArea) {
-        comName = focusArea.elemenet.closest(`[data-com-name]`)?.dataset?.comName ?? '';
-        focusInfo = buildFocusInfo(focusArea.elemenet);
+      if (activeFocusArea) {
+        focusInfo = buildFocusInfo(activeFocusArea.elemenet);
       }
-      // 创建 project 实例（projectJson 由 runtime/style 动态生成，失败时回退 defaultRoot）
-      const runtimeContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.runtimeJsxSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const styleContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.styleSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const storeContent = (() => {
-        try {
-          return decodeURIComponent(aiComParams?.data?.storeJsSource ?? '');
-        } catch {
-          return '';
-        }
-      })();
-      const projectJson = buildProjectJson(runtimeContent, styleContent);
-      const project = createProject({
-        projectJson,
-        getRuntimeContent: () => runtimeContent,
-        getStyleContent: () => styleContent,
-        getStoreContent: () => storeContent,
-      });
 
-      // project.read('DataCard')
-      // return project.exportToMessage().then((message) => {
-      //   console.log("[@project.exportToMessage]", message);
-      //   return message;
-      // });
+      const themesContent = (() => {
+        try {
+          const { activeThemeId, themes } = aiComParams?.data?.themes ?? {};
+          const theme = themes?.find((theme) => theme.id === activeThemeId);
+          return '- 设计风格：' + (theme?.vars?.length ? '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' + 
+          theme?.vars?.reduce((pre, cur) => {
+            return pre + `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}`
+          }, "") : '\n  当前项目没有定义主题变量，禁止创造变量，风格根据需求自由发挥即可')
+        } catch {
+          return '';
+        }
+      })()
+
+      const project = createProject({
+        getFiles: () => aiComParams?.data?.files,
+        getThemesContent: () => themesContent,
+        getDesignerState: () => aiComParams?.data?._designerState,
+        getErrors: () => aiComParams?.data?._errors,
+        getLogs: () => debugLogs.get(focus.comId),
+        snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
+      });
 
       const hasAttachments = Array.isArray(params.attachments) && params.attachments?.length > 0;
 
@@ -418,11 +279,20 @@ export default function ({ context }) {
             cancel: () => { },
           },
           presetMessages: async () => {
-            const content = await project.exportToMessage()
+            const codeStatus = await project.exportToMessage();
+            const designerStatus = await project.exportDesignerToMessage();
             return [
               {
                 role: 'user',
-                content
+                content: designerStatus,
+              },
+              {
+                role: 'assistant',
+                content: '收到，我了解了当前设计器的搭建状态视图了。'
+              },
+              {
+                role: 'user',
+                content: codeStatus
               },
               {
                 role: 'assistant',
@@ -432,42 +302,6 @@ export default function ({ context }) {
           },
         };
 
-        // asTool 模式：stream 收到 files 时调用 batchUpdateComponentFiles(files, context)
-        const batchUpdateComponentFiles = createBatchUpdateComponentFiles(context);
-
-        // asTool 模式，直接被上级 agent 调用
-        const AsToolModeConfig = {
-        ...baseConfig,
-        planList: [`${developMyBricksModule.toolName} -mode restore`],
-        tools: [
-          developMyBricksModule({
-            enabledBatch: true,
-            hasAttachments,
-            onStream: batchUpdateComponentFiles,
-            onOpenCodes: () => {
-              project.read('root')
-            },
-          }),
-          answer()
-        ],
-        formatUserMessage: (text: string) => {
-          const style = aiComParams?.style ?? {};
-          const wUnit = typeof style.width === 'number' ? 'px' : '';
-          const hUnit = typeof style.height === 'number' ? 'px' : '';
-          const componentInfo =
-            style.widthFact != null && style.heightFact != null
-              ? `宽度为${style.width ?? ''}${wUnit}，实际渲染宽度为${style.widthFact}px；高度为${style.height ?? ''}${hUnit}，实际渲染高度为${style.heightFact}px`
-              : '暂无尺寸信息';
-
-          return `<当前组件的信息>
-${componentInfo}
-</当前组件的信息>
-<用户消息>
-${text}
-</用户消息>
-`;
-        },
-        };
 
         const formatUserMessage = (text: string) => {
           return `
@@ -481,7 +315,9 @@ ${text}
         // agent模式配置：planningCheck 保证「代码开发」前必须调用 readRelated
         const READ_RELATED_NAME = (readRelated as any).toolName;
         const DEVELOP_MODULE_NAME = (developModule as any).toolName;
-        const ANSWER_NAME = (answer as any).toolName;
+
+        // 每次请求共享的标志：developModule 成功修改代码后置 true，checkDesignStatus 消费后重置
+        const codeModifiedFlag = { value: false };
 
         const AgentModeConfig = {
           ...baseConfig,
@@ -489,22 +325,33 @@ ${text}
             readRelated({ project }),
             developModule({
               hasAttachments,
-              execute(p) {
-                return updateComponentFiles(p.files ?? [], focus.comId, context);
+              onUpdate: onUpdateFiles,
+              codeModifiedFlag,
+              setLock
+            }),
+            checkDesignStatus({ project, setLock, codeModifiedFlag }),
+            syncMarkdownformybricksModule({
+              setLock,
+              onUpdate: (p) => {
+                const files = p.files;
+                const summary = files.find((f) => f.fileName === "summary.md")
+
+                if (summary) {
+                  context.updateVersionWithContent(focus.comId, planAgent, {
+                    summary: summary.content
+                  })
+                }
+                
+                onUpdateFiles({
+                  files: summary ? files.filter((f) => f.fileName !== "summary.md") : files
+                })
               },
             }),
-            answer()
+            answer(),
           ],
           planningCheck: (tools: any[]) => {
             const toolNames = tools.map((t: any) => t[1]);
             const resultTools = [...tools];
-
-            // 规则1: 如果 信息获取类 在最后一个，则添加一个 answer
-            const infoToolNames = [READ_RELATED_NAME];
-            if (toolNames.length > 0 && infoToolNames.includes(toolNames[toolNames.length - 1])) {
-              resultTools.push(['node', ANSWER_NAME]);
-              return resultTools;
-            }
 
             // 规则2: 开发代码前必须调用 readRelated
             const developIndex = toolNames.indexOf(DEVELOP_MODULE_NAME);
@@ -520,42 +367,13 @@ ${text}
           },
           historyMessageMode: "expanded",
           formatUserMessage,
+          onPlan: (plan) => {
+            planAgent = plan;
+            params?.onPlan?.(plan);
+          }
         };
 
-        // ReAct 模式
-        // const codeBase = new CodeBase();
-        // codeBase.addFile('/runtime.jsx', () => runtimeContent);
-        // codeBase.addFile('/style.less', () => styleContent);
-        // const ReActModeConfig = {
-        //   ...baseConfig,
-        //   presetMessages: async () => {
-        //     const content = await Promise.resolve(codeBase.exportToMessage());
-        //     return [
-        //       { role: 'user' as const, content },
-        //       { role: 'assistant' as const, content: '感谢您提供的项目信息，我会参考这些信息进行开发。' },
-        //     ];
-        //   },
-        //   maxAppendDepth: 99,
-        //   planList: [`${explore.name}`],
-        //   tools: [
-        //     explore(),
-        //     read({ codeBase }),
-        //     grep({ codeBase }),
-        //     glob({ codeBase }),
-        //     developModule({
-        //       hasAttachments,
-        //       execute(p) {
-        //         return updateComponentFiles(p.files ?? [], focus.comId, context);
-        //       },
-        //     }),
-        //   ],
-        //   formatUserMessage,
-        // };
-
-        const config = asSubAgentTool ? AsToolModeConfig : AgentModeConfig;
-        // 如需 ReAct 模式
-        // const config = asSubAgentTool ? AsToolModeConfig : ReActModeConfig;
-        rxai.requestAI(config);
+        rxai.requestAI(AgentModeConfig);
       });
     },
     getFocusArea(params) {
@@ -566,7 +384,7 @@ ${text}
         const { actions } = aiCom;
         const focusArea = actions?.getFocusArea?.();
         if (focusArea) {
-          comName = focusArea.elemenet.closest(`[data-com-name]`).dataset.comName;
+          comName = focusArea.elemenet.closest(`[data-com-name]`)?.dataset?.comName || "root";
         }
 
         return comName

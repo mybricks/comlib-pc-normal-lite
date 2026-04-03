@@ -10,14 +10,68 @@
 组件必须通过 comRef
 
 ### 页面声明
-页面必须通过 pageRef 包裹实现
+页面必须通过 Route + comRef 包裹实现
 
+
+### 接口使用
+对于所有的接口，都必须维护到service.js文件中，我们提供了 `createEnvs` + `createAPI`，对axios做了代理，所有接口和环境必须通过这两个函数来定义。
+
+```js createEnvs 和 createAPI的源代码说明
+// createEnvs：本质是 axios.create，注册多套环境实例，实例隐式切换后被 createAPI 消费
+function createEnvs(envConfigs) {
+  Object.entries(envConfigs).forEach(([key, { title, baseUrl, ...rest }]) => {
+    envInstances[key] = axios.create({ baseURL: baseUrl, ...rest })
+  })
+}
+
+// createAPI：返回一个函数，调用时合并配置并用当前环境实例发请求，其中defaultConfig的method、url、summary必须
+function createAPI(defaultConfig, paramsMapper) {
+  return (params) => {
+    const runtimeConfig = paramsMapper ? paramsMapper(params) : {}
+    return getCurrentInstance()({ ...defaultConfig, ...runtimeConfig })
+  }
+}
+```
+
+
+service.js文件示例
+```js
+import { createEnvs, createAPI } from 'mybricks'
+
+createEnvs({
+  prod: {
+    title: '正式环境',
+    baseUrl: 'https://www.xxx.com/api',
+    headers: {
+      'x-id': '正式环境固定headers'
+    },
+  }
+})
+
+
+const getUserById = createAPI({
+  method: 'GET',
+  url: '/getUserById',
+  summary: '根据ID请求用户信息'
+}, ({ id }) => {
+  return {
+    params: {
+      id
+    }
+  }
+}).then()
+
+
+export default {
+  getUserById,
+}
+```
 
 ### 路由使用
 对于路由，我们提供 `Routes`、`Route`、`useNavigate`、`useLocation`、`useParams` 实现。
 
 ```jsx
-import { comRef, pageRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
+import { comRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
 import { Button } from 'xy-ui';
 import css from 'style.less';
 
@@ -36,7 +90,7 @@ const ToolBar = comRef(({ store }) => {
   ));
 });
 
-const PageButton = pageRef(() => (
+const PageButton = comRef(() => (
   <div className={css.viewContainer}><ToolBar /></div>
 ));
 
@@ -49,7 +103,7 @@ const UserDetail = comRef(({ store }) => {
   return <div>{user?.name}</div>;
 });
 
-const PageUser = pageRef(() => <UserDetail />);
+const PageUser = comRef(() => <UserDetail />);
 
 /**
  * @title 示例项目

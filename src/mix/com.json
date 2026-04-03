@@ -1,5 +1,5 @@
 {
-  "title": "Antd5-Echars",
+  "title": "PC-AI",
   "namespace": "mybricks.basic-comlib.ai-mix",
   "author": "MyBricks Team",
   "author_name": "MyBricks Team",
@@ -9,11 +9,8 @@
   "runtime": "./runtime.tsx",
   "runtime.edit": "./runtime.edit.tsx",
   "ai": "./ai.ts",
-  "editors": "./editors.tsx",
+  "editors": "./editors/index.tsx",
   "data": "./data.json",
   "slots": [],
-  "docs": "",
-  "target": {
-    "toReact": "./toReact.ts"
-  }
+  "docs": ""
 }

@@ -1,8 +1,9 @@
+import { tramsform } from "./codeTransform";
+
 /**
  * 代码结构生成器
  * 负责将组件数据按照代码结构生成并组织文件
  */
-
 export interface FileItem {
   /** 文件名（包含相对路径，如 runtime.jsx） */
   fileName: string;
@@ -11,80 +12,128 @@ export interface FileItem {
 }
 
 export interface ComponentData {
-  /** 运行时 JSX 源码 */
-  runtimeJsxSource?: string;
-  /** 样式源码（LESS） */
-  styleSource?: string;
-  /** Store 源码 */
-  storeJsSource?: string;
-  /** 其他元数据 */
-  [key: string]: any;
+  files: {
+    /** 文件名 */
+    fileName: string;
+    /** 文件源码（经过 base64 编码） */
+    source: string;
+  }[]
+  themes: {
+    themes: {
+      id: string;
+      name: string;
+      vars: {
+        propertyName: string;
+        value: string;
+        title: string;
+        type: string;
+      }[]
+    }[]
+  }
 }
 
 /**
- * 生成代码文件结构
- * 只导出三个核心文件：runtime.jsx, style.less, store.js
+ * @deprecated
  */
-export function generateCodeStructure(data: ComponentData): FileItem[] {
+interface Config {
+  type: "application" | "component"
+  previous?: boolean
+}
+
+// [TEMP] 临时兼容，后续删除
+const tempFN = (data: ComponentData) => {
   const files: FileItem[] = [];
 
-  // 1. 生成 runtime.jsx
-  if (data.runtimeJsxSource) {
-    files.push({
-      fileName: 'runtime.jsx',
-      content: decodeURIComponent(data.runtimeJsxSource),
-    });
-  }
+  data.files.forEach((file) => {
+    const { fileName, source } = file;
+    if (fileName === "setup.js") {
+      return
+    }
 
-  // 2. 生成 style.less
-  if (data.styleSource) {
-    files.push({
-      fileName: 'style.less',
-      content: decodeURIComponent(data.styleSource),
-    });
-  }
+    let code = decodeURIComponent(source);
+    let name = fileName;
 
-  // 3. 生成 store.js
-  if (data.storeJsSource) {
+    const suffix = fileName.split('.').pop()
+    if(suffix === 'jsx' || suffix === 'js') {
+      code = tramsform(code)
+    } else if (suffix === 'less') {
+      name = name.replace('.less', '.module.less')
+    }
+
     files.push({
-      fileName: 'store.js',
-      content: decodeURIComponent(data.storeJsSource),
-    });
-  }
+      fileName: name,
+      content: code
+    })
+  })
 
   return files;
 }
 
-/**
- * 验证文件结构
- */
-export function validateFileStructure(files: FileItem[]): {
-  valid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
+export function generateCodeStructure(data: ComponentData, config: Config): FileItem[] {
 
-  // 检查必需文件
-  const hasRuntime = files.some((f) => f.fileName === 'runtime.jsx');
-  const hasStyle = files.some((f) => f.fileName === 'style.less');
-
-  if (!hasRuntime) {
-    errors.push('缺少必需文件: runtime.jsx');
+  if (config.previous) {
+    return tempFN(data)
   }
 
-  if (!hasStyle) {
-    errors.push('缺少必需文件: style.less');
-  }
+  const files: FileItem[] = [];
 
-  // 检查文件路径合法性
-  files.forEach((file) => {
-    if (!file.fileName || file.fileName.includes('..')) {
-      errors.push(`非法文件路径: ${file.fileName}`);
+  data.files.forEach((file) => {
+    const { fileName, source } = file;
+    if (fileName === "setup.js") {
+      return
     }
-  });
+
+    let code = decodeURIComponent(source);
+    let name = fileName;
+
+    const suffix = fileName.split('.').pop()
+    if(suffix === 'jsx' || suffix === 'js') {
+      code = tramsform(code)
+    } else if (suffix === 'less') {
+      name = name.replace('.less', '.module.less')
+    }
+
+    files.push({
+      fileName: `src/${name}`,
+      content: code
+    })
+  })
+
+  files.push(themesFile(data))
+  files.push(entryFile())
+
+  return files;
+}
+
+const themesFile = (data: ComponentData) => {
+  const themes = data.themes.themes.reduce((pre, theme) => {
+    pre[theme.id] = theme.vars.reduce((pre, cssVar) => {
+      pre[cssVar.propertyName] = cssVar.value;
+      return pre;
+    }, {})
+    return pre;
+  }, {});
 
   return {
-    valid: errors.length === 0,
-    errors,
-  };
+    fileName: 'themes.js',
+    content: `export default ${JSON.stringify(themes, null, 2)}`
+  }
+}
+
+const entryFile = () => {
+  return {
+    fileName: 'index.jsx',
+    content: `import { ConfigProvider } from '@mybricks/ai-render'
+import App from './src'
+import themes from './themes'
+
+export default function (props) {
+  return (
+    <ConfigProvider themes={themes} {...props}>
+      <App />
+    </ConfigProvider>
+  )
+}
+`
+  }
 }

@@ -1,0 +1,41 @@
+.console-container {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  // background: #fff;
+  background: var(--mybricks-bg-color-main);
+
+  .console-toolbar {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--mybricks-border-color-main);
+    flex-shrink: 0;
+
+    .console-clear-btn {
+      height: 20px;
+      padding: 0 10px;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      background: var(--mybricks-bg-color-main);
+      box-shadow: var(--mybricks-shadow-main);
+      cursor: pointer;
+      color: var(--mybricks-text-color-main);
+      // background: #FFF;
+      // color: #666;
+
+      // &:hover {
+      //   background: #F5F5F5;
+      // }
+    }
+  }
+
+  .console-feed-wrapper {
+    flex: 1;
+    overflow: auto;
+  }
+}

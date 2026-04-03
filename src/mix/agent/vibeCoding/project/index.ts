@@ -3,11 +3,7 @@
  * 根据 project.json 生成实时更新的 message：项目架构树 + 文件系统（按组件 name 展开代码）
  */
 
-/** 允许使用的三方库提示词（antd / echarts / icon） */
-import antdPrompt from '../../../prompts/antd-summary.md';
-import echartsPrompt from '../../../prompts/echarts-summary.md';
-import iconPrompt from '../../../prompts/icon-summary.md';
-import mybricksPrompt from '../../../prompts/mybricks.md';
+import { getEffectiveLibraryDocs } from '../../../availableLibraries';
 
 
 /** project.json 中单个节点的类型 */
@@ -30,18 +26,25 @@ export const ROOT_NAME = 'root';
 /** 项目配置 */
 export interface ProjectConfig {
   /** project.json 根数组（仅取第一个根节点） */
-  projectJson: ProjectNode[];
-  /** 获取 runtime.jsx 全文 */
-  getRuntimeContent: () => string;
-  /** 获取 style.less 全文 */
-  getStyleContent: () => string;
-  /** 获取 store.js 全文 */
-  getStoreContent: () => string;
+  /** 获取主题配置全文 */
+  getThemesContent: () => string;
+  /** 获取设计器运行时状态（由渲染层写入） */
+  getDesignerState?: () => { pages: string[]; popups: string[] } | undefined;
+  /** 获取当前运行时报错列表 */
+  getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
+  /** 获取本次组件加载后收集到的日志列表（每次重载重置） */
+  getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number; mode?: string }> | undefined;
+  /** createProject 时快照的 runtimeMode（`${id}_edit` / `${id}_runtime_mock` 等），用于过滤日志和固定设计器状态描述 */
+  snapshotRuntimeMode?: string;
+
+
+  getFiles: () => any[];
 }
 
 const RUNTIME_PATH = '/runtime.jsx';
 const STYLE_PATH = '/style.less';
 const STORE_PATH = '/store.js';
+const SERVICE_PATH = '/service.js';
 /** 折叠占位提示（不耦合具体工具名） */
 const FOLD_HINT = '// ... 这部分代码已折叠，如需要可通过读取工具打开 ...';
 
@@ -214,17 +217,15 @@ function buildFileSection(
  */
 export class Project {
   private config: ProjectConfig;
-  private root: ProjectNode;
+  // private root: ProjectNode;
   /** 通过 read(name) 展开的组件名集合 */
   private expandedNames = new Set<string>();
+  /** createProject 时快照的 runtimeMode，用于固定 exportDesignerToMessage / exportLogsToMessage 的视角 */
+  private snapshotRuntimeMode: string | undefined;
 
   constructor(config: ProjectConfig) {
     this.config = config;
-    const rootNode = config.projectJson?.[0];
-    if (!rootNode) {
-      throw new Error('[Project] projectJson 需至少包含一个根节点');
-    }
-    this.root = rootNode;
+    this.snapshotRuntimeMode = config.snapshotRuntimeMode;
   }
 
   /**
@@ -233,14 +234,14 @@ export class Project {
    * 传入 "root" 时直接返回全量文件（所有代码文件全文）。
    */
   read(componentName: string): void {
-    if (!componentName || typeof componentName !== 'string') return;
-    const name = componentName.trim();
-    const node = getNodeByName(this.root, name);
-    if (node) {
-      collectNodeAndDescendantNames(node).forEach((n) => this.expandedNames.add(n));
-    } else {
-      this.expandedNames.add(name);
-    }
+    // if (!componentName || typeof componentName !== 'string') return;
+    // const name = componentName.trim();
+    // const node = getNodeByName(this.root, name);
+    // if (node) {
+    //   collectNodeAndDescendantNames(node).forEach((n) => this.expandedNames.add(n));
+    // } else {
+    //   this.expandedNames.add(name);
+    // }
   }
 
   /**
@@ -260,18 +261,116 @@ export class Project {
   /**
    * 获取项目架构中所有组件 name（含 root）
    */
-  getComponentNames(): string[] {
-    return collectNodeAndDescendantNames(this.root);
+  // getComponentNames(): string[] {
+  //   return collectNodeAndDescendantNames(this.root);
+  // }
+
+  /**
+   * 当前设计器是否有运行时错误
+   */
+  hasRuntimeErrors(): boolean {
+    const errors = this.config.getErrors?.() ?? [];
+    return errors.length > 0;
+  }
+
+  /**
+   * 将本次载入的运行日志格式化为 Markdown 字符串，供 checkDesignStatus 拼接
+   */
+  exportLogsToMessage(maxCount = 30, maxArgLength = 50): string {
+    const allLogs = this.config.getLogs?.() ?? [];
+    // 若有快照 runtimeMode，只展示该模式下的日志；否则展示全部
+    const filtered = this.snapshotRuntimeMode
+      ? allLogs.filter((entry) => entry.mode === this.snapshotRuntimeMode)
+      : allLogs;
+    const logs = filtered.slice(-maxCount);
+    const truncatedCount = filtered.length - logs.length;
+    if (logs.length === 0) {
+      return `\n## 运行日志\n  （本次载入暂无日志）\n`;
+    }
+    const logLines = logs.map((entry, i) => {
+      const argsStr = entry.args.map((a: any) => {
+        let s: string;
+        try { s = JSON.stringify(a); } catch { s = String(a); }
+        return s.length > maxArgLength ? s.slice(0, maxArgLength) + '…' : s;
+      }).join(', ');
+      return `  ${i + 1}. [${entry.type}] ${entry.method}(${argsStr})`;
+    }).join('\n');
+    const truncatedNote = truncatedCount > 0
+      ? `\n  （已省略最早的 ${truncatedCount} 条，仅展示最近 ${maxCount} 条）`
+      : '';
+    return `\n## 运行日志（按顺序）${truncatedNote}\n${logLines}\n`;
+  }
+
+  async exportDesignerToMessage(): Promise<string> {
+    const designModeKnowledge = `
+## 页面渲染：
+通过 Route 注册的组件统一定义为页面；
+### 设计态渲染方式
+  - 在设计态中，所有通过Route注册的页面会被同时平铺按顺序展示，而非只显示当前激活路由对应的组件；
+  - 这意味着每个通过 Route 注册的 comRef 组件都会在画布上独立渲染，设计者可以直接看到并编辑所有页面；
+  - 在设计态中，所有通过 popupRef 包裹的浮层类组件会被同时平铺展示；
+  - 这意味着每个通过 popupRef 包裹的浮层类组件都会在画布上独立渲染，设计者可以直接看到并编辑所有浮层类组件（例如弹窗、抽屉等）；
+### 运行态渲染方式
+  - 在运行态中，只有当前激活路由对应的页面会被展示；
+  - 在运行态中，通过 popupRef 包裹的浮层组件（弹窗、抽屉等）展示与否是受控的，通过用户交互或代码逻辑主动触发才会显示；
+  
+## 接口请求
+设计态会替换axios的内部实现，不允许请求真实接口，需要提供 mock 数据。
+`;
+
+    const state = this.config.getDesignerState?.();
+    // 优先使用创建时快照的 runtimeMode 推断模式；否则回退到实时状态
+    let mode: string;
+    if (this.snapshotRuntimeMode) {
+      mode = this.snapshotRuntimeMode.endsWith('_edit') ? 'design' : (state?.mode ?? 'design');
+    } else {
+      mode = state?.mode ?? 'design';
+    }
+    const modeLabel = mode === 'design' ? '设计态' : `运行态(${mode.replace(/^.*_runtime_/, '')}环境)`;
+    
+    const pageRefNames = state?.pages ?? [];
+    const popupRefNames = state?.popups ?? [];
+
+    const errors = this.config.getErrors?.() ?? [];
+
+    let canvasStatus: string;
+    if (errors.length > 0) {
+      const errorLines = errors.map((e, i) => `  ${i + 1}. [${e.type}]${e.file ? ` ${e.file}` : ''}: ${e.message}`).join('\n');
+      canvasStatus = `画布当前处于报错状态，暂时无法看见任何展示内容。错误列表如下：\n${errorLines}`;
+    } else if (pageRefNames.length === 0 && popupRefNames.length === 0) {
+      canvasStatus = '当前代码暂无页面或弹窗组件，画布尚无可展示内容。';
+    } else {
+      // 页面在前、弹窗在后，与设计态画布实际渲染顺序一致
+      const allZones = [
+        ...pageRefNames.map((name) => ({ name, kind: '页面' })),
+        ...popupRefNames.map((name) => ({ name, kind: '弹窗/浮层' })),
+      ];
+      const zonesList = allZones.map((z, i) => `  ${i + 1}. ${z.name}（${z.kind}）`).join('\n');
+      canvasStatus = `画布从左到右共渲染了 ${allZones.length} 个画布（页面 ${pageRefNames.length} 个，弹窗/浮层 ${popupRefNames.length} 个），依次为：
+${zonesList}`;
+    }
+
+    const curStatus = `
+## 设计态渲染情况
+${canvasStatus}
+
+## 当前状态
+状态：${modeLabel}
+`    
+    return [
+      '# 设计器状态（实时更新）',
+      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「运行态」，两种模式下展示的内容不一样',
+      designModeKnowledge,
+      curStatus
+    ].join('\n');
   }
 
   /**
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getRuntimeContent, getStyleContent, getStoreContent } = this.config;
-    const runtimeContent = getRuntimeContent();
-    const styleContent = getStyleContent();
-    const storeContent = getStoreContent();
+    const { getFiles, getThemesContent } = this.config;
+    const themesContent = getThemesContent();
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
@@ -283,6 +382,12 @@ export class Project {
   - 功能：生产级别的功能性；
   - 细节：在每个细节都精心完善；
   - 响应式：保证合理统一的间距，以及支持宽度变化自适应的代码；
+  - 当前每一个设计态画布默认宽度为1200px，可以通过样式文件中使用 :frame { width: 1660px } 统一配置画布宽度；
+    - 如果是PC端界面，画布宽度配置常见的 1200、1660、1920 等宽度；
+    - 如果是移动端界面，画布宽度建议配置414宽度；
+- 拆分逻辑
+  - 精准识别到底是页面还是弹窗，对其进行拆分，如果是页面，需要使用Route渲染，如果是弹窗，需要使用popupRef；
+  - 我们特别希望在设计态能够展示所有页面和弹窗，方便用户进行调试；
 - 静态资源：
   - 对于图标：为了保证视觉的统一与专业性，我们的共识是统一使用图标组件。
     - 如果没有图标组件，则使用 placehold.co，禁止使用 Emoji 或特殊字符，它们可能导致在不同设备上的显示差异。
@@ -294,60 +399,33 @@ export class Project {
     对于插画/装饰性图形：我们优先推荐使用简单的svg来占位，避免使用图片过于跳脱；
 - 美学指南：
   - 在浅色和深色主题、不同字体、美学之间变化；
+${themesContent}
 注意：永远不要使用通用的AI生成美学、陈词滥调的配色方案（特别是白色背景上的紫色渐变）、可预测的布局，以及缺乏特征的千篇一律的设计。
 `;
 
-    const archMd = buildArchitectureMd(this.root);
-
-    const libraryDocsContent = [mybricksPrompt, antdPrompt, echartsPrompt, iconPrompt].join('\n\n');
-
+    const libraryDocsContent = getEffectiveLibraryDocs();
     const fileSectionParts: string[] = [];
+
     fileSectionParts.push('\n## 源代码\n');
     fileSectionParts.push('包含项目中的各代码文件。所有折叠内容可通过读取工具展开\n');
 
-    const runtimeLines = runtimeContent.split(/\r?\n/);
-    const styleLines = styleContent.split(/\r?\n/);
-    const storeLines = storeContent.split(/\r?\n/);
-    const isFullFile = this.expandedNames.has(ROOT_NAME);
-    const defaultImportRanges =
-      this.root.commonImports
-        ?.filter((c) => c.path === RUNTIME_PATH)
-        .flatMap((c) => (c.locs ?? []).map(([start, end]) => ({ start, end }))) ?? [];
-    const runtimeRanges = isFullFile
-      ? [{ start: 1, end: runtimeLines.length }]
-      : mergeRanges([
-          ...defaultImportRanges,
-          ...getInitialComponentRangesForRuntime(this.root),
-          ...getExpandedRangesForFile(this.root, this.expandedNames, RUNTIME_PATH),
-        ]);
-    const styleRanges = isFullFile
-      ? [{ start: 1, end: styleLines.length }]
-      : getExpandedRangesForFile(this.root, this.expandedNames, STYLE_PATH);
-    const storeRanges = isFullFile
-      ? [{ start: 1, end: storeLines.length }]
-      : getExpandedRangesForFile(this.root, this.expandedNames, STORE_PATH);
+    const files = getFiles();
 
-    if (runtimeRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('runtime.jsx', runtimeContent, runtimeRanges, 'jsx')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('runtime.jsx', runtimeContent, [], 'jsx'));
-    }
-    if (styleRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('style.less', styleContent, styleRanges, 'less')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('style.less', styleContent, [], 'less'));
-    }
-    if (storeRanges.length > 0) {
-      fileSectionParts.push(
-        buildFileSection('store.js', storeContent, storeRanges, 'js')
-      );
-    } else {
-      fileSectionParts.push(buildFileSection('store.js', storeContent, [], 'js'));
-    }
+    files.forEach((file) => {
+      const { fileName, source } = file;
+      const content = decodeURIComponent(source);
+      const lines = content.split(/\r?\n/);
+      const ranges = [{ start: 1, end: lines.length }];
+      const suffix = fileName.split('.').pop();
+
+      if (ranges.length > 0) {
+        fileSectionParts.push(
+          buildFileSection(fileName, content, ranges, suffix)
+        );
+      } else {
+        fileSectionParts.push(buildFileSection(fileName, content, [], suffix));
+      }
+    })
 
     return [
       '# 项目空间\n',
@@ -359,10 +437,6 @@ export class Project {
       '\n---\n\n',
       libraryDocsContent,
       '\n\n---\n\n',
-      '## 组件架构\n',
-      '\n组件树结构与层级关系有助于理解组件间关系；代码按组件层级展开，父组件包含所有子组件代码，子组件不包含父组件代码。\n',
-      '根组件 → 组件（树状结构）：\n\n',
-      archMd,
       '\n',
       ...fileSectionParts,
     ].join('');

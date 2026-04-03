@@ -16,3 +16,5 @@ cypress/downloads
 cypress-visual-report
 cypress-visual-screenshots
 dist/
+
+.codeflicker

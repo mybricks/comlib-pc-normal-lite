@@ -19,6 +19,8 @@ export interface ExportProgress {
 export interface ExportOptions {
   /** 文件夹名称 */
   folderName?: string;
+  /** 上次已选择的目标目录路径（仅 VSCode 环境有效），传入后跳过目录选择弹窗直接写入 */
+  outputDir?: string;
   /** 进度回调 */
   onProgress?: (progress: ExportProgress) => void;
 }
@@ -27,19 +29,24 @@ export interface ExportOptions {
  * 导出代码文件
  * 自动检测环境：优先使用 VSCode，否则使用浏览器 API
  */
+/**
+ * 导出代码文件
+ * 自动检测环境：优先使用 VSCode，否则使用浏览器 API
+ * VSCode 环境下返回本次实际使用的导出目录路径，浏览器环境下返回 undefined
+ */
 export async function exportCode(
   files: FileItem[],
   options: ExportOptions = {}
-): Promise<void> {
-  const { folderName = 'mybricks-component', onProgress } = options;
+): Promise<string | undefined> {
+  const { folderName = 'mybricks-component', outputDir, onProgress } = options;
 
   // 检查是否在 VSCode 环境
   const exportCodeToVSCode = (window as any).exportCodeToVSCode;
   if (typeof exportCodeToVSCode === 'function') {
-    // 使用 VSCode 导出
+    // 使用 VSCode 导出，返回实际使用的目录路径
     console.log('[代码导出] 使用 VSCode 导出');
-    await exportCodeToVSCode(files, { folderName, onProgress });
-    return;
+    const usedDir: string = await exportCodeToVSCode(files, { folderName, outputDir, onProgress });
+    return usedDir;
   }
 
   // 检查浏览器是否支持文件系统 API
@@ -90,6 +97,7 @@ export async function exportCode(
     }
     throw error;
   }
+  return undefined;
 }
 
 /**
