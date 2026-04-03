@@ -9,6 +9,7 @@ import React, {
   useCallback,
   useEffect
 } from 'react';
+import { parseFrameSize } from "../utils";
 import css from './index.less';
 import { debugLogs } from '../../../../../mix/context/debugLogs';
 
@@ -207,6 +208,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   };
   const debugTarget: any =
     env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
+  const filesMap = data.files.reduce((pre, file) => {
+    pre[file.fileName] = file
+    return pre
+  }, {})
 
   /** 向 debugLogs 追加一条日志记录（按打印顺序入栈） */
   const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
@@ -327,6 +332,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const theme = themes.find((theme) => theme.id === activeThemeId);
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue>({ container: document.body });
+    const [style, setStyle] = useState<React.CSSProperties>({});
 
     useLayoutEffect(() => {
       setContainer({ container: containerRef.current! })
@@ -339,6 +345,34 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         if (title) {
           containerRef.current!.setAttribute("data-zone-title", title);
         }
+        const dataLoc = firstWidget?.getAttribute('data-loc')
+        const style: React.CSSProperties = {
+          minWidth: 1200,
+          width: 'fit-content',
+          height: 'fit-content'
+        }
+        if (dataLoc) {
+          const loc = JSON.parse(dataLoc);
+          const { files } = loc;
+          if (files?.less) {
+            const file = filesMap[files.less]
+            const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+            const { width, height } = parseFrameSize(lessCode);
+            if (width) {
+              style.width = width
+              Reflect.deleteProperty(style, "minWidth")
+            }
+            if (height) {
+              style.height = height
+            }
+          } else {
+            console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+          }
+        } else {
+          console.error('[@动态解析] 未找到 data-loc', containerRef.current);
+        }
+
+        setStyle(style)
       }
     }, [])
 
@@ -349,13 +383,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         data-zone-kind='page'
         data-desn-page={path}
         style={{
-          ...(data?.frameStyle?.width
-            ? { width: data.frameStyle.width }
-            : { minWidth: 1200, width: 'fit-content' }
-          ),
+          ...style,
+          // ...(data?.frameStyle?.width
+          //   ? { width: data.frameStyle.width }
+          //   : { minWidth: 1200, width: 'fit-content' }
+          // ),
           // minHeight: 600,
           transform: 'scale(1)',
-          height: 'fit-content',
+          // height: 'fit-content',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -571,10 +606,58 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
+        const [style, setStyle] = useState<React.CSSProperties>({});
 
         useLayoutEffect(() => {
           setContainer(containerRef.current!)
         }, [])
+
+        useEffect(() => {
+          if (mdCompiled && containerRef.current && container) {
+            try {
+              const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+              const widgetName = firstWidget?.getAttribute('data-widget-name');
+              const docs = widgetName && mdCompiled[widgetName];
+              const title = docs?.title;
+              if (title) {
+                containerRef.current!.setAttribute("data-zone-title", title);
+              }
+
+              const style: React.CSSProperties = {
+                minWidth: 1200,
+                width: 'fit-content',
+                height: 'fit-content',
+                minHeight: 2000,
+              }
+              const dataLoc = firstWidget?.getAttribute('data-loc')
+              if (dataLoc) {
+                const loc = JSON.parse(dataLoc);
+                const { files } = loc;
+                if (files?.less) {
+                  const file = filesMap[files.less]
+                  const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+                  const { width, height } = parseFrameSize(lessCode);
+                  if (width) {
+                    style.width = width
+                    Reflect.deleteProperty(style, "minWidth")
+                  }
+                  if (height) {
+                    style.height = height
+                    Reflect.deleteProperty(style, "minHeight")
+                  }
+                  console.log("[style]", style)
+                } else {
+                  console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+                }
+              } else {
+                console.error('[@动态解析] 未找到 data-loc', containerRef.current);
+              }
+              setStyle(style)
+            } catch (e) {
+              console.error("[@动态解析]", e);
+            }
+          }
+        }, [container])
 
         return (
           <div
@@ -583,15 +666,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             data-zone-kind="popup"
             data-desn-page={"/"}
             style={{
-              ...(data?.frameStyle?.width
-                ? { width: data.frameStyle.width }
-                : { minWidth: 1200, width: 'fit-content' }
-              ),
-              minHeight: 2000,
+              ...style,
               display: 'inline-block',
               transform: 'scale(1)',
-              height: 'fit-content',
-              ...env._debugTarget?.style,
               ...theme?.vars?.reduce((pre, cur) => {
                 pre[cur.propertyName] = cur.value;
                 return pre;

@@ -5,4 +5,15 @@ const replaceToUnderline = (str: string) => {
   return str.replace(/[^0-9a-zA-Z_]/g, '_');
 }
 
-export { replaceToUnderline }
+const parseFrameSize = (lessCode: string): { width: string | null; height: string | null } => {
+  const frameMatch = lessCode.match(/:frame\s*\{([^}]*)\}/);
+  if (!frameMatch) return { width: null, height: null };
+  
+  const block = frameMatch[1];
+  const width = block.match(/width\s*:\s*([^;]+)/)?.[1]?.trim() ?? null;
+  const height = block.match(/height\s*:\s*([^;]+)/)?.[1]?.trim() ?? null;
+  
+  return { width, height };
+}
+
+export { replaceToUnderline, parseFrameSize }

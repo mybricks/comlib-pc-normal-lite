@@ -191,7 +191,7 @@ class Context {
 
       this.versionStateMap[comId] = versions.slice(0, index + 1);
       this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
-      this.getAiComEvents(comId)?.emit('fileChange', null);
+      // this.getAiComEvents(comId)?.emit('fileChange', null);
       (window as any)._mybricksOnEdit_?.({ autoSave: true });
     }
   }
@@ -508,14 +508,38 @@ class Context {
 
       if (fileName === "README.md") {
         try {
+          const compiled = parsemd(content)
           updateFileContent({
             fileName,
             files,
             content: {
               source: encodeURIComponent(content),
-              compiled: parsemd(content),
+              compiled,
             }
           })
+
+          const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
+          for (const [blockName, block] of Object.entries(compiled)) {
+            if (!block.events) continue
+            for (const ev of block.events) {
+              if (!ev.relation) continue
+              relations.push({
+                from: {
+                  selector: [
+                    `[data-widget-name="${blockName}"][data-zone-events*="${ev.id}"]`,
+                    `[data-widget-name="${blockName}"] [data-zone-events*="${ev.id}"]`,
+                  ].join(', '),
+                },
+                to: {
+                  type: ev.relation.type,
+                  selector: `[data-widget-name="${ev.relation.name}"]`,
+                },
+              })
+            }
+          }
+          this.getAiCom(id)?.actions?.notifyChanged?.({
+            relations
+          });
         } catch (e) {
           console.error("[@parsemd error]", e);
         }
@@ -539,7 +563,7 @@ class Context {
       this.getAiComEvents(id).emit("compileError", aiComParams.data._errors)
     }
 
-    this.getAiComEvents(id)?.emit('fileChange', null);
+    // this.getAiComEvents(id)?.emit('fileChange', null);
     (window as any)._mybricksOnEdit_?.();
     aiComParams?.notify?.edit();
   }

@@ -194,7 +194,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
 
     useEffect(() => {
       const offError = context.getAiComEvents(id).on("runtimeError", (err) => {
-        console.log("[err]", err)
         setRuntimeError(err)
       }, true)
 

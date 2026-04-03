@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useState, useRef, useEffect } from 'react';
 import Runtime from './runtime';
 import context from './context';
 
@@ -42,13 +42,25 @@ export default (props: any) => {
   useLayoutEffect(() => {
     const events = context.getAiComEvents(props.id);
     const cancelListenDebugTarget = events.on('debugTarget', setDebugTarget);
-    const cancelListenFileChange = events.on('fileChange', () => setFileChangeKey(c => c + 1));
+    // const cancelListenFileChange = events.on('fileChange', () => setFileChangeKey(c => c + 1));
 
     return () => {
       cancelListenDebugTarget();
-      cancelListenFileChange();
+      // cancelListenFileChange();
     }
   }, [])
+
+    // 用稳定的 key 字符串表示 files 快照，用于监听变化
+    const filesKey = data.files.map((f) => `${f.fileName}:${f.source}`).join('|');
+  
+    // 监听 files 变化：刷新当前选中文件内容 / 处理文件被删除的情况
+    const prevFilesKeyRef = useRef<string>('');
+    useEffect(() => {
+      if (prevFilesKeyRef.current === filesKey) return;
+      prevFilesKeyRef.current = filesKey;
+
+      setFileChangeKey((c) => c + 1);
+    }, [filesKey]);
 
   // const debugTarget = data?.debugTarget;
   const isPageDebug = debugTarget?.type === 'page';
