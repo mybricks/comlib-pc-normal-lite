@@ -576,6 +576,18 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           setContainer(containerRef.current!)
         }, [])
 
+        useEffect(() => {
+          if (mdCompiled && containerRef.current && container) {
+            const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+            const widgetName = firstWidget?.getAttribute('data-widget-name');
+            const docs = widgetName && mdCompiled[widgetName];
+            const title = docs?.title;
+            if (title) {
+              containerRef.current!.setAttribute("data-zone-title", title);
+            }
+          }
+        }, [container])
+
         return (
           <div
             ref={containerRef}
