@@ -98,7 +98,7 @@ export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
         onClick={() => setVisible(true)}
         style={buttonStyle}
       >
-        查看需求文档
+        查看PRD文档
       </button>
       {visible && (
         <RequirementViewModal
