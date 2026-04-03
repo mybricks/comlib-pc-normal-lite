@@ -1,5 +1,5 @@
 import React from 'react';
-import ExportCodePanel from '../../../utils/code-export/render';
+import ExportCodePanel, { ViewDocsBtn } from '../../../utils/code-export/render';
 import context from '../../context';
 import type { Props } from '../types';
 
@@ -8,6 +8,13 @@ export function buildExportCodeConfig(props: Props) {
     {
       title: '导出',
       items: [
+        {
+          title: '文档',
+          type: 'editorRender',
+          options: {
+            render: () => <ViewDocsBtn comId={props.id} />,
+          },
+        },
         {
           title: '代码',
           type: 'editorRender',

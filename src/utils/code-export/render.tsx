@@ -8,6 +8,150 @@ interface ExportCodePanelProps {
   data: any;
 }
 
+const buttonStyle: React.CSSProperties = {
+  cursor: 'pointer',
+  width: '100%',
+  textAlign: 'center',
+  height: 26,
+  lineHeight: '26px',
+  borderRadius: 6,
+  border: '1px solid rgba(2, 9, 16, 0.13)',
+  backgroundColor: 'var(--mybricks-bg-color-hover, #F5F5F5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 12,
+  color: 'var(--mybricks-text-color-main)',
+  padding: 0,
+  boxSizing: 'border-box',
+};
+
+// ─── 查看文档按钮 ────────────────────────────────────────────────────────────
+
+interface ViewDocsBtnProps {
+  comId: string;
+}
+
+export function ViewDocsBtn({ comId }: ViewDocsBtnProps) {
+  const [visible, setVisible] = useState(false);
+
+  const readmeContent = React.useMemo(() => {
+    try {
+      const aiComParams = context.getAiComParams(comId);
+      const files = aiComParams?.data?.files as any[] | undefined;
+      if (!files) return '';
+      const readmeFile = files.find(
+        (f: any) => f.fileName === 'README.md' || f.fileName === 'readme.md'
+      );
+      return decodeURIComponent(readmeFile?.source ?? '');
+    } catch {
+      return '';
+    }
+  }, [comId]);
+
+  if (!readmeContent) return null;
+
+  return (
+    <div style={{ padding: '4px 0' }}>
+      <button
+        type="button"
+        onClick={() => setVisible(true)}
+        style={buttonStyle}
+      >
+        查看文档
+      </button>
+      {visible && (
+        <ReadmeModal
+          content={readmeContent}
+          onClose={() => setVisible(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── README 弹窗 ─────────────────────────────────────────────────────────────
+
+interface ReadmeModalProps {
+  content: string;
+  onClose: () => void;
+}
+
+function ReadmeModal({ content, onClose }: ReadmeModalProps) {
+  const renderPrd = typeof window !== 'undefined' && (window as any)._render_comp_prd;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          width: 680,
+          maxWidth: '90vw',
+          maxHeight: '80vh',
+          backgroundColor: 'var(--mybricks-bg-color, #fff)',
+          borderRadius: 8,
+          boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            zIndex: 1,
+            width: 24,
+            height: 24,
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--mybricks-text-color-secondary, #999)',
+            fontSize: 16,
+            padding: 0,
+            borderRadius: 4,
+          }}
+          title="关闭"
+        >
+          ✕
+        </button>
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '24px 28px',
+          }}
+        >
+          {renderPrd
+            ? renderPrd({ content, showTitle: true, title: 'README' })
+            : <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--mybricks-text-color-main)' }}>{content}</pre>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 导出面板 ─────────────────────────────────────────────────────────────────
+
 export default function Render({ comId, data }: ExportCodePanelProps) {
   const [loadingType, setLoadingType] = useState<'application' | 'component' | null>(null);
 
@@ -86,23 +230,12 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
 
   const loading = loadingType !== null;
 
-  const buttonStyle: React.CSSProperties = {
+  const exportBtnStyle: React.CSSProperties = {
+    ...buttonStyle,
     cursor: loading ? 'not-allowed' : 'pointer',
     flex: 1,
-    textAlign: 'center',
-    height: 26,
-    lineHeight: '26px',
-    borderRadius: 6,
-    border: '1px solid rgba(2, 9, 16, 0.13)',
-    backgroundColor: 'var(--mybricks-bg-color-hover, #F5F5F5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 12,
     color: loading ? '#aaa' : 'var(--mybricks-text-color-main)',
-    padding: 0,
     opacity: loading ? 0.6 : 1,
-    boxSizing: 'border-box',
   };
 
   return (
@@ -112,7 +245,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
           type="button"
           disabled={loading}
           onClick={() => handleExport('application')}
-          style={buttonStyle}
+          style={exportBtnStyle}
         >
           {loadingType === 'application' ? '导出中...' : '导出'}
         </button>
@@ -120,7 +253,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
           type="button"
           disabled={loading}
           onClick={() => handleExport('component')}
-          style={buttonStyle}
+          style={exportBtnStyle}
         >
           {loadingType === 'component' ? '导出中...' : '导出组件'}
         </button> */}
