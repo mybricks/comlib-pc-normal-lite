@@ -175,32 +175,207 @@ export { parsemd }
 
 // ─── requirement.md parser ────────────────────────────────────────────────────
 
-/** 单个功能点 */
-export type RequirementFeature = {
-  title: string
-  type?: string
-  related?: string
+/** requirement.md 解析结果 */
+export type ParsedRequirement = {
+  /** YAML front matter 中的 title */
+  title?: string
+  /** YAML front matter 中的 desc */
+  desc?: string
+  /**
+   * 预处理后的 markdown 正文（已去除 front matter）：
+   * 1. flowchart/graph 裸行 → mermaid fenced 代码块
+   * 2. ## 标题后紧跟的 type/related/rank 裸行 → HTML 标签行（可出现在文档任意位置）
+   */
   body: string
 }
 
-/** requirement.md 解析结果 */
-export type ParsedRequirement = {
-  title?: string
-  desc?: string
-  overview?: string
-  features: RequirementFeature[]
+const META_TYPE_LABEL: Record<string, string> = { new: '新需求', edit: '变更需求' }
+
+/** 优先级 → 颜色映射（P0 红、P1 橙、P2 蓝灰，其余默认灰） */
+const rankColor = (rank: string): { bg: string; color: string; border: string } => {
+  const r = rank.toUpperCase()
+  if (r === 'P0') return { bg: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e' }
+  if (r === 'P1') return { bg: '#fff7e6', color: '#d46b08', border: '1px solid #ffd591' }
+  if (r === 'P2') return { bg: '#f0f5ff', color: '#2f54eb', border: '1px solid #adc6ff' }
+  return {
+    bg: 'var(--mybricks-bg-color-hover)',
+    color: 'var(--mybricks-text-color-sub)',
+    border: '1px solid var(--mybricks-border-color-main)',
+  }
+}
+
+/**
+ * 将 ## 标题 + meta（type/rank/related）渲染为 HTML：
+ * - 若标题无序号，自动在左侧添加序号（调用方传入）
+ * - 标题行：序号 + 标题文字，右侧依次 [rank标签] [type标签]
+ * - related 另起一行，前缀「关联UI：」
+ */
+const renderHeadingWithMeta = (
+  headingText: string,
+  index: number,
+  type?: string,
+  related?: string,
+  rank?: string,
+): string => {
+  // 若标题不以数字/中文序号开头，自动加序号
+  const hasIndex = /^[\d一二三四五六七八九十]/.test(headingText)
+  const displayTitle = hasIndex ? headingText : `${index}. ${headingText}`
+
+  // rank 标签
+  let rankHtml = ''
+  if (rank) {
+    const { bg, color, border } = rankColor(rank)
+    rankHtml =
+      `<span style="display:inline-flex;align-items:center;padding:0 6px;height:19px;border-radius:4px;` +
+      `font-size:11px;font-weight:600;background:${bg};color:${color};border:${border};` +
+      `flex-shrink:0;vertical-align:middle;margin-left:6px">${rank}</span>`
+  }
+
+  // type 标签（新需求/变更需求，放标题右侧）
+  let typeHtml = ''
+  if (type) {
+    const label = META_TYPE_LABEL[type] ?? type
+    const isNew = type === 'new'
+    const bg = isNew
+      ? 'var(--mybricks-color-primary,#1677ff)'
+      : 'color-mix(in srgb,var(--mybricks-color-primary,#1677ff) 15%,transparent)'
+    const color = isNew ? '#fff' : 'var(--mybricks-color-primary,#1677ff)'
+    const border = isNew
+      ? 'none'
+      : '1px solid color-mix(in srgb,var(--mybricks-color-primary,#1677ff) 35%,transparent)'
+    typeHtml =
+      `<span style="display:inline-flex;align-items:center;padding:0 7px;height:19px;border-radius:4px;` +
+      `font-size:11px;font-weight:600;background:${bg};color:${color};border:${border};` +
+      `flex-shrink:0;vertical-align:middle;margin-left:6px">${label}</span>`
+  }
+
+  // 标题行：标题文字在左，rank + type 在右
+  const titleLine =
+    `<h3 style="display:flex;align-items:center;margin:16px 0 4px;font-size:14px;font-weight:600;` +
+    `color:var(--mybricks-text-color-main)">` +
+    `<span>${displayTitle}</span>` +
+    rankHtml +
+    typeHtml +
+    `</h3>`
+
+  // related 行（另起一行，加前缀）
+  let relatedLine = ''
+  if (related) {
+    const tags = related.split(',').map(s => s.trim()).filter(Boolean).map(name =>
+      `<span style="display:inline-flex;align-items:center;padding:0 6px;height:18px;border-radius:3px;` +
+      `font-size:11px;background:var(--mybricks-bg-color-hover);color:var(--mybricks-text-color-main);` +
+      `border:1px solid var(--mybricks-border-color-main);flex-shrink:0;font-family:monospace">${name}</span>`
+    ).join('')
+    relatedLine =
+      `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:0 0 8px;font-size:12px;color:var(--mybricks-text-color-sub)">` +
+      `<span style="flex-shrink:0">关联UI：</span>${tags}</div>`
+  }
+
+  return titleLine + (relatedLine ? '\n' + relatedLine : '')
+}
+
+/**
+ * 全文预处理（不在 fenced 代码块内的行）：
+ * 1. flowchart/graph 裸行 → mermaid fenced 代码块
+ * 2. ## 标题后紧跟的 type/related/rank 裸行 → 融合进标题行的 HTML
+ *    - type 标签在标题左侧，rank 标签在标题右侧，related 另起一行
+ */
+const preprocessBody = (text: string): string => {
+  const lines = text.split('\n')
+  const out: string[] = []
+  let inFence = false
+  let collectingMeta = false
+  let metaBuf: { type?: string; related?: string; rank?: string } = {}
+  let headingOutIdx = -1
+  let headingText = ''
+  // ## 标题计数，用于无序号标题自动添加序号
+  let featureIndex = 0
+
+  const flushMeta = () => {
+    if (headingOutIdx >= 0) {
+      out[headingOutIdx] = renderHeadingWithMeta(headingText, featureIndex, metaBuf.type, metaBuf.related, metaBuf.rank)
+    }
+    collectingMeta = false
+    metaBuf = {}
+    headingOutIdx = -1
+    headingText = ''
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // fenced 代码块切换
+    if (/^```/.test(line)) {
+      if (collectingMeta) flushMeta()
+      inFence = !inFence
+      out.push(line)
+      continue
+    }
+
+    if (inFence) { out.push(line); continue }
+
+    const trimmed = line.trim()
+
+    // ## 标题：如果正在收集 meta，先 flush，再开启新的收集
+    if (/^## /.test(line)) {
+      if (collectingMeta) flushMeta()
+      featureIndex++
+      collectingMeta = true
+      metaBuf = {}
+      headingText = line.replace(/^## /, '').trim()
+      headingOutIdx = out.length
+      console.log('[preprocessBody] heading detected:', JSON.stringify(headingText), 'idx:', headingOutIdx)
+      out.push(line) // 先占位，flush 时替换
+      continue
+    }
+
+    // 处于 meta 收集阶段
+    if (collectingMeta) {
+      if (trimmed === '') {
+        // 空行：结束收集，flush，然后输出空行
+        console.log('[preprocessBody] flush on empty line, metaBuf:', metaBuf)
+        flushMeta()
+        out.push(line)
+        continue
+      }
+      const kvMatch = trimmed.match(/^-?\s*(type|related|rank)\s*:\s*(.+)$/i)
+      if (kvMatch) {
+        console.log('[preprocessBody] meta matched:', kvMatch[1], '=', kvMatch[2])
+        ;(metaBuf as any)[kvMatch[1].toLowerCase()] = kvMatch[2].trim()
+        continue
+      }
+      // 非 meta 行：结束收集，flush，再正常处理该行
+      console.log('[preprocessBody] flush on non-meta line:', JSON.stringify(trimmed), 'metaBuf:', metaBuf)
+      flushMeta()
+      // fall through to normal processing below
+    }
+
+    // flowchart/graph 裸行 → mermaid block
+    if (/^(flowchart|graph)\s/.test(trimmed)) {
+      out.push('```mermaid')
+      out.push(trimmed)
+      out.push('```')
+      continue
+    }
+
+    out.push(line)
+  }
+
+  if (collectingMeta) flushMeta()
+
+  return out.join('\n')
 }
 
 /**
  * 解析 requirement.md 为结构化数据。
  * 格式约定：
  * - 顶部 YAML front matter（---...---）含 title、desc 字段
- * - # 概述：概述文本（可含 flowchart LR; ... 单行流程图）
- * - # 功能点列表：每个 ## 子标题为一个功能点
- *   - 紧跟 type: new/edit 和 related: xxx 纯文本行（非列表）
+ * - 正文为标准 markdown，预处理后存入 body：
+ *   1. flowchart/graph 裸行 → mermaid 代码块
+ *   2. 任意 ## 标题后紧跟的 type/related/rank 裸行 → HTML 标签行
  */
 export const parseRequirement = (md: string): ParsedRequirement => {
-  const result: ParsedRequirement = { features: [] }
+  const result: ParsedRequirement = { body: '' }
 
   // 1. 提取并剥离 YAML front matter
   let body = md.trim()
@@ -214,41 +389,8 @@ export const parseRequirement = (md: string): ParsedRequirement => {
     body = body.slice(fmMatch[0].length).trim()
   }
 
-  // 2. 按 # 一级标题切分
-  const h1Sections = body.split(/(?=^# )/m)
-
-  for (const section of h1Sections) {
-    const h1Match = section.match(/^# (.+)\n/)
-    if (!h1Match) continue
-    const h1Title = h1Match[1].trim()
-    const h1Body = section.slice(h1Match[0].length)
-
-    if (h1Title === '概述') {
-      result.overview = h1Body.trim()
-      continue
-    }
-
-    if (h1Title === '功能点列表') {
-      // 按 ## 二级标题切分功能点
-      const h2Sections = h1Body.split(/(?=^## )/m)
-      for (const h2sec of h2Sections) {
-        const h2Match = h2sec.match(/^## (.+)\n/)
-        if (!h2Match) continue
-        const featureTitle = h2Match[1].trim()
-        const featureBody = h2sec.slice(h2Match[0].length)
-
-        const typeMatch = featureBody.match(/^type\s*:\s*(.+)$/m)
-        const relatedMatch = featureBody.match(/^related\s*:\s*(.+)$/m)
-
-        result.features.push({
-          title: featureTitle,
-          type: typeMatch?.[1].trim(),
-          related: relatedMatch?.[1].trim(),
-          body: featureBody.trim(),
-        })
-      }
-    }
-  }
+  // 2. 预处理正文
+  result.body = preprocessBody(body)
 
   return result
 }
