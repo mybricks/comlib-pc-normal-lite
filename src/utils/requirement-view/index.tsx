@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import type { ParsedRequirement } from '../ai-code/md';
+import { useDarkMode } from '../hooks';
 
 interface RequirementViewModalProps {
   compiled: ParsedRequirement;
@@ -9,8 +10,7 @@ interface RequirementViewModalProps {
 
 export function RequirementViewModal({ compiled, onClose }: RequirementViewModalProps) {
   const renderPrd = typeof window !== 'undefined' && (window as any)._render_comp_prd;
-
-  console.log('compiled:', compiled, renderPrd);
+  const isDark = useDarkMode();
 
   const modal = (
     <div
@@ -116,7 +116,7 @@ export function RequirementViewModal({ compiled, onClose }: RequirementViewModal
           {/* 正文：body 已预处理（flowchart → mermaid block，meta 行 → HTML），直接渲染 */}
           {compiled.body && (
             renderPrd
-              ? renderPrd({ content: compiled.body, showTitle: false })
+              ? renderPrd({ content: compiled.body, showTitle: false, darkMode: isDark })
               : <pre style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{compiled.body}</pre>
           )}
         </div>

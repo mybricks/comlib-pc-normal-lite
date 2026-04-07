@@ -182,8 +182,6 @@ const BootstrapReactComponent = ({ id, env, data, dependencies, logger, cssApi, 
     }
   }, []);
 
-  console.log('data.files', data)
-
   // const readmeContent = useMemo(() => {
   //   try {
   //     const readmeFile = (data.files as any[]).find(

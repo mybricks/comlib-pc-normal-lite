@@ -77,19 +77,20 @@ export function ViewDocsBtn({ comId }: ViewDocsBtnProps) {
 export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
   const [visible, setVisible] = useState(false);
 
-  const requirementCompiled = React.useMemo(() => {
+  const aiComParams = context.getAiComParams(comId);
+
+  const compiled = React.useMemo(() => {
+    const files = aiComParams?.data?.files;
+    if (!files) return null;
     try {
-      const aiComParams = context.getAiComParams(comId);
-      const files = aiComParams?.data?.files as any[] | undefined;
-      if (!files) return null;
       const reqFile = files.find((f: any) => f.fileName === 'requirement.md');
       return reqFile?.compiled ?? null;
     } catch {
       return null;
     }
-  }, [comId]);
+  }, [comId, aiComParams?.data?.files]);
 
-  if (!requirementCompiled) return null;
+  if (!compiled) return null;
 
   return (
     <div style={{ padding: '4px 0' }}>
@@ -102,7 +103,7 @@ export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
       </button>
       {visible && (
         <RequirementViewModal
-          compiled={requirementCompiled}
+          compiled={compiled}
           onClose={() => setVisible(false)}
         />
       )}
