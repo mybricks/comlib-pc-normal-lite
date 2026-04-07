@@ -246,6 +246,8 @@ export default function ({ context }) {
       const project = createProject({
         getFiles: () => aiComParams?.data?.files,
         getThemesContent: () => themesContent,
+        getCodeRules: () => mixContext.projectConfig.codeRules ?? '',
+        getDesignRules: () => mixContext.projectConfig.designRules ?? '',
         getDesignerState: () => aiComParams?.data?._designerState,
         getErrors: () => aiComParams?.data?._errors,
         getLogs: () => debugLogs.get(focus.comId),

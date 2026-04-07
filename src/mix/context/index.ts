@@ -332,7 +332,7 @@ class Context {
     return this.aiComParamsMap[id]?.aiComParams;
   }
 
-  projectConfig: { availableLibraries?: any[]; themes?: any[] } = {};
+  projectConfig: { availableLibraries?: any[]; themes?: any[]; codeRules?: string; designRules?: string } = {};
 
   /**
    * 解析组件实际应使用的主题。

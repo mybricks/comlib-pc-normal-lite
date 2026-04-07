@@ -28,6 +28,10 @@ export interface ProjectConfig {
   /** project.json 根数组（仅取第一个根节点） */
   /** 获取主题配置全文 */
   getThemesContent: () => string;
+  /** 获取代码规则（Markdown） */
+  getCodeRules?: () => string;
+  /** 获取设计规则（Markdown） */
+  getDesignRules?: () => string;
   /** 获取设计器运行时状态（由渲染层写入） */
   getDesignerState?: () => { pages: string[]; popups: string[] } | undefined;
   /** 获取当前运行时报错列表 */
@@ -369,14 +373,24 @@ ${canvasStatus}
    * 生成实时 message（Markdown）
    */
   async exportToMessage(): Promise<string> {
-    const { getFiles, getThemesContent } = this.config;
+    const { getFiles, getThemesContent, getCodeRules, getDesignRules } = this.config;
     const themesContent = getThemesContent();
+    const codeRules = getCodeRules?.() ?? '';
+    const designRules = getDesignRules?.() ?? '';
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
 
+    const codeRulesSection = codeRules.trim()
+      ? `\n<code_rules>\n${codeRules.trim()}\n</code_rules>\n`
+      : '';
+
+    const designRulesSection = designRules.trim()
+      ? `\n<design_rules>\n${designRules.trim()}\n</design_rules>\n`
+      : '';
+
     // 最佳实践：在此补充项目约定的开发习惯、推荐写法等，供 Agent 参考
-    const bestPracticesContent = `
+    const bestPracticesContent = `${codeRulesSection}${designRulesSection}
 - 总体规则
   - 开发规范：参考下方mybricks类库的的最佳实践；
   - 功能：生产级别的功能性；
