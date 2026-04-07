@@ -213,5 +213,12 @@ export function buildHooks(props: Props) {
         console.error('[@viewCode] 未找到 data-loc', params);
       }
     },
+
+    '@openDocs'() {
+      const events = context.getAiComEvents(props.id);
+      setTimeout(() => {
+        events.emit('openDocs');
+      }, 300)
+    },
   };
 }

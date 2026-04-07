@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { MarkdownViewModal } from '../markdown-view';
 import { RequirementViewModal } from '../requirement-view';
 import { generateCodeStructure } from './structure-generator';
@@ -89,6 +89,18 @@ export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
       return null;
     }
   }, [comId, aiComParams?.data?.files]);
+
+  useEffect(() => {
+    const events = context.getAiComEvents(comId);
+    const handleOpenDocs = () => {
+      setVisible(true);
+    };
+    // 第三个参数 immediate 设为 false，禁用缓存事件的立即触发
+    events.on('openDocs', handleOpenDocs, false);
+    return () => {
+      events.off('openDocs', handleOpenDocs);
+    };
+  }, [comId]);
 
   if (!compiled) return null;
 
