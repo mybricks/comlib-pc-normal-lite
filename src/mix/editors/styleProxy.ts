@@ -103,6 +103,9 @@ export function genStyleValue(params: { comId: string }) {
       const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
 
       const fullSelector = params.selector;
+
+      console.log("editConfig.value.set 组件侧接收params.selector",fullSelector)
+
       const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
       const ele: Element | null = params.focusArea?.ele ?? null;
