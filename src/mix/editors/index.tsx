@@ -55,5 +55,6 @@ export default function (props: Props, actions: Actions) {
       style: [{ items: [] }],
     },
     '[data-library-source]': {},
+    '[class]': {},
   };
 }
