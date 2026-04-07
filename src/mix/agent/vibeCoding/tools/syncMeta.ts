@@ -231,7 +231,7 @@ related: NewModalButton,ItemNewModal
   1）必须更新（强约束）
   - 当前模块目录下不存在 README.md：需要根据 jsx、store.js 首次生成完整的 README.md。
   - 需求直接要求更新文档。
-  - 当前文档内容与<文档编写规范>要求的不一致。
+  - 当前文档内容与<README.md 文档编写规范>要求的不一致。
 
   2）结构或内容变化（建议更新）
   - 节点增删改：在 jsx 中新增、删除或重命名了 appRef/comRef 节点，或 Route 中注册的页面组件发生变化（即文档中的「# default」及各级 ##、### 标题对应的节点）。
@@ -244,6 +244,8 @@ related: NewModalButton,ItemNewModal
   - 仅修改了与 jsx、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 README.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
 
   判断时请对照当前【源代码】中的 jsx 与已有的 README.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
+
+  注意：工具每次调用都必须review当前README.md内容是否符合<README.md 文档编写规范>，不符合时必须按照规范更新内容。
   </如何判断需要更新 README.md>
 
   <如何判断需要更新 requirement.md>
