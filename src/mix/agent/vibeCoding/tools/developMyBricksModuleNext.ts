@@ -825,35 +825,17 @@ export default function developMyBricksModule(config: Config) {
     },
     execute(params, context) {
       const files = (params?.files ?? []) as RxFile[];
-      const actionsFile = files.find((f) => f.fileName === 'action.json');
-      let actionReason = '';
-      let actionType: string | undefined;
-      if (actionsFile) {
-        try {
-          const obj = JSON.parse(actionsFile.content);
-          actionReason = (obj.reason as string) ?? '';
-          actionType = obj.action;
-        } catch { }
-      }
-
-      if (actionsFile && actionType === 'read') {
-        return { displayContent: actionReason, llmContent: actionReason, appendCommands: [{ toolName: readRelated.name, params: { names: 'root' } }, { toolName: developMyBricksModule.name }] } as any;
-      }
-      if (actionsFile && actionType === 'abort') {
-        return { displayContent: actionReason, llmContent: actionReason };
-      }
-
       const llmContent = `${params.content}\n\n${excuteMessage}`;
-
       const commands: any = []
-
       const needsCheck = files.some((f) => {
         const extension = f?.fileName?.split?.('.').pop();
         return extension && SUPPORTED_FILE_EXTENSION.has(extension)
       })
 
       if (needsCheck) {
+        // @ts-ignore
         if (!context.commands?.find((command: any) => command.name === checkDesignStatus.toolName)) {
+          // @ts-ignore
           commands.push({ toolName: checkDesignStatus.toolName });
         }
       }
@@ -871,73 +853,51 @@ export default function developMyBricksModule(config: Config) {
       const { ToolRetryError } = context ?? {};
       const files = (params?.files ?? []) as RxFile[];
       const raw = replaceContent ?? '';
-      const actionsFile = files.find((f) => f.fileName === 'action.json');
-
-      let actionReason = '';
-      let actionType: string | undefined;
-      if (actionsFile) {
-        try {
-          const obj = JSON.parse(actionsFile.content);
-          actionReason = (obj.reason as string) ?? '';
-          actionType = obj.action;
-        } catch { }
-      }
 
       if (status === 'complete') {
-        if (actionType) {
-          return raw
-            .replace(/action\.json/g, actionReason)
-        } else {
-          config.setLock('unlock')
-          const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
-          const msg = result ? formatUpdateResult(result) : '';
+        config.setLock('unlock')
+        const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
+        const msg = result ? formatUpdateResult(result) : '';
 
-          if (msg) {
-            excuteMessage = msg;
-          }
-
-          if (!result || result.mergeSuccess) {
-            (window as any)._mybricksOnEdit_?.();
-            if (config.codeModifiedFlag) {
-              config.codeModifiedFlag.value = true;
-            }
-          }
-
-          if (result && !result.mergeSuccess && ToolRetryError) {
-            const errMsg = msg || '执行失败';
-            throw new ToolRetryError({
-              llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
-              displayContent: '执行失败，当前操作已回滚，请重试',
-              autoRetry: true,
-              maxRetries: 2
-            });
-          }
-
-          if (result && result.mergeSuccess && !result.compileSuccess && ToolRetryError) {
-            const compileErrLines = result.compileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
-            throw new ToolRetryError({
-              llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
-              displayContent: '代码存在编译/校验错误，请重试',
-              autoRetry: true,
-              maxRetries: 2
-            });
-          }
-          
-          return raw
-            .replace(/runtime\.jsx/g, '')
-            .replace(/style\.less/g, '')
-            .replace(/store\.js/g, '')
-            .replace(/dataSource\.js/g, '')
-            .replace(/setup\.js/g, '') + '\n' + msg;
+        if (msg) {
+          excuteMessage = msg;
         }
+
+        if (!result || result.mergeSuccess) {
+          (window as any)._mybricksOnEdit_?.();
+          if (config.codeModifiedFlag) {
+            config.codeModifiedFlag.value = true;
+          }
+        }
+
+        if (result && !result.mergeSuccess && ToolRetryError) {
+          const errMsg = msg || '执行失败';
+          throw new ToolRetryError({
+            llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
+            displayContent: '执行失败，当前操作已回滚，请重试',
+            autoRetry: true,
+            maxRetries: 2
+          });
+        }
+
+        if (result && result.mergeSuccess && !result.compileSuccess && ToolRetryError) {
+          const compileErrLines = result.compileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+          throw new ToolRetryError({
+            llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+            displayContent: '代码存在编译/校验错误，请重试',
+            autoRetry: true,
+            maxRetries: 2
+          });
+        }
+        
+        return raw
+          .replace(/runtime\.jsx/g, '')
+          .replace(/style\.less/g, '')
+          .replace(/store\.js/g, '')
+          .replace(/dataSource\.js/g, '')
+          .replace(/setup\.js/g, '') + '\n' + msg;
       }
       return params.content;
-
-      // return raw
-      //   .replace(/action\.json/g, actionReason)
-      //   .replace(/runtime\.jsx/, '尝试修改内容...').replace(/runtime\.jsx/g, '')
-      //   .replace(/style\.less/, '尝试调整样式...').replace(/style\.less/g, '')
-      //   .replace(/store\.js/, '尝试修改逻辑...').replace(/store\.js/g, '')
     },
     aiRole: ({ params }, execCtx) => {
       const mode = params?.mode ?? 'generate';

@@ -49,7 +49,15 @@ export default function syncMarkdownformybricksModule(config) {
   - type：app | page | com，其中 app 对应 appRef，page 对应通过 Route 注册的 comRef（页面组件），com 对应 comRef（非路由页面）。
   - events：该组件内声明的事件列表
     1. 从源码识别：JSX 块注释如 /** onClick:事件名 */（或其它 onXXX:事件名）
-    2. 每条一行，格式：事件名 简短中文说明 - {根据事件内容生成对应的 Mermaid 语法流程图}
+    2. 每条事件用结构化格式描述，包含以下字段：
+        - 事件名
+          - title: 简短中文说明（如 登录）
+          - mermaid: 根据事件内容生成对应的 Mermaid 语法流程图（以 flowchart LR; 开头，单行书写）
+          - relation:
+            - type: 关系类型（page，popup），打开弹窗使用popup，跳转页面使用page
+            - name: 关联的弹窗或页面的名称，即对应的节点名称
+      注意格式要严格保持一致；
+      关于relation，只有一条对应关系，事件如果涉及到打开弹窗、跳转页面，则需要relation说明；
       关于 Mermaid 语法流程图需关注以下规则和要求：
         - 流程图方向统一用 LR（从左到右），节点文本全部用双引号包裹；
         - 条件判断节点用 {} 包裹，分支标注用 |标注内容| 写在箭头上；
@@ -139,7 +147,9 @@ export default appRef(() => {
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
+  - signIn
+    - title: 登录
+    - mermaid: flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 （SignIn 是通过 Route index 注册的页面组件，因此 type 为 page）
 
@@ -161,11 +171,11 @@ export default appRef(() => {
 - summary: 注册表单容器，包含表单与注册按钮，提交时触发 signUp。
 - type: com
 - events:
-  - signUp 注册 - flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
+  - signUp
+    - title: 注册
+    - mermaid: flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 \`\`\`
-<基于runtime.jsx的README.md示例>
-
 
 <requirement.md 文档编写规范>
 总体规则：需求可以从源代码和用户消息中分析，最重要的是从产品视角来梳理，整体的业务流程、业务规则、效果、业务逻辑和目标。
@@ -219,26 +229,29 @@ related: NewModalButton,ItemNewModal
   在以下任一情况成立时，应当更新 README.md；否则可仅阅读源码与现有文档，不做修改。
 
   1）必须更新（强约束）
-  - 当前模块目录下不存在 README.md：需要根据 runtime.jsx 首次生成完整的 README.md。
+  - 当前模块目录下不存在 README.md：需要根据 jsx、store.js 首次生成完整的 README.md。
   - 需求直接要求更新文档。
+  - 当前文档内容与<README.md 文档编写规范>要求的不一致。
 
   2）结构或内容变化（建议更新）
-  - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/comRef 节点，或 Route 中注册的页面组件发生变化（即文档中的「# default」及各级 ##、### 标题对应的节点）。
+  - 节点增删改：在 jsx 中新增、删除或重命名了 appRef/comRef 节点，或 Route 中注册的页面组件发生变化（即文档中的「# default」及各级 ##、### 标题对应的节点）。
   - 根节点或层级变化：export default 的根节点类型或子节点类型组合发生变化，导致标题层级规则需要调整（如从「仅 page + com」变为「app + page + com」）。
   - 事件增删改：在 JSX 中新增、删除或修改了带 /** onXXX:事件名 */ 注释的事件；或某节点下事件列表与 README.md 中该节点的 events 不一致。
   - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 README.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
 
   3）无需更新
-  - runtime.jsx、store.js 未被修改，且现有 README.md 已正确反映当前源码的节点结构、事件与说明时，无需对 README.md 做变更。
-  - 仅修改了与 runtime、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 README.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
+  - jsx、store.js 未被修改，且现有 README.md 已正确反映当前源码的节点结构、事件与说明时，无需对 README.md 做变更。
+  - 仅修改了与 jsx、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 README.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
 
-  判断时请对照当前【源代码】中的 runtime.jsx 与已有的 README.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
+  判断时请对照当前【源代码】中的 jsx 与已有的 README.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
+
+  注意：工具每次调用都必须review当前README.md内容是否符合<README.md 文档编写规范>，不符合时必须按照规范更新内容。
   </如何判断需要更新 README.md>
 
   <如何判断需要更新 requirement.md>
   在以下任一情况成立时，应当更新 requirement.md；
   1.必须更新（强约束）
-    - 当前模块目录下不存在 requirement.md：需要根据 runtime.jsx 首次生成完整的 requirement.md。
+    - 当前模块目录下不存在 requirement.md：需要根据 jsx 首次生成完整的 requirement.md。
     - 需求直接要求更新文档。
   2. 用户的需求目的有更新；
   3. 源代码关联组件名发生了变化；
@@ -316,7 +329,9 @@ related: NewModalButton,ItemNewModal
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
+  - signIn
+    - title: 登录
+    - mermaid: flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 \`\`\`
 
 
