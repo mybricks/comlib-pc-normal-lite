@@ -49,7 +49,15 @@ export default function syncMarkdownformybricksModule(config) {
   - type：app | page | com，其中 app 对应 appRef，page 对应通过 Route 注册的 comRef（页面组件），com 对应 comRef（非路由页面）。
   - events：该组件内声明的事件列表
     1. 从源码识别：JSX 块注释如 /** onClick:事件名 */（或其它 onXXX:事件名）
-    2. 每条一行，格式：事件名 简短中文说明 - {根据事件内容生成对应的 Mermaid 语法流程图}
+    2. 每条事件用结构化格式描述，包含以下字段：
+        - 事件名
+          - title: 简短中文说明（如 登录）
+          - mermaid: 根据事件内容生成对应的 Mermaid 语法流程图（以 flowchart LR; 开头，单行书写）
+          - relation:
+            - type: 关系类型（page，popup），打开弹窗使用popup，跳转页面使用page
+            - name: 关联的弹窗或页面的名称，即对应的节点名称
+      注意格式要严格保持一致；
+      关于relation，只有一条对应关系，事件如果涉及到打开弹窗、跳转页面，则需要relation说明；
       关于 Mermaid 语法流程图需关注以下规则和要求：
         - 流程图方向统一用 LR（从左到右），节点文本全部用双引号包裹；
         - 条件判断节点用 {} 包裹，分支标注用 |标注内容| 写在箭头上；
@@ -139,7 +147,9 @@ export default appRef(() => {
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
+  - signIn
+    - title: 登录
+    - mermaid: flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 （SignIn 是通过 Route index 注册的页面组件，因此 type 为 page）
 
@@ -161,7 +171,9 @@ export default appRef(() => {
 - summary: 注册表单容器，包含表单与注册按钮，提交时触发 signUp。
 - type: com
 - events:
-  - signUp 注册 - flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
+  - signUp
+    - title: 注册
+    - mermaid: flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 \`\`\`
 <基于runtime.jsx的README.md示例>
@@ -316,7 +328,9 @@ related: NewModalButton,ItemNewModal
 - summary: 用户登录入口页，提供登录按钮并触发 signIn 完成登录。
 - type: page
 - events:
-  - signIn 登录 - flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
+  - signIn
+    - title: 登录
+    - mermaid: flowchart LR; A["校验登录参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求登录接口"] --> E{"请求是否成功"} -->|成功| F["更新用户状态"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 \`\`\`
 
 
