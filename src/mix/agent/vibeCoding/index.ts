@@ -5,6 +5,7 @@ import { createProject } from "./project";
 import { multiReplaceFile, buildFocusInfo } from "../utils";
 import type { ReplaceResultItem } from "../utils/editReplace";
 import { debugLogs } from "../../context/debugLogs";
+import mixContext from "../../context";
 import {
   type ComponentFileItem,
   type FileUpdateResult,
@@ -232,11 +233,10 @@ export default function ({ context }) {
 
       const themesContent = (() => {
         try {
-          const { activeThemeId, themes } = aiComParams?.data?.themes ?? {};
-          const theme = themes?.find((theme) => theme.id === activeThemeId);
+          const theme = mixContext.resolveActiveTheme(aiComParams?.data);
           return '- 设计风格：' + (theme?.vars?.length ? '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' + 
           theme?.vars?.reduce((pre, cur) => {
-            return pre + `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}`
+            return pre + `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}${cur.desc ? ` [${cur.desc}]` : ''}`
           }, "") : '\n  当前项目没有定义主题变量，禁止创造变量，风格根据需求自由发挥即可')
         } catch {
           return '';
@@ -246,6 +246,8 @@ export default function ({ context }) {
       const project = createProject({
         getFiles: () => aiComParams?.data?.files,
         getThemesContent: () => themesContent,
+        getCodeRules: () => mixContext.projectConfig.codeRules ?? '',
+        getDesignRules: () => mixContext.projectConfig.designRules ?? '',
         getDesignerState: () => aiComParams?.data?._designerState,
         getErrors: () => aiComParams?.data?._errors,
         getLogs: () => debugLogs.get(focus.comId),
