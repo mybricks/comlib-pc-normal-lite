@@ -176,8 +176,6 @@ export default appRef(() => {
     - mermaid: flowchart LR; A["校验表单参数"] --> B{"参数是否有效"} -->|有效| C["设置loading状态"] --> D["请求注册接口"] --> E{"请求是否成功"} -->|成功| F["跳转登录页"] --> G["取消loading状态"]; E -->|失败| H["提示错误信息"] --> G; B -->|无效| I["提示参数错误"]
 
 \`\`\`
-<基于runtime.jsx的README.md示例>
-
 
 <requirement.md 文档编写规范>
 总体规则：需求可以从源代码和用户消息中分析，最重要的是从产品视角来梳理，整体的业务流程、业务规则、效果、业务逻辑和目标。
@@ -231,26 +229,27 @@ related: NewModalButton,ItemNewModal
   在以下任一情况成立时，应当更新 README.md；否则可仅阅读源码与现有文档，不做修改。
 
   1）必须更新（强约束）
-  - 当前模块目录下不存在 README.md：需要根据 runtime.jsx 首次生成完整的 README.md。
+  - 当前模块目录下不存在 README.md：需要根据 jsx、store.js 首次生成完整的 README.md。
   - 需求直接要求更新文档。
+  - 当前文档内容与<文档编写规范>要求的不一致。
 
   2）结构或内容变化（建议更新）
-  - 节点增删改：在 runtime.jsx 中新增、删除或重命名了 appRef/comRef 节点，或 Route 中注册的页面组件发生变化（即文档中的「# default」及各级 ##、### 标题对应的节点）。
+  - 节点增删改：在 jsx 中新增、删除或重命名了 appRef/comRef 节点，或 Route 中注册的页面组件发生变化（即文档中的「# default」及各级 ##、### 标题对应的节点）。
   - 根节点或层级变化：export default 的根节点类型或子节点类型组合发生变化，导致标题层级规则需要调整（如从「仅 page + com」变为「app + page + com」）。
   - 事件增删改：在 JSX 中新增、删除或修改了带 /** onXXX:事件名 */ 注释的事件；或某节点下事件列表与 README.md 中该节点的 events 不一致。
   - 节点职责或说明变化：某节点的 UI 结构、交互或业务含义发生明显变化，导致现有 README.md 中该节点的 title、summary 或 events 下的说明已不准确或缺失。
 
   3）无需更新
-  - runtime.jsx、store.js 未被修改，且现有 README.md 已正确反映当前源码的节点结构、事件与说明时，无需对 README.md 做变更。
-  - 仅修改了与 runtime、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 README.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
+  - jsx、store.js 未被修改，且现有 README.md 已正确反映当前源码的节点结构、事件与说明时，无需对 README.md 做变更。
+  - 仅修改了与 jsx、store 无关的其他文件（如 style.less、service.js、mock.json）时，通常不需要仅为此而更新 README.md；除非这些改动影响了你在文档中描述的节点行为或事件说明。
 
-  判断时请对照当前【源代码】中的 runtime.jsx 与已有的 README.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
+  判断时请对照当前【源代码】中的 jsx 与已有的 README.md（若存在），按上述条件决定是「生成/整文件替换」「局部 before/after 修改」还是「不修改」。
   </如何判断需要更新 README.md>
 
   <如何判断需要更新 requirement.md>
   在以下任一情况成立时，应当更新 requirement.md；
   1.必须更新（强约束）
-    - 当前模块目录下不存在 requirement.md：需要根据 runtime.jsx 首次生成完整的 requirement.md。
+    - 当前模块目录下不存在 requirement.md：需要根据 jsx 首次生成完整的 requirement.md。
     - 需求直接要求更新文档。
   2. 用户的需求目的有更新；
   3. 源代码关联组件名发生了变化；
