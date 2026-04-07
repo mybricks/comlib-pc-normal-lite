@@ -12,6 +12,7 @@ import React, {
 import { parseFrameSize } from "../utils";
 import css from './index.less';
 import { debugLogs } from '../../../../../mix/context/debugLogs';
+import mixContext from '../../../../../mix/context';
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
@@ -328,8 +329,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
     const { path = '/', children } = params;
-    const { activeThemeId, themes } = data.themes;
-    const theme = themes.find((theme) => theme.id === activeThemeId);
+    const theme = mixContext.resolveActiveTheme(data);
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue>({ container: document.body });
     const [style, setStyle] = useState<React.CSSProperties>({});
@@ -600,8 +600,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRef = (Component: any) => {
     const ObservedComponent = observer(Component);
     const DialogRoot = (props) => {
-      const { activeThemeId, themes } = data.themes;
-      const theme = themes.find((theme) => theme.id === activeThemeId);
+      const theme = mixContext.resolveActiveTheme(data);
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -754,8 +753,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   const useDesignToken = () => {
-    const { activeThemeId, themes } = data.themes;
-    const theme = themes.find((theme) => theme.id === activeThemeId);
+    const theme = mixContext.resolveActiveTheme(data);
     return theme?.vars?.reduce((pre, cur) => {
       const key = cssVarToToken(cur.propertyName);
       pre[key] = cur.value;

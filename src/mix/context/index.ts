@@ -334,6 +334,20 @@ class Context {
 
   projectConfig: { availableLibraries?: any[]; themes?: any[] } = {};
 
+  /**
+   * 解析组件实际应使用的主题。
+   * 若组件未手动修改过主题（data._themesModified 为假），且项目配置了主题，则取项目主题第一个；
+   * 否则取组件自身 data.themes 中 activeThemeId 对应的主题。
+   */
+  resolveActiveTheme(data: any) {
+    const projectThemes = this.projectConfig.themes;
+    if (!data?._themesModified && projectThemes && projectThemes.length > 0) {
+      return projectThemes[0];
+    }
+    const { activeThemeId, themes } = data?.themes ?? {};
+    return themes?.find((t: any) => t.id === activeThemeId);
+  }
+
   agent: any = {
     vibeCoding: null,
   };
