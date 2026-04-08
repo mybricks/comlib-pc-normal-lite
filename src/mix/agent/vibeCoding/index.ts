@@ -280,6 +280,7 @@ export default function ({ context }) {
             cancel: () => { },
           },
           presetMessages: async () => {
+            console.log("重新组织presetMessages")
             const codeStatus = await project.exportToMessage();
             const designerStatus = await project.exportDesignerToMessage();
             return [

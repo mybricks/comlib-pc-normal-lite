@@ -54,6 +54,7 @@ export default function developMyBricksModule(config: Config) {
 `,
     getPrompts: () => {
       config.setLock('lock')
+      console.log("编码重置stream")
       // 重制steam信息
       excuteMessage = '';
       streamProcessedIndex = 0;
@@ -906,7 +907,7 @@ export default function developMyBricksModule(config: Config) {
               if (!result.compileSuccess && ToolRetryError) {
                 const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
                 throw new ToolRetryError({
-                  llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+                  llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines + '\n\n 修复完成后，检查当前是否已经完成用户需求，若未完成应该继续编写代码以完成用户需求',
                   displayContent: '代码存在编译/校验错误，请重试',
                   autoRetry: true,
                   maxRetries: 2
@@ -927,7 +928,7 @@ export default function developMyBricksModule(config: Config) {
                 if (!result.compileSuccess && ToolRetryError) {
                   const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
                   throw new ToolRetryError({
-                    llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+                    llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines + '\n\n 修复完成后，检查当前是否已经完成用户需求，若未完成应该继续编写代码以完成用户需求',
                     displayContent: '代码存在编译/校验错误，请重试',
                     autoRetry: true,
                     maxRetries: 2
