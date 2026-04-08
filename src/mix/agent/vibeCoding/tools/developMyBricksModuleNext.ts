@@ -879,41 +879,44 @@ export default function developMyBricksModule(config: Config) {
       const files = (params?.files ?? []) as RxFile[];
       const raw = replaceContent ?? '';
 
-      if (status === 'ing') {
-        // Reset state on first ing call of a new stream sequence
-        if (!streamIsActive) {
-          streamIsActive = true;
-          streamProcessedIndex = 0;
-          streamResults = [];
-        }
+      /**
+       * Iterate over `allFiles` starting at `startIndex`, calling onUpdate for each complete group.
+       * - `stopOnIncomplete=true` (ing mode): stop at the first incomplete file and return the new index.
+       * - `stopOnIncomplete=false` (complete mode): skip incomplete files and process as many as possible.
+       * Returns the index one past the last processed file.
+       */
+      const processFiles = async (
+        allFiles: RxFile[],
+        startIndex: number,
+        stopOnIncomplete: boolean,
+      ): Promise<number> => {
+        let i = startIndex;
+        while (i < allFiles.length) {
+          const file = allFiles[i];
 
-        // Process newly completed files incrementally
-        let i = streamProcessedIndex;
-        while (i < files.length) {
-          const file = files[i];
           if (file.language === 'write' || file.language === 'delete') {
-            if (file.isComplete) {
-              const result = await config.onUpdate?.({ files: [{ fileName: file.fileName, content: file.content, language: file.language }] });
-              if (result) {
-                streamResults.push(result);
-                if (!result.compileSuccess && ToolRetryError) {
-                  const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
-                  throw new ToolRetryError({
-                    llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
-                    displayContent: '代码存在编译/校验错误，请重试',
-                    autoRetry: true,
-                    maxRetries: 2
-                  });
-                }
-              }
-              streamProcessedIndex = i + 1;
-            } else {
-              // Not yet complete, stop processing
-              break;
+            if (!file.isComplete) {
+              if (stopOnIncomplete) break;
+              i++;
+              continue;
             }
+            const result = await config.onUpdate?.({ files: [{ fileName: file.fileName, content: file.content, language: file.language }] });
+            if (result) {
+              streamResults.push(result);
+              if (!result.compileSuccess && ToolRetryError) {
+                const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+                throw new ToolRetryError({
+                  llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+                  displayContent: '代码存在编译/校验错误，请重试',
+                  autoRetry: true,
+                  maxRetries: 2
+                });
+              }
+            }
+            i++;
+
           } else if (file.language === 'before') {
-            // Need to wait for the paired 'after' file
-            const afterFile = files[i + 1];
+            const afterFile = allFiles[i + 1];
             if (afterFile && afterFile.language === 'after' && file.isComplete && afterFile.isComplete) {
               const result = await config.onUpdate?.({ files: [
                 { fileName: file.fileName, content: file.content, language: file.language },
@@ -931,22 +934,30 @@ export default function developMyBricksModule(config: Config) {
                   });
                 }
               }
-              streamProcessedIndex = i + 2;
               i += 2;
-              continue;
             } else {
-              // Pair not yet complete, stop processing
-              break;
+              if (stopOnIncomplete) break;
+              i++;
             }
-          } else if (file.language === 'after') {
-            // 'after' files are always paired with 'before', skip if orphaned
-            streamProcessedIndex = i + 1;
+
           } else {
-            // Unknown language, skip
-            streamProcessedIndex = i + 1;
+            // 'after' (orphaned) or unknown language — skip
+            i++;
           }
-          i++;
         }
+        return i;
+      };
+
+      if (status === 'ing') {
+        // Reset state on first ing call of a new stream sequence
+        if (!streamIsActive) {
+          streamIsActive = true;
+          streamProcessedIndex = 0;
+          streamResults = [];
+        }
+
+        // Process newly completed files incrementally, stopping on first incomplete file
+        streamProcessedIndex = await processFiles(files, streamProcessedIndex, true);
 
         return params.content;
       }
@@ -955,13 +966,8 @@ export default function developMyBricksModule(config: Config) {
         streamIsActive = false;
         config.setLock('unlock')
 
-        // Process any remaining unprocessed files
-        let finalResult: Awaited<ExecuteResult> | undefined;
-        const remainingFiles = files.slice(streamProcessedIndex);
-        if (remainingFiles.length > 0) {
-          finalResult = await config.onUpdate?.({ files: remainingFiles.map(({ fileName, content, language }) => ({ fileName, content, language })) });
-          if (finalResult) streamResults.push(finalResult);
-        }
+        // Process any remaining unprocessed files, skipping incomplete ones
+        await processFiles(files, streamProcessedIndex, false);
 
         // Determine overall result from all stream results
         // If any mergeSuccess=false, the overall is a failure; use the last result for compileErrors
@@ -979,8 +985,6 @@ export default function developMyBricksModule(config: Config) {
 
         // Check overall merge success (all must have succeeded)
         const overallMergeSuccess = allResults.every((r) => !r || r.mergeSuccess);
-        // Check overall compile success
-        const overallCompileSuccess = allResults.every((r) => !r || r.compileSuccess);
 
         if (overallMergeSuccess) {
           (window as any)._mybricksOnEdit_?.();
@@ -994,17 +998,6 @@ export default function developMyBricksModule(config: Config) {
           throw new ToolRetryError({
             llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
             displayContent: '执行失败，当前操作已回滚，请重试',
-            autoRetry: true,
-            maxRetries: 2
-          });
-        }
-
-        if (overallMergeSuccess && !overallCompileSuccess && ToolRetryError) {
-          const allCompileErrors = allResults.flatMap((r) => (r && !r.compileSuccess) ? r.compileErrors : []);
-          const compileErrLines = allCompileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
-          throw new ToolRetryError({
-            llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
-            displayContent: '代码存在编译/校验错误，请重试',
             autoRetry: true,
             maxRetries: 2
           });
