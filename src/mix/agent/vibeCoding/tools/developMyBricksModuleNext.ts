@@ -27,6 +27,11 @@ export default function developMyBricksModule(config: Config) {
 
   let excuteMessage = '';
 
+  // Stream incremental write state
+  let streamProcessedIndex = 0;
+  let streamResults: Array<Awaited<ExecuteResult>> = [];
+  let streamIsActive = false;
+
   return {
     name: NAME,
     displayName: "编写代码",
@@ -49,6 +54,12 @@ export default function developMyBricksModule(config: Config) {
 `,
     getPrompts: () => {
       config.setLock('lock')
+      // 重制steam信息
+      excuteMessage = '';
+      streamProcessedIndex = 0;
+      streamResults = [];
+      streamIsActive = false;
+
       return `
 <你的角色与任务>
   你是MyBricks模块开发专家同时也是一名资深的前端开发专家、架构师，技术资深、逻辑严谨、实事求是，同时具备专业的审美和设计能力。
@@ -299,6 +310,20 @@ export default function developMyBricksModule(config: Config) {
       - 按照文档中的使用说明来使用类库，比如*引用方式*、*何时使用*，*组件用法*等。
     > 如果用户指定类库中并不在<允许使用的类库/>范围内，则告知用户无法使用，并且使用当前 <允许使用的类库/> 进行替代实现或者占位。
   </技术栈和类库使用说明>
+
+  <文件输出顺序要求>
+    输出文件时，必须严格按照以下顺序依次输出，不得颠倒：
+    1. dataSource.js（如有修改）
+    2. setup.js（如有修改）
+    3. store.js（如有修改）
+    4. index.jsx（appRef 入口，如有修改）
+    5. 各页面（如有修改）
+      5.1 store.js
+      5.2 index.less
+      5.3 index.jsx
+
+    组件会在文件输出期间渲染，这个顺序可以保证组件的完整性。
+  </文件输出顺序要求>
 
   <日志规范>
     项目中必须使用 mybricks 提供的 \`logger\` 工具打印日志，禁止使用 console.log / console.warn / console.error 等原生方法。
@@ -854,23 +879,117 @@ export default function developMyBricksModule(config: Config) {
       const files = (params?.files ?? []) as RxFile[];
       const raw = replaceContent ?? '';
 
+      if (status === 'ing') {
+        // Reset state on first ing call of a new stream sequence
+        if (!streamIsActive) {
+          streamIsActive = true;
+          streamProcessedIndex = 0;
+          streamResults = [];
+        }
+
+        // Process newly completed files incrementally
+        let i = streamProcessedIndex;
+        while (i < files.length) {
+          const file = files[i];
+          if (file.language === 'write' || file.language === 'delete') {
+            if (file.isComplete) {
+              const result = await config.onUpdate?.({ files: [{ fileName: file.fileName, content: file.content, language: file.language }] });
+              if (result) {
+                streamResults.push(result);
+                if (!result.compileSuccess && ToolRetryError) {
+                  const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+                  throw new ToolRetryError({
+                    llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+                    displayContent: '代码存在编译/校验错误，请重试',
+                    autoRetry: true,
+                    maxRetries: 2
+                  });
+                }
+              }
+              streamProcessedIndex = i + 1;
+            } else {
+              // Not yet complete, stop processing
+              break;
+            }
+          } else if (file.language === 'before') {
+            // Need to wait for the paired 'after' file
+            const afterFile = files[i + 1];
+            if (afterFile && afterFile.language === 'after' && file.isComplete && afterFile.isComplete) {
+              const result = await config.onUpdate?.({ files: [
+                { fileName: file.fileName, content: file.content, language: file.language },
+                { fileName: afterFile.fileName, content: afterFile.content, language: afterFile.language },
+              ] });
+              if (result) {
+                streamResults.push(result);
+                if (!result.compileSuccess && ToolRetryError) {
+                  const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+                  throw new ToolRetryError({
+                    llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
+                    displayContent: '代码存在编译/校验错误，请重试',
+                    autoRetry: true,
+                    maxRetries: 2
+                  });
+                }
+              }
+              streamProcessedIndex = i + 2;
+              i += 2;
+              continue;
+            } else {
+              // Pair not yet complete, stop processing
+              break;
+            }
+          } else if (file.language === 'after') {
+            // 'after' files are always paired with 'before', skip if orphaned
+            streamProcessedIndex = i + 1;
+          } else {
+            // Unknown language, skip
+            streamProcessedIndex = i + 1;
+          }
+          i++;
+        }
+
+        return params.content;
+      }
+
       if (status === 'complete') {
+        streamIsActive = false;
         config.setLock('unlock')
-        const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
-        const msg = result ? formatUpdateResult(result) : '';
+
+        // Process any remaining unprocessed files
+        let finalResult: Awaited<ExecuteResult> | undefined;
+        const remainingFiles = files.slice(streamProcessedIndex);
+        if (remainingFiles.length > 0) {
+          finalResult = await config.onUpdate?.({ files: remainingFiles.map(({ fileName, content, language }) => ({ fileName, content, language })) });
+          if (finalResult) streamResults.push(finalResult);
+        }
+
+        // Determine overall result from all stream results
+        // If any mergeSuccess=false, the overall is a failure; use the last result for compileErrors
+        const allResults = streamResults as Array<Awaited<UpdateComponentFilesResult | void>>;
+        const failedResult = allResults.find((r) => r && !r.mergeSuccess) as Awaited<UpdateComponentFilesResult> | undefined;
+        const lastResult = allResults.length > 0 ? allResults[allResults.length - 1] as Awaited<UpdateComponentFilesResult> : undefined;
+        // Pick the result to report: failed result takes priority, otherwise last
+        const reportResult = failedResult ?? lastResult;
+
+        const msg = reportResult ? formatUpdateResult(reportResult) : '';
 
         if (msg) {
           excuteMessage = msg;
         }
 
-        if (!result || result.mergeSuccess) {
+        // Check overall merge success (all must have succeeded)
+        const overallMergeSuccess = allResults.every((r) => !r || r.mergeSuccess);
+        // Check overall compile success
+        const overallCompileSuccess = allResults.every((r) => !r || r.compileSuccess);
+
+        if (overallMergeSuccess) {
           (window as any)._mybricksOnEdit_?.();
           if (config.codeModifiedFlag) {
             config.codeModifiedFlag.value = true;
           }
         }
 
-        if (result && !result.mergeSuccess && ToolRetryError) {
+        if (!overallMergeSuccess && ToolRetryError) {
           const errMsg = msg || '执行失败';
           throw new ToolRetryError({
             llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
@@ -880,8 +999,9 @@ export default function developMyBricksModule(config: Config) {
           });
         }
 
-        if (result && result.mergeSuccess && !result.compileSuccess && ToolRetryError) {
-          const compileErrLines = result.compileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+        if (overallMergeSuccess && !overallCompileSuccess && ToolRetryError) {
+          const allCompileErrors = allResults.flatMap((r) => (r && !r.compileSuccess) ? r.compileErrors : []);
+          const compileErrLines = allCompileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
           throw new ToolRetryError({
             llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
             displayContent: '代码存在编译/校验错误，请重试',

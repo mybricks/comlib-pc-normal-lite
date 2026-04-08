@@ -337,42 +337,46 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     useLayoutEffect(() => {
       setContainer({ container: containerRef.current! })
 
-      if (mdCompiled && containerRef.current) {
-        const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
-        const widgetName = firstWidget?.getAttribute('data-widget-name');
-        const docs = widgetName && mdCompiled[widgetName];
-        const title = docs?.title;
-        if (title) {
-          containerRef.current!.setAttribute("data-zone-title", title);
-        }
-        const dataLoc = firstWidget?.getAttribute('data-loc')
-        const style: React.CSSProperties = {
-          minWidth: 1200,
-          width: 'fit-content',
-          height: 'fit-content'
-        }
-        if (dataLoc) {
-          const loc = JSON.parse(dataLoc);
-          const { files } = loc;
-          if (files?.less) {
-            const file = filesMap[files.less]
-            const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
-            const { width, height } = parseFrameSize(lessCode);
-            if (width) {
-              style.width = width
-              Reflect.deleteProperty(style, "minWidth")
+      try {
+        if (containerRef.current) {
+          if (mdCompiled) {
+            const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+            const widgetName = firstWidget?.getAttribute('data-widget-name');
+            const docs = widgetName && mdCompiled[widgetName];
+            const title = docs?.title;
+            if (title) {
+              containerRef.current!.setAttribute("data-zone-title", title);
             }
-            if (height) {
-              style.height = height
-            }
-          } else {
-            console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
           }
-        } else {
-          console.error('[@动态解析] 未找到 data-loc', containerRef.current);
-        }
 
-        setStyle(style)
+          const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+          const style: React.CSSProperties = {
+            minWidth: 1200,
+            width: 'fit-content',
+            height: 'fit-content'
+          }
+          if (dataLoc) {
+            const loc = JSON.parse(dataLoc);
+            const { files } = loc;
+            if (files?.less) {
+              const file = filesMap[files.less]
+              const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+              const { width, height } = parseFrameSize(lessCode);
+              if (width) {
+                style.width = width
+                Reflect.deleteProperty(style, "minWidth")
+              }
+              if (height) {
+                style.height = height
+              }
+            } else {
+              console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+            }
+          }
+          setStyle(style)
+        }
+      } catch (e) {
+        console.error(`[@动态解析]`, e)
       }
     }, [])
 
@@ -612,14 +616,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         }, [])
 
         useEffect(() => {
-          if (mdCompiled && containerRef.current && container) {
-            try {
-              const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
-              const widgetName = firstWidget?.getAttribute('data-widget-name');
-              const docs = widgetName && mdCompiled[widgetName];
-              const title = docs?.title;
-              if (title) {
-                containerRef.current!.setAttribute("data-zone-title", title);
+          try {
+            if (containerRef.current && container) {
+              if (mdCompiled) {
+                const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+                const widgetName = firstWidget?.getAttribute('data-widget-name');
+                const docs = widgetName && mdCompiled[widgetName];
+                const title = docs?.title;
+                if (title) {
+                  containerRef.current!.setAttribute("data-zone-title", title);
+                }
               }
 
               const style: React.CSSProperties = {
@@ -628,7 +634,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 height: 'fit-content',
                 minHeight: 2000,
               }
-              const dataLoc = firstWidget?.getAttribute('data-loc')
+              const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
                 const { files } = loc;
@@ -648,13 +654,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 } else {
                   console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
                 }
-              } else {
-                console.error('[@动态解析] 未找到 data-loc', containerRef.current);
               }
               setStyle(style)
-            } catch (e) {
-              console.error("[@动态解析]", e);
             }
+          } catch (e) {
+            console.error(`[@动态解析]`, e)
           }
         }, [container])
 
