@@ -8,7 +8,8 @@ import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
 import { genStyleValue, genResizer } from './styleProxy';
 import type { Props, Actions } from './types';
-import { registerResourcesCode } from './registerResourcesCode'
+import { registerResourcesCode } from './registerResourcesCode';
+import { registerSandbox } from '../sandbox';
 
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
@@ -31,7 +32,8 @@ export default function (props: Props, actions: Actions) {
     context.projectConfig = (window as any)._getProjectConfig_();
   }
 
-  context.createVibeCodingAgent({ register: (window as any)._registerAgent_ });
+  // 注册沙箱：将 mix 组件的文件系统和上下文桥接给 plugin-ai 的 CodeAgent
+  registerSandbox(comId);
 
   return {
     ...focusAreaConfigs,

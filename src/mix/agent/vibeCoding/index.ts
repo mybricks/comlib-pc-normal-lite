@@ -2,14 +2,16 @@ import developModule from "./tools/developMyBricksModuleNext";
 import readRelated from "./tools/readRelated";
 import answer from "./tools/answer";
 import { createProject } from "./project";
-import { multiReplaceFile, buildFocusInfo } from "../utils";
+import { buildFocusInfo } from "../utils";
 import type { ReplaceResultItem } from "../utils/editReplace";
 import { debugLogs } from "../../context/debugLogs";
 import mixContext from "../../context";
 import {
   type ComponentFileItem,
-  type FileUpdateResult,
   type UpdateComponentFilesResult,
+  type FileUpdateResult,
+  SUPPORTED_FILE_EXTENSION,
+  updateComponentFiles,
 } from "./tools/utils/files";
 import syncMarkdownformybricksModule from "./tools/syncMarkdownformybricksModule";
 import syncMeta from './tools/syncMeta'
@@ -23,128 +25,6 @@ export type { ComponentFileItem };
 export type { ReplaceResultItem };
 
 export type { FileUpdateResult, UpdateComponentFilesResult };
-
-export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md'])
-export const SUPPORTED_FILE_LANGUAGE = new Set(['write', 'delete', 'before', 'after'])
-
-/**
- * 将指定组件的若干源文件（model.json / runtime.jsx / style.less / config.js / com.json）
- * 写入 context 并同步到组件 data，支持单文件覆盖或多组 before/after 片段替换；最后清空该组件的需求文档。
- * 使用多策略匹配（精确、行 trim、首尾行锚点、空格归一化），并返回每个文件的替换结果。
- */
-function updateComponentFiles(
-  files: Array<ComponentFileItem>,
-  comId: string,
-  context: any
-): UpdateComponentFilesResult {
-  const aiComParams = context.getAiComParams(comId);
-  const fileResults: FileUpdateResult[] = [];
-  /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
-  const pendingWrites: Array<{ fileName: string; content: string }> = [];
-
-  const fileNames = [...new Set(files.filter((f) => (SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '') && SUPPORTED_FILE_LANGUAGE.has(f.language))).map((f) => f.fileName))];
-
-  const currentFilesMap = (aiComParams.data.files ?? []).reduce((pre, cur) => {
-    pre[cur.fileName] = cur;
-    return pre;
-  }, {})
-
-  const deleteFileNames = new Set();
-
-  for (const fileName of fileNames) {
-    const matchedFiles = files.filter((f) => f.fileName === fileName);
-    if (matchedFiles.length === 0) continue;
-
-    const dataKey = fileName;
-
-    if (matchedFiles.length === 1) {
-
-      if (matchedFiles[0].language === "delete") {
-        deleteFileNames.add(matchedFiles[0].fileName);
-        continue;
-      }
-
-      fileResults.push({
-        fileName,
-        dataKey,
-        fullReplace: true,
-        replaceCount: 1,
-        results: [{ ok: true, strategy: 'fullReplace' }],
-        success: true,
-      });
-      pendingWrites.push({ fileName, content: matchedFiles[0].content });
-      continue;
-    }
-
-    const current = decodeURIComponent(currentFilesMap[fileName]?.source || '');
-    const operations: Array<{ before: string; after: string }> = [];
-    for (let i = 0; i < matchedFiles.length; i += 2) {
-      const before = matchedFiles[i];
-      const after = matchedFiles[i + 1];
-      if (!after) continue;
-      operations.push({ before: before.content, after: after.content });
-    }
-
-    const multi = multiReplaceFile(current, operations);
-    if (!multi.ok && multi.results.length > 0) {
-      const firstFail = multi.results.find((r) => !r.ok);
-      if (firstFail?.message) {
-        console.error(`[@开发模块 - 文件${fileName} 替换失败]`, firstFail.message);
-      }
-    }
-
-    fileResults.push({
-      fileName,
-      dataKey,
-      fullReplace: false,
-      replaceCount: multi.results.length,
-      results: multi.results,
-      success: multi.ok,
-    });
-    if (multi.ok && multi.newContent !== undefined) {
-      pendingWrites.push({ fileName, content: multi.newContent });
-    }
-  }
-
-  const mergeSuccess = fileResults.every((r) => r.success);
-  if (mergeSuccess) {
-    pendingWrites.map(({ fileName, content }) =>
-      context.updateFile(comId, { fileName, content })
-    )
-    aiComParams.data.document = '';
-  }
-
-  deleteFileNames.forEach((fileName) => {
-    context.updateFile(comId, { fileName, type: "delete" })
-  })
-
-  // 收集编译/校验错误（来自 data._errors，只取本次涉及文件的错误）
-  const updatedFileNames = new Set(pendingWrites.map((f) => f.fileName));
-  const rawErrors: Array<{ file: string; message: string; type?: string }> =
-    aiComParams.data._errors ?? [];
-  const compileErrors = rawErrors
-    .filter((e) => updatedFileNames.has(e.file))
-    .map((e) => ({
-      file: e.file,
-      message: e.message,
-      type: (e.type === 'validate' ? 'validate' : 'compile') as 'compile' | 'validate',
-    }));
-
-  const compileSuccess = compileErrors.length === 0;
-
-
-  console.log("[aiCom]", aiComParams);
-
-  return {
-    comId,
-    fileResults,
-    mergeSuccess,
-    compileErrors,
-    compileSuccess,
-    success: mergeSuccess && compileSuccess,
-    updateFile: !!(mergeSuccess && pendingWrites.length)
-  };
-}
 
 export default function ({ context }) {
   console.log("[@vibeCoding - context]", context);

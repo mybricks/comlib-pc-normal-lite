@@ -1,4 +1,5 @@
 import type { ReplaceResultItem } from "../../../utils/editReplace";
+import { multiReplaceFile } from "../../../utils";
 
 /** 工具 execute/stream 所需的文件（与 type.d.ts 一致） */
 export type ComponentFileItem = { fileName: string; content: string; isComplete?: boolean; language: string };
@@ -10,6 +11,9 @@ export interface RxFile {
   content: string;
   isComplete: boolean;
 }
+
+export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md']);
+export const SUPPORTED_FILE_LANGUAGE = new Set(['write', 'delete', 'before', 'after']);
 
 /** 单个文件的更新结果（与 updateComponentFiles 返回结构一致） */
 export type FileUpdateResult = {
@@ -77,5 +81,134 @@ function formatUpdateResult(result: UpdateComponentFilesResult): string {
   return `\n准备执行修改\n\n${lines.join('\n')}`;
 }
 
-export { formatUpdateResult };
-export type { UpdateComponentFilesResult };
+function updateComponentFiles(
+  files: Array<ComponentFileItem>,
+  comId: string,
+  context: any
+): UpdateComponentFilesResult {
+  const aiComParams = context.getAiComParams(comId);
+  const fileResults: FileUpdateResult[] = [];
+  /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
+  const pendingWrites: Array<{ fileName: string; content: string }> = [];
+
+  const fileNames = [...new Set(
+    files
+      .filter((f) => (
+        SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '') &&
+        SUPPORTED_FILE_LANGUAGE.has(f.language)
+      ))
+      .map((f) => f.fileName)
+  )];
+
+  const currentFilesMap = (aiComParams.data.files ?? []).reduce((pre, cur) => {
+    pre[cur.fileName] = cur;
+    return pre;
+  }, {});
+
+  const deleteFileNames = new Set<string>();
+
+  for (const fileName of fileNames) {
+    const matchedFiles = files.filter((f) => f.fileName === fileName);
+    if (matchedFiles.length === 0) continue;
+
+    const dataKey = fileName;
+
+    if (matchedFiles.length === 1) {
+      if (matchedFiles[0].language === "delete") {
+        deleteFileNames.add(matchedFiles[0].fileName);
+        fileResults.push({
+          fileName,
+          dataKey,
+          fullReplace: true,
+          replaceCount: 1,
+          results: [{ ok: true, strategy: 'delete' }],
+          success: true,
+        });
+        continue;
+      }
+
+      fileResults.push({
+        fileName,
+        dataKey,
+        fullReplace: true,
+        replaceCount: 1,
+        results: [{ ok: true, strategy: 'fullReplace' }],
+        success: true,
+      });
+      pendingWrites.push({ fileName, content: matchedFiles[0].content });
+      continue;
+    }
+
+    const current = decodeURIComponent(currentFilesMap[fileName]?.source || '');
+    const operations: Array<{ before: string; after: string }> = [];
+    for (let i = 0; i < matchedFiles.length; i += 2) {
+      const before = matchedFiles[i];
+      const after = matchedFiles[i + 1];
+      if (!after) continue;
+      operations.push({ before: before.content, after: after.content });
+    }
+
+    const multi = multiReplaceFile(current, operations);
+    if (!multi.ok && multi.results.length > 0) {
+      const firstFail = multi.results.find((r) => !r.ok);
+      if (firstFail?.message) {
+        console.error(`[@开发模块 - 文件${fileName} 替换失败]`, firstFail.message);
+      }
+    }
+
+    fileResults.push({
+      fileName,
+      dataKey,
+      fullReplace: false,
+      replaceCount: multi.results.length,
+      results: multi.results,
+      success: multi.ok,
+    });
+    if (multi.ok && multi.newContent !== undefined) {
+      pendingWrites.push({ fileName, content: multi.newContent });
+    }
+  }
+
+  const mergeSuccess = fileResults.every((r) => r.success);
+  if (mergeSuccess) {
+    pendingWrites.forEach(({ fileName, content }) =>
+      context.updateFile(comId, { fileName, content })
+    );
+    deleteFileNames.forEach((fileName) => {
+      context.updateFile(comId, { fileName, type: "delete" });
+    });
+    aiComParams.data.document = '';
+  }
+
+  // 收集编译/校验错误（来自 data._errors，只取本次涉及文件的错误）
+  const updatedFileNames = new Set([
+    ...pendingWrites.map((f) => f.fileName),
+    ...deleteFileNames,
+  ]);
+  const rawErrors: Array<{ file: string; message: string; type?: string }> =
+    aiComParams.data._errors ?? [];
+  const compileErrors = rawErrors
+    .filter((e) => updatedFileNames.has(e.file))
+    .map((e) => ({
+      file: e.file,
+      message: e.message,
+      type: (e.type === 'validate' ? 'validate' : 'compile') as 'compile' | 'validate',
+    }));
+
+  const compileSuccess = compileErrors.length === 0;
+
+  console.log("[aiCom]", aiComParams);
+
+  return {
+    comId,
+    fileResults,
+    mergeSuccess,
+    compileErrors,
+    compileSuccess,
+    success: mergeSuccess && compileSuccess,
+    updateFile: !!(mergeSuccess && (pendingWrites.length || deleteFileNames.size))
+  };
+}
+
+export { formatUpdateResult, updateComponentFiles };
+export type { ReplaceResultItem, UpdateComponentFilesResult };

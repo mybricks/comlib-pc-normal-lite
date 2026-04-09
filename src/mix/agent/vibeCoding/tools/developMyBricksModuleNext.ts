@@ -1,8 +1,7 @@
 import readRelated from "./readRelated";
-import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
+import { formatUpdateResult, UpdateComponentFilesResult, RxFile, SUPPORTED_FILE_EXTENSION } from "./utils";
 import checkDesignStatus from "./checkDesignStatus";
 import { getAllLibraryNames } from '../../../availableLibraries';
-import { SUPPORTED_FILE_EXTENSION } from "../index";
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME

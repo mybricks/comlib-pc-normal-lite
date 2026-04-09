@@ -1,4 +1,3 @@
-import genVibeCodingAgent from "../agent/vibeCoding";
 import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
@@ -56,25 +55,9 @@ class Context {
   versionStateMap: Record<string, VersionSnapshot[]> = {};
   versionStateEvents: Record<string, Events<{ 'change': VersionSnapshot[] }>> = {};
 
-  rxaiMap: Record<string, any> = {};
-
-  getRxai(comId: string) {
-    if (!this.rxaiMap[comId]) {
-      const rxai = (window as any)._getRxaiByAbstractAgentWithVibeCoding_(comId);
-      this.rxaiMap[comId] = rxai;
-      rxai?.idb?.trimVersions?.(30);
-    }
-
-    return this.rxaiMap[comId];
-  }
-
   async getVersions(comId: string): Promise<VersionSnapshot[]> {
     if (!this.versionStateMap[comId]) {
-      const rxai = this.getRxai(comId);
-      const versions = rxai?.idb?.getVersions ? (await rxai?.idb?.getVersions?.()) : [];
-      this.versionStateMap[comId] = versions.map(({ data }) => {
-        return data;
-      });
+      this.versionStateMap[comId] = [];
     }
 
     return this.versionStateMap[comId];
@@ -85,7 +68,6 @@ class Context {
     const lastVersion = versions[versions.length - 1];
     const id = lastVersion ? lastVersion.id + 1 : 0
     const aiComParams = this.getAiComParams(comId);
-    const rxai = this.getRxai(comId);
 
     if (type === 'ai') {
       const version: VersionSnapshot = {
@@ -96,7 +78,6 @@ class Context {
         dataSnapshot: deepClone(aiComParams?.data ?? {}),
         planId: planAgent?.id
       }
-      rxai?.idb?.addVersion?.(version.id, version);
       versions.push(version);
       this.versionStateMap[comId] = versions;
       this.getVersionStateEvents(comId).emit('change', versions);
@@ -105,7 +86,6 @@ class Context {
       if (lastVersion && lastVersion.type === 'editor') {
         lastVersion.timestamp = getTimestamp({ showMs: false });
         lastVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
-        rxai?.idb?.updateVersion?.(lastVersion.id, lastVersion)
         this.getVersionStateEvents(comId).emit('change', [...versions]);
         return lastVersion
       } else {
@@ -117,7 +97,6 @@ class Context {
           dataSnapshot: deepClone(aiComParams?.data ?? {}),
           planId: planAgent?.id
         }
-        rxai?.idb?.addVersion?.(version.id, version);
         versions.push(version);
         this.versionStateMap[comId] = versions;
         this.getVersionStateEvents(comId).emit('change', versions);
@@ -130,11 +109,9 @@ class Context {
     const versions = await this.getVersions(comId);
     const updateVersion = versions.find(v => v.planId === planAgent.id)
     const aiComParams = this.getAiComParams(comId);
-    const rxai = this.getRxai(comId);
 
     if (updateVersion) {
       updateVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
-      rxai?.idb?.updateVersion?.(updateVersion.id, updateVersion)
       this.getVersionStateEvents(comId).emit('change', [...versions]);
     }
   }
@@ -142,13 +119,11 @@ class Context {
   async updateVersionWithContent(comId, planAgent, content) {
     const versions = await this.getVersions(comId);
     const updateVersion = versions.find(v => v.planId === planAgent.id)
-    const rxai = this.getRxai(comId);
 
     if (updateVersion) {
       Object.entries(content).forEach(([key, value]) => {
         updateVersion[key] = value;
       })
-      rxai?.idb?.updateVersion?.(updateVersion.id, updateVersion)
       this.getVersionStateEvents(comId).emit('change', [...versions]);
     }
   }
@@ -166,7 +141,6 @@ class Context {
     const index = versions.findIndex(v => v.id === version.id);
 
     if (index !== -1) {
-      const rxai = (window as any)._getRxaiByAbstractAgentWithVibeCoding_(comId);
       const aiComParams = this.getAiComParams(comId);
       const data = aiComParams.data;
       const rollbackVersion = versions[index];
@@ -179,19 +153,8 @@ class Context {
         }
       });
 
-      const aiVersion = versions.slice(index + 1).find((version) => {
-        return version.type === "ai";
-      });
-
-      if (aiVersion) {
-        rxai?.truncateFrom?.(aiVersion.planId);
-      }
-
-      rxai?.idb?.deleteVersion?.(versions[index + 1].id);
-
       this.versionStateMap[comId] = versions.slice(0, index + 1);
       this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
-      // this.getAiComEvents(comId)?.emit('fileChange', null);
       (window as any)._mybricksOnEdit_?.({ autoSave: true });
     }
   }
@@ -348,19 +311,6 @@ class Context {
     return themes?.find((t: any) => t.id === activeThemeId);
   }
 
-  agent: any = {
-    vibeCoding: null,
-  };
-
-  createVibeCodingAgent({ register }) {
-    if (!this.agent.vibeCoding) {
-      const that = this;
-      const vibeCoding = genVibeCodingAgent({ context: that });
-      this.agent.vibeCoding = vibeCoding;
-      register(vibeCoding);
-    }
-  }
-
   plugins: any;
 
   /** 生成中：start 后展示流式界面，stream 传全量（多次即流式），end 删 data 并渲染，error 展示错误面板 */
@@ -402,6 +352,8 @@ class Context {
     },
   };
 
+  updateFile(id: any, payload: { fileName: string; type: "delete" }): void;
+  updateFile(id: any, payload: { fileName: string; content: string; type?: string }): void;
   updateFile(id, { fileName, content, type }) {
     // 现在只有 jsx、less、js 三种文件
     const aiComParams = this.getAiComParams(id);
@@ -412,6 +364,9 @@ class Context {
       if (deleteIndex !== -1) {
         files.splice(deleteIndex, 1)
       }
+      aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+      this.getAiCom(id)?.actions?.notifyChanged?.();
+      this.getAiComEvents(id).emit("compileError", aiComParams.data._errors)
     } else {
       const suffix = fileName.split('.').pop();
 
