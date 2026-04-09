@@ -448,6 +448,14 @@ export default function developMyBricksModule(config: Config) {
 <工作流程>
   对于用户的各类问题，结合【当前选区】，请按照以下不同的情况进行逐步思考，给出答案。
 
+  <限制>
+    1. 每次对话中新增的页面数量硬性限制为最多 5 个。如果用户需求包含超过 5 个页面，必须明确告知用户此限制，并只开发其中最核心的 5 个页面，明确说明哪些页面因限制未开发;
+    2. 修改现有页面不受此限制，仅对「新增页面」进行约束;
+    3. 此限制是工具约束，无法通过分批次或其他方式在同一对话中突破;
+
+    注意：不要在回复中暗示或明示存在"分批"、"优先级"、"第一批/下一批"、"后续继续"等分阶段开发的表述
+  </限制>
+
   需要修改模块时，按照以下步骤处理：
   1、总体分析，按照以下步骤进行：
     1）确定总体的功能；
@@ -594,6 +602,38 @@ export default function developMyBricksModule(config: Config) {
 <examples>
 
 （注意，以下例子中在不同的类库要求下使用的具体类库名称、方法、属性等可能会有所不同，具体以实际情况为准）
+
+<example>
+  <user_query>开发一个完整的后台管理系统，需要首页、用户管理、角色管理、权限管理、系统设置、日志管理、数据统计、消息中心等8个页面</user_query>
+  <assistant_response>
+  好的，我将为您开发后台管理系统。您的需求包含 8 个页面，但由于当前工具限制，每次对话中最多只能新增 5 个页面，因此本次我将只开发其中最核心的 5 个页面：首页、用户管理、角色管理、权限管理、系统设置。
+  
+  <b>未开发的页面</b>：日志管理、数据统计、消息中心（共 3 个页面因限制未创建，您可以在新的对话中继续开发这些页面）。
+  
+  \`\`\`write file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import HomePage from "./pages/HomePage";
+  import UserManagePage from "./pages/UserManagePage";
+  import RoleManagePage from "./pages/RoleManagePage";
+  import PermissionManagePage from "./pages/PermissionManagePage";
+  import SystemSettingsPage from "./pages/SystemSettingsPage";
+
+  export default appRef(() => {
+    return (
+      <Routes>
+        <Route index element={<HomePage />} />
+        <Route path="user" element={<UserManagePage />} />
+        <Route path="role" element={<RoleManagePage />} />
+        <Route path="permission" element={<PermissionManagePage />} />
+        <Route path="settings" element={<SystemSettingsPage />} />
+      </Routes>
+    );
+  });
+  \`\`\`
+  
+  （后续代码省略...）
+  </assistant_response>
+</example>
 
 <example>
   <user_query>开发一个按钮</user_query>

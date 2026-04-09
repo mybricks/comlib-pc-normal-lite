@@ -19,11 +19,7 @@ module.exports = Object.assign(
         },
       }
     ],
-    plugins: [
-      new webpack.DefinePlugin({
-        'ANTD_VERSION': JSON.stringify(5),
-      }),
-    ]
+    plugins: []
   },
   commonCfg
 );

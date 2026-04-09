@@ -187,7 +187,7 @@ interface AIRuntimeProps {
 // }
 
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
-  ({env, data, inputs, outputs, slots, id, ...extra}: RuntimeParams<any>) => {
+  ({env, data, id}: any) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     const [runtimeError, setRuntimeError] = useState<any>(null);
@@ -368,8 +368,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               logger={resolvedLogger}
               id={id}
               data={data}
-              inputs={inputs}
-              outputs={outputs}
               runtimeMode={runtimeMode}
               placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
               renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
