@@ -191,7 +191,7 @@ class Context {
 
       this.versionStateMap[comId] = versions.slice(0, index + 1);
       this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
-      // this.getAiComEvents(comId)?.emit('fileChange', null);
+      this.getAiComEvents(comId)?.emit('fileChange', null);
       (window as any)._mybricksOnEdit_?.({ autoSave: true });
     }
   }
@@ -577,7 +577,7 @@ class Context {
       this.getAiComEvents(id).emit("compileError", aiComParams.data._errors)
     }
 
-    // this.getAiComEvents(id)?.emit('fileChange', null);
+    this.getAiComEvents(id)?.emit('fileChange', null);
     (window as any)._mybricksOnEdit_?.();
     aiComParams?.notify?.edit();
   }
