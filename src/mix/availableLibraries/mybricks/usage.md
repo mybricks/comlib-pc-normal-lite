@@ -143,10 +143,10 @@ import dataSource from './dataSource'
 
 // 必须：设计态 mock 环境
 describe('mock', () => {
+  // 上面 getUserById 直接返回一个axios.get，可以确定里面有status、data字段
   spyOn(dataSource, 'getUserById').mockReturn({
     status: 200,
     data: { id: 1, name: '张三', age: 18 },
-    message: 'success'
   })
 })
 
