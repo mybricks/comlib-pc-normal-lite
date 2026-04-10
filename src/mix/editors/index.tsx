@@ -57,7 +57,7 @@ export default function (props: Props, actions: Actions) {
     },
     '[data-library-source]': {},
     '[class]': {},
-    'img': {
+    'img': {//测试代码，可删除
       items: [
         {
           type: 'button',
