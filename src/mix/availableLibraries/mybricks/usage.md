@@ -143,10 +143,10 @@ import dataSource from './dataSource'
 
 // 必须：设计态 mock 环境
 describe('mock', () => {
+  // 上面 getUserById 直接返回一个axios.get，可以确定里面有status、data字段
   spyOn(dataSource, 'getUserById').mockReturn({
     status: 200,
     data: { id: 1, name: '张三', age: 18 },
-    message: 'success'
   })
 })
 
@@ -168,8 +168,8 @@ describe('无权限测试', () => {
 
 #### spyOn 使用原则
 - spyOn的有且只有一个使用方式，就是 `mockReturn`，不得使用任何其他不存在的方法；
-- `spyOn(dataSource, 'method').mockReturn(value: Record<string, any>)`：可以替换该单个方法的返回值，**value 必须为 对象**；
-- 仅必要时使用，比如由于设计态无法请求真实接口，需要劫持axios接口调用；
+- `spyOn(dataSource, 'method').mockReturn(value: Record<string, any>): Promise<value>`：可以替换该单个方法的返回值，**value 必须为 对象**；
+- 仅必要时使用，比如由于设计态无法请求真实接口，需要劫持axios接口调用，不要劫持静态数据方法；
 - `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；
 - **必须声明 `mock` 环境**（设计态自动激活）；
 

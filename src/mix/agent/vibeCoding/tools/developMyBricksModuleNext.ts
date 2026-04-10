@@ -26,6 +26,11 @@ export default function developMyBricksModule(config: Config) {
 
   let excuteMessage = '';
 
+  // Stream incremental write state
+  let streamProcessedIndex = 0;
+  let streamResults: Array<Awaited<ExecuteResult>> = [];
+  let streamIsActive = false;
+
   return {
     name: NAME,
     displayName: "编写代码",
@@ -48,6 +53,13 @@ export default function developMyBricksModule(config: Config) {
 `,
     getPrompts: () => {
       config.setLock('lock')
+      console.log("编码重置stream")
+      // 重制steam信息
+      excuteMessage = '';
+      streamProcessedIndex = 0;
+      streamResults = [];
+      streamIsActive = false;
+
       return `
 <你的角色与任务>
   你是MyBricks模块开发专家同时也是一名资深的前端开发专家、架构师，技术资深、逻辑严谨、实事求是，同时具备专业的审美和设计能力。
@@ -299,6 +311,20 @@ export default function developMyBricksModule(config: Config) {
     > 如果用户指定类库中并不在<允许使用的类库/>范围内，则告知用户无法使用，并且使用当前 <允许使用的类库/> 进行替代实现或者占位。
   </技术栈和类库使用说明>
 
+  <文件输出顺序要求>
+    输出文件时，必须严格按照以下顺序依次输出，不得颠倒：
+    1. dataSource.js（如有修改）
+    2. setup.js（如有修改）
+    3. store.js（如有修改）
+    4. index.jsx（appRef 入口，如有修改）
+    5. 各页面（如有修改）
+      5.1 store.js
+      5.2 index.less
+      5.3 index.jsx
+
+    组件会在文件输出期间渲染，这个顺序可以保证组件的完整性。
+  </文件输出顺序要求>
+
   <日志规范>
     项目中必须使用 mybricks 提供的 \`logger\` 工具打印日志，禁止使用 console.log / console.warn / console.error 等原生方法。
 
@@ -420,6 +446,14 @@ export default function developMyBricksModule(config: Config) {
 
 <工作流程>
   对于用户的各类问题，结合【当前选区】，请按照以下不同的情况进行逐步思考，给出答案。
+
+  <限制>
+    1. 每次对话中新增的页面数量硬性限制为最多 5 个。如果用户需求包含超过 5 个页面，必须明确告知用户此限制，并只开发其中最核心的 5 个页面，明确说明哪些页面因限制未开发;
+    2. 修改现有页面不受此限制，仅对「新增页面」进行约束;
+    3. 此限制是工具约束，无法通过分批次或其他方式在同一对话中突破;
+
+    注意：不要在回复中暗示或明示存在"分批"、"优先级"、"第一批/下一批"、"后续继续"等分阶段开发的表述
+  </限制>
 
   需要修改模块时，按照以下步骤处理：
   1、总体分析，按照以下步骤进行：
@@ -567,6 +601,38 @@ export default function developMyBricksModule(config: Config) {
 <examples>
 
 （注意，以下例子中在不同的类库要求下使用的具体类库名称、方法、属性等可能会有所不同，具体以实际情况为准）
+
+<example>
+  <user_query>开发一个完整的后台管理系统，需要首页、用户管理、角色管理、权限管理、系统设置、日志管理、数据统计、消息中心等8个页面</user_query>
+  <assistant_response>
+  好的，我将为您开发后台管理系统。您的需求包含 8 个页面，但由于当前工具限制，每次对话中最多只能新增 5 个页面，因此本次我将只开发其中最核心的 5 个页面：首页、用户管理、角色管理、权限管理、系统设置。
+  
+  <b>未开发的页面</b>：日志管理、数据统计、消息中心（共 3 个页面因限制未创建，您可以在新的对话中继续开发这些页面）。
+  
+  \`\`\`write file="index.jsx"
+  import { appRef, Routes, Route } from "mybricks";
+  import HomePage from "./pages/HomePage";
+  import UserManagePage from "./pages/UserManagePage";
+  import RoleManagePage from "./pages/RoleManagePage";
+  import PermissionManagePage from "./pages/PermissionManagePage";
+  import SystemSettingsPage from "./pages/SystemSettingsPage";
+
+  export default appRef(() => {
+    return (
+      <Routes>
+        <Route index element={<HomePage />} />
+        <Route path="user" element={<UserManagePage />} />
+        <Route path="role" element={<RoleManagePage />} />
+        <Route path="permission" element={<PermissionManagePage />} />
+        <Route path="settings" element={<SystemSettingsPage />} />
+      </Routes>
+    );
+  });
+  \`\`\`
+  
+  （后续代码省略...）
+  </assistant_response>
+</example>
 
 <example>
   <user_query>开发一个按钮</user_query>
@@ -853,37 +919,125 @@ export default function developMyBricksModule(config: Config) {
       const files = (params?.files ?? []) as RxFile[];
       const raw = replaceContent ?? '';
 
+      /**
+       * Iterate over `allFiles` starting at `startIndex`, calling onUpdate for each complete group.
+       * - `stopOnIncomplete=true` (ing mode): stop at the first incomplete file and return the new index.
+       * - `stopOnIncomplete=false` (complete mode): skip incomplete files and process as many as possible.
+       * Returns the index one past the last processed file.
+       */
+      const processFiles = async (
+        allFiles: RxFile[],
+        startIndex: number,
+        stopOnIncomplete: boolean,
+      ): Promise<number> => {
+        let i = startIndex;
+        while (i < allFiles.length) {
+          const file = allFiles[i];
+
+          if (file.language === 'write' || file.language === 'delete') {
+            if (!file.isComplete) {
+              if (stopOnIncomplete) break;
+              i++;
+              continue;
+            }
+            const result = await config.onUpdate?.({ files: [{ fileName: file.fileName, content: file.content, language: file.language }] });
+            if (result) {
+              streamResults.push(result);
+              if (!result.compileSuccess && ToolRetryError) {
+                const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+                throw new ToolRetryError({
+                  llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines + '\n\n 修复完成后，检查当前是否已经完成用户需求，若未完成应该继续编写代码以完成用户需求',
+                  displayContent: '代码存在编译/校验错误，请重试',
+                  autoRetry: true,
+                  maxRetries: 2
+                });
+              }
+            }
+            i++;
+
+          } else if (file.language === 'before') {
+            const afterFile = allFiles[i + 1];
+            if (afterFile && afterFile.language === 'after' && file.isComplete && afterFile.isComplete) {
+              const result = await config.onUpdate?.({ files: [
+                { fileName: file.fileName, content: file.content, language: file.language },
+                { fileName: afterFile.fileName, content: afterFile.content, language: afterFile.language },
+              ] });
+              if (result) {
+                streamResults.push(result);
+                if (!result.compileSuccess && ToolRetryError) {
+                  const compileErrLines = (result.compileErrors ?? []).map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
+                  throw new ToolRetryError({
+                    llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines + '\n\n 修复完成后，检查当前是否已经完成用户需求，若未完成应该继续编写代码以完成用户需求',
+                    displayContent: '代码存在编译/校验错误，请重试',
+                    autoRetry: true,
+                    maxRetries: 2
+                  });
+                }
+              }
+              i += 2;
+            } else {
+              if (stopOnIncomplete) break;
+              i++;
+            }
+
+          } else {
+            // 'after' (orphaned) or unknown language — skip
+            i++;
+          }
+        }
+        return i;
+      };
+
+      if (status === 'ing') {
+        // Reset state on first ing call of a new stream sequence
+        if (!streamIsActive) {
+          streamIsActive = true;
+          streamProcessedIndex = 0;
+          streamResults = [];
+        }
+
+        // Process newly completed files incrementally, stopping on first incomplete file
+        streamProcessedIndex = await processFiles(files, streamProcessedIndex, true);
+
+        return params.content;
+      }
+
       if (status === 'complete') {
+        streamIsActive = false;
         config.setLock('unlock')
-        const result = await config.onUpdate?.({ files: files.map(({ fileName, content, language }) => ({ fileName, content, language })) });
-        const msg = result ? formatUpdateResult(result) : '';
+
+        // Process any remaining unprocessed files, skipping incomplete ones
+        await processFiles(files, streamProcessedIndex, false);
+
+        // Determine overall result from all stream results
+        // If any mergeSuccess=false, the overall is a failure; use the last result for compileErrors
+        const allResults = streamResults as Array<Awaited<UpdateComponentFilesResult | void>>;
+        const failedResult = allResults.find((r) => r && !r.mergeSuccess) as Awaited<UpdateComponentFilesResult> | undefined;
+        const lastResult = allResults.length > 0 ? allResults[allResults.length - 1] as Awaited<UpdateComponentFilesResult> : undefined;
+        // Pick the result to report: failed result takes priority, otherwise last
+        const reportResult = failedResult ?? lastResult;
+
+        const msg = reportResult ? formatUpdateResult(reportResult) : '';
 
         if (msg) {
           excuteMessage = msg;
         }
 
-        if (!result || result.mergeSuccess) {
+        // Check overall merge success (all must have succeeded)
+        const overallMergeSuccess = allResults.every((r) => !r || r.mergeSuccess);
+
+        if (overallMergeSuccess) {
           (window as any)._mybricksOnEdit_?.();
           if (config.codeModifiedFlag) {
             config.codeModifiedFlag.value = true;
           }
         }
 
-        if (result && !result.mergeSuccess && ToolRetryError) {
+        if (!overallMergeSuccess && ToolRetryError) {
           const errMsg = msg || '执行失败';
           throw new ToolRetryError({
             llmContent: params.content + '\n\n 上面是上一轮你输出的错误代码，执行过程如下： \n\n' + errMsg,
             displayContent: '执行失败，当前操作已回滚，请重试',
-            autoRetry: true,
-            maxRetries: 2
-          });
-        }
-
-        if (result && result.mergeSuccess && !result.compileSuccess && ToolRetryError) {
-          const compileErrLines = result.compileErrors.map((e) => `[${e.type}] ${e.file}: ${e.message}`).join('\n');
-          throw new ToolRetryError({
-            llmContent: params.content + '\n\n 上面是上一轮你输出的代码，合并成功但存在以下编译/校验错误，请修复：\n\n' + compileErrLines,
-            displayContent: '代码存在编译/校验错误，请重试',
             autoRetry: true,
             maxRetries: 2
           });

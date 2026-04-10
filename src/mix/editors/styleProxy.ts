@@ -22,22 +22,54 @@ function camelToKebab(str: string) {
   return str.replace(/([A-Z])/g, '-$1').toLowerCase();
 }
 
+
 function getBaseSelector(selector: string) {
   return selector.replace(/:{1,2}[a-zA-Z-]+(\([^)]*\))?$/, '').trim();
 }
 
+// 找出 cssObj 中与 targetSelector 同元素的孤儿 key（含伪类变体），用于清空后联动删除。
 function findOrphanKeys(cssObj: Record<string, any>, targetSelector: string): string[] {
-  const segments = targetSelector.trim().split(/\s+/).filter(Boolean);
+  const targetBase = getBaseSelector(targetSelector);
+  const segments = targetBase.trim().split(/\s+/).filter(Boolean);
   const lastSegment = segments[segments.length - 1];
+  const middleSegments = segments.slice(1, -1);
+  const rootSegment = segments[0];
+
   return Object.keys(cssObj).filter(key => {
     if (key === targetSelector) return false;
     const base = getBaseSelector(key);
-    if (base === targetSelector || targetSelector.endsWith(' ' + base)) return true;
-    if (segments.length === 1 && lastSegment.startsWith('.') && base.endsWith(lastSegment) && !base.includes(' ')) return true;
+
+    // 同一路径（含伪类）可一起删除，例如 ".a .b" 与 ".a .b:hover"
+    if (base === targetBase) return true;
+
+    // 保护独立根规则，避免把 ".a .b" 的后缀 ".b" / ".b::placeholder" 误删
+    if (
+      segments.length > 1 &&
+      !base.includes(' ') &&
+      !!lastSegment &&
+      (base === lastSegment || base.endsWith(lastSegment))
+    ) {
+      return false;
+    }
+
+    // 只清理明显由中间节点拆分出来的扁平孤儿类（例如 ".parent .mid .leaf" 里的 ".mid"）
+    if (segments.length >= 3 && !base.includes(' ') && middleSegments.includes(base)) {
+      const parentRoots = new Set(
+        Object.keys(cssObj)
+          .map(item => getBaseSelector(item).trim().split(/\s+/).filter(Boolean))
+          .filter(itemSegs => itemSegs.length > 1 && itemSegs.includes(base))
+          .map(itemSegs => itemSegs[0])
+      );
+      if (parentRoots.size === 0 || (parentRoots.size === 1 && parentRoots.has(rootSegment))) {
+        return true;
+      }
+    }
+
     return false;
   });
 }
 
+// 吸收孤儿类，将孤儿类合并到目标选择器中
 function absorbOrphans(cssObj: Record<string, any>, targetKey: string): void {
   const segments = targetKey.trim().split(/\s+/).filter(Boolean);
   if (segments.length < 3) return;
@@ -84,6 +116,42 @@ function findCompoundClassKey(cssObj: Record<string, any>, eleClassList: string[
   return best;
 }
 
+// 根据选择器获取对应的css对象key
+function resolveTargetKey(params: {
+  cssObj: Record<string, any>;
+  fullSelector: string;
+  eleClassList?: string[];
+}): string {
+  const { cssObj, fullSelector, eleClassList = [] } = params;
+  const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
+
+  // 后缀遍历匹配：取路径最长（最具体）的 key
+  const suffixMatchKey = Object.keys(cssObj)
+    .filter(k => k === fullSelector || k.endsWith(' ' + fullSelector))
+    .sort((a, b) => b.length - a.length)[0];
+
+  const shrinkMatchKey = segments.slice(1).reduce((found: string | undefined, _, i) => {
+    if (found) return found;
+    const candidate = segments.slice(i + 1).join(' ');
+    return cssObj[candidate] !== undefined ? candidate : undefined;
+  }, undefined as string | undefined);
+
+  const compoundMatchKey = eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined;
+
+  // 逗号分隔选择器兼容
+  const commaMatchKey = Object.keys(cssObj).find(k => {
+    if (!k.includes(',')) return false;
+    return k.split(',').map(s => s.trim()).some(s => s === fullSelector || s.endsWith(' ' + fullSelector));
+  });
+
+  return suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? fullSelector;
+}
+
+function extractDataZoneSelector(selector: string): string {
+  const match = selector.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
+  return match?.[1] ?? selector;
+}
+
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 export function genStyleValue(params: { comId: string }) {
@@ -106,36 +174,9 @@ export function genStyleValue(params: { comId: string }) {
 
       console.log("editConfig.value.set 组件侧接收params.selector",fullSelector)
 
-      const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
-
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
-
-      // 后缀遍历匹配：取路径最长（最具体）的 key
-      const suffixMatchKey = Object.keys(cssObj)
-        .filter(k => k === fullSelector || k.endsWith(' ' + fullSelector))
-        .sort((a, b) => b.length - a.length)[0];
-
-      const shrinkMatchKey = segments.slice(1).reduce((found: string | undefined, _, i) => {
-        if (found) return found;
-        const candidate = segments.slice(i + 1).join(' ');
-        return cssObj[candidate] !== undefined ? candidate : undefined;
-      }, undefined) as string | undefined;
-
-      const compoundMatchKey = eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined;
-
-      // 逗号分隔选择器兼容
-      const commaMatchKey = Object.keys(cssObj).find(k => {
-        if (!k.includes(',')) return false;
-        return k.split(',').map(s => s.trim()).some(s => s === fullSelector || s.endsWith(' ' + fullSelector));
-      });
-
-      const targetKey: string =
-        suffixMatchKey
-        ?? shrinkMatchKey
-        ?? compoundMatchKey
-        ?? commaMatchKey
-        ?? fullSelector;
+      const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList });
 
       absorbOrphans(cssObj, targetKey);
 
@@ -189,9 +230,10 @@ export function genResizer() {
           const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
           cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
 
-          const match = params.selector?.match(/\[data-zone-selector=\[["']([^"']+)["']\]\]/);
-          const selector = match?.[1] ?? params.selector;
-          cssObjKey = Object.keys(cssObj).find(key => key.endsWith(selector)) ?? selector;
+          const selector = extractDataZoneSelector(params.selector);
+          const ele: Element | null = params.focusArea?.ele ?? null;
+          const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
+          cssObjKey = resolveTargetKey({ cssObj, fullSelector: selector, eleClassList });
 
           if (!cssObj[cssObjKey]) {
             cssObj[cssObjKey] = {};

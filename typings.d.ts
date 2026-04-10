@@ -1,6 +1,6 @@
 declare module '*.less' {
   const resource: { [key: string]: string };
-  export = resource;
+  export default resource;
 }
 
 declare module '*.md' {
@@ -13,52 +13,7 @@ declare module '*.svg' {
   export = resource;
 }
 
-declare const ANTD_VERSION: number;
-
-/**
- * hasPermission 返回的权限数据格式
- */
-type DynamicPermission = {
-  permission: boolean;
-  type: 'hide' | 'hintLink';
-  hintLinkUrl?: string;
-  hintLinkTitle?: string;
-};
-
-/**
- * _permission 设置器返回的数据格式
- */
-type ConfigPermission = {
-  id: string;
-  type?: string;
-  remark?: string;
-  hintLink?: string;
-  registerData?: {
-    noPrivilege?: 'hide' | 'hintLink';
-    code?: string;
-    title?: string;
-  };
-  register?: () => void;
-};
-
 interface Env {
-  ajax: (url: string, opt: Record<string, any>) => Promise<any>;
-  events: any[];
-  vars?: {
-    i18nContent: string;
-    getQuery: () => any;
-    getExecuteEnv?: () => any;
-    getProps: () => any;
-    getCookies: () => any;
-    getRouter: () => Record<string, Function>;
-    locale: string | number | symbol | undefined;
-    customMethods?: {
-      options?: { label: string, value: string },
-      methodMap?: Record<string, Function>
-    }
-  };
-  hasPermission: (id: string) => boolean | DynamicPermission;
-  i18n: (text: any) => any;
   [x: string]: any;
 }
 interface RuntimeParams<T> {
@@ -158,25 +113,11 @@ type ConfigInstance = {
   remove: () => void;
 };
 
-type AnyMap = {
-  [key in string | number]: any;
-};
-
-type StyleModeType<T> = Partial<{
-  title: string;
-  catelog?: string;
-  ifVisible?: any;
-  initValue: CSSProperties;
-  target: string | ((props: EditorResult<T>) => string) | undefined;
-  domTarget: string;
-  options: Array<string | { type: string; config: Record<string, any> }>;
-}>;
-
 declare interface Window {
-  ace: any;
   Babel: any;
   less: any; // Less 编译器，CDN 加载
   myTinymce: any; // Tinymce
   jstt: any;
   MYBRICKS_AICOM_THEME_VARIABLES?: any;
+  _render_comp_start_view_: any;
 }

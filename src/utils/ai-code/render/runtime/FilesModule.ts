@@ -112,7 +112,16 @@ class FilesModule {
     }
 
     if (!file || !file.compiled) {
-      return undefined;
+      if (fileName === "index.jsx") {
+        // 入口文件未完成编写
+        return undefined
+      }
+
+      // 目前要求了文件返回顺序，store/less在jsx之前，暂时默认一定是jsx
+      return {
+        __esModule: true,
+        default: () => null
+      }
     }
 
     const suffix = fileName.split('.').pop();
