@@ -83,8 +83,19 @@
   inlineImageFillsInTree = _ii.inlineImageFillsInTree;
 })();
 
-/* Stub declarations for Node/webpack module resolution */
+/* ── Stub declarations for Node/webpack module resolution */
 var SHADOW_HOST_ID, GEOVIEW_WRAPPER_ID, getShadowHost, resolveFrameRoot, getCssRulesBySelector, getGeoviewScaleAndOrigin, getDesignRect, hasClassPrefix, simpleSelectorMatches, getMatchedSelectorsForElement, getDeclaredStyleForElement, getFrameTitleFromElement, findArtboardIdFromElement, emptyRoot, normalizeSvgPathForFigma, parseUrlFromBgImage, parseLinearGradientFromBgImage, parseRadialGradientFromBgImage, parseBoxShadow, parseBorderShorthand, parseGridTemplateColumnsCount, serializeSvgElement, parseTransformRotation, cssColorToHex, cssColorToRgba, parseFontFamilyStack, resolveFontFamilyFromStack, getGlobalFont, buildInlineTextStyle, buildStyleJSON, getM, pruneChildMarginsAfterGapMerge, anyChildHasMargin, childrenHaveUniformMargin, applyUniformMarginAsGap, ensureItemSpacingFromPositions, shouldSetTextAlignVerticalCenterForAbsoluteTextLeaf, inferNodeType, shouldMergeTextAndBrChildren, mergeTextAndBrChildNodesContent, getElementContentsTextBlockRect, getTextNodeRect, shouldMarkWidthConstrainedForEdgeWhitespace, applyWidthConstrainedForFigmaEdgeWhitespace, applyTextOverflowEllipsisExport, normalizeTextExportPreserveTrailing, getTextContent, getTextWithActualLineBreaksForElement, isShowingPlaceholder, getPseudoTextNode, getPseudoShapeNode, fetchImageAsBase64DataUrl, inlineImageFillsInTree;
+
+/**
+ * ★ Figma 组件库映射开关
+ *
+ * 设为 true 时：walk 遇到带 data-library-source 属性的第三方 UI 组件（antd/m-ui 等），
+ * 会输出 type:'component-library' + rawClassName，并停止递归子节点，
+ * 由 VibeUI 消费侧根据 rawClassName 查映射表替换为 Figma 规范组件实例。
+ *
+ * 设为 false（默认）时：保持原有行为，照常展开为 Frame/Text 节点树。
+ */
+var FIGMA_COMPONENT_LIBRARY_ENABLED = false;
 
 /**
  * 从指定 DOM 元素直接导出，不需要通过 comId 查找 Shadow DOM。
@@ -93,9 +104,9 @@ var SHADOW_HOST_ID, GEOVIEW_WRAPPER_ID, getShadowHost, resolveFrameRoot, getCssR
  * @param {string} [styleTagId] - 可选，<style> 的 id，用于获取组件样式表（通常为组件 id）
  * @returns {{ page: { name?: string, "component-def"?: any[], content: any[] } }}
  */
-function elementToMybricksJson(el, styleTagId) {
+function elementToMybricksJson(el, styleTagId, options) {
   if (!el) return emptyRoot();
-  return domToMybricksJson(null, styleTagId, el);
+  return domToMybricksJson(null, styleTagId, el, options);
 }
 
 /**
@@ -103,7 +114,7 @@ function elementToMybricksJson(el, styleTagId) {
  * @param {string} comId - 组件根元素 id，同时作为 styleTagId 传入 domToMybricksJson
  * @returns {{ page: { name?: string, "component-def"?: any[], content: any[] } }}
  */
-function comToMybricksJson(comId) {
+function comToMybricksJson(comId, options) {
   var host = getShadowHost();
   if (!host || !host.shadowRoot) {
     return emptyRoot();
@@ -118,11 +129,11 @@ function comToMybricksJson(comId) {
     return emptyRoot();
   }
 
-  return domToMybricksJson(frameId, comId);
+  return domToMybricksJson(frameId, comId, null, options);
 }
 
 /** 同上，但会请求 background-image url() 并内联为 base64，供导出到 Figma 时带背景图。返回 Promise。 */
-function comToMybricksJsonWithInlineImages(comId) {
+function comToMybricksJsonWithInlineImages(comId, options) {
   var host = getShadowHost();
   if (!host || !host.shadowRoot) return Promise.resolve(emptyRoot());
   var shadowRoot = host.shadowRoot;
@@ -130,10 +141,10 @@ function comToMybricksJsonWithInlineImages(comId) {
   if (!comEl) return Promise.resolve(emptyRoot());
   var frameId = findArtboardIdFromElement(comEl);
   if (!frameId) return Promise.resolve(emptyRoot());
-  return domToMybricksJsonWithInlineImages(frameId, comId);
+  return domToMybricksJsonWithInlineImages(frameId, comId, options);
 }
 
-function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
+function domToMybricksJson(frameId, styleTagId, _rootElOverride, options) {
   const host = getShadowHost();
   const shadowRoot = host && host.shadowRoot ? host.shadowRoot : null;
   // 没有 shadowRoot 时：有 _rootElOverride 才能继续（elementToMybricksJson 场景），否则返回空
@@ -148,6 +159,10 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
 
   const cssRuleMap = styleTagId ? getCssRulesBySelector(styleTagId, shadowRoot || document) : null;
   const dom = root;
+  const COMPONENT_LIBRARY_ENABLED =
+    options && typeof options.componentLibraryEnabled === 'boolean'
+      ? options.componentLibraryEnabled
+      : FIGMA_COMPONENT_LIBRARY_ENABLED;
 
   var geo = getGeoviewScaleAndOrigin(shadowRoot || document);
 
@@ -155,7 +170,7 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
   var rootComputed = window.getComputedStyle(root);
   var globalFont = getGlobalFont(root, rootComputed, cssRuleMap);
 
-  function walk(el, parentRect) {
+  function walk(el, parentRect, _inProForm, _inTabs, _inQuickSort) {
     var rect = getDesignRect(el, geo);
     const computed = window.getComputedStyle(el);
     const tag = (el.tagName || '').toLowerCase();
@@ -198,6 +213,9 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
     if (hasClassPrefix(el, 'append-')) return null;
     if (hasClassPrefix(el, 'boardTitle-')) return null;
 
+    // ant-checkbox-inner 是 checkbox 的纯视觉方框，当启用组件库映射时由 Figma 变体组件负责渲染，跳过
+    if (COMPONENT_LIBRARY_ENABLED && el.classList && el.classList.contains('ant-checkbox-inner')) return null;
+
     // display:contents 节点自身不作为独立 frame，直接将其子节点合并到父级
     if (isDisplayContents) {
       const childNodes = [];
@@ -206,11 +224,11 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         if (child.nodeType === 1) {
           const elChild = child;
           const skipTag = (elChild.tagName || '').toLowerCase();
-          if (skipTag === 'script' || skipTag === 'style' || skipTag === 'link') continue;
+          if (skipTag === 'script' || skipTag === 'style' || skipTag === 'link' || skipTag === 'colgroup' || skipTag === 'col') continue;
           if (hasClassPrefix(elChild, 'selection-')) continue;
           if (hasClassPrefix(elChild, 'append-')) continue;
           if (hasClassPrefix(elChild, 'boardTitle-')) continue;
-          const childNode = walk(elChild, parentRect);
+          const childNode = walk(elChild, parentRect, _inProForm, _inTabs, _inQuickSort);
           if (childNode) childNodes.push(childNode);
         }
       }
@@ -332,13 +350,13 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         }
         applyWidthConstrainedForFigmaEdgeWhitespace(node);
       }
-      // 多行 + 中文数字混合：递归遍历所有子节点检测 DOM 实际断行位置，插入 \n，避免 Figma 在 CJK 标点处错误断行
+      // 多行文本：递归遍历所有子节点检测 DOM 实际断行位置，插入 \n，
+      // 使 Figma 导入后立即按正确行数显示（无需双击）。
+      // 原仅对 CJK+数字混合触发；现扩展到所有 singleLine:false 节点，
+      // 包括纯中文、纯英文、中英混合、以及普通 CSS 宽度换行文本。
       if (nodeType === 'text' && node.style && !node.style.singleLine) {
-        var _rawT = node.content || '';
-        if (/[\u4e00-\u9fff\uff00-\uffef]/.test(_rawT) && /\d/.test(_rawT)) {
-          var _cwb = getTextWithActualLineBreaksForElement(el);
-          if (_cwb) node.content = _cwb;
-        }
+        var _cwb = getTextWithActualLineBreaksForElement(el);
+        if (_cwb) node.content = _cwb;
       }
       // input/textarea 浏览器默认垂直居中，Figma text 节点需要显式设置
       var _itag = (el.tagName || '').toLowerCase();
@@ -391,6 +409,121 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
 
     var childNodes = [];
     var isLibrarySource = !!(el.getAttribute && el.getAttribute('data-library-source') != null);
+
+    // ★ Figma 组件库映射：开关开启时，凡带 data-library-source 的节点直接打标并停止递归，
+    //   由消费侧根据 librarySource + zoneTitle + rawClassName 查规则表映射到 Figma 变体。
+    //   没有 data-library-source 的节点一律走原有绘制逻辑（frame / text 等）。
+    var _libCls = (el.className && typeof el.className === 'string') ? el.className : '';
+    if (isLibrarySource) {
+      console.log('[dom-to-figma] library-source hit', {
+        enabled: COMPONENT_LIBRARY_ENABLED,
+        tag: tag,
+        nodeType: nodeType,
+        librarySource: el.getAttribute('data-library-source'),
+        zoneTitle: el.getAttribute('data-zone-title'),
+        cls: _libCls.slice(0, 80),
+        willTag: COMPONENT_LIBRARY_ENABLED && nodeType !== 'text' && nodeType !== 'image' && tag !== 'svg',
+      });
+    }
+    if (COMPONENT_LIBRARY_ENABLED && isLibrarySource && nodeType !== 'text' && nodeType !== 'image' && tag !== 'svg') {
+      // 检查子树中是否还有嵌套的 data-library-source 节点（如 ProForm 内嵌 ProFormText）。
+      // 有则说明当前节点是容器，不能在此停止，需继续递归让子节点各自打标。
+      var _hasNestedLibSource = !!(el.querySelector && el.querySelector('[data-library-source]'));
+      // data-zone-title=".tabs" 是 tabs 容器，子节点 ant-tabs-tab 需要各自打标，不能在此截停
+      var _isTabsContainer = (el.getAttribute('data-zone-title') || '') === '.tabs';
+      // data-zone-title 含 "quickSort" 的容器，或 className 含精确 class "ant-pro-checkableTags"（有s）的容器：
+      // 子节点 ant-pro-checkableTag（无s）需要各自打标为单个二三级tab，不能在此截停
+      var _isQuickSortContainer =
+        (el.getAttribute('data-zone-title') || '').indexOf('quickSort') !== -1 ||
+        (' ' + _libCls + ' ').indexOf(' ant-pro-checkableTags ') !== -1;
+      // ProTable 根节点需要整体映射为「表格」变体，允许在此强制截停（即使子树里有其他 data-library-source）
+      var _zoneTitle = el.getAttribute('data-zone-title') || '';
+      var _isProTableRoot = _zoneTitle === 'ProTable';
+      if ((_isProTableRoot) || (!_hasNestedLibSource && !_isTabsContainer && !_isQuickSortContainer)) {
+        node.type = 'component-library';
+        node.rawClassName = _libCls.trim();
+        var _libSrc = el.getAttribute('data-library-source') || '';
+        if (_libSrc) node.librarySource = _libSrc;
+        var _zoneTitleRaw = _zoneTitle;
+        if (_zoneTitleRaw) node.zoneTitle = _zoneTitleRaw;
+        // 优先从表单标签元素提取标题（避免把 placeholder 文本也混入 label）
+        var _labelDomEl = el.querySelector && (
+          el.querySelector('.ant-form-item-label label') ||
+          el.querySelector('label.ant-form-item-no-colon') ||
+          el.querySelector('label')
+        );
+        var _libLabel = _labelDomEl
+          ? (_labelDomEl.getAttribute('title') || _labelDomEl.textContent || '').trim()
+          : (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (_libLabel) node.label = _libLabel;
+        // 提取 placeholder：
+        //   1. input / textarea[placeholder] —— ProFormText 等输入框
+        //   2. .ant-select-selection-placeholder —— ProFormSelect 等下拉框（placeholder 是 span 文本）
+        var _inputDomEl = el.querySelector && el.querySelector('input[placeholder]:not([style*="opacity: 0"]):not([style*="opacity:0"]), textarea[placeholder]');
+        var _selectPhEl = el.querySelector && el.querySelector('.ant-select-selection-placeholder');
+        var _phVal = (_inputDomEl && _inputDomEl.getAttribute('placeholder'))
+          || (_selectPhEl && (_selectPhEl.textContent || '').trim())
+          || '';
+        if (_phVal) node.placeholder = _phVal;
+        return node;
+      }
+      // 有嵌套 library-source，fall through → 继续普通 frame 递归逻辑
+    }
+    // ProForm 内置按钮（无 data-library-source 但在 ProForm 子树内）：
+    // ProForm 的提交/重置按钮由框架自动渲染，不会携带 data-library-source，
+    // 但因已明确处于 ProForm 内部，可补上 librarySource 让消费侧映射到变体组件库。
+    // 只对带 ant-btn 的元素截停；其他中间容器（ant-row / ant-col / ant-pro-form-group 等）
+    // 不截停，继续递归让按钮在更深层被识别。
+    var _isProFormBtn = _libCls.indexOf('ant-btn') !== -1 || tag === 'button';
+    if (COMPONENT_LIBRARY_ENABLED && _inProForm && !isLibrarySource && _isProFormBtn) {
+      node.type = 'component-library';
+      node.rawClassName = _libCls.trim();
+      node.librarySource = '@es/pro-components';
+      var _pfBtnLabel = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (_pfBtnLabel) node.label = _pfBtnLabel;
+      return node;
+    }
+    // tabs 容器内的 ant-tabs-tab 子节点（无 data-library-source，由父容器 _inTabs 标记识别）：
+    // 每个 tab 项映射为独立的 component-library 节点，label 取 tab 文案，librarySource 补充为父容器来源。
+    if (COMPONENT_LIBRARY_ENABLED && _inTabs && !isLibrarySource
+        && _libCls.indexOf('ant-tabs-tab') !== -1) {
+      node.type = 'component-library';
+      node.rawClassName = _libCls.trim();
+      node.librarySource = '@m-ui/react';
+      var _tabLabel = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (_tabLabel) node.label = _tabLabel;
+      return node;
+    }
+    // quickSort 容器内的 ant-pro-checkableTag 子节点（无 data-library-source，由父容器 _inQuickSort 标记识别）：
+    // 每个快捷筛选项映射为独立的 component-library 节点。
+    // label 取纯文本（排除徽标数字 span），若存在纯数字 span 则以 placeholder 字段存储数字
+    // 并在 rawClassName 追加 __has-badge-number，供消费侧判断「是否带数字」变体。
+    // 注意：用精确 class 匹配（加空格包围）区分 ant-pro-checkableTag（无s）与 ant-pro-checkableTags（有s容器）。
+    if (COMPONENT_LIBRARY_ENABLED && _inQuickSort && !isLibrarySource
+        && (' ' + _libCls + ' ').indexOf(' ant-pro-checkableTag ') !== -1) {
+      node.type = 'component-library';
+      node.rawClassName = _libCls.trim();
+      node.librarySource = '@es/pro-components';
+      var _qsText = '', _qsBadge = '';
+      for (var _qsi = 0; _qsi < el.childNodes.length; _qsi++) {
+        var _qsChild = el.childNodes[_qsi];
+        if (_qsChild.nodeType === 3) {
+          var _qst = (_qsChild.textContent || '').trim();
+          if (_qst) _qsText += _qst;
+        } else if (_qsChild.nodeType === 1 && (_qsChild.tagName || '').toLowerCase() === 'span') {
+          var _qsSpanText = (_qsChild.textContent || '').trim();
+          if (/^\d+$/.test(_qsSpanText)) _qsBadge = _qsSpanText;
+        }
+      }
+      if (!_qsText) _qsText = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (_qsText) node.label = _qsText.trim();
+      if (_qsBadge) {
+        node.placeholder = _qsBadge;
+        node.rawClassName += ' __has-badge-number';
+      }
+      return node;
+    }
+
     if (nodeType !== 'text' && nodeType !== 'image' && !(tag === 'svg')) {
       // 支持 div 内同时有文本和 DOM：按 childNodes 顺序，元素走 walk，文本节点单独成 text 节点；SVG 用占位组件不遍历子节点
       var _mergedTextBr = '';
@@ -416,18 +549,44 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
         }
       }
       if (!_didMergeTextBr) {
+      // ProForm 容器检测：当前节点是 @es/pro-components 的 ProForm 时，
+      // 向所有子节点传递 _inProForm=true，让内部无标记按钮得以被识别。
+      // 已有 _inProForm 的保持不变（嵌套 ProForm 兜底）。
+      var _nextInProForm = _inProForm;
+      if (COMPONENT_LIBRARY_ENABLED && !_nextInProForm && isLibrarySource) {
+        var _pfLibSrc = el.getAttribute('data-library-source') || '';
+        var _pfZone = el.getAttribute('data-zone-title') || '';
+        if (_pfLibSrc === '@es/pro-components' && _pfZone === 'ProForm') {
+          _nextInProForm = true;
+        }
+      }
+      // tabs 容器：向子节点传递 _inTabs=true，让 ant-tabs-tab 子项得以被识别并打标
+      var _nextInTabs = _inTabs;
+      if (COMPONENT_LIBRARY_ENABLED && !_nextInTabs && isLibrarySource) {
+        if ((el.getAttribute('data-zone-title') || '') === '.tabs') {
+          _nextInTabs = true;
+        }
+      }
+      // quickSort 容器：向子节点传递 _inQuickSort=true，让 ant-pro-checkableTag 子项得以被识别并打标
+      var _nextInQuickSort = _inQuickSort;
+      if (COMPONENT_LIBRARY_ENABLED && !_nextInQuickSort && isLibrarySource) {
+        if ((el.getAttribute('data-zone-title') || '').indexOf('quickSort') !== -1 ||
+            (' ' + _libCls + ' ').indexOf(' ant-pro-checkableTags ') !== -1) {
+          _nextInQuickSort = true;
+        }
+      }
       for (let i = 0; i < el.childNodes.length; i++) {
         const child = el.childNodes[i];
         if (child.nodeType === 1) {
           const elChild = child;
-          const skip = (elChild.tagName || '').toLowerCase() === 'script' ||
-            (elChild.tagName || '').toLowerCase() === 'style' ||
-            (elChild.tagName || '').toLowerCase() === 'link';
+          var _childTag = (elChild.tagName || '').toLowerCase();
+          var skip = _childTag === 'script' || _childTag === 'style' || _childTag === 'link' ||
+            _childTag === 'colgroup' || _childTag === 'col';
           if (skip) continue;
           if (hasClassPrefix(elChild, 'selection-')) continue;
           if (hasClassPrefix(elChild, 'append-')) continue;
           if (hasClassPrefix(elChild, 'boardTitle-')) continue;
-          const childNode = walk(elChild, rect);
+          const childNode = walk(elChild, rect, _nextInProForm, _nextInTabs, _nextInQuickSort);
           if (childNode) childNodes.push(childNode);
         } else if (child.nodeType === 3) {
           var textContent = normalizeTextExportPreserveTrailing(child.textContent || '', false);
@@ -589,20 +748,8 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
             }
           }
         }
-        // 绝对定位子节点（position: absolute）在 CSS 里靠 z-index 浮于普通流之上，
-        // Figma 没有 z-index，层叠顺序由 children 数组决定（后面的在上层）。
-        // 将 positionType: absolute 的节点移到数组末尾，保证它们始终渲染在最上层。
-        var _absNodes2 = [];
-        var _flowNodes2 = [];
-        for (var _zi2 = 0; _zi2 < childNodes.length; _zi2++) {
-          var _zn2 = childNodes[_zi2];
-          if (_zn2 && _zn2.style && _zn2.style.positionType === 'absolute') {
-            _absNodes2.push(_zn2);
-          } else {
-            _flowNodes2.push(_zn2);
-          }
-        }
-        if (_absNodes2.length > 0) childNodes = _flowNodes2.concat(_absNodes2);
+        // 保持 DOM 原始子节点顺序，避免将所有 absolute 节点统一抬到最上层。
+        // 对于“背景图 + 文本”场景，背景图通常在 DOM 更靠前，需保持在文字下方。
         // ant-radio-group：过滤掉各 wrapper 内的 pseudo-before 竖线（Figma 里不需要，边框各自渲染）
         // 注意：选中态 wrapper（ant-radio-button-wrapper-checked）的 ::before 是左侧高亮边，不能过滤
         if (node.className && node.className.indexOf('ant-radio-group') !== -1) {
@@ -741,7 +888,7 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
   }
 
   const rootStyle = buildStyleJSON(dom, rootComputed, rootDesignRect, null, cssRuleMap, globalFont);
-  const pageName = dom.id || (typeof dom.className === 'string' && dom.className.trim() && dom.className.trim().split(/\s+/).find(function (c) { return c.startsWith('body-'); }) || dom.className.trim().split(/\s+/)[0]) || undefined;
+  const pageName = (dom.getAttribute && dom.getAttribute('data-zone-title')) || dom.id || (typeof dom.className === 'string' && dom.className.trim() && dom.className.trim().split(/\s+/).find(function (c) { return c.startsWith('body-'); }) || dom.className.trim().split(/\s+/)[0]) || undefined;
   var rootSelectors = cssRuleMap ? getMatchedSelectorsForElement(dom, cssRuleMap) : [];
   const content = [
     {
@@ -780,22 +927,22 @@ function domToMybricksJson(frameId, styleTagId, _rootElOverride) {
   return { page: pagePayload };
 }
 
-function domToMybricksJsonAsync(frameId, styleTagId) {
-  var syncPayload = domToMybricksJson(frameId, styleTagId);
+function domToMybricksJsonAsync(frameId, styleTagId, options) {
+  var syncPayload = domToMybricksJson(frameId, styleTagId, null, options);
   var content = syncPayload.page && syncPayload.page.content;
   if (!content || !content.length) return Promise.resolve(syncPayload);
-  return inlineImageFillsInTree(content[0]).then(function () { return syncPayload; });
+  return inlineImageFillsInTree(content[0], options).then(function () { return syncPayload; });
 }
 
-function domToMybricksJsonWithInlineImages(frameId, styleTagId) {
-  return domToMybricksJsonAsync(frameId, styleTagId);
+function domToMybricksJsonWithInlineImages(frameId, styleTagId, options) {
+  return domToMybricksJsonAsync(frameId, styleTagId, options);
 }
 
-function elementToMybricksJsonWithInlineImages(el, styleTagId) {
-  var syncPayload = elementToMybricksJson(el, styleTagId);
+function elementToMybricksJsonWithInlineImages(el, styleTagId, options) {
+  var syncPayload = elementToMybricksJson(el, styleTagId, options);
   var content = syncPayload.page && syncPayload.page.content;
   if (!content || !content.length) return Promise.resolve(syncPayload);
-  return inlineImageFillsInTree(content[0]).then(function () { return syncPayload; });
+  return inlineImageFillsInTree(content[0], options).then(function () { return syncPayload; });
 }
 
 

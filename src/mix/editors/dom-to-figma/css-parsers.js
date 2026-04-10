@@ -372,8 +372,7 @@ function parseBoxShadow(boxShadowStr) {
       skipWs();
       if (i < str.length && str[i] !== ',') color = parseColor();
     }
-    if (!inset) {
-      // 统一转 rgba 格式
+    {
       var resolvedColor = color ? (cssColorToRgba(String(color).trim()) || 'rgba(0, 0, 0, 1)') : 'rgba(0, 0, 0, 1)';
       var one = {
         offsetX: Math.round(offsetX),
@@ -382,6 +381,7 @@ function parseBoxShadow(boxShadowStr) {
         spread: spread != null ? Math.round(spread) : 0,
         color: resolvedColor
       };
+      if (inset) one.inset = true;
       result.push(one);
     }
     skipWs();
