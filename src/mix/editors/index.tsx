@@ -3,13 +3,13 @@ import '../../utils/antd';
 import './dom-to-figma/index';
 import './dom-to-figma/ir-to-figma-clipboard';
 import context from '../context';
-import { buildFocusAreaConfigs } from './configs/focusArea';
-import { buildExportCodeConfig } from './configs/exportCode';
-import { buildPagePanel } from './configs/pagePanel';
-import { buildHooks } from './hooks';
-import { genStyleValue, genResizer } from './styleProxy';
-import type { Props, Actions } from './types';
-import { registerResourcesCode } from './registerResourcesCode'
+import {buildFocusAreaConfigs} from './configs/focusArea';
+import {buildExportCodeConfig} from './configs/exportCode';
+import {buildPagePanel} from './configs/pagePanel';
+import {buildHooks} from './hooks';
+import {genStyleValue, genResizer} from './styleProxy';
+import type {Props, Actions} from './types';
+import {registerResourcesCode} from './registerResourcesCode'
 
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
@@ -21,18 +21,18 @@ export default function (props: Props, actions: Actions) {
   const exportCodeConfig = buildExportCodeConfig(props);
 
   if (!focusAreaConfigs[':root']) {
-    focusAreaConfigs[':root'] = { items: [...exportCodeConfig] };
+    focusAreaConfigs[':root'] = {items: [...exportCodeConfig]};
   } else {
     focusAreaConfigs[':root'].items.push(...exportCodeConfig);
   }
 
-  context.setAiCom(props.id, { params: props, actions });
+  context.setAiCom(props.id, {params: props, actions});
 
   if ((window as any)._getProjectConfig_) {
     context.projectConfig = (window as any)._getProjectConfig_();
   }
 
-  context.createVibeCodingAgent({ register: (window as any)._registerAgent_ });
+  context.createVibeCodingAgent({register: (window as any)._registerAgent_});
 
   return {
     ...focusAreaConfigs,
@@ -45,7 +45,7 @@ export default function (props: Props, actions: Actions) {
             {
               title: '样式',
               autoOptions: true,
-              valueProxy: genStyleValue({ comId }),
+              valueProxy: genStyleValue({comId}),
             },
             genResizer(),
           ],
@@ -53,9 +53,22 @@ export default function (props: Props, actions: Actions) {
       ],
     },
     '[data-zone-noselector]': {
-      style: [{ items: [] }],
+      style: [{items: []}],
     },
     '[data-library-source]': {},
     '[class]': {},
+    'img': {
+      items: [
+        {
+          type: 'button',
+          title:'更改图片',
+          value: {
+            set() {
+              debugger
+            }
+          }
+        }
+      ]
+    }
   };
 }
