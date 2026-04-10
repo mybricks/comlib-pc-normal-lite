@@ -22,12 +22,38 @@ import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
  * 初始为 undefined，首次请求前必须通过 beforeRequest 完成初始化。
  */
 const projectRefMap = new Map<string, { current: ReturnType<typeof createProject> | undefined }>();
+const requestSourceSnapshotMap = new WeakMap<object, Map<string, string>>();
 
 function getProjectRef(comId: string) {
   if (!projectRefMap.has(comId)) {
     projectRefMap.set(comId, { current: undefined });
   }
   return projectRefMap.get(comId)!;
+}
+
+function createSourceSnapshot(files: any[]): Map<string, string> {
+  const snapshot = new Map<string, string>();
+  for (const file of files ?? []) {
+    const fileName = typeof file?.fileName === 'string' ? file.fileName : '';
+    const source = typeof file?.source === 'string' ? file.source : '';
+    snapshot.set(fileName, source);
+  }
+  return snapshot;
+}
+
+function hasSourceChanged(files: any[], previousSnapshot?: Map<string, string>): boolean {
+  if (!previousSnapshot) return false;
+  if (previousSnapshot.size !== (files?.length ?? 0)) return true;
+
+  for (const file of files ?? []) {
+    const fileName = typeof file?.fileName === 'string' ? file.fileName : '';
+    const source = typeof file?.source === 'string' ? file.source : '';
+    if (!previousSnapshot.has(fileName) || previousSnapshot.get(fileName) !== source) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ─── 构建 project 快照 ────────────────────────────────────────────────────────
@@ -153,6 +179,30 @@ export function registerSandbox(comId: string): void {
        */
       async beforeRequest() {
         projectRef.current = buildProject(comId);
+        const data = context.getAiComParams(comId)?.data;
+        if (data && typeof data === 'object') {
+          requestSourceSnapshotMap.set(data, createSourceSnapshot(data.files ?? []));
+        }
+      },
+      async afterTurn(turn: { id?: string }) {
+        const data = context.getAiComParams(comId)?.data;
+        if (!data || typeof data !== 'object') return;
+
+        const previousSnapshot = requestSourceSnapshotMap.get(data);
+        if (!hasSourceChanged(data.files ?? [], previousSnapshot)) return;
+
+        if (!turn?.id) {
+          await context.addVersion(comId, 'ai');
+          return;
+        }
+
+        const versions = await context.getVersions(comId);
+        if (versions.some((version) => version.planId === turn.id)) return;
+        await context.addVersion(comId, 'ai', turn);
+      },
+      async afterTurnSummary(turn: { id?: string }, summary: string) {
+        if (!turn?.id) return;
+        await context.updateVersionWithContent(comId, turn, { summary });
       },
     },
   });
