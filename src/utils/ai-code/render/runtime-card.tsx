@@ -47,14 +47,8 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
         message = `当前组件出错了，${desc || title || '未知错误'}`;
       } 
     }
-    
-    (window as any)._showAIDialog_?.(comId);
-    setTimeout(() => {
-      if ((window as any)._sendToFocusVibeAgent_) {
-        (window as any)._sendToFocusVibeAgent_({ message });
-      }
-    }, 500)
-  }, [title, desc, errors, comId]);
+    (window as any)._sandbox_?.helpers?.sendToAgent?.(comId, { message });
+  }, [comId, desc, error, errors, source, title]);
 
   return (
     <div className={css.runtimeCardErrorView}>
@@ -95,11 +89,8 @@ const GenerateLoadingView = ({
 }: { fileName?: string; content?: string; error?: boolean; errorMessage?: string; comId?: string }) => {
   const onRetry = useCallback(() => {
     const message = errorMessage || '未知错误';
-    (window as any)._showAIDialog_?.(comId);
-    if ((window as any)._sendToFocusVibeAgent_) {
-      (window as any)._sendToFocusVibeAgent_({ message });
-    }
-  }, [errorMessage, comId]);
+    (window as any)._sandbox_?.helpers?.sendToAgent?.(comId, { message });
+  }, [comId, errorMessage]);
 
   return (
     <div className={css.generateRoot}>
@@ -309,13 +300,13 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       migrate('service.js', data.serviceJsCompiled);
     }
 
-    const shouldRenderSender = !!window._render_comp_start_view_;
+    const shouldRenderSender = !!(window as any)._sandbox_?.helpers?.renders?.renderStartView;
 
     const renderSender = useMemo(() => {
-      if (window._render_comp_start_view_) {
+      if ((window as any)._sandbox_?.helpers?.renders?.renderStartView) {
         return (
           <div className={css.tip}>
-            {window._render_comp_start_view_({ comId: id })}
+            {(window as any)._sandbox_.helpers.renders.renderStartView({ comId: id })}
           </div>
         )
       }
@@ -394,4 +385,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         </Wrapper>
       </div>
     );
-  }
+}
+
+export default genAIRuntime;

@@ -1,7 +1,7 @@
 /**
  * mix sandbox adapter
  *
- * 实现 plugin-ai 的 Designer + Hooks 接口，通过 window._registSandBox_ 注册。
+ * 实现 plugin-ai 的 Designer + Hooks 接口，通过 window._sandbox_.connectToAI 注册。
  *
  * 核心设计：
  * - project 实例在 hooks.beforeRequest 中创建（快照当前 runtimeMode），
@@ -100,15 +100,15 @@ function buildProject(comId: string) {
  * 在 editors/index.tsx 中 context.setAiCom 之后调用。
  */
 export function registerSandbox(comId: string): void {
-  const registSandBox = (window as any)._registSandBox_;
-  if (typeof registSandBox !== 'function') {
-    console.warn('[mix/sandbox] window._registSandBox_ not found, skipping sandbox registration');
+  const connectToAI = (window as any)._sandbox_?.connectToAI;
+  if (typeof connectToAI !== 'function') {
+    console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
   }
 
   const projectRef = getProjectRef(comId);
 
-  registSandBox(comId, {
+  connectToAI(comId, {
     designer: {
       async exportToMessage(): Promise<string> {
         const project = projectRef.current;

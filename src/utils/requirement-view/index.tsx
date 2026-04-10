@@ -9,7 +9,7 @@ interface RequirementViewModalProps {
 }
 
 export function RequirementViewModal({ compiled, onClose }: RequirementViewModalProps) {
-  const renderPrd = typeof window !== 'undefined' && (window as any)._render_comp_prd;
+  const renderPrd = typeof window !== 'undefined' && (window as any)._sandbox_?.helpers?.renders?.renderPrdView;
   const isDark = useDarkMode();
 
   const modal = (
