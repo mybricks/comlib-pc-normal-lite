@@ -10,7 +10,8 @@ import {
   getPageRefForJSXPath,
   getPopupRefForJSXPath,
   getEvents,
-  getJSXElementNameString
+  getJSXElementNameString,
+  hasEditableTextContent
 } from "./utils";
 
 /** 从文件路径派生组件名：folder/index.jsx → folder 名；直接文件 → 文件名（去扩展名） */
@@ -95,6 +96,9 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
           enter(path) {
             try {
               const { node } = path;
+              if (hasEditableTextContent(node)) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-text-editable", "1");
+              }
               const dataLocValueObject: any = {
                 jsx: { start: node.start, end: node.end },
                 tag: { end: node.openingElement.end },

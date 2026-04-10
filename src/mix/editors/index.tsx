@@ -10,6 +10,7 @@ import {buildHooks} from './hooks';
 import {genStyleValue, genResizer} from './styleProxy';
 import type {Props, Actions} from './types';
 import {registerResourcesCode} from './registerResourcesCode'
+import {getDataZoneTextEditable} from './getDataZoneTextEditable'
 
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
@@ -69,6 +70,7 @@ export default function (props: Props, actions: Actions) {
           }
         }
       ]
-    }
+    },
+    ...getDataZoneTextEditable(),
   };
 }
