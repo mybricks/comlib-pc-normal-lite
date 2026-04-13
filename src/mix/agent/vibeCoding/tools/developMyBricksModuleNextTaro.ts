@@ -312,20 +312,6 @@ export default function developMyBricksModule(config: Config) {
     > 如果用户指定类库中并不在<允许使用的类库/>范围内，则告知用户无法使用，并且使用当前 <允许使用的类库/> 进行替代实现或者占位。
   </技术栈和类库使用说明>
 
-  <文件输出顺序要求>
-    输出文件时，必须严格按照以下顺序依次输出，不得颠倒：
-    1. dataSource.js（如有修改）
-    2. setup.js（如有修改）
-    3. store.js（如有修改）
-    4. index.jsx（appRef 入口，如有修改）
-    5. 各页面（如有修改）
-      5.1 store.js
-      5.2 index.less
-      5.3 index.jsx
-
-    组件会在文件输出期间渲染，这个顺序可以保证组件的完整性。
-  </文件输出顺序要求>
-
   <日志规范>
     项目中必须使用 mybricks 提供的 \`logger\` 工具打印日志，禁止使用 console.log / console.warn / console.error 等原生方法。
 

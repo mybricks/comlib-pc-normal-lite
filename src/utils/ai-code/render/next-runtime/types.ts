@@ -16,12 +16,13 @@ export type Files = {
    */
   compiled: string
 
-  dependencies: Record<string, Record<string, {
-    importType: string
-    isComponentishName: boolean
-    isReactComponent: boolean
-    localName: string
-  }>>
+  // [TEMP] 应该是用不上了
+  // dependencies: Record<string, Record<string, {
+  //   importType: string
+  //   isComponentishName: boolean
+  //   isReactComponent: boolean
+  //   localName: string
+  // }>>
 }[]
 
 export class EmptyDataSource {
