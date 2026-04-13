@@ -5,9 +5,23 @@ const item =  {
   title:'修改内容',
   value: {
     get(params) {
-      const { focusArea } = params
-      const text = focusArea.ele.innerText
-      return text
+      const { data, focusArea } = params
+      try {
+        const loc = JSON.parse(focusArea.dataset.loc)
+        const fileName = loc.files.jsx
+        const file = data.files.find((file) => file.fileName === fileName)
+        const source = decodeURIComponent(file.source)
+        const textloc = JSON.parse(focusArea.dataset.zoneTextEditable)
+        const text = source.slice(textloc.jsx.start, textloc.jsx.end)
+        return text
+          .replace(/<br\s*\/?>/gi, '\uE000')    // 1. 用占位符标记 <br/>
+          .replace(/\s+/g, ' ')                 // 2. 空白符折叠为单个空格
+          .replace(/ ?\uE000 ?/g, '\n')         // 3. 恢复为换行，移除br前后的空格
+          .trim()                               // 4. 移除首尾空白
+      } catch (e) {
+        console.error('[data-zone-text-editable]: set', e)
+      }
+      return focusArea.ele.innerText
     },
     set(params, value) {
       if (!value.trim()) {
