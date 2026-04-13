@@ -2,7 +2,7 @@ import context from '../context'
 
 const item =  {
   type: 'textarea',
-  title:'修改内容',
+  title:'文案',
   value: {
     get(params) {
       const { data, focusArea } = params
