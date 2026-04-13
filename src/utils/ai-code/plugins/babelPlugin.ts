@@ -96,8 +96,11 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
           enter(path) {
             try {
               const { node } = path;
-              if (hasEditableTextContent(node)) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-text-editable", "1");
+
+              const dataZoneTextEditable = hasEditableTextContent(node)
+
+              if (dataZoneTextEditable) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-text-editable", JSON.stringify(dataZoneTextEditable));
               }
               const dataLocValueObject: any = {
                 jsx: { start: node.start, end: node.end },

@@ -18,7 +18,7 @@ function isFormattingTag(child: any): boolean {
   return FORMATTING_TAGS.has(tagName);
 }
 
-export function hasEditableTextContent(jsxElement: any): boolean {
+export function hasEditableTextContent(jsxElement: any): boolean | { jsx: { start: number, end: number }} {
   const children = jsxElement.children;
   
   if (!children || children.length === 0) {
@@ -43,6 +43,15 @@ export function hasEditableTextContent(jsxElement: any): boolean {
 
     // 遇到其他 JSXElement 或表达式，返回 false
     return false;
+  }
+
+  if (hasNonEmptyText) {
+    return {
+      jsx: {
+        start: children[0].start,
+        end: children[children.length - 1].end
+      }
+    }
   }
 
   return hasNonEmptyText;
