@@ -1,7 +1,5 @@
 import './resourceLoader';
 import '../../utils/antd';
-import './dom-to-figma/index';
-import './dom-to-figma/ir-to-figma-clipboard';
 import context from '../context';
 import {buildFocusAreaConfigs} from './configs/focusArea';
 import {buildExportCodeConfig} from './configs/exportCode';
