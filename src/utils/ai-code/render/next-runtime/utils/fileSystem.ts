@@ -244,6 +244,14 @@ class FileSystem {
     }
 
     if (entry.module) {
+      if (from) {
+        const fromEntry = this.filesMap[from]
+        // 有来源，记录依赖关系
+        // from 依赖 entry
+        fromEntry.dependencies.add(entry.file.filename)
+        // entry 被 from 依赖
+        entry.dependedBy.add(from)
+      }
       return entry.module
     }
 
@@ -282,7 +290,7 @@ class FileSystem {
       // from 依赖 entry
       fromEntry.dependencies.add(resolvedFilename)
       // entry 被 from 依赖
-      entry.dependedBy.add(filename)
+      entry.dependedBy.add(from)
     }
 
     return entry.module

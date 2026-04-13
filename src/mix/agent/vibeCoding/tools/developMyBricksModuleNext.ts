@@ -214,7 +214,7 @@ export default function developMyBricksModule(config: Config) {
     <代码示例>
     \`\`\`less file="index.less"
     :frame {
-      width: 1660px;
+      width: 1200px;
     }
     .container {
       width: 100%;
@@ -230,8 +230,8 @@ export default function developMyBricksModule(config: Config) {
     <编写规范>
     1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，编写前必须先列举全部可用变量，再对照每条样式属性逐一检查是否有对应变量，有则必须使用，禁止硬编码已有主题变量所覆盖的色值或数值；
     2. :frame 配置规则（仅页面和浮层类组件需要，普通组件不需要）：
-       - 每个页面（page），必须配置 :frame { width }，宽度参考设计稿或 1440px（若无设计稿）；
-       - 每个浮层类组件（由 popupRef 创建的组件），必须配置 :frame { width; height }，宽度与页面保持一致（同为 1440px 或设计稿宽度），高度在弹窗内容实际高度基础上额外增加 200～300px，以留出遮罩层空间（如内容约 400px 则配置 height: 650px）；
+       - 每个页面（page），必须配置 :frame { width }，宽度参考设计稿或 1200px（若无设计稿）；
+       - 每个浮层类组件（由 popupRef 创建的组件），必须配置 :frame { width; height }，宽度与页面保持一致（同为 1200px 或设计稿宽度），高度在弹窗内容实际高度基础上额外增加 200～300px，以留出遮罩层空间（如内容约 400px 则配置 height: 650px）；
        - :frame 只控制画布尺寸，不影响运行时布局，必须放在所有 CSS 类之前；
        - :frame 只在首次创建页面或浮层类组件或者有重大ui重构时才需要重新估算；
     </编写规范>
@@ -670,7 +670,7 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`write file="pages/ButtonPage/index.less"
   :frame {
-    width: 1440px;
+    width: 1200px;
   }
   .viewContainer {
     position: relative;
@@ -769,7 +769,7 @@ export default function developMyBricksModule(config: Config) {
 
   \`\`\`write file="pages/MainPage/index.less"
   :frame {
-    width: 1600px;
+    width: 1200px;
   }
   .viewContainer {
     position: relative;
@@ -793,7 +793,7 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`write file="pages/ViewPage/index.less"
   :frame {
-    width: 1600px;
+    width: 1200px;
   }
   .viewContainer {
     position: relative;
