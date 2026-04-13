@@ -4,3 +4,4 @@ export * from "./jsdoc";
 export * from "./rely";
 export * from "./css";
 export * from "./comRef";
+export * from "./textContent";

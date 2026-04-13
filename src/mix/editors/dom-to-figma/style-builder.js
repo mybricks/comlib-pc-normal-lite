@@ -247,6 +247,39 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     if (!Number.isNaN(o) && o < 1) style.opacity = o;
   }
 
+  // min-width / min-height / max-width / max-height → Figma minSize / maxSize
+  var _minW = px(computed.minWidth);
+  var _minH = px(computed.minHeight);
+  // 百分比值（如 max-width: 100%）会被 parseFloat 误解析成 100px，需跳过
+  var _isMaxWPct = (function () {
+    var raw = d(['max-width', 'maxWidth']) || (computed && computed.maxWidth);
+    if (raw && String(raw).indexOf('%') >= 0) return true;
+    // 兜底：声明和 computed 都没有 %，但 el.style 中有百分比
+    var inl = el && el.style && el.style.maxWidth;
+    if (inl && String(inl).indexOf('%') >= 0) return true;
+    return false;
+  })();
+  var _isMaxHPct = (function () {
+    var raw = d(['max-height', 'maxHeight']) || (computed && computed.maxHeight);
+    if (raw && String(raw).indexOf('%') >= 0) return true;
+    var inl = el && el.style && el.style.maxHeight;
+    if (inl && String(inl).indexOf('%') >= 0) return true;
+    return false;
+  })();
+  var _maxW = _isMaxWPct ? undefined : px(computed.maxWidth);
+  var _maxH = _isMaxHPct ? undefined : px(computed.maxHeight);
+  // 二次兜底：maxWidth 远小于实际宽度时可能是百分比误转（如 100% → 100px）
+  if (_maxW != null && w != null && _maxW < w * 0.5) _maxW = undefined;
+  if (_maxH != null && h != null && _maxH < h * 0.5) _maxH = undefined;
+  if ((_minW != null && _minW > 0) || (_minH != null && _minH > 0)) {
+    style.minWidth = _minW || undefined;
+    style.minHeight = _minH || undefined;
+  }
+  if ((_maxW != null && _maxW > 0) || (_maxH != null && _maxH > 0)) {
+    style.maxWidth = _maxW || undefined;
+    style.maxHeight = _maxH || undefined;
+  }
+
   // overflow: visible → Figma clipsContent = false（默认 true 会裁切溢出内容）
   var overflowVal = d(['overflow']) || computed.overflow;
   if (overflowVal && overflowVal.trim() === 'visible') {
@@ -288,7 +321,9 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     }
     if (bg) {
       var rgba = cssColorToRgba(bg);
-      if (rgba) style.fills = [rgba];
+      if (rgba && rgba !== 'rgba(0, 0, 0, 0)') {
+        style.fills = [rgba];
+      }
     }
   }
 
@@ -348,6 +383,14 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
       style.strokeBottomWeight = _bbW;
       style.strokeLeftWeight = _blW;
     }
+    // border-style → dashPattern: pick first non-none, non-solid style
+    var _bStyles = [_btStyle, _brStyle, _bbStyle, _blStyle];
+    for (var _si = 0; _si < _bStyles.length; _si++) {
+      if (_bStyles[_si] === 'dashed' || _bStyles[_si] === 'dotted') {
+        style.borderStyle = _bStyles[_si];
+        break;
+      }
+    }
   }
 
   // Border radius
@@ -360,15 +403,17 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     else style.borderRadius = [tl ?? 0, tr ?? 0, br ?? 0, bl ?? 0];
   }
 
-  // box-shadow -> shadows（与 Figma DROP_SHADOW 对应；仅外阴影，inset 忽略）
-  // 优先用 computed（含所有来源），再试 style 标签声明
+  // box-shadow -> shadows (DROP_SHADOW) + innerShadows (INNER_SHADOW)
   var boxShadowStr = (computed && (computed.boxShadow || computed['box-shadow'])) || d(['box-shadow', 'boxShadow']);
   if (boxShadowStr && String(boxShadowStr).trim() !== '' && String(boxShadowStr).trim() !== 'none') {
-    var shadows = parseBoxShadow(String(boxShadowStr));
-    shadows = shadows.filter(function (s) {
+    var _allShadows = parseBoxShadow(String(boxShadowStr));
+    _allShadows = _allShadows.filter(function (s) {
       return s.blur > 0 || s.offsetX !== 0 || s.offsetY !== 0 || (s.spread && s.spread !== 0);
     });
-    if (shadows.length > 0) style.shadows = shadows;
+    var _outerShadows = _allShadows.filter(function (s) { return !s.inset; });
+    var _innerShadows = _allShadows.filter(function (s) { return s.inset; });
+    if (_outerShadows.length > 0) style.shadows = _outerShadows;
+    if (_innerShadows.length > 0) style.innerShadows = _innerShadows;
   }
 
   // Flex / Grid -> Auto layout（gap 等同 itemSpacing）；padding 仅来自声明或 computed，不再与 margin 混合
@@ -518,6 +563,55 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
       }
     }
     style.counterAxisAlignItems = alignMap[alignItemsNorm] || 'MIN';
+    // 几何兜底：部分业务容器会通过 margin/局部偏移让视觉对齐与 CSS align-items 声明不一致。
+    // 直接信声明值会把“实际贴顶”的节点误导成 MAX（贴底）。改为用子节点几何关系二次校准。
+    if (style.layoutMode === 'HORIZONTAL' && el.children && el.children.length > 1) {
+      var _hostRect = el.getBoundingClientRect();
+      var _h = _hostRect.height || 0;
+      if (_h > 0) {
+        var _flowMetrics = [];
+        for (var _gi = 0; _gi < el.children.length; _gi++) {
+          var _gc = el.children[_gi];
+          try {
+            var _gp = (window.getComputedStyle(_gc).position || '').toLowerCase();
+            if (_gp === 'absolute' || _gp === 'fixed') continue;
+          } catch (_gpe) {}
+          var _gr = _gc.getBoundingClientRect();
+          if (!_gr || _gr.height <= 0) continue;
+          var _top = _gr.top - _hostRect.top;
+          var _bottom = _hostRect.bottom - _gr.bottom;
+          var _center = _top + _gr.height / 2;
+          _flowMetrics.push({ top: _top, bottom: _bottom, center: _center, h: _gr.height });
+        }
+        if (_flowMetrics.length >= 2) {
+          var _minTop = Infinity, _maxTop = -Infinity;
+          var _minBottom = Infinity, _maxBottom = -Infinity;
+          var _minCenter = Infinity, _maxCenter = -Infinity;
+          for (var _mi = 0; _mi < _flowMetrics.length; _mi++) {
+            var _m = _flowMetrics[_mi];
+            if (_m.top < _minTop) _minTop = _m.top;
+            if (_m.top > _maxTop) _maxTop = _m.top;
+            if (_m.bottom < _minBottom) _minBottom = _m.bottom;
+            if (_m.bottom > _maxBottom) _maxBottom = _m.bottom;
+            if (_m.center < _minCenter) _minCenter = _m.center;
+            if (_m.center > _maxCenter) _maxCenter = _m.center;
+          }
+          var _topSpan = _maxTop - _minTop;
+          var _bottomSpan = _maxBottom - _minBottom;
+          var _centerSpan = _maxCenter - _minCenter;
+          var _tol = 3;
+          var _inferredCrossAlign = null;
+          if (_topSpan <= _tol && _bottomSpan > _tol) _inferredCrossAlign = 'MIN';
+          else if (_bottomSpan <= _tol && _topSpan > _tol) _inferredCrossAlign = 'MAX';
+          else if (_centerSpan <= _tol) _inferredCrossAlign = 'CENTER';
+          else if (_topSpan <= _tol) _inferredCrossAlign = 'MIN';
+          else if (_bottomSpan <= _tol) _inferredCrossAlign = 'MAX';
+          if (_inferredCrossAlign) {
+            style.counterAxisAlignItems = _inferredCrossAlign;
+          }
+        }
+      }
+    }
     // ant-radio-wrapper：CSS align-items 可能因自定义主题（如 verticalRadio 竖排变体）被覆盖为 flex-start，
     // 导致 radio 圆圈贴顶。改用几何法：取最矮的流内子项（即 radio 圆圈），
     // 若其中心与容器中心对齐（误差 < 5px），则强制 CENTER，不依赖 CSS 声明值。
@@ -638,8 +732,24 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   } else if (display === 'grid' || display === 'inline-grid') {
     // grid-auto-flow: row = 按行排（横向多列）→ HORIZONTAL；column = 按列排（纵向多行）→ VERTICAL
     style.layoutMode = (d(['grid-auto-flow']) || computed.gridAutoFlow || 'row') === 'column' ? 'VERTICAL' : 'HORIZONTAL';
-    var gridGap = px(d(['gap', 'row-gap']) || computed.gap || computed.rowGap || computed.columnGap);
-    if (gridGap != null && gridGap > 0) style.itemSpacing = gridGap;
+    // 分别读取 column-gap 和 row-gap，避免把 row-gap 误用为列间距（HORIZONTAL WRAP 的 itemSpacing 是列间距）。
+    // gap 简写格式 "row-gap column-gap"（如 "40px 32px"），parseFloat 只取第一个值 = row-gap，
+    // 若直接用 gap 值做 itemSpacing 会错误地用 row-gap 代替 column-gap，导致 Figma 中行内溢出换行。
+    var _gridColGap = px(d(['column-gap', 'columnGap']) || computed.columnGap);
+    var _gridRowGap = px(d(['row-gap', 'rowGap']) || computed.rowGap);
+    // gap 简写兜底：当 column-gap / row-gap 均未单独声明时，解析 gap 两段式或单值
+    if (_gridColGap == null || _gridRowGap == null) {
+      var _gapDecl = d(['gap']) || computed.gap;
+      if (_gapDecl) {
+        var _gapStr = String(_gapDecl).trim();
+        var _gapParts = _gapStr.split(/\s+/);
+        if (_gridRowGap == null) _gridRowGap = px(_gapParts[0]);
+        if (_gridColGap == null) _gridColGap = px(_gapParts.length > 1 ? _gapParts[1] : _gapParts[0]);
+      }
+    }
+    // HORIZONTAL grid: itemSpacing = 列间距(column-gap)；VERTICAL grid: itemSpacing = 行间距(row-gap)
+    var _gridPrimaryGap = style.layoutMode === 'HORIZONTAL' ? _gridColGap : _gridRowGap;
+    if (_gridPrimaryGap != null && _gridPrimaryGap > 0) style.itemSpacing = _gridPrimaryGap;
     var gridTemplateCols = d(['grid-template-columns', 'gridTemplateColumns']) || (computed && computed.gridTemplateColumns);
     var colCount = parseGridTemplateColumnsCount(gridTemplateCols);
     if (colCount != null && colCount > 0) {
@@ -650,14 +760,45 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     if (style.layoutMode === 'HORIZONTAL' && gridTemplateCols && String(gridTemplateCols).trim() !== 'none') {
       style.layoutWrap = 'WRAP';
     }
-    var rowGap = px(d(['row-gap', 'rowGap', 'gap']) || (computed && computed.rowGap) || (computed && computed.gap));
-    if (rowGap != null && rowGap > 0) style.counterAxisSpacing = rowGap;
+    // counterAxisSpacing: HORIZONTAL grid = row-gap；VERTICAL grid = column-gap
+    var _gridCounterGap = style.layoutMode === 'HORIZONTAL' ? _gridRowGap : _gridColGap;
+    if (_gridCounterGap != null && _gridCounterGap > 0) style.counterAxisSpacing = _gridCounterGap;
     style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
     style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
     style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
     style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
     style.primaryAxisAlignItems = 'MIN';
     style.counterAxisAlignItems = 'MIN';
+  } else if (display === 'table' || display === 'inline-table' ||
+             display === 'table-header-group' || display === 'table-row-group' ||
+             display === 'table-footer-group') {
+    // table / thead / tbody / tfoot → 行纵向排列
+    style.layoutMode = 'VERTICAL';
+    style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
+    style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
+    style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
+    style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
+    style.primaryAxisAlignItems = 'MIN';
+    style.counterAxisAlignItems = 'MIN';
+  } else if (display === 'table-row') {
+    // tr → 单元格横向排列
+    style.layoutMode = 'HORIZONTAL';
+    style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
+    style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
+    style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
+    style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
+    style.primaryAxisAlignItems = 'MIN';
+    style.counterAxisAlignItems = 'MIN';
+  } else if (display === 'table-cell') {
+    // td / th → 内容横向排列，支持 vertical-align 映射
+    style.layoutMode = 'HORIZONTAL';
+    style.paddingTop = px(d(['padding-top', 'paddingTop']) || computed.paddingTop);
+    style.paddingRight = px(d(['padding-right', 'paddingRight']) || computed.paddingRight);
+    style.paddingBottom = px(d(['padding-bottom', 'paddingBottom']) || computed.paddingBottom);
+    style.paddingLeft = px(d(['padding-left', 'paddingLeft']) || computed.paddingLeft);
+    style.primaryAxisAlignItems = 'MIN';
+    var vAlign = (d(['vertical-align', 'verticalAlign']) || computed.verticalAlign || '').toString().toLowerCase();
+    style.counterAxisAlignItems = vAlign === 'middle' ? 'CENTER' : vAlign === 'bottom' ? 'MAX' : 'MIN';
   }
 
   // Text styles（优先 style 标签，再 computed）；字体仅在与全局不同时输出
@@ -709,6 +850,10 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
     else if (String(textDecoration).indexOf('line-through') >= 0) style.textDecoration = 'STRIKETHROUGH';
   }
 
+  var _lsRaw = d(['letter-spacing', 'letterSpacing']) || computed.letterSpacing;
+  var _ls = px(_lsRaw);
+  if (_ls != null && _ls !== 0) style.letterSpacing = _ls;
+
   // margin：用于后续在自动布局下转成 spacer 节点，不参与 padding/背景
   var _mTRaw = d(['margin-top', 'marginTop']);
   var _mRRaw = d(['margin-right', 'marginRight']);
@@ -737,6 +882,22 @@ function buildStyleJSON(el, computed, rect, parentRect, cssRuleMap, globalFont) 
   if (positionVal === 'absolute' || positionVal === 'fixed') {
     style.positionType = 'absolute';
   }
+  // z-index：用于导出时恢复层级顺序（尤其是 absolute/fixed 节点）
+  var zIndexVal = d(['z-index', 'zIndex']) || computed.zIndex;
+  if (zIndexVal != null) {
+    var z = parseInt(String(zIndexVal), 10);
+    if (!Number.isNaN(z)) {
+      style.zIndex = z;
+    }
+  }
+
+  // flex-grow → Figma FILL（填充剩余空间）
+  var _fg = parseFloat(d(['flex-grow', 'flexGrow']) || computed.flexGrow || '0');
+  if (_fg >= 1) style.flexGrow = _fg;
+
+  // align-self → 子节点自身的交叉轴对齐
+  var _as = (d(['align-self', 'alignSelf']) || computed.alignSelf || '').toString().toLowerCase();
+  if (_as === 'stretch') style.alignSelfStretch = true;
 
   return style;
 }
