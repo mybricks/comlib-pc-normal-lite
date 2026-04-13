@@ -15,14 +15,6 @@ export type Files = {
    * 注意：如果是样式文件，需支持JSON.parse解析出cssContent(样式代码字符串)、classMap(key映射，cssmodules)
    */
   compiled: string
-
-  // [TEMP] 应该是用不上了
-  // dependencies: Record<string, Record<string, {
-  //   importType: string
-  //   isComponentishName: boolean
-  //   isReactComponent: boolean
-  //   localName: string
-  // }>>
 }[]
 
 export class EmptyDataSource {
