@@ -356,28 +356,33 @@ class FileSystem {
         entry.currentImpl = module.default || (() => null)
         entry.forceUpdate()
       } else {
-        const tempModule = {
-          default: () => null
+        const tempModule: any = {
+          default: hackProxy(),
+          __default: null
         }
         Object.defineProperty(tempModule, '__esModule', {
           value: true
         })
-        this.filesMap[filename] = {
+        tempModule.__default = tempModule.default
+
+        const tempEntry = {
           file,
           module: tempModule,
-          dependencies: new Set(),
-          dependedBy: new Set(),
+          dependencies: new Set<string>(),
+          dependedBy: new Set<string>(),
           forceUpdate: () => {},
           currentImpl: () => null
         }
+        const HotComponent = createHotComponent({ entry: tempEntry })
+        tempModule.default = HotComponent
+        this.filesMap[filename] = tempEntry
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename)
         })
-        module.__default = module.default
-        this.filesMap[filename].module = module
-        this.filesMap[filename].currentImpl = module.__default || (() => null)
+        tempEntry.module!.__default = module.default
+        tempEntry.currentImpl = module.default || (() => null)
       }
     } else if (isJsModule(filename)) {
       if (entry) {

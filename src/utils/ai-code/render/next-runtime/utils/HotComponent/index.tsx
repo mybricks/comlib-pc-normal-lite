@@ -12,13 +12,6 @@ const genHotComponent = ({ entry }: HotComponentProps) => {
     entry.forceUpdate = () => setState(!state)
 
     return entry.currentImpl(props)
-
-    // [TODO] 做热更新时再引入ErrorBoundary
-    // return (
-    //   <ErrorBoundary>
-    //     {entry.currentImpl(props)}
-    //   </ErrorBoundary>
-    // )
   }) 
 }
 
