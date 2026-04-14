@@ -1,11 +1,14 @@
 import context from '../context'
 
-const item =  {
+const item = {
   type: 'textarea',
-  title:'修改内容',
+  title: '文案',
+  options: {
+    autoSize: {minRows: 7}
+  },
   value: {
     get(params) {
-      const { data, focusArea } = params
+      const {data, focusArea} = params
       try {
         const loc = JSON.parse(focusArea.dataset.loc)
         const fileName = loc.files.jsx
@@ -28,7 +31,7 @@ const item =  {
         // 不允许空字符
         return
       }
-      const { id, data, focusArea } = params
+      const {id, data, focusArea} = params
       try {
         const loc = JSON.parse(focusArea.dataset.loc)
         const fileName = loc.files.jsx
@@ -39,7 +42,7 @@ const item =  {
         const before = source.slice(loc.jsx.start, loc.jsx.end)
         const after = source.slice(loc.jsx.start, loc.tag.end) + source.slice(loc.tag.end, loc.jsx.end).replace(source.slice(textloc.jsx.start, textloc.jsx.end).trim(), nextValue)
         const newCode = source.replace(before, after)
-        context.updateFile(id, { fileName, content: newCode, type: '' })
+        context.updateFile(id, {fileName, content: newCode, type: ''})
       } catch (e) {
         console.error('[data-zone-text-editable]: set', e)
       }
@@ -56,4 +59,4 @@ const getDataZoneTextEditable = () => {
   }
 }
 
-export { getDataZoneTextEditable }
+export {getDataZoneTextEditable}

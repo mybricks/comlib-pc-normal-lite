@@ -106,6 +106,23 @@ const resolveFilename = (filename: string, filesMap: FilesMap) => {
   return entry
 }
 
+// 对比匹配文件
+export const matchfile = (filename, entryfilename) => {
+  if (filename === entryfilename) {
+    return true
+  }
+
+  return RESOLVE_EXTENSIONS.find((ext) => {
+    if (filename + ext === entryfilename) {
+      return true
+    }
+    if (filename + '/index' + ext === entryfilename) {
+      return true
+    }
+    return false
+  })
+}
+
 interface FileSystemParams {
   dependencies: Dependencies
   css: Css
@@ -121,8 +138,12 @@ type FilesMap = Record<string, {
   dependencies: Set<string>
   /** 依赖该文件的文件列表 */
   dependedBy: Set<string>
+  /** 强制刷新 */
   forceUpdate: () => void
+  /** 渲染组件 */
   currentImpl: (props: unknown) => ReactElement | null
+  /** 清理临时文件 */
+  clearTempFiles?: (filename: string) => void
 }>
 
 class FileSystem {
@@ -135,10 +156,14 @@ class FileSystem {
   /** 事件 */
   events = new Events<{
     init: boolean
+    fileChange: { filename: string, type: 'update' | 'delete' | 'create' }
   }>({})
 
   /** vibing状态 */
   vibing: Vibing = false
+
+  /** 临时文件存储 */
+  tempFilesMap: FilesMap = {}
 
   constructor(params: FileSystemParams) {
     this.params = params
@@ -146,48 +171,87 @@ class FileSystem {
 
   /** 初始化 */
   init(files: Files) {
-    console.log('[files]', files)
     files.forEach(file => {
-      if (file.filename === "pages/GradeQueryPage/GradeTable/index.jsx") {
-        return
-      }
-      this.filesMap[file.filename] = {
-        file,
-        module: null,
-        dependencies: new Set(),
-        dependedBy: new Set(),
-        forceUpdate: () => {},
-        currentImpl: () => null
-      }
+      this.update(file.filename, file)
     })
-    this.events.emit('init', true)
   }
 
   /**
    * filename 加载目标
    * from 被谁加载（filename）
    */
-  get(filename: string, options?: { from: FilesMap[string], oriKey: string }) {
+  get(filename: string, from?: string) {
     const entry = resolveFilename(filename, this.filesMap)
 
     if (!entry) {
-      if (options) {
-        const { from, oriKey } = options
-        console.error('[TODO]', filename, this.filesMap)
-
-        console.log('[from]', { from, oriKey })
-        const dependency = from.file.dependencies[oriKey]
-        console.log('dependency', dependency)
+      const module: any = {
+        default: hackProxy(),
+        __default: null
       }
 
+      Object.defineProperty(module, '__esModule', {
+        value: true
+      })
+      module.__default = module.default
 
-              // index.jsx 可能带后缀
-        // pages/ButtonPage/ButtonGroup 可能不带后缀
+      const tempEntry = {
+        file: {
+          filename: '临时文件',
+          compiled: '',
+        },
+        module,
+        dependencies: new Set<string>(),
+        dependedBy: new Set<string>(),
+        forceUpdate: () => {},
+        currentImpl: module.__default || (() => null),
+        clearTempFiles: (realFilename) => {
+          RESOLVE_EXTENSIONS.forEach((ext) => {
+            if (from) {
+              const fromEntry = this.filesMap[from]
+              fromEntry.dependencies.delete(filename)
+              fromEntry.dependencies.delete(`${filename}${ext}`)
+              fromEntry.dependencies.delete(`${filename}/index${ext}`)
+              fromEntry.dependencies.add(realFilename)
+            }
+            Reflect.deleteProperty(this.tempFilesMap, filename)
+            Reflect.deleteProperty(this.tempFilesMap, `${filename}${ext}`)
+            Reflect.deleteProperty(this.tempFilesMap, `${filename}/index${ext}`)
+          })
+        }
+      }
 
-      return
+      const HotComponent = createHotComponent({ entry: tempEntry })
+      module.default = HotComponent
+
+      if (from) {
+        // 记录临时依赖关系，等待真实文件来刷新
+        const fromEntry = this.filesMap[from]
+        tempEntry.dependedBy.add(from)
+
+        fromEntry.dependencies.add(filename)
+        this.tempFilesMap[filename] = tempEntry
+
+        RESOLVE_EXTENSIONS.forEach((ext) => {
+          fromEntry.dependencies.add(`${filename}${ext}`)
+          fromEntry.dependencies.add(`${filename}/index${ext}`)
+          // 临时entry，file为null
+          this.tempFilesMap[`${filename}${ext}`] = tempEntry
+          this.tempFilesMap[`${filename}/index${ext}`] = tempEntry
+        })
+      }
+
+      return tempEntry.module
     }
 
     if (entry.module) {
+      if (from) {
+        const fromEntry = this.filesMap[from]
+        // 有来源，记录依赖关系
+        // from 依赖 entry
+        fromEntry.dependencies.add(entry.file.filename)
+        // entry 被 from 依赖
+        entry.dependedBy.add(from)
+      }
       return entry.module
     }
 
@@ -220,13 +284,13 @@ class FileSystem {
       entry.module = module
     }
 
-    if (options) {
-      const { from } = options
+    if (from) {
+      const fromEntry = this.filesMap[from]
       // 有来源，记录依赖关系
       // from 依赖 entry
-      from.dependencies.add(resolvedFilename)
+      fromEntry.dependencies.add(resolvedFilename)
       // entry 被 from 依赖
-      entry.dependedBy.add(from.file.filename)
+      entry.dependedBy.add(from)
     }
 
     return entry.module
@@ -259,14 +323,28 @@ class FileSystem {
     })
 
     Reflect.deleteProperty(this.filesMap, filename)
+
+    this.events.emit('fileChange', { filename, type: 'delete' })
   }
 
   update(filename: string, file: Files[0]) {
     // [TODO] 考虑编译报错的情况
+    let entry = this.filesMap[filename]
+
+    if (!entry) {
+      entry = this.tempFilesMap[filename]
+
+      if (entry) {
+        this.filesMap[filename] = entry
+        if (entry.clearTempFiles) {
+          // 清空临时文件和依赖
+          entry.clearTempFiles(filename)
+          Reflect.deleteProperty(entry, 'clearTempFiles')
+        }
+      }
+    }
     // update用于新增和修改
     if (isJsxModule(filename)) {
-      const entry = this.filesMap[filename]
-
       if (entry) {
         const module = loadModule({
           filename,
@@ -278,32 +356,35 @@ class FileSystem {
         entry.currentImpl = module.default || (() => null)
         entry.forceUpdate()
       } else {
-        const tempModule = {
-          default: () => null
+        const tempModule: any = {
+          default: hackProxy(),
+          __default: null
         }
         Object.defineProperty(tempModule, '__esModule', {
           value: true
         })
-        this.filesMap[filename] = {
+        tempModule.__default = tempModule.default
+
+        const tempEntry = {
           file,
           module: tempModule,
-          dependencies: new Set(),
-          dependedBy: new Set(),
+          dependencies: new Set<string>(),
+          dependedBy: new Set<string>(),
           forceUpdate: () => {},
           currentImpl: () => null
         }
+        const HotComponent = createHotComponent({ entry: tempEntry })
+        tempModule.default = HotComponent
+        this.filesMap[filename] = tempEntry
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename)
         })
-        module.__default = module.default
-        this.filesMap[filename].module = module
-        this.filesMap[filename].currentImpl = module.__default || (() => null)
+        tempEntry.module!.__default = module.default
+        tempEntry.currentImpl = module.default || (() => null)
       }
     } else if (isJsModule(filename)) {
-      const entry = this.filesMap[filename]
-
       if (entry) {
         const module = loadModule({
           filename,
@@ -340,7 +421,6 @@ class FileSystem {
       // 如果是less文件，解析后再次调用css即可
       // [TODO] 目前不存在引用关系
       const { module } = loadCssModule({ file, css: this.params.css })
-      const entry = this.filesMap[filename]
 
       if (entry) {
         entry.file = file
@@ -355,7 +435,11 @@ class FileSystem {
           currentImpl: () => null
         }
       }
+
+      this.refreshDependents(filename)
     }
+
+    this.events.emit('fileChange', { filename, type: entry ? 'update' : 'create'})
   }
 
   /** 依赖代理，读取相对路径引用 */
@@ -380,12 +464,7 @@ class FileSystem {
           }
         })
 
-        const currentEntry = that.filesMap[filename]
-
-        return that.get(currentPath.join('/'), {
-          from: currentEntry,
-          oriKey: key
-        })
+        return that.get(currentPath.join('/'), filename)
       }
     })
   }
@@ -438,3 +517,20 @@ class FileSystem {
 
 export { FileSystem }
 export type { FilesMap }
+
+const hackProxy = () => {
+  const f = () => {}
+  const proxy = new Proxy(f, {
+    get() {
+      return proxy
+    },
+    apply(_target, _thisArg, args) {
+      if (args[0]?.['data-loc']) {
+        // 认为是组件
+        return '依赖加载中...'
+      }
+      return proxy
+    }
+  })
+  return proxy
+}

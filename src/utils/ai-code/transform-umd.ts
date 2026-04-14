@@ -2,12 +2,13 @@ import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
 import { getValidatorPlugins } from '../../mix/availableLibraries'
 
-export function transformTsx(code, ctx?: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
+export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
   let transformCode
   const constituency: any = [];
+  const { fileName } = ctx
 
   try {
-    const validatorPlugins = getValidatorPlugins(ctx ?? { fileName: 'runtime.jsx' })
+    const validatorPlugins = getValidatorPlugins({ fileName })
 
     const options = {
       presets: [
