@@ -12,14 +12,12 @@ import type {
   DataSource,
   Dependencies,
   OnRuntimeError,
-  OnEnvNamesLoaded
 } from '../types'
 
 interface RenderProps {
   dependencies: Dependencies
   DataSource: DataSource
   css: Css
-  onEnvNamesLoaded: OnEnvNamesLoaded
   vibing: Vibing
   onMount: (params: { fileSystem: FileSystem }) => void
   onRuntimeError: OnRuntimeError

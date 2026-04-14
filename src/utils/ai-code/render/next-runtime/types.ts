@@ -30,9 +30,6 @@ export type Css = {
   remove(): void
 }
 
-/** setup执行完成回调 */
-export type OnEnvNamesLoaded= (envNames: string[]) => void
-
 /** 处于vibe状态 */
 export type Vibing = boolean
 
