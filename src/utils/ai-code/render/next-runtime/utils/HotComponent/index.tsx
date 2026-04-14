@@ -9,7 +9,9 @@ interface HotComponentProps {
 const genHotComponent = ({ entry }: HotComponentProps) => {
   return memo((props) => {
     const [state, setState] = useState(false)
-    entry.forceUpdate = () => setState(!state)
+    entry.forceUpdate = () => {
+      setState(!state)
+    }
 
     return entry.currentImpl(props)
   }) 
