@@ -184,7 +184,7 @@ export type ParsedRequirement = {
   /**
    * 预处理后的 markdown 正文（已去除 front matter）：
    * 1. flowchart/graph 裸行 → mermaid fenced 代码块
-   * 2. ## 标题后紧跟的 type/related/rank 裸行 → HTML 标签行（可出现在文档任意位置）
+   * 2. ## 标题或整行 **粗体标题** 后紧跟的 type/related/rank 裸行 → HTML 标签行（可出现在文档任意位置）
    */
   body: string
 }
@@ -277,7 +277,7 @@ const renderHeadingWithMeta = (
 /**
  * 全文预处理（不在 fenced 代码块内的行）：
  * 1. flowchart/graph 裸行 → mermaid fenced 代码块
- * 2. ## 标题后紧跟的 type/related/rank 裸行 → 融合进标题行的 HTML
+ * 2. ## 标题 或整行 **粗体标题**（如 **2. 搜索筛选栏**）后紧跟的 type/related/rank 裸行 → 融合进标题行的 HTML
  *    - type 标签在标题左侧，rank 标签在标题右侧，related 另起一行
  */
 const preprocessBody = (text: string): string => {
@@ -316,13 +316,20 @@ const preprocessBody = (text: string): string => {
 
     const trimmed = line.trim()
 
-    // ## 标题：如果正在收集 meta，先 flush，再开启新的收集
+    // ## 标题 或整行 **粗体** 标题：如果正在收集 meta，先 flush，再开启新的收集
+    let headingFromLine: string | null = null
     if (/^## /.test(line)) {
+      headingFromLine = line.replace(/^## /, '').trim()
+    } else {
+      const boldOnly = trimmed.match(/^\*\*(.+)\*\*$/)
+      if (boldOnly) headingFromLine = boldOnly[1].trim()
+    }
+    if (headingFromLine !== null) {
       if (collectingMeta) flushMeta()
       featureIndex++
       collectingMeta = true
       metaBuf = {}
-      headingText = line.replace(/^## /, '').trim()
+      headingText = headingFromLine
       headingOutIdx = out.length
       console.log('[preprocessBody] heading detected:', JSON.stringify(headingText), 'idx:', headingOutIdx)
       out.push(line) // 先占位，flush 时替换
@@ -372,7 +379,7 @@ const preprocessBody = (text: string): string => {
  * - 顶部 YAML front matter（---...---）含 title、desc 字段
  * - 正文为标准 markdown，预处理后存入 body：
  *   1. flowchart/graph 裸行 → mermaid 代码块
- *   2. 任意 ## 标题后紧跟的 type/related/rank 裸行 → HTML 标签行
+ *   2. 任意 ## 标题或整行 **粗体标题** 后紧跟的 type/related/rank 裸行 → HTML 标签行
  */
 export const parseRequirement = (md: string): ParsedRequirement => {
   const result: ParsedRequirement = { body: '' }

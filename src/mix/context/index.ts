@@ -1,7 +1,6 @@
 import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
-import { deepClone } from "../utils/normal";
 import { parsemd, parseRequirement } from "../../utils/ai-code/md";
 
 export interface LogMessage {
@@ -18,14 +17,12 @@ export interface ComDebugState {
   logIdCounter: number;
 }
 
-export interface VersionSnapshot {
-  id: number;
-  /** V0 / V1 / V2 ... */
+export interface VersionRecord {
+  id: string;
+  turnId: string;
   label: string;
-  type: 'ai' | 'editor';
-  timestamp: string;
-  dataSnapshot: Record<string, any>;
-  planId?: string;
+  type: 'ai' | 'manual' | 'rollback';
+  createdAt: number;
   summary?: string;
 }
 
@@ -52,112 +49,40 @@ class Context {
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
-  versionStateMap: Record<string, VersionSnapshot[]> = {};
-  versionStateEvents: Record<string, Events<{ 'change': VersionSnapshot[] }>> = {};
+  versionStateEvents: Record<string, Events<{ 'change': VersionRecord[] }>> = {};
 
-  async getVersions(comId: string): Promise<VersionSnapshot[]> {
-    if (!this.versionStateMap[comId]) {
-      this.versionStateMap[comId] = [];
-    }
-
-    return this.versionStateMap[comId];
-  }
-
-  async addVersion(comId, type, planAgent?) {
-    const versions = await this.getVersions(comId);
-    const lastVersion = versions[versions.length - 1];
-    const id = lastVersion ? lastVersion.id + 1 : 0
-    const aiComParams = this.getAiComParams(comId);
-
-    if (type === 'ai') {
-      const version: VersionSnapshot = {
-        id,
-        label: `V${id}`,
-        type,
-        timestamp: getTimestamp({ showMs: false }),
-        dataSnapshot: deepClone(aiComParams?.data ?? {}),
-        planId: planAgent?.id
-      }
-      versions.push(version);
-      this.versionStateMap[comId] = versions;
-      this.getVersionStateEvents(comId).emit('change', versions);
-      return version
-    } else if (type === 'editor') {
-      if (lastVersion && lastVersion.type === 'editor') {
-        lastVersion.timestamp = getTimestamp({ showMs: false });
-        lastVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
-        this.getVersionStateEvents(comId).emit('change', [...versions]);
-        return lastVersion
-      } else {
-        const version: VersionSnapshot = {
-          id,
-          label: `V${id}`,
-          type,
-          timestamp: getTimestamp({ showMs: false }),
-          dataSnapshot: deepClone(aiComParams?.data ?? {}),
-          planId: planAgent?.id
-        }
-        versions.push(version);
-        this.versionStateMap[comId] = versions;
-        this.getVersionStateEvents(comId).emit('change', versions);
-        return version
-      }
-    }    
-  }
-
-  async updateVersion(comId, planAgent) {
-    const versions = await this.getVersions(comId);
-    const updateVersion = versions.find(v => v.planId === planAgent.id)
-    const aiComParams = this.getAiComParams(comId);
-
-    if (updateVersion) {
-      updateVersion.dataSnapshot = deepClone(aiComParams?.data ?? {});
-      this.getVersionStateEvents(comId).emit('change', [...versions]);
-    }
-  }
-
-  async updateVersionWithContent(comId, planAgent, content) {
-    const versions = await this.getVersions(comId);
-    const updateVersion = versions.find(v => v.planId === planAgent.id)
-
-    if (updateVersion) {
-      Object.entries(content).forEach(([key, value]) => {
-        updateVersion[key] = value;
-      })
-      this.getVersionStateEvents(comId).emit('change', [...versions]);
-    }
-  }
-
-  getVersionStateEvents(id: string): Events<{ 'change': VersionSnapshot[] }> {
+  getVersionStateEvents(id: string): Events<{ 'change': VersionRecord[] }> {
     if (!this.versionStateEvents[id]) {
       this.versionStateEvents[id] = new Events();
     }
     return this.versionStateEvents[id];
   }
 
-  async rollbackToVersion(comId: string, version: VersionSnapshot) {
-    const versions = await this.getVersions(comId);
+  /**
+   * 通知 UI 版本列表变更（统一入口，避免每处都写 emit）。
+   * sandbox 在 addVersion / rollback 等操作完成后调用此方法。
+   */
+  notifyVersionsChange(comId: string, versions: VersionRecord[]): void {
+    this.getVersionStateEvents(comId).emit('change', versions);
+  }
 
-    const index = versions.findIndex(v => v.id === version.id);
+  private rollbackMap: Record<string, (versionId: string) => Promise<void>> = {};
+  private historyMap: Record<string, any> = {};
 
-    if (index !== -1) {
-      const aiComParams = this.getAiComParams(comId);
-      const data = aiComParams.data;
-      const rollbackVersion = versions[index];
+  setRollback(comId: string, fn: (versionId: string) => Promise<void>): void {
+    this.rollbackMap[comId] = fn;
+  }
 
-      Object.entries(rollbackVersion.dataSnapshot).forEach(([key, value]) => {
-        if (key === "files") {
-          data[key] = [...value]
-        } else {
-          data[key] = value;
-        }
-      });
+  getRollback(comId: string): ((versionId: string) => Promise<void>) | undefined {
+    return this.rollbackMap[comId];
+  }
 
-      this.versionStateMap[comId] = versions.slice(0, index + 1);
-      this.getVersionStateEvents(comId).emit('change', this.versionStateMap[comId]);
-      this.getAiComEvents(comId)?.emit('fileChange', null);
-      (window as any)._mybricksOnEdit_?.({ autoSave: true });
-    }
+  setHistory(comId: string, history: any): void {
+    this.historyMap[comId] = history;
+  }
+
+  getHistory(comId: string): any {
+    return this.historyMap[comId];
   }
   // ─────────────────────────────────────────────────────────────────────────────
 

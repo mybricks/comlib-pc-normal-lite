@@ -293,7 +293,7 @@ export default function LowcodeView(params: Params) {
     }));
   }, [selectFile]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!selectFile) {
       return
     }
@@ -301,15 +301,41 @@ export default function LowcodeView(params: Params) {
     const { fileName } = selectFile;
 
     if (fileName in modifiedContent) {
-      context.updateFile(params.model.runtime.id, { fileName, content: modifiedContent[fileName], type: "update" });
+      const comId = params.model.runtime.id;
+      context.updateFile(comId, { fileName, content: modifiedContent[fileName], type: "update" });
       setModifiedContent((prev) => {
         const next = { ...prev };
         delete next[fileName];
         return next;
       });
-      context.addVersion(params.model.runtime.id, "editor")
+
+      // 手动编辑保存后，添加 manual 类型版本记录
+      const history = (context as any).getHistory?.(comId);
+      if (history) {
+        const data = context.getAiComParams(comId)?.data;
+        const files = (data?.files ?? [])
+          .filter((f: any) => f.source)
+          .map((f: any) => ({
+            path: f.fileName,
+            content: decodeURIComponent(f.source),
+          }));
+
+        const existingVersions = await history.listVersions();
+        const record = {
+          id: crypto.randomUUID(),
+          turnId: '',
+          label: `V${existingVersions.length}`,
+          type: 'manual' as const,
+          createdAt: Date.now(),
+        };
+
+        await history.addVersion(record, files);
+
+        const updated = await history.listVersions();
+        context.notifyVersionsChange(comId, updated);
+      }
     }
-  }, [selectFile, modifiedContent, params.data]);
+  }, [selectFile, modifiedContent, params.model]);
 
   // 仅当当前聚焦的文件有未保存修改时，保存按钮可用
   const hasUnsavedChanges = selectFile && (selectFile.fileName in modifiedContent);

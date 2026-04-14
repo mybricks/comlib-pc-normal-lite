@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import context from "../../context";
-import type { VersionSnapshot } from "../../context";
+import type { VersionRecord } from "../../context";
 import * as lazyCss from "./index.lazy.less";
 import { getLazyCss } from "../utils/css";
 
@@ -11,9 +11,10 @@ interface VersionPanelProps {
   componentId: string;
 }
 
-const TYPE_LABEL: Record<VersionSnapshot['type'], string> = {
-  editor: 'Editor',
-  ai: 'AI',
+const TYPE_LABEL: Record<VersionRecord['type'], string> = {
+  manual: '手动编辑版本',
+  ai: 'AI修改版本',
+  rollback: '回滚版本',
 };
 
 interface PopconfirmProps {
@@ -103,17 +104,22 @@ function VersionItem({
   tagCls,
   onRollback,
 }: {
-  version: VersionSnapshot;
+  version: VersionRecord;
   isCurrent: boolean;
   itemCls: string;
   dotCls: string;
   tagCls: string;
-  onRollback: (v: VersionSnapshot) => void;
+  onRollback: (v: VersionRecord) => void;
 }) {
   const [popconfirmVisible, setPopconfirmVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const isActive = isHovered || popconfirmVisible;
+
+  const timeStr = new Date(version.createdAt).toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
 
   return (
     <div
@@ -126,7 +132,7 @@ function VersionItem({
           <div className={dotCls} />
           <span className={css['version-label']}>{version.label}</span>
           <span className={tagCls}>{TYPE_LABEL[version.type]}</span>
-          <span className={css['version-time']}>{version.timestamp}</span>
+          <span className={css['version-time']}>{timeStr}</span>
         </div>
         {version.summary && (
           <div className={css['version-summary']}>{version.summary}</div>
@@ -153,31 +159,35 @@ function VersionItem({
 }
 
 export default function VersionPanel({ componentId }: VersionPanelProps) {
-  const [versions, setVersions] = useState<VersionSnapshot[]>([]);
+  const [versions, setVersions] = useState<VersionRecord[]>([]);
 
   useEffect(() => {
-    if (!componentId) {
-      return
+    if (!componentId) return;
+
+    // 从 context 获取 history（由 sandbox 注册）
+    const history = (context as any).getHistory?.(componentId);
+
+    // 初始化加载
+    if (history) {
+      history.listVersions().then((list: VersionRecord[]) => setVersions([...list].reverse()));
     }
-    context.getVersions(componentId).then((versions) => {
-      setVersions([...versions].reverse())
-    })
 
     const off = context.getVersionStateEvents(componentId).on(
       'change',
-      (versions) => {
-        setVersions([...versions].reverse())
+      (list) => {
+        setVersions([...list].reverse());
       },
       false
     );
 
     return () => {
-      off()
-    }
-  }, [componentId])
+      off();
+    };
+  }, [componentId]);
 
-  const handleRollback = useCallback((version: VersionSnapshot) => {
-    context.rollbackToVersion(componentId, version);
+  const handleRollback = useCallback((version: VersionRecord) => {
+    const rollback = (context as any).getRollback?.(componentId);
+    rollback?.(version.id);
   }, [componentId]);
 
   return (
