@@ -18,18 +18,18 @@ export function buildExportCodeConfig(props: Props) {
         render: () => <ViewRequirementBtn comId={props.id} />,
       },
     },
-    {
-      title: '导出',
-      items: [
-        {
-          title: '代码',
-          type: 'editorRender',
-          options: {
-            render: () => <ExportCodePanel comId={props.id} data={props.data} />,
-          },
-        },
-      ],
-    },
+    // {
+    //   title: '导出',
+    //   items: [
+    //     {
+    //       title: '代码',
+    //       type: 'editorRender',
+    //       options: {
+    //         render: () => <ExportCodePanel comId={props.id} data={props.data} />,
+    //       },
+    //     },
+    //   ],
+    // },
     {
       type: 'themes',
       value: {
