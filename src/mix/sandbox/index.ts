@@ -110,75 +110,102 @@ interface VersionRecord {
   summary?: string;
 }
 
+type SandboxHistory = {
+  listVersions: () => Promise<VersionRecord[]>;
+  addVersion: (record: VersionRecord, files: VersionFile[]) => Promise<void>;
+};
+
+/**
+ * turn 结束后：若源码相对 beforeTurn 快照有变化，则追加一条 AI 版本（含幂等）。
+ * 内部可提前 return，不影响调用方后续逻辑。
+ */
+async function persistAiVersionAfterTurn(
+  comId: string,
+  history: SandboxHistory,
+  data: { files?: any[] },
+  turn?: { id?: string }
+): Promise<void> {
+  const previousSnapshot = requestSourceSnapshotMap.get(data);
+  if (!hasSourceChanged(data.files ?? [], previousSnapshot)) return;
+
+  const files: VersionFile[] = (data.files ?? [])
+    .filter((f: any) => f.source)
+    .map((f: any) => ({
+      path: f.fileName,
+      content: decodeURIComponent(f.source),
+    }));
+
+  const existingVersions = await history.listVersions();
+
+  if (turn?.id && existingVersions.some((v: VersionRecord) => v.turnId === turn.id)) return;
+
+  const record: VersionRecord = {
+    id: crypto.randomUUID(),
+    turnId: turn?.id ?? '',
+    label: `V${existingVersions.length}`,
+    type: 'ai',
+    createdAt: Date.now(),
+  };
+
+  await history.addVersion(record, files);
+
+  const updated = await history.listVersions();
+  context.notifyVersionsChange(comId, updated);
+}
+
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
 
-// export type DesignerLoadingProgressStatus = 'start' | 'complete' | 'error';
+export type DesignerLoadingProgressStatus = 'start' | 'complete' | 'error';
 
-// export interface DesignerLoadingOptions {
-//   /** 与 plugin-ai request params.onProgress 对齐 */
-//   onProgress?: (status: DesignerLoadingProgressStatus) => void;
-// }
+export interface DesignerLoadingOptions {
+  /** 与 plugin-ai request params.onProgress 对齐 */
+  onProgress?: (status: DesignerLoadingProgressStatus) => void;
+}
 
-// /**
-//  * 单次 AI 请求内的 lock + 编译/运行时错误监听 + onProgress 回调。
-//  * registerSandbox 里 designer.loading(...) 与 vibeCoding 共用此实现。
-//  */
-// export function createDesignerLoading(
-//   comId: string,
-//   focusArea: any,
-//   options?: DesignerLoadingOptions
-// ) {
-//   const lockId = uuid();
-//   let compileError: any = null;
-//   let runtimeError: any = null;
+/**
+ * 单次 AI 请求内的 lock + 编译/运行时错误监听 + onProgress 回调。
+ * registerSandbox 里 designer.loading(...) 与 vibeCoding 共用此实现。
+ */
+export function createDesignerLoading(
+  comId: string,
+  focusArea: any,
+  options?: DesignerLoadingOptions
+) {
+  const lockId = uuid();
+  let compileError: any = null;
+  let runtimeError: any = null;
 
-//   const events = context.getAiComEvents(comId);
-//   const offCompileError = events.on('compileError', (error) => {
-//     compileError = error?.length ? error : null;
-//   });
-//   const offRuntimeError = events.on('runtimeError', (error) => {
-//     runtimeError = error;
-//   });
+  const events = context.getAiComEvents(comId);
+  const offCompileError = events.on('compileError', (error) => {
+    compileError = error?.length ? error : null;
+  });
+  const offRuntimeError = events.on('runtimeError', (error) => {
+    runtimeError = error;
+  });
 
-//   let lockType: 'lock' | 'unlock' | undefined;
-//   const { actions } = context.getAiCom(comId);
+  let lockType: 'lock' | 'unlock' | undefined;
+  const { actions } = context.getAiCom(comId);
 
-//   const setLock = (type: 'lock' | 'unlock') => {
-//     if (lockType === type) {
-//       return;
-//     }
-//     lockType = type;
-//     if (!focusArea || compileError || runtimeError) {
-//       options?.onProgress?.(type === 'lock' ? 'start' : 'complete');
-//     } else {
-//       actions[type](lockId, focusArea);
-//     }
-//   };
+  const setLock = (type: 'lock' | 'unlock') => {
+    if (lockType === type) {
+      return;
+    }
+    lockType = type;
+    if (!focusArea || compileError || runtimeError) {
+      options?.onProgress?.(type === 'lock' ? 'start' : 'complete');
+    } else {
+      actions[type](lockId, focusArea);
+    }
+  };
 
-//   const onProgress = (status: DesignerLoadingProgressStatus) => {
-//     if (status === 'start') {
-//       (window as any).__vibeCodingCallbacks__?.onStart?.();
-//       setLock('lock');
-//     } else if (status === 'complete') {
-//       (window as any).__vibeCodingCallbacks__?.onComplete?.();
-//       setLock('unlock');
-//       offCompileError();
-//       offRuntimeError();
-//     } else if (status === 'error') {
-//       (window as any).__vibeCodingCallbacks__?.onError?.();
-//       setLock('unlock');
-//       offCompileError();
-//       offRuntimeError();
-//     }
-//   };
+  const dispose = () => {
+    setLock('unlock');
+    offCompileError();
+    offRuntimeError();
+  };
 
-//   const dispose = () => {
-//     offCompileError();
-//     offRuntimeError();
-//   };
-
-//   return { onProgress, setLock, dispose };
-// }
+  return { setLock, dispose };
+}
 
 // ─── 注册沙箱 ─────────────────────────────────────────────────────────────────
 
@@ -192,6 +219,10 @@ export function registerSandbox(comId: string): void {
     console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
   }
+
+  const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
+    current: null,
+  };
 
   const projectRef = getProjectRef(comId);
   const { history } = connectToAI(comId, {
@@ -266,9 +297,14 @@ export function registerSandbox(comId: string): void {
     },
 
     hooks: {
-      async beforeRequest() {
+      async beforeRequest({ meta }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
-        // projectRef.current = buildProject(comId);
+
+        const focusArea = (window as any)?._ai_focus_params_?.focusArea;
+        const onProgress = (window as any)?._ai_focus_params_?.onProgress;
+        
+        loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
+        loadingRef.current?.setLock('lock');
       },
       async beforeTurn() {
         projectRef.current = buildProject(comId);
@@ -278,42 +314,15 @@ export function registerSandbox(comId: string): void {
         }
       },
       async afterTurn(turn: { id?: string }) {
-        if (!history) return;
         const data = context.getAiComParams(comId)?.data;
-        if (!data || typeof data !== 'object') return;
-
-        const previousSnapshot = requestSourceSnapshotMap.get(data);
-        if (!hasSourceChanged(data.files ?? [], previousSnapshot)) return;
-
-        // 构建文件快照（只存 decoded source）
-        const files: VersionFile[] = (data.files ?? [])
-          .filter((f: any) => f.source)
-          .map((f: any) => ({
-            path: f.fileName,
-            content: decodeURIComponent(f.source),
-          }));
-
-        // 版本序号：读取现有版本数量
-        const existingVersions = await history.listVersions();
-
-        // 幂等保护：同一 turnId 不重复创建版本
-        if (turn?.id && existingVersions.some((v: VersionRecord) => v.turnId === turn.id)) return;
-
-        const record: VersionRecord = {
-          id: crypto.randomUUID(),
-          turnId: turn?.id ?? '',
-          label: `V${existingVersions.length}`,
-          type: 'ai',
-          createdAt: Date.now(),
-        };
-
-        await history.addVersion(record, files);
-
-        // 通知 UI
-        const updated = await history.listVersions();
-        context.notifyVersionsChange(comId, updated);
+        if (history && data && typeof data === 'object') {
+          await persistAiVersionAfterTurn(comId, history, data, turn);
+        }
 
         (window as any).__vibeCodingCallbacks__?.onComplete?.();
+
+        loadingRef.current?.dispose();
+        loadingRef.current = null;
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
         if (!history || !turn?.id) return;
