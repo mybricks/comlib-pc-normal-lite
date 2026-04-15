@@ -2,7 +2,7 @@ import { ReactElement } from 'react'
 import { Events } from './events'
 import createHotComponent from './HotComponent'
 import { hackProxy } from './hackProxy'
-import type { Files, Dependencies, Css, Vibing } from '../types'
+import type { Files, Dependencies, Css, Vibing, LoadingView } from '../types'
 
 interface LoadModuleParams {
   filename: string
@@ -159,6 +159,8 @@ interface FileSystemParams {
   css: Css
   // [TEMP] 约定入口文件一定是JSX
   entryFile: string;
+
+  LoadingView: LoadingView
 }
 
 type FilesMap = Record<string, {
@@ -253,7 +255,7 @@ class FileSystem {
         }
       }
 
-      const HotComponent = createHotComponent({ entry: tempEntry })
+      const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
       module.default = HotComponent
 
       if (from) {
@@ -300,7 +302,7 @@ class FileSystem {
       module.__default = module.default
       // 将实际的组件函数赋值给 currentImpl
       entry.currentImpl = module.__default || (() => null)
-      const HotComponent = createHotComponent({ entry })
+      const HotComponent = createHotComponent({ entry, LoadingView: this.params.LoadingView  })
       module.default = HotComponent
       entry.module = module
     } else if (isJsModule(resolvedFilename)) {
@@ -406,7 +408,7 @@ class FileSystem {
           forceUpdateSet: new Set<() => void>(),
           currentImpl: () => null
         }
-        const HotComponent = createHotComponent({ entry: tempEntry })
+        const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
         tempModule.default = HotComponent
         this.filesMap[filename] = tempEntry
         const module = loadModule({

@@ -35,3 +35,5 @@ export type Vibing = boolean
 
 /** 运行时错误 */
 export type OnRuntimeError = (error: Error, errorInfo: ErrorInfo) => void
+
+export type LoadingView = (props: { tip: string, withContainer: boolean }) => JSX.Element

@@ -345,6 +345,29 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       }
     }, [shouldRenderSender])
 
+    const LoadingView = useMemo(() => {
+      const LoadingView = (window as any)._sandbox_.helpers.renders.renderLoadingView || (({ tip }) => tip)
+      const { width: canvasWidth = 1200, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
+
+      return ({ tip, withContainer }) => {
+        if (withContainer) {
+          return (
+            <div
+              className={css.tip}
+              style={{
+                width: canvasWidth,
+                height: canvasHeight,
+                minWidth: canvasWidth,
+                minHeight: canvasHeight
+              }}>
+              <LoadingView tip={tip}/>
+            </div>
+          )
+        }
+        return <LoadingView tip={tip}/>
+      }
+    }, [])
+
     const resolvedLogger = typeof logger === 'function' ? logger({ id, mode: env.runtime ? 'runtime' : 'design'}) : logger;
 
     // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
@@ -450,6 +473,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
                 setReload((reload) => reload + 1)
               }
             }}
+            LoadingView={LoadingView}
           />
         )
         // return (

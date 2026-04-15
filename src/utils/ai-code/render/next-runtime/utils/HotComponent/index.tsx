@@ -2,11 +2,13 @@ import React, { memo, useReducer, useEffect } from 'react'
 // [TODO] 循环引用
 import type { FilesMap } from '../fileSystem'
 import { PROXY_MARKER } from '../hackProxy'
+import type { LoadingView } from '../../types'
 
 interface HotComponentProps {
   entry: FilesMap[string]
+  LoadingView: LoadingView
 }
-const genHotComponent = ({ entry }: HotComponentProps) => {
+const genHotComponent = ({ entry, LoadingView }: HotComponentProps) => {
   return memo((props) => {
     const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
 
@@ -21,7 +23,7 @@ const genHotComponent = ({ entry }: HotComponentProps) => {
     const Impl = entry.currentImpl
 
     if (Impl[PROXY_MARKER]) {
-      return <div>加载中...</div>
+      return <LoadingView tip='依赖加载中...' withContainer={false}/>
     }
 
     return <Impl {...props}/>

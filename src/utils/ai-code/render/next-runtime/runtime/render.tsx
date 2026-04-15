@@ -10,6 +10,7 @@ import type {
   Css,
   Vibing,
   DataSource,
+  LoadingView,
   Dependencies,
   OnRuntimeError,
 } from '../types'
@@ -24,6 +25,7 @@ interface RenderProps {
   entryFile: string
   // [TODO]
   onFileChange: (params: { filename: string, type: string }) => void
+  LoadingView: LoadingView
 }
 interface RenderRef {
   fileSystem: FileSystem
@@ -33,7 +35,8 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
   const fileSystem = useRef(new FileSystem({
     dependencies: props.dependencies,
     css: props.css,
-    entryFile: props.entryFile
+    entryFile: props.entryFile,
+    LoadingView: props.LoadingView
   }))
   const [isInitialized, setIsInitialized] = useState(false)
 
@@ -65,8 +68,9 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
 
   const Entry = useMemo(() => {
     if (!isInitialized) {
+      const { LoadingView } = props
       // [TODO] 提出去作为一个组件
-      return () => <div>入口文件编写中...</div>
+      return () => <LoadingView tip="入口文件编写中..." withContainer={true}/>
     }
     // [TODO] 配置入口文件
     return fileSystem.current.get(props.entryFile)?.default;
