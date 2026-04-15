@@ -461,6 +461,7 @@ class Context {
           this.getAiCom(id)?.actions?.notifyChanged?.({
             relations
           });
+          this.getAiComEvents(id)?.emit("fileChange", { filename: fileName })
         } catch (e) {
           console.error("[@parsemd error]", e);
         }

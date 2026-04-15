@@ -37,16 +37,20 @@ export default (props: any) => {
   dataCompatible(data);
 
   const [debugTarget, setDebugTarget] = useState<any>(null);
-  // const [fileChangeKey, setFileChangeKey] = useState<number>(0);
+  const [fileChangeKey, setFileChangeKey] = useState<number>(0);
 
   useLayoutEffect(() => {
     const events = context.getAiComEvents(props.id);
     const cancelListenDebugTarget = events.on('debugTarget', setDebugTarget);
-    // const cancelListenFileChange = events.on('fileChange', () => setFileChangeKey(c => c + 1));
-
+    // [TODO] 这类文件监听后续整理下
+    const cancelListenFileChange = events.on('fileChange', (params) => {
+      if (params?.filename === "README.md") {
+        setFileChangeKey((key) => key + 1)
+      }
+    });
     return () => {
       cancelListenDebugTarget();
-      // cancelListenFileChange();
+      cancelListenFileChange();
     }
   }, [])
 
@@ -84,7 +88,7 @@ export default (props: any) => {
   // - 不同页面之间切换时同样强制重建，避免上一页状态污染
   const runtimeKey = `${isPageDebug
     ? `page-debug-${debugTarget.pageIndex}`
-    : 'component-edit'}`;
+    : 'component-edit'}` + fileChangeKey;
 // key={runtimeKey} 
 
   return <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
