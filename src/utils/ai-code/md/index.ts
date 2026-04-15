@@ -184,7 +184,7 @@ export type ParsedRequirement = {
   /**
    * 预处理后的 markdown 正文（已去除 front matter）：
    * 1. flowchart/graph 裸行 → mermaid fenced 代码块
-   * 2. ## 标题或整行 **粗体标题** 后紧跟的 type/related/rank 裸行 → HTML 标签行（可出现在文档任意位置）
+   * 2. ## 标题或整行 **粗体标题** 后的 type/related/rank 裸行 → HTML 标签行；无自带序号的标题仅按功能点条数编号
    */
   body: string
 }
@@ -206,20 +206,20 @@ const rankColor = (rank: string): { bg: string; color: string; border: string } 
 
 /**
  * 将 ## 标题 + meta（type/rank/related）渲染为 HTML：
- * - 若标题无序号，自动在左侧添加序号（调用方传入）
+ * - 仅当本标题为功能点（带 type/related/rank 之一）且标题自身无序号时，在左侧加「功能点序号」
  * - 标题行：序号 + 标题文字，右侧依次 [rank标签] [type标签]
  * - related 另起一行，前缀「关联UI：」
  */
 const renderHeadingWithMeta = (
   headingText: string,
-  index: number,
+  featureOrdinal: number | null,
   type?: string,
   related?: string,
   rank?: string,
 ): string => {
-  // 若标题不以数字/中文序号开头，自动加序号
   const hasIndex = /^[\d一二三四五六七八九十]/.test(headingText)
-  const displayTitle = hasIndex ? headingText : `${index}. ${headingText}`
+  const displayTitle =
+    hasIndex ? headingText : featureOrdinal != null ? `${featureOrdinal}. ${headingText}` : headingText
 
   // rank 标签
   let rankHtml = ''
@@ -277,8 +277,11 @@ const renderHeadingWithMeta = (
 /**
  * 全文预处理（不在 fenced 代码块内的行）：
  * 1. flowchart/graph 裸行 → mermaid fenced 代码块
- * 2. ## 标题 或整行 **粗体标题**（如 **2. 搜索筛选栏**）后紧跟的 type/related/rank 裸行 → 融合进标题行的 HTML
+ * 2. ## 标题 或整行 **粗体标题**（如 **2. 搜索筛选栏**）后的 type/related/rank 裸行 → 融合进标题行的 HTML
+ *    - 标题与首条 meta 之间允许若干空行或 --- / *** / ___ 分隔线；已写入 meta 后，空行仍表示 meta 块结束
+ *    - type/related/rank 行可无列表横线，也可选 - * + • 等前缀；冒号支持半角 : 与中文 ：
  *    - type 标签在标题左侧，rank 标签在标题右侧，related 另起一行
+ *    - 无序号标题的「1. 2. …」仅按带 type/related/rank 的功能点递增，背景类等 ## 标题不计入
  */
 const preprocessBody = (text: string): string => {
   const lines = text.split('\n')
@@ -288,12 +291,35 @@ const preprocessBody = (text: string): string => {
   let metaBuf: { type?: string; related?: string; rank?: string } = {}
   let headingOutIdx = -1
   let headingText = ''
-  // ## 标题计数，用于无序号标题自动添加序号
-  let featureIndex = 0
+  /** 标题后、尚未出现任何 meta 行时的空行暂存（遇到 meta 则丢弃；遇到正文则 flush 在标题后输出） */
+  let pendingAfterHeading: string[] = []
+  /** 功能点序号：仅在有 type/related/rank 的标题 flush 时递增 */
+  let featureOrdinal = 0
+
+  const emitPendingAfterHeading = () => {
+    if (pendingAfterHeading.length) {
+      out.push(...pendingAfterHeading)
+      pendingAfterHeading = []
+    }
+  }
+
+  const hasFeatureMeta = (buf: typeof metaBuf) =>
+    !!(buf.type?.trim() || buf.related?.trim() || buf.rank?.trim())
 
   const flushMeta = () => {
     if (headingOutIdx >= 0) {
-      out[headingOutIdx] = renderHeadingWithMeta(headingText, featureIndex, metaBuf.type, metaBuf.related, metaBuf.rank)
+      let ordinal: number | null = null
+      if (hasFeatureMeta(metaBuf)) {
+        featureOrdinal += 1
+        ordinal = featureOrdinal
+      }
+      out[headingOutIdx] = renderHeadingWithMeta(
+        headingText,
+        ordinal,
+        metaBuf.type,
+        metaBuf.related,
+        metaBuf.rank,
+      )
     }
     collectingMeta = false
     metaBuf = {}
@@ -306,7 +332,10 @@ const preprocessBody = (text: string): string => {
 
     // fenced 代码块切换
     if (/^```/.test(line)) {
-      if (collectingMeta) flushMeta()
+      if (collectingMeta) {
+        flushMeta()
+        emitPendingAfterHeading()
+      }
       inFence = !inFence
       out.push(line)
       continue
@@ -325,13 +354,14 @@ const preprocessBody = (text: string): string => {
       if (boldOnly) headingFromLine = boldOnly[1].trim()
     }
     if (headingFromLine !== null) {
-      if (collectingMeta) flushMeta()
-      featureIndex++
+      if (collectingMeta) {
+        flushMeta()
+        emitPendingAfterHeading()
+      }
       collectingMeta = true
       metaBuf = {}
       headingText = headingFromLine
       headingOutIdx = out.length
-      console.log('[preprocessBody] heading detected:', JSON.stringify(headingText), 'idx:', headingOutIdx)
       out.push(line) // 先占位，flush 时替换
       continue
     }
@@ -339,21 +369,35 @@ const preprocessBody = (text: string): string => {
     // 处于 meta 收集阶段
     if (collectingMeta) {
       if (trimmed === '') {
-        // 空行：结束收集，flush，然后输出空行
-        console.log('[preprocessBody] flush on empty line, metaBuf:', metaBuf)
-        flushMeta()
-        out.push(line)
+        if (Object.keys(metaBuf).length > 0) {
+          // 已有 meta：空行结束 meta 块
+          flushMeta()
+          out.push(line)
+          continue
+        }
+        // 标题后、尚无 meta：允许中间空行，直到出现 type/related/rank 或正文
+        pendingAfterHeading.push(line)
         continue
       }
-      const kvMatch = trimmed.match(/^-?\s*(type|related|rank)\s*:\s*(.+)$/i)
+      // 标题与首条 meta 之间常见分隔线（--- / *** / ___），不参与正文
+      if (
+        Object.keys(metaBuf).length === 0 &&
+        /^(?:-{3,}|_{3,}|\*{3,})\s*$/.test(trimmed)
+      ) {
+        continue
+      }
+      // 可选列表符 - * + • 全角横线等；键值支持半角/中文冒号（不要求行首必须有横线）
+      const kvMatch = trimmed.match(
+        /^(?:[-*+•\uFF0D\u2013\u2014]\s*)?(type|related|rank)\s*[:：]\s*(.+)$/i,
+      )
       if (kvMatch) {
-        console.log('[preprocessBody] meta matched:', kvMatch[1], '=', kvMatch[2])
+        pendingAfterHeading = []
         ;(metaBuf as any)[kvMatch[1].toLowerCase()] = kvMatch[2].trim()
         continue
       }
       // 非 meta 行：结束收集，flush，再正常处理该行
-      console.log('[preprocessBody] flush on non-meta line:', JSON.stringify(trimmed), 'metaBuf:', metaBuf)
       flushMeta()
+      emitPendingAfterHeading()
       // fall through to normal processing below
     }
 
@@ -368,7 +412,10 @@ const preprocessBody = (text: string): string => {
     out.push(line)
   }
 
-  if (collectingMeta) flushMeta()
+  if (collectingMeta) {
+    flushMeta()
+    emitPendingAfterHeading()
+  }
 
   return out.join('\n')
 }
@@ -379,7 +426,7 @@ const preprocessBody = (text: string): string => {
  * - 顶部 YAML front matter（---...---）含 title、desc 字段
  * - 正文为标准 markdown，预处理后存入 body：
  *   1. flowchart/graph 裸行 → mermaid 代码块
- *   2. 任意 ## 标题或整行 **粗体标题** 后紧跟的 type/related/rank 裸行 → HTML 标签行
+ *   2. 任意 ## 标题或整行 **粗体标题** 后的 type/related/rank 裸行（与标题间可有空行）→ HTML 标签行
  */
 export const parseRequirement = (md: string): ParsedRequirement => {
   const result: ParsedRequirement = { body: '' }

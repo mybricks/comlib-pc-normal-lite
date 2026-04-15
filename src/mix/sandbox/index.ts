@@ -190,6 +190,11 @@ export function createDesignerLoading(
     if (lockType === type) {
       return;
     }
+
+    if (type === 'lock') {
+      setLock('unlock');
+    }
+
     lockType = type;
     if (!focusArea || compileError || runtimeError) {
       options?.onProgress?.(type === 'lock' ? 'start' : 'complete');
@@ -299,14 +304,14 @@ export function registerSandbox(comId: string): void {
     hooks: {
       async beforeRequest({ meta }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
-
-        const focusArea = (window as any)?._ai_focus_params_?.focusArea;
-        const onProgress = (window as any)?._ai_focus_params_?.onProgress;
         
-        loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
         loadingRef.current?.setLock('lock');
       },
       async beforeTurn() {
+        const focusArea = (window as any)?._ai_focus_params_?.focusArea;
+        const onProgress = (window as any)?._ai_focus_params_?.onProgress;
+        loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
+
         projectRef.current = buildProject(comId);
         const data = context.getAiComParams(comId)?.data;
         if (data && typeof data === 'object') {
