@@ -89,6 +89,8 @@ function buildProject(comId: string) {
     getErrors: () => aiComParams?.data?._errors,
     getLogs: () => debugLogs.get(comId),
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
+    getCodeRules: () => context.projectConfig.codeRules ?? '',
+    getDesignRules: () => context.projectConfig.designRules ?? '',
   });
 }
 
