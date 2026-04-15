@@ -8,6 +8,8 @@ export interface ProjectConfig {
   getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number; mode?: string }> | undefined;
   snapshotRuntimeMode?: string;
   getFocusInfo?: string;
+  getCodeRules?: () => string;
+  getDesignRules?: () => string;
 }
 
 export class Project {
@@ -115,13 +117,31 @@ ${canvasStatus}
   }
 
   async exportToMessage(): Promise<string> {
-    const { getFiles, getThemesContent } = this.config;
+    const { getFiles, getThemesContent, getCodeRules, getDesignRules } = this.config;
     const promptSections = (window as any)._sandbox_?.config?.promptSections;
     const developeGuide = promptSections?.developeGuide ?? {};
     const designGuide = promptSections?.designGuide ?? {};
+    const documentGuide = promptSections?.documentGuide ?? {};
+
+    const codeRules = getCodeRules?.() ?? '';
+    const designRules = getDesignRules?.() ?? '';
+
+    const codeRulesSection = codeRules.trim()
+      ? `\n<code_rules>\n${codeRules.trim()}\n</code_rules>\n`
+      : '';
+
+    const designRulesSection = designRules.trim()
+      ? `\n<design_rules>\n${designRules.trim()}\n</design_rules>\n`
+      : '';
 
     const bestPracticesContent = [
-      '#### 资源使用：\n' + developeGuide.assetsUsageSection,
+      codeRulesSection.length ? '#### 代码规范：\n' + codeRulesSection : undefined,
+      developeGuide.assetsUsageSection ? '#### 资源使用：\n' + developeGuide.assetsUsageSection : undefined,
+      developeGuide.examplesSection ? '#### 开发示例：\n' + developeGuide.examplesSection : undefined,
+    ].filter(Boolean).join('\n');
+
+    const bestDesignPracticesContent = [
+      designRulesSection.length  ? designRulesSection : undefined,
     ].filter(Boolean).join('\n');
 
     const architectureContent = developeGuide.architectureSection ?? '';
@@ -160,9 +180,12 @@ ${canvasStatus}
       architectureContent,
       '\n## 最佳实践\n',
       bestPracticesContent,
-      developeGuide.extraSection,
+      developeGuide.end,
       '\n## 设计规范\n',
       designContent,
+      bestDesignPracticesContent,
+      '\n## 文档规范\n',
+      documentGuide?.firstOfAll,
       '\n## 允许使用的类库\n',
       '\n---\n\n',
       libraryDocsContent,
