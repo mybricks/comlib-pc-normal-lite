@@ -1,7 +1,8 @@
 import readRelated from "./readRelated";
-import { formatUpdateResult, UpdateComponentFilesResult, RxFile, SUPPORTED_FILE_EXTENSION } from "./utils";
+import { formatUpdateResult, UpdateComponentFilesResult, RxFile } from "./utils";
 import checkDesignStatus from "./checkDesignStatus";
 import { getAllLibraryNames } from '../../../availableLibraries';
+import { SUPPORTED_FILE_EXTENSION } from "../index";
 
 const NAME = 'developMyBricksModule'
 developMyBricksModule.toolName = NAME
@@ -213,7 +214,7 @@ export default function developMyBricksModule(config: Config) {
     <代码示例>
     \`\`\`less file="index.less"
     :frame {
-      width: 1200px;
+      width: 1660px;
     }
     .container {
       width: 100%;
@@ -229,8 +230,8 @@ export default function developMyBricksModule(config: Config) {
     <编写规范>
     1. 严格参考 <设计风格与主题变量使用说明/> 来编写样式；若项目提供了主题变量，编写前必须先列举全部可用变量，再对照每条样式属性逐一检查是否有对应变量，有则必须使用，禁止硬编码已有主题变量所覆盖的色值或数值；
     2. :frame 配置规则（仅页面和浮层类组件需要，普通组件不需要）：
-       - 每个页面（page），必须配置 :frame { width }，宽度参考设计稿或 1200px（若无设计稿）；
-       - 每个浮层类组件（由 popupRef 创建的组件），必须配置 :frame { width; height }，宽度与页面保持一致（同为 1200px 或设计稿宽度），高度在弹窗内容实际高度基础上额外增加 200～300px，以留出遮罩层空间（如内容约 400px 则配置 height: 650px）；
+       - 每个页面（page），必须配置 :frame { width }，宽度参考设计稿或 1440px（若无设计稿）；
+       - 每个浮层类组件（由 popupRef 创建的组件），必须配置 :frame { width; height }，宽度与页面保持一致（同为 1440px 或设计稿宽度），高度在弹窗内容实际高度基础上额外增加 200～300px，以留出遮罩层空间（如内容约 400px 则配置 height: 650px）；
        - :frame 只控制画布尺寸，不影响运行时布局，必须放在所有 CSS 类之前；
        - :frame 只在首次创建页面或浮层类组件或者有重大ui重构时才需要重新估算；
     </编写规范>
@@ -310,20 +311,6 @@ export default function developMyBricksModule(config: Config) {
       - 按照文档中的使用说明来使用类库，比如*引用方式*、*何时使用*，*组件用法*等。
     > 如果用户指定类库中并不在<允许使用的类库/>范围内，则告知用户无法使用，并且使用当前 <允许使用的类库/> 进行替代实现或者占位。
   </技术栈和类库使用说明>
-
-  <文件输出顺序要求>
-    输出文件时，必须严格按照以下顺序依次输出，不得颠倒：
-    1. dataSource.js（如有修改）
-    2. setup.js（如有修改）
-    3. store.js（如有修改）
-    4. index.jsx（appRef 入口，如有修改）
-    5. 各页面（如有修改）
-      5.1 store.js
-      5.2 index.less
-      5.3 index.jsx
-
-    组件会在文件输出期间渲染，这个顺序可以保证组件的完整性。
-  </文件输出顺序要求>
 
   <日志规范>
     项目中必须使用 mybricks 提供的 \`logger\` 工具打印日志，禁止使用 console.log / console.warn / console.error 等原生方法。
@@ -669,7 +656,7 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`write file="pages/ButtonPage/index.less"
   :frame {
-    width: 1200px;
+    width: 1440px;
   }
   .viewContainer {
     position: relative;
@@ -768,7 +755,7 @@ export default function developMyBricksModule(config: Config) {
 
   \`\`\`write file="pages/MainPage/index.less"
   :frame {
-    width: 1200px;
+    width: 1600px;
   }
   .viewContainer {
     position: relative;
@@ -792,7 +779,7 @@ export default function developMyBricksModule(config: Config) {
   
   \`\`\`write file="pages/ViewPage/index.less"
   :frame {
-    width: 1200px;
+    width: 1600px;
   }
   .viewContainer {
     position: relative;

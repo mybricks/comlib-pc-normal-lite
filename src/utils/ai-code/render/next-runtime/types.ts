@@ -15,13 +15,6 @@ export type Files = {
    * 注意：如果是样式文件，需支持JSON.parse解析出cssContent(样式代码字符串)、classMap(key映射，cssmodules)
    */
   compiled: string
-
-  dependencies: Record<string, Record<string, {
-    importType: string
-    isComponentishName: boolean
-    isReactComponent: boolean
-    localName: string
-  }>>
 }[]
 
 export class EmptyDataSource {
@@ -36,9 +29,6 @@ export type Css = {
   /** 清空样式 */
   remove(): void
 }
-
-/** setup执行完成回调 */
-export type OnEnvNamesLoaded= (envNames: string[]) => void
 
 /** 处于vibe状态 */
 export type Vibing = boolean

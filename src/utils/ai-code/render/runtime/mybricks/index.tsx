@@ -370,7 +370,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 style.height = height
               }
             } else {
-              console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+              // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
             }
           }
           setStyle(style)
@@ -652,7 +652,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   }
                   console.log("[style]", style)
                 } else {
-                  console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+                  // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
                 }
               }
               setStyle(style)
