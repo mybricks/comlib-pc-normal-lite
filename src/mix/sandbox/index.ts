@@ -267,6 +267,7 @@ export function registerSandbox(comId: string): void {
 
     hooks: {
       async beforeRequest() {
+        (window as any).__vibeCodingCallbacks__?.onStart?.();
         // projectRef.current = buildProject(comId);
       },
       async beforeTurn() {
@@ -311,6 +312,8 @@ export function registerSandbox(comId: string): void {
         // 通知 UI
         const updated = await history.listVersions();
         context.notifyVersionsChange(comId, updated);
+
+        (window as any).__vibeCodingCallbacks__?.onComplete?.();
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
         if (!history || !turn?.id) return;
