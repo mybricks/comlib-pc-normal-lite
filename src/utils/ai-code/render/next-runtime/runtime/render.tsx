@@ -30,7 +30,8 @@ interface RenderRef {
 const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
   const fileSystem = useRef(new FileSystem({
     dependencies: props.dependencies,
-    css: props.css
+    css: props.css,
+    entryFile: props.entryFile
   }))
   const [isInitialized, setIsInitialized] = useState(false)
 

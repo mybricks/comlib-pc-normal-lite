@@ -1,6 +1,7 @@
 import { ReactElement } from 'react'
 import { Events } from './events'
 import createHotComponent from './HotComponent'
+import { hackProxy } from './hackProxy'
 import type { Files, Dependencies, Css, Vibing } from '../types'
 
 interface LoadModuleParams {
@@ -126,6 +127,8 @@ export const matchfile = (filename, entryfilename) => {
 interface FileSystemParams {
   dependencies: Dependencies
   css: Css
+  // [TEMP] 约定入口文件一定是JSX
+  entryFile: string;
 }
 
 type FilesMap = Record<string, {
@@ -344,8 +347,11 @@ class FileSystem {
       }
     }
     // update用于新增和修改
-    if (isJsxModule(filename)) {
+    if (isJsxModule(filename) || matchfile(filename, this.params.entryFile)) {
       if (entry) {
+        if (matchfile(filename, this.params.entryFile)) {
+          console.log(1111111)
+        }
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
@@ -439,6 +445,7 @@ class FileSystem {
       this.refreshDependents(filename)
     }
 
+    console.log("文件修改通知？", filename)
     this.events.emit('fileChange', { filename, type: entry ? 'update' : 'create'})
   }
 
@@ -517,20 +524,3 @@ class FileSystem {
 
 export { FileSystem }
 export type { FilesMap }
-
-const hackProxy = () => {
-  const f = () => {}
-  const proxy = new Proxy(f, {
-    get() {
-      return proxy
-    },
-    apply(_target, _thisArg, args) {
-      if (args[0]?.['data-loc']) {
-        // 认为是组件
-        return '依赖加载中...'
-      }
-      return proxy
-    }
-  })
-  return proxy
-}

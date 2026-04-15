@@ -1,7 +1,7 @@
 import React, { memo, useState } from 'react'
-import ErrorBoundary from './ErrorBoundary'
 // [TODO] 循环引用
 import type { FilesMap } from '../fileSystem'
+import { PROXY_MARKER } from '../hackProxy'
 
 interface HotComponentProps {
   entry: FilesMap[string]
@@ -13,7 +13,13 @@ const genHotComponent = ({ entry }: HotComponentProps) => {
       setState(!state)
     }
 
-    return entry.currentImpl(props)
+    const Impl = entry.currentImpl
+
+    if (Impl[PROXY_MARKER]) {
+      return <div>加载中...</div>
+    }
+
+    return <Impl {...props}/>
   }) 
 }
 

@@ -120,4 +120,5 @@ declare interface Window {
   jstt: any;
   MYBRICKS_AICOM_THEME_VARIABLES?: any;
   _render_comp_start_view_: any;
+  _sandbox_: any
 }
