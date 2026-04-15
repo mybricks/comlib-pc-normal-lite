@@ -112,73 +112,57 @@ interface VersionRecord {
 
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
 
-// export type DesignerLoadingProgressStatus = 'start' | 'complete' | 'error';
+export type DesignerLoadingProgressStatus = 'start' | 'complete' | 'error';
 
-// export interface DesignerLoadingOptions {
-//   /** 与 plugin-ai request params.onProgress 对齐 */
-//   onProgress?: (status: DesignerLoadingProgressStatus) => void;
-// }
+export interface DesignerLoadingOptions {
+  /** 与 plugin-ai request params.onProgress 对齐 */
+  onProgress?: (status: DesignerLoadingProgressStatus) => void;
+}
 
-// /**
-//  * 单次 AI 请求内的 lock + 编译/运行时错误监听 + onProgress 回调。
-//  * registerSandbox 里 designer.loading(...) 与 vibeCoding 共用此实现。
-//  */
-// export function createDesignerLoading(
-//   comId: string,
-//   focusArea: any,
-//   options?: DesignerLoadingOptions
-// ) {
-//   const lockId = uuid();
-//   let compileError: any = null;
-//   let runtimeError: any = null;
+/**
+ * 单次 AI 请求内的 lock + 编译/运行时错误监听 + onProgress 回调。
+ * registerSandbox 里 designer.loading(...) 与 vibeCoding 共用此实现。
+ */
+export function createDesignerLoading(
+  comId: string,
+  focusArea: any,
+  options?: DesignerLoadingOptions
+) {
+  const lockId = uuid();
+  let compileError: any = null;
+  let runtimeError: any = null;
 
-//   const events = context.getAiComEvents(comId);
-//   const offCompileError = events.on('compileError', (error) => {
-//     compileError = error?.length ? error : null;
-//   });
-//   const offRuntimeError = events.on('runtimeError', (error) => {
-//     runtimeError = error;
-//   });
+  const events = context.getAiComEvents(comId);
+  const offCompileError = events.on('compileError', (error) => {
+    compileError = error?.length ? error : null;
+  });
+  const offRuntimeError = events.on('runtimeError', (error) => {
+    runtimeError = error;
+  });
 
-//   let lockType: 'lock' | 'unlock' | undefined;
-//   const { actions } = context.getAiCom(comId);
+  let lockType: 'lock' | 'unlock' | undefined;
+  const { actions } = context.getAiCom(comId);
 
-//   const setLock = (type: 'lock' | 'unlock') => {
-//     if (lockType === type) {
-//       return;
-//     }
-//     lockType = type;
-//     if (!focusArea || compileError || runtimeError) {
-//       options?.onProgress?.(type === 'lock' ? 'start' : 'complete');
-//     } else {
-//       actions[type](lockId, focusArea);
-//     }
-//   };
+  const setLock = (type: 'lock' | 'unlock') => {
+    if (lockType === type) {
+      return;
+    }
+    lockType = type;
+    if (!focusArea || compileError || runtimeError) {
+      options?.onProgress?.(type === 'lock' ? 'start' : 'complete');
+    } else {
+      actions[type](lockId, focusArea);
+    }
+  };
 
-//   const onProgress = (status: DesignerLoadingProgressStatus) => {
-//     if (status === 'start') {
-//       (window as any).__vibeCodingCallbacks__?.onStart?.();
-//       setLock('lock');
-//     } else if (status === 'complete') {
-//       (window as any).__vibeCodingCallbacks__?.onComplete?.();
-//       setLock('unlock');
-//       offCompileError();
-//       offRuntimeError();
-//     } else if (status === 'error') {
-//       (window as any).__vibeCodingCallbacks__?.onError?.();
-//       setLock('unlock');
-//       offCompileError();
-//       offRuntimeError();
-//     }
-//   };
+  const dispose = () => {
+    setLock('unlock');
+    offCompileError();
+    offRuntimeError();
+  };
 
-//   const dispose = () => {
-//     offCompileError();
-//     offRuntimeError();
-//   };
-
-//   return { onProgress, setLock, dispose };
-// }
+  return { setLock, dispose };
+}
 
 // ─── 注册沙箱 ─────────────────────────────────────────────────────────────────
 
@@ -191,6 +175,10 @@ export function registerSandbox(comId: string): void {
   if (typeof connectToAI !== 'function') {
     console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
+  }
+
+  const loadingRef =  {
+    current: null,
   }
 
   const projectRef = getProjectRef(comId);
@@ -266,9 +254,14 @@ export function registerSandbox(comId: string): void {
     },
 
     hooks: {
-      async beforeRequest() {
+      async beforeRequest({ meta }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
-        // projectRef.current = buildProject(comId);
+
+        const focusArea = window?._ai_focus_params_?.focusArea
+        const onProgress = window?._ai_focus_params_?.onProgress
+        
+        loadingRef.current = createDesignerLoading(comId, focusArea, onProgress);
+        loadingRef.current?.setLock('lock');
       },
       async beforeTurn() {
         projectRef.current = buildProject(comId);
@@ -314,6 +307,10 @@ export function registerSandbox(comId: string): void {
         context.notifyVersionsChange(comId, updated);
 
         (window as any).__vibeCodingCallbacks__?.onComplete?.();
+
+        loadingRef.current?.dispose();
+        loadingRef.current = null;
+
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
         if (!history || !turn?.id) return;
