@@ -12,7 +12,7 @@ export interface RxFile {
   isComplete: boolean;
 }
 
-export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md']);
+export const SUPPORTED_FILE_EXTENSION = new Set(['jsx', 'less', 'js', 'md', 'ts', 'tsx']);
 export const SUPPORTED_FILE_LANGUAGE = new Set(['write', 'delete', 'before', 'after']);
 
 /** 单个文件的更新结果（与 updateComponentFiles 返回结构一致） */

@@ -187,6 +187,8 @@ export function buildHooks(props: Props) {
           debugEnvOptions.push({label: name, value: name});
         }
       });
+      // 默认prod模式
+      data._activeDebugEnv = 'prod'
 
       return debugEnvOptions;
     },

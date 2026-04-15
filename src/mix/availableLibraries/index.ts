@@ -150,7 +150,10 @@ function formatValidationErrors(errors: import('./types').ValidationError[]): st
 // ── Library Doc ────────────────────────────────────────────────────────────────
 
 function getLibraryDocDescription(library: { name: string; version: string; usage: string }) {
-  return `---\nname: ${library.name}\nversion: ${library.version}\n---\n${library.usage}`
+  // @ts-ignore [TODO] 临时usagenext
+  const usage = library.name === 'mybricks' && window._sandbox_?.config?.componentRuntime?.entryFile ? library.usagenext : library.usage
+
+  return `---\nname: ${library.name}\nversion: ${library.version}\n---\n${usage}`
 }
 
 /** 获取指定内置库的文档描述（用于注入 AI 提示词） */

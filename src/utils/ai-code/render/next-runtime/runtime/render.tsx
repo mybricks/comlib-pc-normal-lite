@@ -22,6 +22,8 @@ interface RenderProps {
   onMount: (params: { fileSystem: FileSystem }) => void
   onRuntimeError: OnRuntimeError
   entryFile: string
+  // [TODO]
+  onFileChange: (params: { filename: string, type: string }) => void
 }
 interface RenderRef {
   fileSystem: FileSystem
@@ -47,6 +49,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
         // 监听入口文件，是否有必要，好像也可以用loading替代
         setIsInitialized(true)
       }
+      props.onFileChange({ filename, type })
     })
     props.onMount({ fileSystem: fileSystem.current })
     return () => {

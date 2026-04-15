@@ -10,6 +10,10 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
   try {
     const validatorPlugins = getValidatorPlugins({ fileName })
 
+    const babelPlugins = window._sandbox_.config.componentRuntime?.babelPlugins?.map((babelPlugin) => {
+      return babelPlugin({ filename: fileName })
+    }) || []
+
     const options = {
       presets: [
         [
@@ -29,6 +33,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
             isTSX: true
           }
         ],
+        ...babelPlugins,
         babelPlugin({ constituency, fileName: ctx?.fileName }),
         ...validatorPlugins,
       ],

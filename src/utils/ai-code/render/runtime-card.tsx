@@ -1,4 +1,4 @@
-import React, {FunctionComponent, ReactElement, useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import React, {FunctionComponent, ReactElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react'
 import { debugLogs } from '../../../mix/context/debugLogs'
 import ReactDom from 'react-dom';
 import * as antd from "antd";
@@ -11,6 +11,10 @@ import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
 import context from '../../../mix/context';
+import NextRuntime from './next-runtime'
+import { DataSource } from './runtime/mybricks/data-source'
+import { replaceToUnderline } from './runtime/utils'
+import { useDependencies } from './useDependencies'
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
 export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
@@ -52,7 +56,7 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
 
   return (
     <div className={css.runtimeCardErrorView}>
-      <div className={css.runtimeCardError}>
+      <div className={css.runtimeCardError} data-zone-type='ai-fixed'>
         <span className={css.runtimeCardErrorIcon}>!</span>
         <div className={css.runtimeCardErrorTitle}>{title}</div>
         <pre className={css.runtimeCardErrorDesc}>{desc || '未知错误'}</pre>
@@ -180,6 +184,18 @@ interface AIRuntimeProps {
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, id}: any) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
+    const [reload, setReload] = useState(0)
+    const [vibing, setVibing] = useState(false);
+
+    useLayoutEffect(() => {
+      const events = context.getAiComEvents(id);
+      const cancelListenVibing = events.on('vibing', setVibing);
+
+      return () => {
+        cancelListenVibing();
+      }
+    }, [])
 
     const [runtimeError, setRuntimeError] = useState<any>(null);
 
@@ -223,7 +239,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     }, []);
 
     // 计算 runtimeMode：唯一标识当前运行模式（设计态 / runtime_mock / runtime_prod）
-    const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
     const runtimeMode = env.edit ? `${id}_edit` : `${id}_runtime_${activeEnv}`;
 
     // runtimeMode 变化时：写入 data.runtimeMode，并清除该组件同 runtimeMode 的历史日志
@@ -286,6 +301,24 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const canvasContainer = useMemo(() => {
       return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot || null;
     }, [])
+
+    const dependencies = useDependencies({
+      id,
+      env,
+      data,
+      activeEnv,
+      runtimeMode,
+      logger,
+      reload,
+      dependencies: {
+        'dayjs': dayjs,
+        ...(getDependencies?.() ?? {}),
+        'react': React,
+        'react-dom': ReactDom,
+        '@ant-design/icons': icons,
+      },
+      DataSource
+    })
 
     // 兼容老版本数据：data.files 不存在时，从旧字段迁移
     if (data && !Array.isArray(data.files)) {
@@ -353,26 +386,88 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
 
       if (data.files.length) {
         return (
-          <StyleProvider hashPriority='low'>
-            <AIJsxRuntime
-              env={env}
-              logger={resolvedLogger}
-              id={id}
-              data={data}
-              runtimeMode={runtimeMode}
-              placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-              renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
-              dependencies={{
-                'dayjs': dayjs,
-                ...(getDependencies?.() ?? {}),
-                'react': React,
-                'react-dom': ReactDom,
-                '@ant-design/icons': icons,
-              }}
-              inMybricksGeoWebview={!!canvasContainer}
-            />
-          </StyleProvider>
-        );
+          <NextRuntime
+            key={activeEnv + "_" + reload}
+            wrapper={({ children }) => {
+              return (
+                <StyleProvider hashPriority='low'>
+                  {children}
+                </StyleProvider>
+              )
+            }}
+            dependencies={dependencies}
+            DataSource={DataSource}
+            css={{
+              set(filename, css) {
+                const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+                // 替换编译时注入的值，使用where防止提升权重
+                const myContent = css.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
+                // 组件id + 文件路径，保证唯一性
+                env.canvas.css.set(replaceToUnderline(`${id}_${filename}`), myContent)
+              },
+              remove() {
+                env.canvas.css.remove(id)
+              }
+            }}
+            vibing={vibing}
+            onMount={({ fileSystem }) => {
+              context.fileSystemMap[id] = fileSystem
+              const files = [...data.files]
+
+              // [TODO] 加载优化，手动调整优先加载这两个文件
+              const setupIndex = files.findIndex((file) => file.fileName.startsWith("setup."))
+              if (setupIndex !== -1) {
+                const setupFile = files[setupIndex]
+                files.splice(setupIndex, 1)
+                files.unshift(setupFile)
+              }
+              const dataSourceIndex = files.findIndex((file) => file.fileName.startsWith("dataSource."))
+              if (dataSourceIndex !== -1) {
+                const dataSourceFile = files[dataSourceIndex]
+                files.splice(dataSourceIndex, 1)
+                files.unshift(dataSourceFile)
+              }
+
+              fileSystem.init(files.map((file) => {
+                return {
+                  ...file,
+                  filename: file.fileName
+                }
+              }))
+            }}
+            onRuntimeError={(error) => {
+              setRuntimeError(error)
+            }}
+            entryFile={window._sandbox_.config.componentRuntime?.entryFile || 'index'}
+            onFileChange={({ filename, type }) => {
+              if (filename.startsWith('setup.') && type === 'update') {
+                // [TODO]
+                setReload((reload) => reload + 1)
+              }
+            }}
+          />
+        )
+        // return (
+        //   <StyleProvider hashPriority='low'>
+        //     <AIJsxRuntime
+        //       env={env}
+        //       logger={resolvedLogger}
+        //       id={id}
+        //       data={data}
+        //       runtimeMode={runtimeMode}
+        //       placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
+        //       renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
+        //       dependencies={{
+        //         'dayjs': dayjs,
+        //         ...(getDependencies?.() ?? {}),
+        //         'react': React,
+        //         'react-dom': ReactDom,
+        //         '@ant-design/icons': icons,
+        //       }}
+        //       inMybricksGeoWebview={!!canvasContainer}
+        //     />
+        //   </StyleProvider>
+        // );
       }
 
       return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;

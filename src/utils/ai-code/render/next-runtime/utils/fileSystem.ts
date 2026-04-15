@@ -30,7 +30,26 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     return dependencies[packageName]
   })
   } catch (e: any) {
-    console.error('[TODO - loadModule]', e)
+    console.error('[loadModule]', e)
+    // [TODO] 复制的代码，关注下错误信息收集是否准确
+    // 构造带有文件位置信息的运行时错误
+    const fileLabel = filename ? `[${filename}] ` : ''
+    const originalMessage = e?.message || String(e)
+
+    // 尝试从错误堆栈中提取行号（eval 内部行号，偏移 2 行的包装代码头）
+    let lineInfo = ''
+    const stackMatch = e?.stack?.match(/<anonymous>:(\d+):(\d+)/)
+    if (stackMatch) {
+      const evalLine = parseInt(stackMatch[1], 10)
+      // wrapCode 包装头占 2 行，所以实际代码行 = evalLine - 2
+      const codeLine = Math.max(1, evalLine - 2)
+      lineInfo = ` (第 ${codeLine} 行)`
+    }
+
+    const enrichedError: any = new Error(`${fileLabel}${originalMessage}${lineInfo}`)
+    enrichedError.originalError = e
+    enrichedError.fileName = filename
+    throw enrichedError
   }
 
   return exports
@@ -58,7 +77,7 @@ const loadCssModule = (params: LoadCssParams) => {
   const cssModule = JSON.parse(compiled);
   const { cssContent, classMap } = cssModule;
   const proxy = new Proxy({}, {
-    get(_, key: string) {
+    get(_, key) {
       if (key === 'default') {
         return proxy
       }
@@ -67,7 +86,8 @@ const loadCssModule = (params: LoadCssParams) => {
   })
 
   const module = {
-    default: proxy
+    default: proxy,
+    classMap
   }
   Object.defineProperty(module, '__esModule', {
     value: true
@@ -135,14 +155,14 @@ type FilesMap = Record<string, {
   file: Files[0]
   module: {
     default: any
-    [key: string]: any
-  } | null
+    [key: string | symbol]: any
+  }
   /** 该文件依赖的文件列表 */
   dependencies: Set<string>
   /** 依赖该文件的文件列表 */
   dependedBy: Set<string>
-  /** 强制刷新 */
-  forceUpdate: () => void
+  /** 所有挂载实例的 forcer 集合 */
+  forceUpdateSet: Set<() => void>
   /** 渲染组件 */
   currentImpl: (props: unknown) => ReactElement | null
   /** 清理临时文件 */
@@ -205,7 +225,7 @@ class FileSystem {
         module,
         dependencies: new Set<string>(),
         dependedBy: new Set<string>(),
-        forceUpdate: () => {},
+        forceUpdateSet: new Set<() => void>(),
         currentImpl: module.__default || (() => null),
         clearTempFiles: (realFilename) => {
           RESOLVE_EXTENSIONS.forEach((ext) => {
@@ -349,9 +369,6 @@ class FileSystem {
     // update用于新增和修改
     if (isJsxModule(filename) || matchfile(filename, this.params.entryFile)) {
       if (entry) {
-        if (matchfile(filename, this.params.entryFile)) {
-          console.log(1111111)
-        }
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
@@ -360,7 +377,7 @@ class FileSystem {
         entry.file = file
         entry.module!.__default = module.default
         entry.currentImpl = module.default || (() => null)
-        entry.forceUpdate()
+        entry.forceUpdateSet.forEach(fn => fn())
       } else {
         const tempModule: any = {
           default: hackProxy(),
@@ -376,7 +393,7 @@ class FileSystem {
           module: tempModule,
           dependencies: new Set<string>(),
           dependedBy: new Set<string>(),
-          forceUpdate: () => {},
+          forceUpdateSet: new Set<() => void>(),
           currentImpl: () => null
         }
         const HotComponent = createHotComponent({ entry: tempEntry })
@@ -411,7 +428,7 @@ class FileSystem {
           module: tempModule,
           dependencies: new Set(),
           dependedBy: new Set(),
-          forceUpdate: () => {},
+          forceUpdateSet: new Set<() => void>(),
           currentImpl: () => null
         }
         const module = loadModule({
@@ -428,7 +445,12 @@ class FileSystem {
       // [TODO] 目前不存在引用关系
       const { module } = loadCssModule({ file, css: this.params.css })
 
+      let refresh = false
+
       if (entry) {
+        if (!entry.module.classMap || (Object.keys(entry.module.classMap).join('') !== Object.keys(module.classMap).join(''))) {
+          refresh = true
+        }
         entry.file = file
         entry.module = module
       } else {
@@ -437,15 +459,17 @@ class FileSystem {
           module,
           dependencies: new Set(),
           dependedBy: new Set(),
-          forceUpdate: () => {},
+          forceUpdateSet: new Set<() => void>(),
           currentImpl: () => null
         }
+        refresh = true
       }
 
-      this.refreshDependents(filename)
+      if (refresh) {
+        this.refreshDependents(filename)
+      }
     }
 
-    console.log("文件修改通知？", filename)
     this.events.emit('fileChange', { filename, type: entry ? 'update' : 'create'})
   }
 
@@ -500,7 +524,7 @@ class FileSystem {
         
         dependentEntry.module!.__default = reloadedModule.default
         dependentEntry.currentImpl = reloadedModule.default || (() => null)
-        dependentEntry.forceUpdate()
+        dependentEntry.forceUpdateSet.forEach(fn => fn())
       } else if (isJsModule(dependentFilename)) {
         // 被 JS 依赖，递归刷新依赖链
         // 重新加载 JS 模块

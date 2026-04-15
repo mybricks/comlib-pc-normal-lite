@@ -1,4 +1,3 @@
-const webpack = require('webpack');
 const commonCfg = require('./webpack.common');
 
 module.exports = Object.assign(

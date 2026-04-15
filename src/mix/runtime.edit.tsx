@@ -37,7 +37,7 @@ export default (props: any) => {
   dataCompatible(data);
 
   const [debugTarget, setDebugTarget] = useState<any>(null);
-  const [fileChangeKey, setFileChangeKey] = useState<number>(0);
+  // const [fileChangeKey, setFileChangeKey] = useState<number>(0);
 
   useLayoutEffect(() => {
     const events = context.getAiComEvents(props.id);
@@ -50,17 +50,17 @@ export default (props: any) => {
     }
   }, [])
 
-    // 用稳定的 key 字符串表示 files 快照，用于监听变化
-    const filesKey = data.files.map((f) => `${f.fileName}:${f.source}`).join('|');
+    // // 用稳定的 key 字符串表示 files 快照，用于监听变化
+    // const filesKey = data.files.map((f) => `${f.fileName}:${f.source}`).join('|');
   
-    // 监听 files 变化：刷新当前选中文件内容 / 处理文件被删除的情况
-    const prevFilesKeyRef = useRef<string>('');
-    useEffect(() => {
-      if (prevFilesKeyRef.current === filesKey) return;
-      prevFilesKeyRef.current = filesKey;
+    // // 监听 files 变化：刷新当前选中文件内容 / 处理文件被删除的情况
+    // const prevFilesKeyRef = useRef<string>('');
+    // useEffect(() => {
+    //   if (prevFilesKeyRef.current === filesKey) return;
+    //   prevFilesKeyRef.current = filesKey;
 
-      setFileChangeKey((c) => c + 1);
-    }, [filesKey]);
+    //   setFileChangeKey((c) => c + 1);
+    // }, [filesKey]);
 
   // const debugTarget = data?.debugTarget;
   const isPageDebug = debugTarget?.type === 'page';
@@ -84,7 +84,8 @@ export default (props: any) => {
   // - 不同页面之间切换时同样强制重建，避免上一页状态污染
   const runtimeKey = `${isPageDebug
     ? `page-debug-${debugTarget.pageIndex}`
-    : 'component-edit'}_${fileChangeKey}`;
+    : 'component-edit'}`;
+// key={runtimeKey} 
 
   return <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
 };

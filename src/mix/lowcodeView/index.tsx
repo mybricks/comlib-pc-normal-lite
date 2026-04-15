@@ -147,7 +147,7 @@ export default function LowcodeView(params: Params) {
 
     const path = `file:///${componentId}/${fileName}`;
 
-    if (['jsx', 'js'].includes(suffix)) {
+    if (['jsx', 'js', 'tsx', 'ts'].includes(suffix)) {
       return {
         path,
         language: 'typescript',

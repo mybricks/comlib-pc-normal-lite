@@ -2,6 +2,7 @@ import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
 import { parsemd, parseRequirement } from "../../utils/ai-code/md";
+import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 
 export interface LogMessage {
   method: 'log' | 'info' | 'warn' | 'error';
@@ -46,6 +47,7 @@ class Context {
     'fileChange': any;
     'runtimeError': Error | null
     'compileError': any[]
+    'vibing': boolean
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
@@ -287,6 +289,10 @@ class Context {
 
     if (type === "delete") {
       const deleteIndex = files.findIndex((f) => f.fileName === fileName);
+      const fileSystem = this.fileSystemMap[id]
+      if (fileSystem) {
+        fileSystem.delete(files[deleteIndex].fileName)
+      }
       if (deleteIndex !== -1) {
         files.splice(deleteIndex, 1)
       }
@@ -298,6 +304,7 @@ class Context {
 
       switch (suffix) {
         case 'jsx':
+        case 'tsx':
           try {
             const { transformCode, constituency } = transformTsx(content, { fileName });
             updateFileContent({
@@ -311,6 +318,12 @@ class Context {
             })
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file);
+            
+            const fileSystem = this.fileSystemMap[id]
+            if (fileSystem) {
+              const file = files.find((f) => f.fileName === fileName);
+              fileSystem.update(fileName, {...file, filename: fileName })
+            }
           } catch (e: any) {
             console.error("[@transformTsx error]", e);
             updateFileContent({
@@ -344,6 +357,12 @@ class Context {
               }
             });
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+
+            const fileSystem = this.fileSystemMap[id]
+            if (fileSystem) {
+              const file = files.find((f) => f.fileName === fileName);
+              fileSystem.update(fileName, {...file, filename: fileName })
+            }
           } catch (e: any) {
             console.error("[@transformLess error]", e);
             updateFileContent({
@@ -365,6 +384,7 @@ class Context {
           this.getAiCom(id)?.actions?.notifyChanged?.();
           break;
         case 'js':
+        case 'ts':
           try {
             const { transformCode } = transformTsx(content, { fileName })
             updateFileContent({
@@ -376,6 +396,12 @@ class Context {
               }
             })
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+
+            const fileSystem = this.fileSystemMap[id]
+            if (fileSystem) {
+              const file = files.find((f) => f.fileName === fileName);
+              fileSystem.update(fileName, {...file, filename: fileName })
+            }
           } catch (e: any) {
             console.error("[@transformTsx error]", e);
             updateFileContent({
@@ -462,6 +488,8 @@ class Context {
     (window as any)._mybricksOnEdit_?.();
     aiComParams?.notify?.edit();
   }
+
+  fileSystemMap: Record<string, FileSystem> = {}
 }
 
 export default new Context();

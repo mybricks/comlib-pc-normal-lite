@@ -202,6 +202,9 @@ interface CreateMyBricksProps {
 }
 
 const createMyBricks = (props: CreateMyBricksProps) => {
+  // 配置的画布信息
+  const { width: canvasWidth = 1200, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
+  
   const { comId, runtimeMode, env, data, logger } = props;
   const mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
   const _env = {
@@ -351,7 +354,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
           const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
           const style: React.CSSProperties = {
-            minWidth: 1200,
+            minWidth: canvasWidth,
             width: 'fit-content',
             height: 'fit-content'
           }
@@ -473,22 +476,27 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const appContext = useContext(AppContext)
     const routerContext = useContext(RouterContext)
 
+    if (!element) {
+      return null
+    }
+
     if (appContext.state === 'collect_routes') {
-      return element
+      return element.props['data-loc'] ? element : React.cloneElement(element, { ['data-loc']: '1' })
     } else if (index || path) {
       const currentPath = transformPath({ index: null, path: routerContext.currentPath })
       const propPath = transformPath({ index, path })
 
       const matched = matchPath(propPath, currentPath)
       if (matched) {
+        const nextElement = element.props['data-loc'] ? element : React.cloneElement(element, { ['data-loc']: '1' })
         if (Object.keys(matched.params).length > 0) {
           return (
             <RouterContext.Provider value={{ ...routerContext, params: matched.params }}>
-              {element}
+              {nextElement}
             </RouterContext.Provider>
           )
         }
-        return element;
+        return nextElement;
       }
     }
 
@@ -629,10 +637,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }
 
               const style: React.CSSProperties = {
-                minWidth: 1200,
+                minWidth: canvasWidth,
                 width: 'fit-content',
                 height: 'fit-content',
-                minHeight: 2000,
+                minHeight: canvasHeight,
               }
               const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
               if (dataLoc) {
@@ -650,7 +658,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                     style.height = height
                     Reflect.deleteProperty(style, "minHeight")
                   }
-                  console.log("[style]", style)
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
                 }
@@ -718,8 +725,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return DialogRoot
   };
 
+  const nextLogger = logger({ id: comId, mode: _env.mode })
   // 将 logger 的调用同步收集到 debugLogs（设计态、运行态均收集）
-  const capturedLogger = new Proxy(logger ?? {}, {
+  const capturedLogger = new Proxy(nextLogger ?? {}, {
     get(target, prop: string) {
       const original = typeof target[prop] === 'function' ? target[prop] : (() => {});
       return (...args: any[]) => {

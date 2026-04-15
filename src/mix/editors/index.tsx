@@ -32,6 +32,16 @@ export default function (props: Props, actions: Actions) {
     context.projectConfig = (window as any)._getProjectConfig_();
   }
 
+  const dependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks: {} }) || {}
+  if (!context.projectConfig.availableLibraries) {
+    context.projectConfig.availableLibraries = []
+  }
+  context.projectConfig.availableLibraries.push(...Object.keys(dependencies).map((key) => {
+    return {
+      name: key
+    }
+  }))
+
   // 注册沙箱：将 mix 组件的文件系统和上下文桥接给 plugin-ai 的 CodeAgent
   registerSandbox(comId);
 
