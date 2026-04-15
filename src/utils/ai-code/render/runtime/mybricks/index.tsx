@@ -523,14 +523,22 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return ctx.params
   }
 
-  const popupRefRegistry: React.FC[] = [];
-  const popupRefOriginalsSet = new Set<React.FC>();
+  const popupRefRegistry: Record<string, React.FC> = {};
+  let popupRefRegistryForceUpdate: (() => void) | null = null;
+
 
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
     return (props) => {
       if (isDesign()) {
         const collectingRoutes = useRef<string[]>([]);
+        const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
+        React.useEffect(() => {
+          popupRefRegistryForceUpdate = forceUpdate;
+          return () => {
+            if (popupRefRegistryForceUpdate === forceUpdate) popupRefRegistryForceUpdate = null;
+          };
+        }, [forceUpdate]);
 
         const [app, setApp] = useState<AppContextValue>({
           state: 'collect_routes',
@@ -577,8 +585,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               )
             )}
             {app.state === 'runtime' && (
-              popupRefRegistry.map((DialogRoot, index) => (
-                <DialogRoot key={`dialog-${index}`}/>
+              Object.entries(popupRefRegistry).map(([filename, DialogRoot]) => (
+                // @ts-ignore
+                <DialogRoot key={filename} __mybricks_show/>
               ))
             )}
           </AppContext.Provider>
@@ -609,9 +618,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const DesignPopup = () => null;
   DesignPopup.__type = DESIGNPOPUP_TYPE
 
-  const popupRef = (Component: any) => {
+  const popupRef = (Component: any, filename) => {
     const ObservedComponent = observer(Component);
     const DialogRoot = (props) => {
+      if (!props.__mybricks_show) {
+        return null
+      }
       const theme = mixContext.resolveActiveTheme(data);
 
       if (isDesign()) {
@@ -705,22 +717,17 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         )
       }
     };
-
     if (isDesign()) {
-      // 运行态不做任何处理，保留类字段原始初始值
-      if (!popupRefOriginalsSet.has(Component)) {
-        popupRefOriginalsSet.add(Component);
-        popupRefRegistry.push(DialogRoot);
-        // 写入 data._designerState.popups
-        if (data) {
-          if (!data._designerState) data._designerState = { pages: [], popups: [] };
-          if (!data._designerState.popups.includes(Component.name)) {
-            data._designerState.popups.push(Component.name);
-          }
+      // 每次都更新 registry，以支持热更新替换 DialogRoot
+      popupRefRegistry[filename] = DialogRoot;
+      popupRefRegistryForceUpdate?.();
+      // 写入 data._designerState.popups（去重）
+      if (data) {
+        if (!data._designerState) data._designerState = { pages: [], popups: [] };
+        if (!data._designerState.popups.includes(Component.name)) {
+          data._designerState.popups.push(Component.name);
         }
       }
-
-      return DesignPopup
     }
     return DialogRoot
   };

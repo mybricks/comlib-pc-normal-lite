@@ -27,6 +27,16 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       ${compiled}
       //# sourceURL=${filename}
     })`)(exports, (packageName: string) => {
+    if (packageName === 'mybricks') {
+      const result = dependencies[packageName]
+      return {
+        ...result,
+        popupRef: (Component) => {
+          return result.popupRef(Component, filename)
+        }
+      }
+    }
+
     return dependencies[packageName]
   })
   } catch (e: any) {

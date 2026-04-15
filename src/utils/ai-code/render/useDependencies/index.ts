@@ -38,7 +38,6 @@ const useDependencies = (params: Params) => {
               return (...args: any[]) => {
                 const result = val.apply(target, args);
                 // [TODO] 日志收集
-                console.log('[DataSourceWithProxy]', { type: 'dataSource', method: key, args, result })
                 // collectDebugLogs({ type: 'dataSource', method: key, args, result });
                 return result
               }
