@@ -189,28 +189,57 @@ export function createDesignerLoading(
     runtimeError = error;
   });
 
-  let lockType: 'lock' | 'unlock' | undefined;
   const { actions } = context.getAiCom(comId);
 
+  // 当前生效的锁模式：progress = onProgress 整页；component = actions.lock 组件锁；null = 未上锁
+  let currentMode: 'progress' | 'component' | null = null;
+  let releaseLock: (() => void) | null = null;
+
+  const resolveMode = (): 'progress' | 'component' =>
+    !focusArea || compileError || runtimeError ? 'progress' : 'component';
+
+  const applyLock = (mode: 'progress' | 'component') => {
+    if (mode === 'progress') {
+      options?.onProgress?.('start');
+      releaseLock = () => {
+        options?.onProgress?.('complete');
+      };
+    } else {
+      const lockResult = actions.lock(lockId, focusArea);
+      releaseLock = typeof lockResult === 'function'
+        ? lockResult
+        : () => actions.unlock(lockId, focusArea);
+    }
+    currentMode = mode;
+  };
+
+  const releaseCurrent = () => {
+    if (releaseLock) {
+      releaseLock();
+      releaseLock = null;
+    }
+    currentMode = null;
+  };
+
   const setLock = (type: 'lock' | 'unlock') => {
-    if (lockType === type) {
+    if (type === 'unlock') {
+      releaseCurrent();
       return;
     }
 
-    if (type === 'lock') {
-      setLock('unlock');
+    const nextMode = resolveMode();
+
+    // 模式未变，跳过解锁+重新上锁
+    if (currentMode === nextMode) {
+      return;
     }
 
-    lockType = type;
-    if (!focusArea || compileError || runtimeError) {
-      options?.onProgress?.(type === 'lock' ? 'start' : 'complete');
-    } else {
-      actions[type](lockId, focusArea);
-    }
+    releaseCurrent();
+    applyLock(nextMode);
   };
 
   const dispose = () => {
-    setLock('unlock');
+    releaseCurrent();
     offCompileError();
     offRuntimeError();
   };
