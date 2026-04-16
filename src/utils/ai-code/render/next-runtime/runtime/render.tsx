@@ -36,7 +36,8 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     dependencies: props.dependencies,
     css: props.css,
     entryFile: props.entryFile,
-    LoadingView: props.LoadingView
+    LoadingView: props.LoadingView,
+    onRuntimeError: props.onRuntimeError
   }))
   const [isInitialized, setIsInitialized] = useState(false)
 
@@ -54,10 +55,14 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
       }
       props.onFileChange({ filename, type })
     })
+    // 注册错误监听
+    fileSystem.current.setupErrorListeners()
     props.onMount({ fileSystem: fileSystem.current })
     return () => {
       // 取消事件监听
       fileSystem.current.events.offAll()
+      // 卸载错误监听
+      fileSystem.current.teardownErrorListeners()
     }
   }, [])
 

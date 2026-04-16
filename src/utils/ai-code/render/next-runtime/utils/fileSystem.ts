@@ -2,7 +2,14 @@ import { ReactElement } from 'react'
 import { Events } from './events'
 import createHotComponent from './HotComponent'
 import { hackProxy } from './hackProxy'
-import type { Files, Dependencies, Css, Vibing, LoadingView } from '../types'
+import type {
+  Files,
+  Dependencies,
+  Css,
+  Vibing,
+  LoadingView,
+  OnRuntimeError
+} from '../types'
 
 interface LoadModuleParams {
   filename: string
@@ -25,7 +32,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
   try {
     eval(`(function(exports, require) {
       ${compiled}
-      //# sourceURL=${filename}
+      //# sourceURL=_mybricks_ai/${filename}
     })`)(exports, (packageName: string) => {
     if (packageName === 'mybricks') {
       const result = dependencies[packageName]
@@ -161,6 +168,7 @@ interface FileSystemParams {
   entryFile: string;
 
   LoadingView: LoadingView
+  onRuntimeError: OnRuntimeError
 }
 
 type FilesMap = Record<string, {
@@ -200,8 +208,50 @@ class FileSystem {
   /** 临时文件存储 */
   tempFilesMap: FilesMap = {}
 
+  /** 全局错误监听器引用 */
+  private _onError: ((event: ErrorEvent) => void) | null = null
+
   constructor(params: FileSystemParams) {
     this.params = params
+  }
+
+  /** 注册错误监听 */
+  setupErrorListeners() {
+    // 避免重复注册
+    if (this._onError) return
+
+    const isFromSandbox = (stack: string) => {
+       const knownFiles = [
+        ...Object.keys(this.filesMap),
+        ...Object.keys(this.tempFilesMap)
+      ]
+
+      for (const filename of knownFiles) {
+        if (stack.includes(`_mybricks_ai/${filename}`)) {
+          return stack.replace(`_mybricks_ai/${filename}`, filename)
+        }
+      }
+    }
+
+    this._onError = (event: ErrorEvent) => {
+      const { error } = event
+      if (!error?.stack) return
+      const replaceStack = isFromSandbox(error.stack)
+      if (replaceStack) {
+        error.stack = replaceStack
+        this.params.onRuntimeError(error, error)
+      }
+    }
+
+    window.addEventListener('error', this._onError)
+  }
+
+  /** 卸载错误监听 */
+  teardownErrorListeners() {
+    if (this._onError) {
+      window.removeEventListener('error', this._onError)
+      this._onError = null
+    }
   }
 
   /** 初始化 */

@@ -621,7 +621,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRef = (Component: any, filename) => {
     const ObservedComponent = observer(Component);
     const DialogRoot = (props) => {
-      if (!props.__mybricks_show) {
+      if (isDesign() && !props.__mybricks_show) {
         return null
       }
       const theme = mixContext.resolveActiveTheme(data);
