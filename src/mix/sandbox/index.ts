@@ -82,11 +82,17 @@ function buildProject(comId: string) {
     }
   })();
 
+  let runtimeError: any = null
+  const events = context.getAiComEvents(comId);
+  events.on('runtimeError', (error) => {
+    runtimeError = error
+  })
+
   return createProject({
     getFiles: () => aiComParams?.data?.files ?? [],
     getThemesContent: () => themesContent,
     getDesignerState: () => aiComParams?.data?._designerState,
-    getErrors: () => aiComParams?.data?._errors,
+    getErrors: () => (runtimeError ? [runtimeError] : []).concat(aiComParams?.data?._errors || []),
     getLogs: () => debugLogs.get(comId),
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
     getCodeRules: () => context.projectConfig.codeRules ?? '',

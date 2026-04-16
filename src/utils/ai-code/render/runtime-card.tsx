@@ -464,7 +464,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               }))
             }}
             onRuntimeError={(error) => {
-              setRuntimeError(error)
+              context.getAiComEvents(id).emit('runtimeError', error)
             }}
             entryFile={window._sandbox_.config.componentRuntime?.entryFile || 'index'}
             onFileChange={({ filename, type }) => {
