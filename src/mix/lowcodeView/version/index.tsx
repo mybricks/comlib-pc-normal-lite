@@ -12,6 +12,7 @@ interface VersionPanelProps {
 }
 
 const TYPE_LABEL: Record<VersionRecord['type'], string> = {
+  init: '初始版本',
   manual: '手动编辑版本',
   ai: 'AI修改版本',
   rollback: '回滚版本',
@@ -169,7 +170,29 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
 
     // 初始化加载
     if (history) {
-      history.listVersions().then((list: VersionRecord[]) => setVersions([...list].reverse()));
+      history.listVersions().then(async (list: VersionRecord[]) => {
+        // 没有历史记录，默认加一下初始化
+        if (!list.length) {
+          const data = context.getAiComParams(componentId)?.data;
+          const files = (data?.files ?? [])
+            .filter((f: any) => f.source)
+            .map((f: any) => ({
+              path: f.fileName,
+              content: decodeURIComponent(f.source),
+            }));
+          const record = {
+            id: crypto.randomUUID(),
+            turnId: '',
+            label: `V${0}`,
+            type: 'init' as const,
+            createdAt: Date.now(),
+          };
+          await history.addVersion(record, files);
+          return setVersions([record])
+        }
+
+        return setVersions([...list].reverse())
+      });
     }
 
     const off = context.getVersionStateEvents(componentId).on(

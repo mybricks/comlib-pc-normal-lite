@@ -22,7 +22,7 @@ export interface VersionRecord {
   id: string;
   turnId: string;
   label: string;
-  type: 'ai' | 'manual' | 'rollback';
+  type: 'ai' | 'manual' | 'rollback' | 'init';
   createdAt: number;
   summary?: string;
 }
