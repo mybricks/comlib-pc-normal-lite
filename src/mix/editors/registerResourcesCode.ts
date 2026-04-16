@@ -16,7 +16,20 @@ export function registerResourcesCode(comId: string, comName: string) {
     },
     getData: () => {
       const aiComParams = context.getAiComParams(comId);
-      return aiComParams?.data
+      const data = aiComParams?.data;
+      if (!data) return data;
+      const projectThemes = context.projectConfig?.themes;
+      if (!data._themesModified && projectThemes?.length > 0) {
+        return {
+          ...data,
+          themes: {
+            ...data.themes,
+            activeThemeId: projectThemes[0].id,
+            themes: projectThemes,
+          },
+        };
+      }
+      return data;
     }
   };
   forApp._getResourcesCode_ = (type: 'application' | 'component') => {
