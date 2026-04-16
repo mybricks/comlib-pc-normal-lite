@@ -23,7 +23,7 @@ const genHotComponent = ({ entry, LoadingView }: HotComponentProps) => {
     const Impl = entry.currentImpl
 
     if (Impl[PROXY_MARKER]) {
-      return <LoadingView tip='依赖加载中...' withContainer={false}/>
+      return <LoadingView tip='加载中...' withContainer={false}/>
     }
 
     return <Impl {...props}/>
