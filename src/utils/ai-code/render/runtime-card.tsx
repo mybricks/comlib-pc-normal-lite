@@ -247,6 +247,18 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       debugLogs.clearByMode(id, runtimeMode);
     }, [runtimeMode]);
 
+    useEffect(() => {
+      // 如果宿主应用在组件初始化前通过 window.__vibePendingMessage__ 预置了消息，
+      // 则在 StartView 挂载后立即触发发送，实现自动开始对话的效果。
+      const pendingMessage = (window as any).__vibePendingMessage__;
+      (window as any).__vibePendingMessage__ = null;
+      if (pendingMessage) {
+        setTimeout(() => {
+          (window as any)._sandbox_?.helpers?.sendToAgent?.(id, pendingMessage);
+        }, 500);
+      }
+    }, []);
+
     /**
      * 【重要】errorInfo 只响应 compile 错误（type !== 'runtime'），用于阻断渲染并展示编译失败面板。
      * runtime 错误由 ErrorBoundary 在内部捕获并渲染 RuntimeErrorView，不在此处处理。
