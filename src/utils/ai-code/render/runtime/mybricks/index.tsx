@@ -526,7 +526,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return ctx.params
   }
 
-  const popupRefRegistry: Record<string, React.FC> = {};
+  const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
 
 
@@ -588,10 +588,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               )
             )}
             {app.state === 'runtime' && (
-              Object.entries(popupRefRegistry).map(([filename, DialogRoot]) => (
-                // @ts-ignore
-                <DialogRoot key={filename} __mybricks_show/>
-              ))
+              Object.entries(popupRefRegistry).map(([filename, DialogRoots]) => {
+                return DialogRoots.map((DialogRoot) => {
+                  // @ts-ignore
+                  return <DialogRoot key={filename} __mybricks_show/>
+                })
+              })
             )}
           </AppContext.Provider>
         )
@@ -719,16 +721,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       }
     };
     if (isDesign()) {
-      // 每次都更新 registry，以支持热更新替换 DialogRoot
-      popupRefRegistry[filename] = DialogRoot;
-      popupRefRegistryForceUpdate?.();
-      // 写入 data._designerState.popups（去重）
-      if (data) {
-        if (!data._designerState) data._designerState = { pages: [], popups: [] };
-        if (!data._designerState.popups.includes(Component.name)) {
-          data._designerState.popups.push(Component.name);
-        }
+      if (!popupRefRegistry[filename]) {
+        popupRefRegistry[filename] = []
       }
+      popupRefRegistry[filename].push(DialogRoot)
+      popupRefRegistryForceUpdate?.();
     }
     return DialogRoot
   };
@@ -797,6 +794,18 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     _collectDebugLogs: collectDebugLogs,
     PopupVisible,
     useDesignToken,
+
+    /**
+     * [TODO] 
+     * 后续把这里和next-runtime合并
+     * 引入热更新机制
+     */
+    _refreshPopups: (filename) => {
+      if (popupRefRegistry[filename]?.length) {
+        Reflect.deleteProperty(popupRefRegistry, filename)
+        popupRefRegistryForceUpdate?.()
+      }
+    }
   }
 }
 

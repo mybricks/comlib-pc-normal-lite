@@ -29,6 +29,9 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     __default: null
   }
 
+  const { _refreshPopups } = dependencies['mybricks']
+  _refreshPopups?.(filename)
+
   try {
     eval(`(function(exports, require) {
       ${compiled}
