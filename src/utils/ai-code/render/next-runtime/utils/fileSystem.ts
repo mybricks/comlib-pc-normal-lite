@@ -40,6 +40,9 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
         ...result,
         popupRef: (Component) => {
           return result.popupRef(Component, filename)
+        },
+        comRef: (Component) => {
+          return result.comRef(Component, filename)
         }
       }
     }
@@ -121,21 +124,23 @@ const isCssModule = (filename: string): boolean => {
   return CSS_MODULE_EXTENSIONS.some(ext => filename.endsWith(ext))
 }
 
-const resolveFilename = (filename: string, filesMap: FilesMap) => {
-  let entry = filesMap[filename]
+const resolveFilename = (filename: string, filesMap: FilesMap, tempFilesMap: FilesMap) => {
+  let entry = filesMap[filename] || tempFilesMap[filename]
   let resolvedFilename = filename
 
   // 如果找不到,尝试添加后缀查找
   if (!entry) {
     for (const ext of RESOLVE_EXTENSIONS) {
       resolvedFilename = filename + ext
-      if (filesMap[resolvedFilename]) {
-        entry = filesMap[resolvedFilename]
+      const entry1 = filesMap[resolvedFilename] || tempFilesMap[resolvedFilename]
+      if (entry1) {
+        entry = entry1
         break
       }
       resolvedFilename = filename + '/index' + ext
-      if (filesMap[resolvedFilename]) {
-        entry = filesMap[resolvedFilename]
+      const entry2 = filesMap[resolvedFilename] || tempFilesMap[resolvedFilename]
+      if (entry2) {
+        entry = entry2
         break
       }
     }
@@ -266,7 +271,7 @@ class FileSystem {
    * from 被谁加载（filename）
    */
   get(filename: string, from?: string) {
-    const entry = resolveFilename(filename, this.filesMap)
+    const entry = resolveFilename(filename, this.filesMap, this.tempFilesMap)
 
     if (!entry) {
       const module: any = {
