@@ -203,7 +203,7 @@ interface CreateMyBricksProps {
 
 const createMyBricks = (props: CreateMyBricksProps) => {
   // 配置的画布信息
-  const { width: canvasWidth = 1200, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
+  const { width: canvasWidth = 1440, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
   
   const { comId, runtimeMode, env, data, logger } = props;
   let mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
@@ -372,7 +372,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
               const { width, height } = parseFrameSize(lessCode);
               if (width) {
-                style.width = canvasWidth
+                const numberWidth = parseInt(width)
+                style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
               }
               if (height) {
                 style.minHeight = height
@@ -663,7 +664,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
                   const { width, height } = parseFrameSize(lessCode);
                   if (width) {
-                    style.width = width
+                    const numberWidth = parseInt(width)
+                    style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
                   }
                   if (height) {
                     style.height = height
