@@ -206,7 +206,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const { width: canvasWidth = 1200, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
   
   const { comId, runtimeMode, env, data, logger } = props;
-  const mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
+  let mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
+  if (mdCompiled) {
+    mdCompiled = Object.entries(mdCompiled).reduce((pre, [key, value]) => {
+      pre[key] = value
+      pre[key.toLowerCase()] = value
+      return pre;
+    }, {})
+  }
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
@@ -345,7 +352,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           if (mdCompiled) {
             const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
             const widgetName = firstWidget?.getAttribute('data-widget-name');
-            const docs = widgetName && mdCompiled[widgetName];
+            const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
             const title = docs?.title;
             if (title) {
               containerRef.current!.setAttribute("data-zone-title", title);
@@ -354,9 +361,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
           const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
           const style: React.CSSProperties = {
-            minWidth: canvasWidth,
-            width: 'fit-content',
-            height: 'fit-content'
+            width: canvasWidth,
+            minHeight: canvasHeight
           }
           if (dataLoc) {
             const loc = JSON.parse(dataLoc);
@@ -366,11 +372,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
               const { width, height } = parseFrameSize(lessCode);
               if (width) {
-                style.width = width
-                Reflect.deleteProperty(style, "minWidth")
+                style.width = canvasWidth
               }
               if (height) {
-                style.height = height
+                style.minHeight = height
               }
             } else {
               // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
@@ -389,6 +394,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={path}
+        data-zone-title='页面'
         style={{
           ...style,
           // ...(data?.frameStyle?.width
@@ -398,10 +404,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           // minHeight: 600,
           transform: 'scale(1)',
           // height: 'fit-content',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
           ...pageStyle,
           ...env._debugTarget?.style,
           ...theme?.vars?.reduce((pre, cur) => {
@@ -410,9 +412,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           }, {})
         }}
       >
-        <PageContext.Provider value={container}>
+        {container && <PageContext.Provider value={container}>
           {children}
-        </PageContext.Provider>
+        </PageContext.Provider>}
       </div>
     )
   }
@@ -605,7 +607,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     }
   }
 
-  const comRef = (Component: any) => {
+  const comRef = (Component: any, filename) => {
     const ObservedComponent = observer(Component);
     return (props: any) => {
       const pageContext = useContext(PageContext);
@@ -641,7 +643,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               if (mdCompiled) {
                 const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
                 const widgetName = firstWidget?.getAttribute('data-widget-name');
-                const docs = widgetName && mdCompiled[widgetName];
+                const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
                 const title = docs?.title;
                 if (title) {
                   containerRef.current!.setAttribute("data-zone-title", title);
@@ -649,10 +651,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }
 
               const style: React.CSSProperties = {
-                minWidth: canvasWidth,
-                width: 'fit-content',
-                height: 'fit-content',
-                minHeight: canvasHeight,
+                width: canvasWidth,
+                height: canvasHeight
               }
               const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
               if (dataLoc) {
@@ -664,11 +664,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   const { width, height } = parseFrameSize(lessCode);
                   if (width) {
                     style.width = width
-                    Reflect.deleteProperty(style, "minWidth")
                   }
                   if (height) {
                     style.height = height
-                    Reflect.deleteProperty(style, "minHeight")
                   }
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
@@ -687,6 +685,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             data-zone-type="page"
             data-zone-kind="popup"
             data-desn-page={"/"}
+            data-zone-title='弹窗'
             style={{
               ...style,
               display: 'inline-block',
