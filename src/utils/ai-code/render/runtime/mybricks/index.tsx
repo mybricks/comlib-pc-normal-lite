@@ -344,7 +344,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const theme = mixContext.resolveActiveTheme(data);
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue | null>(null);
-    const [style, setStyle] = useState<React.CSSProperties>({});
+    const [style, setStyle] = useState<React.CSSProperties>({
+      width: canvasWidth,
+      minHeight: canvasHeight
+    });
 
     useLayoutEffect(() => {
       setContainer({
