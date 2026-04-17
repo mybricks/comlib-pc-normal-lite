@@ -90,6 +90,53 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               const componentName = id.name;
               popupRefDeclarators.set(path.node, componentName);
             }
+            // 为 comRef / popupRef 注入第二个参数 { widgetName }
+            if (
+              types.isIdentifier(id) &&
+              types.isCallExpression(init) &&
+              (types.isIdentifier(init.callee)
+                ? init.callee.name === 'comRef' || init.callee.name === 'popupRef'
+                : init.callee?.property?.name === 'comRef' || init.callee?.property?.name === 'popupRef') &&
+              init.arguments.length === 1
+            ) {
+              const widgetName = (id as any).name as string;
+              init.arguments.push({
+                type: 'ObjectExpression',
+                properties: [
+                  {
+                    type: 'ObjectProperty',
+                    key: { type: 'Identifier', name: 'widgetName' },
+                    value: { type: 'StringLiteral', value: widgetName },
+                    shorthand: false,
+                    computed: false,
+                  } as any,
+                ],
+              } as any);
+            }
+          } catch { }
+        },
+        ExportDefaultDeclaration(path) {
+          try {
+            const { declaration } = path.node as any;
+            if (
+              declaration &&
+              declaration.type === 'CallExpression' &&
+              (types.isIdentifier(declaration.callee) ? declaration.callee.name === 'comRef' || declaration.callee.name === 'popupRef' : declaration.callee?.property?.name === 'comRef' || declaration.callee?.property?.name === 'popupRef') &&
+              declaration.arguments.length === 1
+            ) {
+              declaration.arguments.push({
+                type: 'ObjectExpression',
+                properties: [
+                  {
+                    type: 'ObjectProperty',
+                    key: { type: 'Identifier', name: 'widgetName' },
+                    value: { type: 'StringLiteral', value: fallbackName },
+                    shorthand: false,
+                    computed: false,
+                  } as any,
+                ],
+              } as any);
+            }
           } catch { }
         },
         JSXElement: {

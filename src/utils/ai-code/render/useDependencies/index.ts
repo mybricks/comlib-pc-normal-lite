@@ -60,7 +60,10 @@ const useDependencies = (params: Params) => {
     
     const dependencies: Dependencies = {
       ...params.dependencies,
-      ...customDependencies,
+      ...Object.entries(customDependencies).reduce((pre, [key, value]: any) => {
+        pre[key] = value.module
+        return pre;
+      }, {}),
       'mybricks': mybricks,
       'mybricks/testing': mybricksTesting
     }

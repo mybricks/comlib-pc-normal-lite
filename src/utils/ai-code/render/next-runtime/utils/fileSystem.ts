@@ -41,11 +41,11 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       const result = dependencies[packageName]
       return {
         ...result,
-        popupRef: (Component) => {
-          return result.popupRef(Component, filename)
+        popupRef: (Component, params = {}) => {
+          return result.popupRef(Component, { filename, ...params })
         },
-        comRef: (Component) => {
-          return result.comRef(Component, filename)
+        comRef: (Component, params = {}) => {
+          return result.comRef(Component, { filename, ...params })
         }
       }
     }

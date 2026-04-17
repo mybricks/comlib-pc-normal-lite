@@ -36,9 +36,10 @@ export default function (props: Props, actions: Actions) {
   if (!context.projectConfig.availableLibraries) {
     context.projectConfig.availableLibraries = []
   }
-  context.projectConfig.availableLibraries.push(...Object.keys(dependencies).map((key) => {
+  context.projectConfig.availableLibraries.push(...Object.entries(dependencies).map(([key, value]: any) => {
     return {
-      name: key
+      name: key,
+      ...value
     }
   }))
 

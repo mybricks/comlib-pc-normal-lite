@@ -325,9 +325,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   interface PageContextValue {
     container: HTMLElement
+    onPageInfo: (params: { widgetName?: string | null }) => void
   }
   const PageContext = createContext<PageContextValue>({
-    container: document.body
+    container: document.body,
+    onPageInfo: () => {}
   });
 
   /**
@@ -341,52 +343,61 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const { path = '/', children } = params;
     const theme = mixContext.resolveActiveTheme(data);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [container, setContainer] = useState<PageContextValue>({ container: document.body });
+    const [container, setContainer] = useState<PageContextValue | null>(null);
     const [style, setStyle] = useState<React.CSSProperties>({});
 
     useLayoutEffect(() => {
-      setContainer({ container: containerRef.current! })
+      setContainer({
+        container: containerRef.current!,
+        onPageInfo: (params) => {
+          try {
+            if (containerRef.current) {
+              if (mdCompiled) {
+                let widgetName = params?.widgetName
 
-      try {
-        if (containerRef.current) {
-          if (mdCompiled) {
-            const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
-            const widgetName = firstWidget?.getAttribute('data-widget-name');
-            const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
-            const title = docs?.title;
-            if (title) {
-              containerRef.current!.setAttribute("data-zone-title", title);
-            }
-          }
+                if (!widgetName) {
+                  const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+                  widgetName = firstWidget?.getAttribute('data-widget-name');
+                }
+                
+                const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
+                const title = docs?.title;
+                if (title) {
+                  containerRef.current!.setAttribute("data-zone-title", title);
+                }
+              }
 
-          const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
-          const style: React.CSSProperties = {
-            width: canvasWidth,
-            minHeight: canvasHeight
-          }
-          if (dataLoc) {
-            const loc = JSON.parse(dataLoc);
-            const { files } = loc;
-            if (files?.less) {
-              const file = filesMap[files.less]
-              const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
-              const { width, height } = parseFrameSize(lessCode);
-              if (width) {
-                const numberWidth = parseInt(width)
-                style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+              const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+              const style: React.CSSProperties = {
+                width: canvasWidth,
+                minHeight: canvasHeight
               }
-              if (height) {
-                style.minHeight = height
+
+              if (dataLoc) {
+                const loc = JSON.parse(dataLoc);
+                const { files } = loc;
+                if (files?.less) {
+                  const file = filesMap[files.less]
+                  const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+                  const { width, height } = parseFrameSize(lessCode);
+                  if (width) {
+                    const numberWidth = parseInt(width)
+                    style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                  }
+                  if (height) {
+                    style.minHeight = height
+                  }
+                } else {
+                  // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+                }
               }
-            } else {
-              // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+              setStyle(style)
             }
+          } catch (e) {
+            console.error(`[@动态解析]`, e)
           }
-          setStyle(style)
         }
-      } catch (e) {
-        console.error(`[@动态解析]`, e)
-      }
+      })
     }, [])
 
     return (
@@ -491,7 +502,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
       const matched = matchPath(propPath, currentPath)
       if (matched) {
-        const nextElement = element.props['data-loc'] ? element : React.cloneElement(element, { ['data-loc']: '1' })
+        const nextElement = React.cloneElement(element, {
+          ['data-loc']: element.props['data-loc'] || '1',
+          ['_mybricks_page']: true
+        })
+
         if (Object.keys(matched.params).length > 0) {
           return (
             <RouterContext.Provider value={{ ...routerContext, params: matched.params }}>
@@ -610,10 +625,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     }
   }
 
-  const comRef = (Component: any, filename) => {
+  const comRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
     return (props: any) => {
       const pageContext = useContext(PageContext);
+
+      if (props['_mybricks_page']) {
+        useLayoutEffect(() => {
+          pageContext.onPageInfo(params)
+        }, [])
+      }
       return (
         <ObservedComponent {...props} _env={_env} popupNode={pageContext.container}/>
       );
@@ -623,7 +644,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const DesignPopup = () => null;
   DesignPopup.__type = DESIGNPOPUP_TYPE
 
-  const popupRef = (Component: any, filename) => {
+  const popupRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
     const DialogRoot = (props) => {
       if (isDesign() && !props.__mybricks_show) {
@@ -721,10 +742,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       }
     };
     if (isDesign()) {
-      if (!popupRefRegistry[filename]) {
-        popupRefRegistry[filename] = []
+      if (!popupRefRegistry[params.filename]) {
+        popupRefRegistry[params.filename] = []
       }
-      popupRefRegistry[filename].push(DialogRoot)
+      popupRefRegistry[params.filename].push(DialogRoot)
       popupRefRegistryForceUpdate?.();
     }
     return DialogRoot
@@ -802,7 +823,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
      */
     _refreshPopups: (filename) => {
       if (popupRefRegistry[filename]?.length) {
-        Reflect.deleteProperty(popupRefRegistry, filename)
+        popupRefRegistry[filename] = []
         popupRefRegistryForceUpdate?.()
       }
     }
