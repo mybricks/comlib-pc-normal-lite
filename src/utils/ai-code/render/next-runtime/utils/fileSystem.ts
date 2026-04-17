@@ -382,6 +382,7 @@ class FileSystem {
   }
 
   delete(filename: string) {
+    filename = filename.replace(/^\//, '')
     // 删除文件
     const entry = this.filesMap[filename]
 
@@ -413,6 +414,8 @@ class FileSystem {
   }
 
   update(filename: string, file: Files[0]) {
+    filename = filename.replace(/^\//, '')
+    file.filename = filename
     // [TODO] 考虑编译报错的情况
     let entry = this.filesMap[filename]
 
