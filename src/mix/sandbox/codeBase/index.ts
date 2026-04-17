@@ -141,7 +141,7 @@ ${canvasStatus}
 
     const bestPracticesContent = [
       codeRulesSection.length ? '#### 代码规范：\n' + codeRulesSection : undefined,
-      developeGuide.assetsUsageSection ? '#### 资源使用：\n' + developeGuide.assetsUsageSection : undefined,
+      developeGuide.assetsUsageSection ? '#### 图片和图标使用：\n' + developeGuide.assetsUsageSection : undefined,
       developeGuide.examplesSection ? '#### 开发示例：\n' + developeGuide.examplesSection : undefined,
     ].filter(Boolean).join('\n');
 
@@ -156,9 +156,6 @@ ${canvasStatus}
       designGuide.firstOfAll,
       themesContent,
     ].filter(Boolean).join('\n');
-
-    const projectSpaceDesc = `这是组成整个页面的仓库和源代码。
-注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
 
     const libraryDocsContent = getEffectiveLibraryDocs();
     const fileSectionParts: string[] = [];
@@ -194,7 +191,33 @@ ${canvasStatus}
       '\n## 允许使用的类库\n',
       '\n---\n\n',
       libraryDocsContent,
-      '\n\n---\n\n',
+    ].join('');
+  }
+
+  async exportResourceCode(): Promise<string> {
+    const { getFiles } = this.config;
+
+    const fileSectionParts: string[] = [];
+
+    fileSectionParts.push('\n## 源代码\n');
+    fileSectionParts.push('包含项目中的各代码文件，所有内容每一轮都实时更新，无需读取这些文件。\n');
+
+    const projectSpaceDesc = `这是组成整个页面的仓库和源代码，所有内容每一轮都实时更新，无需读取这些文件。
+注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
+
+    const files = getFiles();
+    if (files.length === 0) {
+      fileSectionParts.push('这是一个空项目，没有任何代码文件。\n');
+    } else {
+      files.forEach((file) => {
+        const { fileName, source } = file;
+        const content = decodeURIComponent(source);
+        const suffix = fileName.split('.').pop() ?? '';
+        fileSectionParts.push(`\n#### ${fileName}\n\n\`\`\`${suffix}\n${content}\n\`\`\`\n`);
+      });
+    }
+
+    return [
       '# 项目空间\n',
       projectSpaceDesc,
       '\n',

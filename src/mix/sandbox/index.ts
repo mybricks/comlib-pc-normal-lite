@@ -310,6 +310,12 @@ export function registerSandbox(comId: string): void {
         );
       },
 
+      async exportResourceCode(): Promise<string> {
+        const project = projectRef.current;
+        if (!project) return '';
+        return project.exportResourceCode();
+      },
+
       // ── 设计器状态 ────────────────────────────────────────────────────────
 
       async exportDesignerToMessage(): Promise<string> {
