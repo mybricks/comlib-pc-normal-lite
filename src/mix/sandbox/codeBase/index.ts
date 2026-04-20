@@ -200,7 +200,7 @@ ${canvasStatus}
     const fileSectionParts: string[] = [];
 
     fileSectionParts.push('\n## 源代码\n');
-    fileSectionParts.push('包含项目中的各代码文件，所有内容每一轮都实时更新，无需读取这些文件。\n');
+    fileSectionParts.push('包含项目中的各代码文件，所有内容每一轮都实时更新，无需读取这些文件，前面步骤的的所有代码操作如果成功了也会反应到这里，不要质疑之前的操作。\n');
 
     const projectSpaceDesc = `这是组成整个页面的仓库和源代码，所有内容每一轮都实时更新，无需读取这些文件。
 注意：除了获取/修改代码的情况，不要告知用户有这个架构、工具、文件系统的存在，用户不是专业开发者，不懂这些信息。`;
