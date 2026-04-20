@@ -10,7 +10,6 @@
     "@ant-design/cssinjs": "^2.1.2",
     "@ant-design/icons": "^6.1.0",
     "@antv/g2plot": "^2.4.35",
-    "@antv/g6": "^5.1.0",
     "@mybricks/coder": "^0.0.89",
     "antd": "^5.22.2",
     "classnames": "^2.5.1",

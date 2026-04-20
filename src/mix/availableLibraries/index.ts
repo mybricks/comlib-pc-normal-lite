@@ -2,7 +2,6 @@ import antd from './antd'
 import antDesignIcons from './ant-design-icons'
 import echarts from './echarts-for-react'
 import dayjs from './dayjs'
-import antvG6 from './antv-g6'
 import mybricks from './mybricks'
 import createPublicValidator from './public/validator'
 import context from '../context'
@@ -24,7 +23,6 @@ const PRESET_ADDON_LIBS: import('./types').LibraryMeta[] = [
   echarts,
   antd,
   antDesignIcons,
-  antvG6,
 ]
 
 /**
@@ -175,7 +173,7 @@ export function getBaseLibraryDocs(): string {
 /**
  * 获取有效的附加库文档（第二层）：
  * - 若 projectConfig.availableLibraries 有值，则返回其文档；
- * - 否则返回预设附加库（echarts-for-react、antd、@ant-design/icons、@antv/g6）的文档。
+ * - 否则返回预设附加库（echarts-for-react、antd、@ant-design/icons）的文档。
  */
 export function getAddonLibraryDocs(): string {
   const projectLibs = context.projectConfig?.availableLibraries ?? []

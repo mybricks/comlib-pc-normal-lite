@@ -29,7 +29,7 @@ export interface LibraryResource {
   /**
    * 加载该 JS 资源后，挂载到 window 上的全局变量名（仅 type='js' 时有意义）。
    * 平台可用此字段判断资源是否已加载，避免重复注入。
-   * 例如：G6 加载后挂载到 window.G6，则填写 'G6'
+   * 例如：echarts 加载后挂载到 window.echarts，则填写 'echarts'
    */
   globalVar?: string;
 }

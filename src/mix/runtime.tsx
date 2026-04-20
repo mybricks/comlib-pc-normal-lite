@@ -6,7 +6,6 @@ import {StyleProvider} from '@ant-design/cssinjs'
 import {ConfigProvider} from "antd";
 import zhCN from 'antd/locale/zh_CN'
 import context from './context'
-import * as G6 from '@antv/g6'
 
 const SUPPORTED_LOGS = {
   log: true,
@@ -34,20 +33,12 @@ export default genAIRuntime({
       // '@dnd-kit/utilities': dndUtilities
     };
 
-    const builtinDefs: PropertyDescriptorMap = {
-      '@antv/g6': {
-        get() { return { ...G6, default: G6 } },
-        enumerable: true,
-        configurable: true,
-      },
-    };
-
     // projectConfig.availableLibraries 中的库通过 library 全局变量名从 window 获取
     const projectConfig = (window as any)._getProjectConfig_?.();
     const projectLibs = projectConfig?.availableLibraries ?? [];
     const projectDefs: PropertyDescriptorMap = {};
     for (const lib of projectLibs) {
-      if (lib.name && lib.library && !(lib.name in base) && !(lib.name in builtinDefs)) {
+      if (lib.name && lib.library && !(lib.name in base)) {
         const globalVar = lib.library;
         projectDefs[lib.name] = {
           get() { return (window as any)[globalVar] },
@@ -57,7 +48,7 @@ export default genAIRuntime({
       }
     }
 
-    return Object.defineProperties(base, { ...builtinDefs, ...projectDefs });
+    return Object.defineProperties(base, { ...projectDefs });
   },
   wrapper: ({ children, env, canvasContainer }) => {
     // const container = useRef(
