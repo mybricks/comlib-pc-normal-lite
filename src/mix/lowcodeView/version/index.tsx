@@ -24,9 +24,10 @@ interface PopconfirmProps {
   onVisible: (v: boolean) => void;
   onConfirm: () => void;
   children: React.ReactElement;
+  parentElement: HTMLDivElement
 }
 
-function Popconfirm({ title, visible, onVisible, onConfirm, children }: PopconfirmProps) {
+function Popconfirm({ title, visible, onVisible, onConfirm, children, parentElement }: PopconfirmProps) {
   const triggerRef = useRef<HTMLSpanElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
@@ -57,7 +58,22 @@ function Popconfirm({ title, visible, onVisible, onConfirm, children }: Popconfi
       onVisible(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    // 监听所有祖先元素的滚动事件，实时更新 popup 位置
+    const scrollParents: Array<HTMLElement | Window> = [parentElement];
+    // let el: HTMLElement | null = triggerRef.current?.parentElement ?? null;
+    // while (el) {
+    //   console.log('[el]', el)
+    //   scrollParents.push(el);
+    //   el = el.parentElement;
+    // }
+    scrollParents.push(window);
+    scrollParents.forEach(p => p.addEventListener('scroll', updatePosition, true));
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      scrollParents.forEach(p => p.removeEventListener('scroll', updatePosition, true));
+    };
   }, [visible, onVisible]);
 
   const handleTrigger = (e: React.MouseEvent) => {
@@ -103,6 +119,7 @@ function VersionItem({
   itemCls,
   dotCls,
   tagCls,
+  parentElement,
   onRollback,
 }: {
   version: VersionRecord;
@@ -110,10 +127,18 @@ function VersionItem({
   itemCls: string;
   dotCls: string;
   tagCls: string;
+  parentElement: HTMLDivElement;
   onRollback: (v: VersionRecord) => void;
 }) {
   const [popconfirmVisible, setPopconfirmVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const isMouseInRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!popconfirmVisible && !isMouseInRef.current) {
+      setIsHovered(false);
+    }
+  }, [popconfirmVisible]);
 
   const isActive = isHovered || popconfirmVisible;
 
@@ -125,8 +150,8 @@ function VersionItem({
   return (
     <div
       className={[itemCls, isActive ? css['version-item-active'] : ''].filter(Boolean).join(' ')}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setPopconfirmVisible(false); }}
+      onMouseEnter={() => { isMouseInRef.current = true; setIsHovered(true); }}
+      onMouseLeave={() => { isMouseInRef.current = false; if (!popconfirmVisible) { setIsHovered(false); } }}
     >
       <div className={css['version-info']}>
         <div className={css['version-main-row']}>
@@ -140,20 +165,23 @@ function VersionItem({
         )}
       </div>
       {!isCurrent && (
-        <Popconfirm
-          title="确认回滚到该版本？该版本之后的内容将被删除且不可撤销。"
-          visible={popconfirmVisible}
-          onVisible={setPopconfirmVisible}
-          onConfirm={() => onRollback(version)}
-        >
-          <button
-            type="button"
-            className={css['version-rollback-btn']}
-            style={{ visibility: (isHovered || popconfirmVisible) ? 'visible' : 'hidden' }}
+        <div>
+          <Popconfirm
+            title="确认回滚到该版本？该版本之后的内容将被删除且不可撤销。"
+            visible={popconfirmVisible}
+            onVisible={setPopconfirmVisible}
+            onConfirm={() => onRollback(version)}
+            parentElement={parentElement}
           >
-            回滚
-          </button>
-        </Popconfirm>
+            <button
+              type="button"
+              className={css['version-rollback-btn']}
+              // style={{ visibility: (isHovered || popconfirmVisible) ? 'visible' : 'hidden' }}
+            >
+              回滚
+            </button>
+          </Popconfirm>
+        </div>
       )}
     </div>
   );
@@ -213,8 +241,10 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
     rollback?.(version.id);
   }, [componentId]);
 
+  const panelContainer = useRef<HTMLDivElement>(null)
+
   return (
-    <div className={css['version-panel']}>
+    <div ref={panelContainer} className={css['version-panel']}>
       {versions.length === 0 ? (
         <div className={css['version-empty']}>暂无版本记录</div>
       ) : (
@@ -245,6 +275,7 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
                 dotCls={dotCls}
                 tagCls={tagCls}
                 onRollback={handleRollback}
+                parentElement={panelContainer.current!}
               />
             );
           })}
