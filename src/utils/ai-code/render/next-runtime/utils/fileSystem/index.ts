@@ -1,7 +1,7 @@
 import { ReactElement } from 'react'
-import { Events } from './events'
-import createHotComponent from './HotComponent'
-import { hackProxy } from './hackProxy'
+import { Events } from '../events'
+import createHotComponent from '../HotComponent'
+import { hackProxy } from '../hackProxy'
 import type {
   Files,
   Dependencies,
@@ -9,7 +9,7 @@ import type {
   Vibing,
   LoadingView,
   OnRuntimeError
-} from '../types'
+} from '../../types'
 
 interface LoadModuleParams {
   filename: string

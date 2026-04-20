@@ -5,7 +5,7 @@ import React, {
   forwardRef,
   useLayoutEffect,
   useImperativeHandle } from 'react'
-import { matchfile, FileSystem } from '../utils'
+import { matchfile, FileSystem, extractMissingFiles } from '../utils'
 import type {
   Css,
   Vibing,
@@ -40,6 +40,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     onRuntimeError: props.onRuntimeError
   }))
   const [isInitialized, setIsInitialized] = useState(false)
+  const [vibingEnded, setVibingEnded] = useState(false)
 
 	useImperativeHandle(ref, () => {
     return {
@@ -66,10 +67,41 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     }
   }, [])
 
+  // 管理 vibing 状态
   useLayoutEffect(() => {
-    // 设置vibe状态
     fileSystem.current.setVibing(props.vibing)
+    
+    if (!props.vibing) {
+      setVibingEnded(true)
+    } else {
+      setVibingEnded(false)
+    }
   }, [props.vibing])
+
+  useLayoutEffect(() => {
+    if (vibingEnded) {
+      // vibe 结束
+      if (!isInitialized) {
+        // 缺失入口文件
+        throw new Error(`入口文件 \`${props.entryFile}\` 缺失，组件无法渲染`)
+      } else {
+        const { tempFilesMap } = fileSystem.current
+        
+        if (Object.keys(tempFilesMap).length > 0) {
+          const missingFiles = extractMissingFiles(tempFilesMap)
+          
+          // 构建详细的错误信息，包含依赖关系
+          const errorDetails = Object.entries(missingFiles)
+            .map(([file, info], index) => {
+              return `${index ? '、' : ''}\`${file}\``
+            })
+            .join('')
+          
+          throw new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`)
+        }
+      }
+    }
+  }, [vibingEnded, isInitialized])
 
   const Entry = useMemo(() => {
     if (!isInitialized) {
