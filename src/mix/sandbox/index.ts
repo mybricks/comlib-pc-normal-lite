@@ -180,13 +180,23 @@ export function createDesignerLoading(
   const lockId = uuid();
   let compileError: any = null;
   let runtimeError: any = null;
+  // [TODO] 临时加一个字段，只要报错过就只能 progress 模式，目前报错后focusArea已经丢失
+  let hasErrorOccurred: boolean = false;
 
   const events = context.getAiComEvents(comId);
   const offCompileError = events.on('compileError', (error) => {
     compileError = error?.length ? error : null;
+
+    if (error?.length) {
+      hasErrorOccurred = true
+    }
   });
   const offRuntimeError = events.on('runtimeError', (error) => {
     runtimeError = error;
+
+    if (error) {
+      hasErrorOccurred = true
+    }
   });
 
   const { actions } = context.getAiCom(comId);
@@ -196,7 +206,7 @@ export function createDesignerLoading(
   let releaseLock: (() => void) | null = null;
 
   const resolveMode = (): 'progress' | 'component' =>
-    !focusArea || compileError || runtimeError ? 'progress' : 'component';
+    !focusArea || compileError || runtimeError || hasErrorOccurred ? 'progress' : 'component';
 
   const applyLock = (mode: 'progress' | 'component') => {
     if (mode === 'progress') {
