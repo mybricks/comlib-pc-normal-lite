@@ -398,6 +398,20 @@ export function registerSandbox(comId: string): void {
     ]);
     if (!targetMeta || !files.length) return;
 
+    const aiCom = context.getAiComParams(comId);
+
+    // 1. 找出当前 data.files 中存在但目标版本中不存在的文件（需要删除）
+    const targetFileNames = new Set(files.map(f => f.path));
+    const currentFiles = aiCom?.data?.files ?? [];
+    const filesToDelete = currentFiles
+      .filter(f => !targetFileNames.has(f.fileName))
+      .map(f => f.fileName);
+
+    // 删除多余文件
+    for (const fileName of filesToDelete) {
+      context.updateFile(comId, { fileName, type: "delete" });
+    }
+
     // 2. 恢复文件到当前 data（触发重新编译）
     for (const file of files) {
       context.updateFile(comId, { fileName: file.path, content: file.content });
