@@ -197,8 +197,6 @@ function updateComponentFiles(
 
   const compileSuccess = compileErrors.length === 0;
 
-  console.log("[aiCom]", aiComParams);
-
   return {
     comId,
     fileResults,

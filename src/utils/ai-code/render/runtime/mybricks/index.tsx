@@ -790,12 +790,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 return pre;
               }, {})
             }}>
-            {container && <ObservedComponent
-              {...props}
-              _env={_env}
-              popupNode={container}
-              wrapper={container}
-            />}
+            {container && (
+              <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
+                <ObservedComponent
+                  {...props}
+                  _env={_env}
+                  popupNode={container}
+                  wrapper={container}
+                />
+              </PageContext.Provider>
+            )}
           </div>
         );
       } else {
