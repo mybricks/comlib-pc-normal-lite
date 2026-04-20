@@ -347,6 +347,8 @@ export function registerSandbox(comId: string): void {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
         
         loadingRef.current?.setLock('lock');
+
+        context.getAiComEvents(comId).emit('vibing', true);
       },
       async beforeTurn() {
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
@@ -369,6 +371,8 @@ export function registerSandbox(comId: string): void {
 
         loadingRef.current?.dispose();
         loadingRef.current = null;
+
+        context.getAiComEvents(comId).emit('vibing', false);
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
         if (!history || !turn?.id) return;

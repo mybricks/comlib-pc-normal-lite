@@ -351,6 +351,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       width: canvasWidth,
       minHeight: canvasHeight
     });
+    const lessRef = useRef<{ filename: string, off: () => void }>({
+      filename: '',
+      off: () => {}
+    });
+
+    useEffect(() => {
+      return () => {
+        lessRef.current?.off?.()
+      }
+    }, [])
 
     useLayoutEffect(() => {
       setContainer({
@@ -374,30 +384,39 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }
 
               const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
-              const style: React.CSSProperties = {
-                width: canvasWidth,
-                minHeight: canvasHeight
-              }
 
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
                 const { files } = loc;
                 if (files?.less) {
-                  const file = filesMap[files.less]
-                  const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
-                  const { width, height } = parseFrameSize(lessCode);
-                  if (width) {
-                    const numberWidth = parseInt(width)
-                    style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
-                  }
-                  if (height) {
-                    style.minHeight = height
+                  if (files.less !== lessRef.current.filename) {
+                    const fileSystem = mixContext.fileSystemMap[comId]
+                    lessRef.current.off()
+                    lessRef.current.filename = files.less
+                    lessRef.current.off = fileSystem.fileWatcher.watch(files.less, (event) => {
+                      const { file, type } = event
+                      if (['create', 'update'].includes(type)) {
+                        const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+                        const style = {
+                          width: canvasWidth,
+                          minHeight: canvasHeight
+                        }
+                        const { width, height } = parseFrameSize(lessCode);
+                        if (width) {
+                          const numberWidth = parseInt(width)
+                          style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                        }
+                        if (height) {
+                          style.minHeight = height
+                        }
+                        setStyle(style)
+                      }
+                    })
                   }
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
                 }
               }
-              setStyle(style)
             }
           } catch (e) {
             console.error(`[@动态解析]`, e)
@@ -670,7 +689,20 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
-        const [style, setStyle] = useState<React.CSSProperties>({});
+        const [style, setStyle] = useState<React.CSSProperties>({
+          width: canvasWidth,
+          height: canvasHeight
+        });
+        const lessRef = useRef<{ filename: string, off: () => void }>({
+          filename: '',
+          off: () => {}
+        });
+
+        useEffect(() => {
+          return () => {
+            lessRef.current?.off?.()
+          }
+        }, [])
 
         useLayoutEffect(() => {
           setContainer(containerRef.current!)
@@ -689,30 +721,53 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 }
               }
 
-              const style: React.CSSProperties = {
-                width: canvasWidth,
-                height: canvasHeight
-              }
               const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
                 const { files } = loc;
                 if (files?.less) {
-                  const file = filesMap[files.less]
-                  const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
-                  const { width, height } = parseFrameSize(lessCode);
-                  if (width) {
-                    const numberWidth = parseInt(width)
-                    style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
-                  }
-                  if (height) {
-                    style.height = height
+                  if (files.less !== lessRef.current.filename) {
+                    const fileSystem = mixContext.fileSystemMap[comId]
+                    lessRef.current.off()
+                    lessRef.current.filename = files.less
+                    lessRef.current.off = fileSystem.fileWatcher.watch(files.less, (event) => {
+                      const { file, type } = event
+                      if (['create', 'update'].includes(type)) {
+                        const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+                        const style: React.CSSProperties = {
+                          width: canvasWidth,
+                          height: canvasHeight
+                        }
+                        const { width, height } = parseFrameSize(lessCode);
+                        if (width) {
+                          const numberWidth = parseInt(width)
+                          style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                        }
+                        if (height) {
+                          style.height = height
+                        }
+                        setStyle(style)
+                      }
+                    })
                   }
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
                 }
+                // if (files?.less) {
+                //   const file = filesMap[files.less]
+                //   const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+                //   const { width, height } = parseFrameSize(lessCode);
+                //   if (width) {
+                //     const numberWidth = parseInt(width)
+                //     style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                //   }
+                //   if (height) {
+                //     style.height = height
+                //   }
+                // } else {
+                //   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+                // }
               }
-              setStyle(style)
             }
           } catch (e) {
             console.error(`[@动态解析]`, e)

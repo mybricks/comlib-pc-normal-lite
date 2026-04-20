@@ -2,6 +2,7 @@ import { ReactElement } from 'react'
 import { Events } from '../events'
 import createHotComponent from '../HotComponent'
 import { hackProxy } from '../hackProxy'
+import { FileWatcher } from './watcher' 
 import type {
   Files,
   Dependencies,
@@ -219,6 +220,8 @@ class FileSystem {
   /** 全局错误监听器引用 */
   private _onError: ((event: ErrorEvent) => void) | null = null
 
+  fileWatcher: FileWatcher = new FileWatcher(this)
+
   constructor(params: FileSystemParams) {
     this.params = params
   }
@@ -291,6 +294,7 @@ class FileSystem {
         file: {
           filename: '临时文件',
           compiled: '',
+          source: ''
         },
         module,
         dependencies: new Set<string>(),
@@ -419,6 +423,9 @@ class FileSystem {
     Reflect.deleteProperty(this.filesMap, filename)
 
     this.events.emit('fileChange', { filename, type: 'delete' })
+
+    this.fileWatcher.emit(filename, 'delete')
+    this.fileWatcher.clearFile(filename)
   }
 
   update(filename: string, file: Files[0]) {
@@ -544,6 +551,7 @@ class FileSystem {
     }
 
     this.events.emit('fileChange', { filename, type: entry ? 'update' : 'create'})
+    this.fileWatcher.emit(filename, entry ? 'update' : 'create')
   }
 
   /** 依赖代理，读取相对路径引用 */

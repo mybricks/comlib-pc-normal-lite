@@ -15,6 +15,8 @@ export type Files = {
    * 注意：如果是样式文件，需支持JSON.parse解析出cssContent(样式代码字符串)、classMap(key映射，cssmodules)
    */
   compiled: string
+  /** 经过encodeURIComponent处理的源代码 */
+  source: string
 }[]
 
 export class EmptyDataSource {
