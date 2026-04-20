@@ -455,13 +455,13 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               })
 
               // [TODO] 加载优化，手动调整优先加载这两个文件
-              const setupIndex = files.findIndex((file) => file.fileName.startsWith("setup."))
+              const setupIndex = files.findIndex((file) => file.fileName.startsWith("setup.") || file.fileName.startsWith("/setup."))
               if (setupIndex !== -1) {
                 const setupFile = files[setupIndex]
                 files.splice(setupIndex, 1)
                 files.unshift(setupFile)
               }
-              const dataSourceIndex = files.findIndex((file) => file.fileName.startsWith("dataSource."))
+              const dataSourceIndex = files.findIndex((file) => file.fileName.startsWith("dataSource.") || file.fileName.startsWith("/dataSource."))
               if (dataSourceIndex !== -1) {
                 const dataSourceFile = files[dataSourceIndex]
                 files.splice(dataSourceIndex, 1)
