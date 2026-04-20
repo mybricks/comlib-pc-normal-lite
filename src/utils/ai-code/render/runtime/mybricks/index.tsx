@@ -277,12 +277,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   type NavigateFn = (to: string | number, options?: NavigateOptions) => void
   interface RouterContextValue {
     currentPath: string
+    search: string
     params: Record<string, string>
     navigate: NavigateFn
     locationState: unknown
   }
   const RouterContext = createContext<RouterContextValue>({
     currentPath: '/',
+    search: '',
     navigate: () => {},
     locationState: undefined,
     params: {}
@@ -294,6 +296,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       <RouterContext.Provider
         value={{
           currentPath: _route,
+          search: '',
           navigate: () => {},
           locationState: undefined,
           params: {}
@@ -441,7 +444,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       { stack: [{ path: _route, state: undefined }], cursor: 0 }
     )
 
-    const currentPath = stack[cursor].path
+    const currentEntry = stack[cursor]
+    const rawPath = currentEntry.path || '/'
+    const searchIndex = rawPath.indexOf('?')
+    const currentPath = searchIndex >= 0 ? rawPath.slice(0, searchIndex) : rawPath
+    const currentSearch = searchIndex >= 0 ? rawPath.slice(searchIndex) : ''
 
     // navigate 无外部依赖，引用永远稳定，不会触发消费者重渲染
     const navigate = useCallback((to, options: any = {}) => {
@@ -450,11 +457,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       else dispatch({ type: 'PUSH', to, state: options.state })
     }, [])
 
-    const locationState = stack[cursor].state
+    const locationState = currentEntry.state
 
     const contextValue = useMemo<RouterContextValue>(
-      () => ({ currentPath, params: {}, navigate, locationState }),
-      [currentPath, navigate, locationState]
+      () => ({ currentPath, search: currentSearch, params: {}, navigate, locationState }),
+      [currentPath, currentSearch, navigate, locationState]
     )
 
     return (
@@ -500,7 +507,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     if (appContext.state === 'collect_routes') {
       return element.props['data-loc'] ? element : React.cloneElement(element, { ['data-loc']: '1' })
     } else if (index || path) {
-      const currentPath = transformPath({ index: null, path: routerContext.currentPath })
+      // Strip query string from currentPath before matching (query params don't affect route matching)
+      const rawCurrentPath = routerContext.currentPath
+      const searchIndex = rawCurrentPath.indexOf('?')
+      const pathOnly = searchIndex >= 0 ? rawCurrentPath.slice(0, searchIndex) : rawCurrentPath
+      const currentPath = transformPath({ index: null, path: pathOnly })
       const propPath = transformPath({ index, path })
 
       const matched = matchPath(propPath, currentPath)
@@ -510,9 +521,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ['_mybricks_page']: true
         })
 
-        if (Object.keys(matched.params).length > 0) {
+        const mergedContext = { ...routerContext, params: matched.params }
+        if (Object.keys(matched.params).length > 0 || routerContext.search) {
           return (
-            <RouterContext.Provider value={{ ...routerContext, params: matched.params }}>
+            <RouterContext.Provider value={mergedContext}>
               {nextElement}
             </RouterContext.Provider>
           )
@@ -526,10 +538,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   Route.__type = ROUTE_TYPE
 
-  const useLocation = (): { pathname: string; state: unknown } => {
+  const useLocation = (): { pathname: string; search: string; state: unknown } => {
     const ctx = useContext(RouterContext)
     if (!ctx) throw new Error('useLocation must be used within a <Routes>')
-    return { pathname: ctx.currentPath, state: ctx.locationState }
+    return { pathname: ctx.currentPath, search: ctx.search, state: ctx.locationState }
   }
 
   const useNavigate = (): NavigateFn => {
