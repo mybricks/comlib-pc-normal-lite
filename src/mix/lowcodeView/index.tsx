@@ -310,30 +310,7 @@ export default function LowcodeView(params: Params) {
       });
 
       // 手动编辑保存后，添加 manual 类型版本记录
-      const history = (context as any).getHistory?.(comId);
-      if (history) {
-        const data = context.getAiComParams(comId)?.data;
-        const files = (data?.files ?? [])
-          .filter((f: any) => f.source)
-          .map((f: any) => ({
-            path: f.fileName,
-            content: decodeURIComponent(f.source),
-          }));
-
-        const existingVersions = await history.listVersions();
-        const record = {
-          id: crypto.randomUUID(),
-          turnId: '',
-          label: `V${existingVersions.length}`,
-          type: 'manual' as const,
-          createdAt: Date.now(),
-        };
-
-        await history.addVersion(record, files);
-
-        const updated = await history.listVersions();
-        context.notifyVersionsChange(comId, updated);
-      }
+      await context.saveManualVersion(comId);
     }
   }, [selectFile, modifiedContent, params.model]);
 

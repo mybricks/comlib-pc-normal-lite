@@ -121,6 +121,6 @@ export function syncStylesFromFigmaJson(comId: string, figmaItems: FigmaImportIt
   });
 
   if (anyChange) {
-    context.addVersion(comId, 'editor');
+    context.saveManualVersion(comId);
   }
 }

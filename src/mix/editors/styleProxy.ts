@@ -201,7 +201,7 @@ export function genStyleValue(params: { comId: string }) {
 
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined });
-      context.addVersion(comId, 'editor');
+      context.saveManualVersion(comId);
     },
   };
 }
@@ -246,7 +246,7 @@ export function genResizer() {
 
           const cssStr = stringifyLess(cssObj);
           context.updateFile(params.id, { fileName: lessPath, content: cssStr, type: undefined });
-          context.addVersion(params.id, 'editor');
+          context.saveManualVersion(params.id);
         }
       },
     },

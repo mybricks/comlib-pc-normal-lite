@@ -491,6 +491,45 @@ class Context {
   }
 
   fileSystemMap: Record<string, FileSystem> = {}
+
+  /**
+   * 手动编辑保存后,添加 manual 类型版本记录
+   */
+  async saveManualVersion(comId: string): Promise<void> {
+    const history = this.getHistory(comId);
+    if (!history) return;
+
+    const data = this.getAiComParams(comId)?.data;
+    const files = (data?.files ?? [])
+      .filter((f: any) => f.source)
+      .map((f: any) => ({
+        path: f.fileName,
+        content: decodeURIComponent(f.source),
+      }));
+
+    const existingVersions = await history.listVersions();
+    const lastRecord = existingVersions[existingVersions.length - 1];
+
+    if (lastRecord?.type === 'manual') {
+      // 手动修改的版本合并，更新版本记录
+      await history.updateVersion(lastRecord.id, { files });
+      return;
+    }
+
+    // 新增版本记录
+    const record = {
+      id: crypto.randomUUID(),
+      turnId: '',
+      label: `V${existingVersions.length}`,
+      type: 'manual' as const,
+      createdAt: Date.now(),
+    };
+
+    await history.addVersion(record, files);
+
+    const updated = await history.listVersions();
+    this.notifyVersionsChange(comId, updated);
+  }
 }
 
 export default new Context();
