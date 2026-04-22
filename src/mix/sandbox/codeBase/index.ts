@@ -1,4 +1,6 @@
 import { getEffectiveLibraryDocs } from '../../availableLibraries';
+import { FileSystem } from "../../../utils/ai-code/render/next-runtime/utils";
+import { extractMissingFiles } from "../../../utils/ai-code/render/next-runtime/utils"
 
 export interface ProjectConfig {
   getFiles: () => any[];
@@ -10,6 +12,7 @@ export interface ProjectConfig {
   getFocusInfo?: string;
   getCodeRules?: () => string;
   getDesignRules?: () => string;
+  getFileSystem?: () => FileSystem
 }
 
 export class Project {
@@ -113,11 +116,33 @@ ${canvasStatus}
 ## 当前状态
 状态：${modeLabel}
 `;
+
+    let emptyFiles = ''
+    const fileSystem = this.config.getFileSystem?.()
+    if (fileSystem?.tempFilesMap) {   
+      const { tempFilesMap } = fileSystem
+      const missingFiles = extractMissingFiles(tempFilesMap)
+      const missingFilesEntries = Object.entries(missingFiles)
+
+      if (missingFilesEntries.length > 0) {
+        emptyFiles = `
+# 缺失的依赖文件
+
+当前有 ${missingFilesEntries.length} 个文件缺失，未编写，导致部分内容无法渲染：
+
+${missingFilesEntries.map(([file, info], index) => {
+  return `${index + 1}. ${file}${info.isEntry ? '（入口文件）' : ''}，该文件被 ${Array.from(info.dependedBy).join('、')} 依赖`
+}).join('\n')}
+`
+      }
+    }
+
     return [
       '# 设计器状态（实时更新）',
       '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「运行态」，两种模式下展示的内容不一样',
       designModeKnowledge,
-      curStatus
+      curStatus,
+      emptyFiles
     ].join('\n');
   }
 

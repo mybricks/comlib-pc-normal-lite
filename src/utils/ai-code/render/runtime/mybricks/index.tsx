@@ -433,6 +433,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         data-desn-page={path}
         data-zone-title='页面'
         style={{
+          // [TODO]
+          height: '100%',
           ...style,
           // ...(data?.frameStyle?.width
           //   ? { width: data.frameStyle.width }

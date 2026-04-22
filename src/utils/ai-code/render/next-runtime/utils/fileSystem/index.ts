@@ -196,6 +196,8 @@ type FilesMap = Record<string, {
   currentImpl: (props: unknown) => ReactElement | null
   /** 清理临时文件 */
   clearTempFiles?: (filename: string) => void
+  /** 是否入口文件 */
+  isEntry?: boolean
 }>
 
 class FileSystem {
@@ -276,8 +278,9 @@ class FileSystem {
    * filename 加载目标
    * from 被谁加载（filename）
    */
-  get(filename: string, from?: string) {
+  get(filename: string, options: { from?: string, isEntry?: boolean}) {
     const entry = resolveFilename(filename, this.filesMap, this.tempFilesMap)
+    const { from, isEntry } = options
 
     if (!entry) {
       const module: any = {
@@ -314,7 +317,8 @@ class FileSystem {
             Reflect.deleteProperty(this.tempFilesMap, `${filename}${ext}`)
             Reflect.deleteProperty(this.tempFilesMap, `${filename}/index${ext}`)
           })
-        }
+        },
+        isEntry
       }
 
       const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
@@ -576,7 +580,7 @@ class FileSystem {
           }
         })
 
-        return that.get(currentPath.join('/'), filename)
+        return that.get(currentPath.join('/'), { from: filename })
       }
     })
   }

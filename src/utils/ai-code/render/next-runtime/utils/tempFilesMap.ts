@@ -2,6 +2,7 @@
 export interface MissingFileInfo {
   /** 依赖该文件的文件列表 */
   dependedBy: string[]
+  isEntry: boolean
 }
 
 /**

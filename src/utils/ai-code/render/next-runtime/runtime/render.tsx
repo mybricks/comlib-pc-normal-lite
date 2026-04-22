@@ -49,6 +49,8 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
   }, [])
 
   useLayoutEffect(() => {
+    // 预加载入口文件
+    fileSystem.current.get(props.entryFile, { isEntry: true })
     fileSystem.current.events.on('fileChange', ({ filename, type }) => {
       if (matchfile(props.entryFile, filename) && type === 'create') {
         // 监听入口文件，是否有必要，好像也可以用loading替代
@@ -110,7 +112,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
       return () => <LoadingView tip="入口文件编写中..." withContainer={true}/>
     }
     // [TODO] 配置入口文件
-    return fileSystem.current.get(props.entryFile)?.default;
+    return fileSystem.current.get(props.entryFile, { isEntry: true })?.default;
   }, [isInitialized])
 
   return <Entry />

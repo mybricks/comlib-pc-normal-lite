@@ -92,6 +92,10 @@ function buildProject(comId: string) {
     getFiles: () => aiComParams?.data?.files ?? [],
     getThemesContent: () => themesContent,
     getDesignerState: () => aiComParams?.data?._designerState,
+    getFileSystem: () => {
+      // 获取文件状态，vibing状态下，有部分文件可能还没编写完成
+      return context.fileSystemMap[comId]
+    },
     getErrors: () => (runtimeError ? [runtimeError] : []).concat(aiComParams?.data?._errors || []),
     getLogs: () => debugLogs.get(comId),
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
