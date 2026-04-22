@@ -7,25 +7,29 @@ export interface CssClassName {
 }
 
 /**
- * 从 className 表达式中提取所有 css.xxx，并标记是否为条件性 class。
- * 支持：css.button、`${css.button} ${css.submit}`、条件表达式中的 css.disabled 等
+ * 从 className 表达式中提取所有 styles.xxx / css.xxx 等 CSS Module 成员访问，并标记是否为条件性 class。
+ * 支持任意导入别名，如 `import styles from './index.less'` 后使用 `styles.button`、
+ * `import css from './style.less'` 后使用 `css.button`，以及模板字符串、条件表达式等。
  *
  * @param node          - AST 节点
  * @param isConditional - 当前节点是否处于条件分支上下文中（由父节点递归传入）
+ * @param cssModuleNames - CSS module 导入变量名集合；若为空则接受任意 Identifier.xxx 访问
  */
-export function extractCssClassNames(node: any, isConditional = false): CssClassName[] {
+export function extractCssClassNames(node: any, isConditional = false, cssModuleNames?: Set<string>): CssClassName[] {
   const result: CssClassName[] = [];
   if (!node) return result;
 
   if (node.type === "MemberExpression") {
     const obj = node.object;
     const prop = node.property;
-    if (obj?.type === "Identifier" && obj.name === "css") {
-      // css.classname
+    // 接受任意 Identifier 对象（如 css.xxx / styles.xxx / s.xxx）
+    // 若提供了 cssModuleNames，则仅匹配已知的 CSS module 导入变量名
+    if (obj?.type === "Identifier" && (!cssModuleNames || cssModuleNames.has(obj.name))) {
+      // styles.classname
       if (prop?.type === "Identifier") {
         result.push({ name: prop.name, conditional: isConditional });
       }
-      // css['classname']
+      // styles['classname']
       if (node.computed && prop?.type === "StringLiteral") {
         result.push({ name: prop.value, conditional: isConditional });
       }
@@ -34,31 +38,31 @@ export function extractCssClassNames(node: any, isConditional = false): CssClass
   }
 
   if (node.type === "BinaryExpression" && node.operator === "+") {
-    result.push(...extractCssClassNames(node.left, isConditional));
-    result.push(...extractCssClassNames(node.right, isConditional));
+    result.push(...extractCssClassNames(node.left, isConditional, cssModuleNames));
+    result.push(...extractCssClassNames(node.right, isConditional, cssModuleNames));
     return result;
   }
 
   if (node.type === "TemplateLiteral") {
     // 模板字符串本身不改变 conditional 语义，透传父级的 isConditional
     for (const expr of node.expressions || []) {
-      result.push(...extractCssClassNames(expr, isConditional));
+      result.push(...extractCssClassNames(expr, isConditional, cssModuleNames));
     }
     return result;
   }
 
   if (node.type === "ConditionalExpression") {
     // consequent / alternate 都是条件性的，无论父级是否已经是条件分支
-    result.push(...extractCssClassNames(node.consequent, true));
-    result.push(...extractCssClassNames(node.alternate, true));
+    result.push(...extractCssClassNames(node.consequent, true, cssModuleNames));
+    result.push(...extractCssClassNames(node.alternate, true, cssModuleNames));
     return result;
   }
 
   if (node.type === "LogicalExpression") {
     // left 通常是布尔判断（如 isActive），不含 css.xxx，透传父级 isConditional
-    result.push(...extractCssClassNames(node.left, isConditional));
+    result.push(...extractCssClassNames(node.left, isConditional, cssModuleNames));
     // right 只在条件成立时生效，标记为 conditional
-    result.push(...extractCssClassNames(node.right, true));
+    result.push(...extractCssClassNames(node.right, true, cssModuleNames));
     return result;
   }
 
@@ -75,12 +79,12 @@ export function extractCssClassNames(node: any, isConditional = false): CssClass
  *   而不是裸的 ".active" 误匹配任意元素
  * - 若无 base class，条件 class 退化为独立输出（向后兼容）
  */
-export function getSelectorSegment(node: any, importRelyMap: any): string[] {
+export function getSelectorSegment(node: any, importRelyMap: any, cssModuleNames?: Set<string>): string[] {
   if (!node || node.type !== "JSXElement") return [];
   const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
   const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
 
-  const raw = extractCssClassNames(classNameExpr);
+  const raw = extractCssClassNames(classNameExpr, false, cssModuleNames);
 
   // 按 name 去重，保留第一次出现的条目
   const seen = new Set<string>();
@@ -137,12 +141,12 @@ export function getSelectorSegment(node: any, importRelyMap: any): string[] {
  * 例如根节点 <div className={css.container}> 得到 "div.container"，
  * 其子 &lt;h1&gt; 得到 "div.container > h1"。
  */
-export function getCssSelectorForJSXPath(path: { node: any; parentPath?: any }, importRelyMap: any) {
+export function getCssSelectorForJSXPath(path: { node: any; parentPath?: any }, importRelyMap: any, cssModuleNames?: Set<string>) {
   let segments: string[] = [];
   let p: any = path;
   while (p?.node) {
     if (p.isJSXElement?.()) {
-      const selectors = getSelectorSegment(p.node, importRelyMap);
+      const selectors = getSelectorSegment(p.node, importRelyMap, cssModuleNames);
       if (selectors.length === 1) {
         segments =
           segments.length === 0

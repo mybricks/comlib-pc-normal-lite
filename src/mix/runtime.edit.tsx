@@ -2,39 +2,52 @@ import React, { useLayoutEffect, useMemo, useState, useRef, useEffect } from 're
 import Runtime from './runtime';
 import context from './context';
 
-const dataCompatible = (data) => {
-  if (!data._errors) {
-    data._errors = [];
-  }
-  if (!data.themes) {
-    data.themes = {
-      activeThemeId: 'theme-1',
-      themes: [
-        {
-          id: 'theme-1',
-          name: '默认主题',
-          vars: []
-        }
-      ]
-    };
-  } else if (Array.isArray(data.themes)) {
-    data.themes = {
-      activeThemeId: 'theme-1',
-      themes: [
-        {
-          id: 'theme-1',
-          name: '默认主题',
-          vars: data.themes
-        }
-      ]
+const dataCompatible = (props) => {
+  try {
+    const { id, data } = props;
+    if (!data._errors) {
+      data._errors = [];
     }
-  }
+    if (!data.themes) {
+      data.themes = {
+        activeThemeId: 'theme-1',
+        themes: [
+          {
+            id: 'theme-1',
+            name: '默认主题',
+            vars: []
+          }
+        ]
+      };
+    } else if (Array.isArray(data.themes)) {
+      data.themes = {
+        activeThemeId: 'theme-1',
+        themes: [
+          {
+            id: 'theme-1',
+            name: '默认主题',
+            vars: data.themes
+          }
+        ]
+      }
+    }
+
+    if (!data.version) {
+      data.version = 1
+      data.files.forEach((file) => {
+        const { fileName, source } = file
+        if (fileName.endsWith('.jsx')) {
+          context.updateFile(id, { fileName, content: decodeURIComponent(source) })
+        }
+      })
+    }
+  } catch {}
 }
 
 export default (props: any) => {
   const { env, data } = props;
 
-  dataCompatible(data);
+  dataCompatible(props);
 
   const [debugTarget, setDebugTarget] = useState<any>(null);
   const [fileChangeKey, setFileChangeKey] = useState<number>(0);

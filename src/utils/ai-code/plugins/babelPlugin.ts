@@ -44,6 +44,8 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
 
     // [TODO] 未来可能从多文件导入less
     const lessMap = new Map();
+    /** CSS Module 导入的本地变量名集合，如 import styles from './index.less' 则记录 'styles' */
+    const cssModuleNames = new Set<string>();
 
     return {
       visitor: {
@@ -54,6 +56,9 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               if (types.isImportSpecifier(specifier) || types.isImportDefaultSpecifier(specifier)) {
                 importRelyMap.set(specifier.local.name, node.source.value);
 
+                if (node.source.value.endsWith('.less')) {
+                  cssModuleNames.add(specifier.local.name);
+                }
                 if (node.source.value.endsWith('.less') && fileName) {
                   let currentPath = fileName.split('/');
                   currentPath = currentPath.slice(0, currentPath.length - 1)
@@ -165,9 +170,9 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
               // extractCssClassNames 现在返回 CssClassName[]，这里提取 .name 并去重
               // 保持 cnList 为 string[]，data-loc 和 constituency.className 的下游消费者无需改动
-              const cnList = [...new Set(extractCssClassNames(classNameExpr).map(c => c.name))];
+              const cnList = [...new Set(extractCssClassNames(classNameExpr, false, cssModuleNames).map(c => c.name))];
   
-              const selectors = getCssSelectorForJSXPath(path, importRelyMap);
+              const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
               const tagName = getJSXElementNameString(node.openingElement.name)?.split(".")[0];
               if (!tagName) {
                 return;
