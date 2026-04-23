@@ -91,8 +91,8 @@ dataSource.js 文件示例：
 import { DataSource } from 'mybricks'
 
 class MyDatasource extends DataSource {
-  // 场景一：静态数据，直接 return
-  getConfig() {
+  // 场景一：静态数据
+  async getConfig() {
     return { theme: 'dark', version: '1.0.0' }
   }
 

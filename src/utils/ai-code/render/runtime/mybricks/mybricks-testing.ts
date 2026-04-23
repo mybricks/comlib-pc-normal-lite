@@ -19,7 +19,7 @@
  */
 
 export interface SpyChain {
-  /** 完全替换该方法的返回值，返回 Promise.resolve(value) */
+  /** 替换该方法的返回值（异步方法返回 Promise.resolve(value)，同步方法直接返回 value） */
   mockReturn(value: any): void;
   /** 恢复原始方法 */
   mockRestore(): void;
@@ -73,10 +73,8 @@ export function createEnvRunner(collectDebugLogs?: (entry: { type: string; metho
       mockReturn(value: any) {
         spiedMethods.push({ target, method, original });
         target[method] = (...callArgs: any[]) => {
-          console.log('spyOn', method, callArgs, value);
-          const result = Promise.resolve(value);
           collectDebugLogs?.({ type: 'spyOn', method, args: callArgs, result: value });
-          return result;
+          return value;
         };
       },
       mockRestore() {
