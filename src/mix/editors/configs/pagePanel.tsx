@@ -1,5 +1,5 @@
 import context from '../../context';
-import { syncStylesFromFigmaJson } from '../figma-to-dom/sync';
+import { syncStylesFromFigmaJson, saveFigmaSyncBaseline } from '../figma-to-dom/sync';
 import type { Props, FigmaImportItem } from '../types';
 
 export function buildPagePanel(props: Props) {
@@ -18,9 +18,15 @@ export function buildPagePanel(props: Props) {
               type: 'figma',
               value: {
                 get() {
-                  return (items: FigmaImportItem[]) => syncStylesFromFigmaJson(comId, items);
+                  return {
+                    onSync: (items: FigmaImportItem[], rootEl?: Element | null) =>
+                      syncStylesFromFigmaJson(comId, items, { rootEl: rootEl ?? null }),
+                    saveBaseline: (rootEl?: Element | null) => saveFigmaSyncBaseline(comId, rootEl ?? null),
+                  };
                 },
-                set() {},
+                set() {
+                  
+                },
               },
             },
             // {
