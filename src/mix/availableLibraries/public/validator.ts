@@ -15,8 +15,6 @@ const BUILTIN_LIBRARIES: readonly string[] = [
 /** react/react-dom 始终允许，与具体注册的三方库无关 */
 const ALWAYS_ALLOWED: readonly string[] = ['react', 'react-dom'];
 
-/** 禁止使用的 console 方法 */
-const FORBIDDEN_CONSOLE_METHODS: readonly string[] = ['log', 'warn', 'error', 'info', 'debug'];
 
 /**
  * 创建公共依赖校验器。
@@ -63,43 +61,11 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
               );
             },
 
-            // ── console.log/warn/error 禁用 ───────────────────────────────
+            // ── setup.js：spyOn 只允许 .mockReturn 链式调用 ──────────────
+            // console.xxx 和 window.location 规则已移至 mix/eslint/ 轻量校验层，不再阻塞编译
             CallExpression(path: any) {
               const callee = path.node.callee;
 
-              // 检测 console.xxx(...)
-              if (
-                callee.type === 'MemberExpression' &&
-                callee.object.type === 'Identifier' &&
-                callee.object.name === 'console' &&
-                callee.property.type === 'Identifier' &&
-                FORBIDDEN_CONSOLE_METHODS.includes(callee.property.name)
-              ) {
-                throw path.buildCodeFrameError(
-                  `[日志校验] 禁止使用 console.${callee.property.name}，请使用 mybricks 提供的 logger 工具。\n` +
-                  `修正建议：import { logger } from 'mybricks'，然后使用 logger.info / logger.warn / logger.error 替代。`
-                );
-              }
-
-              // 检测 window.location.assign/replace/href 赋值（CallExpression 侧）
-              // window.location.assign(...) / window.location.replace(...)
-              if (
-                callee.type === 'MemberExpression' &&
-                callee.object.type === 'MemberExpression' &&
-                callee.object.object.type === 'Identifier' &&
-                callee.object.object.name === 'window' &&
-                callee.object.property.type === 'Identifier' &&
-                callee.object.property.name === 'location' &&
-                callee.property.type === 'Identifier' &&
-                ['assign', 'replace', 'reload'].includes(callee.property.name)
-              ) {
-                throw path.buildCodeFrameError(
-                  `[路由校验] 禁止直接调用 window.location.${callee.property.name}()，请使用 mybricks 提供的路由工具。\n` +
-                  `修正建议：import { useNavigate } from 'mybricks'，然后使用 navigate(path) 进行页面跳转。`
-                );
-              }
-
-              // ── setup.js：spyOn 只允许 .mockReturn 链式调用 ──────────────
               if (isSetupJs) {
                 // 检测 spyOn(...).xxx() 中 xxx 不是 mockReturn 的情况
                 if (
@@ -119,43 +85,6 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                     );
                   }
                 }
-              }
-            },
-
-            // ── window.location.href = '...' 赋值禁用 ───────────────────
-            AssignmentExpression(path: any) {
-              const left = path.node.left;
-
-              // 匹配 window.location = ... 或 window.location.href = ... 等
-              if (left.type !== 'MemberExpression') return;
-
-              const isWindowLocation =
-                // window.location.xxx = ...
-                (
-                  left.object.type === 'MemberExpression' &&
-                  left.object.object.type === 'Identifier' &&
-                  left.object.object.name === 'window' &&
-                  left.object.property.type === 'Identifier' &&
-                  left.object.property.name === 'location'
-                ) ||
-                // window.location = ...
-                (
-                  left.object.type === 'Identifier' &&
-                  left.object.name === 'window' &&
-                  left.property.type === 'Identifier' &&
-                  left.property.name === 'location'
-                ) ||
-                // location.href = ... / location.pathname = ...
-                (
-                  left.object.type === 'Identifier' &&
-                  left.object.name === 'location'
-                );
-
-              if (isWindowLocation) {
-                throw path.buildCodeFrameError(
-                  `[路由校验] 禁止直接修改 window.location，请使用 mybricks 提供的路由工具。\n` +
-                  `修正建议：import { useNavigate } from 'mybricks'，然后使用 navigate(path) 进行页面跳转。`
-                );
               }
             },
 

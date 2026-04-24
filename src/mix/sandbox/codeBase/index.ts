@@ -1,6 +1,7 @@
 import { getEffectiveLibraryDocs } from '../../availableLibraries';
 import { FileSystem } from "../../../utils/ai-code/render/next-runtime/utils";
 import { extractMissingFiles } from "../../../utils/ai-code/render/next-runtime/utils"
+import type { LintMessage } from '../../eslint';
 
 export interface ProjectConfig {
   getFiles: () => any[];
@@ -12,7 +13,8 @@ export interface ProjectConfig {
   getFocusInfo?: string;
   getCodeRules?: () => string;
   getDesignRules?: () => string;
-  getFileSystem?: () => FileSystem
+  getFileSystem?: () => FileSystem;
+  getLintResults?: () => LintMessage[];
 }
 
 export class Project {
@@ -110,11 +112,11 @@ ${zonesList}`;
     }
 
     const curStatus = `
-## 设计态渲染情况
-${canvasStatus}
-
 ## 当前状态
 状态：${modeLabel}
+
+## 设计态渲染情况
+${canvasStatus}
 `;
 
     let emptyFiles = ''
@@ -126,7 +128,7 @@ ${canvasStatus}
 
       if (missingFilesEntries.length > 0) {
         emptyFiles = `
-# 缺失的依赖文件
+# 文件检查
 
 当前有 ${missingFilesEntries.length} 个文件缺失，未编写，导致部分内容无法渲染：
 
@@ -137,11 +139,30 @@ ${missingFilesEntries.map(([file, info], index) => {
       }
     }
 
+    let lintMessages: import('../../eslint').LintMessage[] = [];
+    try {
+      lintMessages = this.config.getLintResults?.() ?? [];
+    } catch {
+      lintMessages = [];
+    }
+    let lintSection = '';
+    if (lintMessages.length > 0) {
+      const lines = lintMessages.map((msg, i) => {
+        const severity = msg.severity === 2 ? 'error' : 'warn';
+        const loc = `${msg.fileName ?? ''}:${msg.line}:${msg.column}`;
+        return `  ${i + 1}. [${severity}] ${loc} (${msg.ruleId}) ${msg.message}`;
+      }).join('\n');
+      lintSection = `\n# 代码检查信息\n共 ${lintMessages.length} 个问题，必须自动修复：\n${lines}\n`;
+    } else {
+      lintSection = '\n# 代码检查信息\n暂未发现代码问题。\n';
+    }
+
     return [
-      '# 设计器状态（实时更新）',
+      '# 渲染状态',
       '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「运行态」，两种模式下展示的内容不一样',
       designModeKnowledge,
       curStatus,
+      lintSection,
       emptyFiles
     ].join('\n');
   }
@@ -211,8 +232,14 @@ ${missingFilesEntries.map(([file, info], index) => {
       '\n## 设计规范\n',
       designContent,
       bestDesignPracticesContent,
-      '\n## 文档规范\n',
-      documentGuide?.firstOfAll,
+      ...(documentGuide && (documentGuide.firstOfAll || documentGuide.requirementGuide) ? [
+        '\n## 文档规范\n',
+        '<文档规范>\n',
+        documentGuide.firstOfAll,
+        '\n',
+        documentGuide.requirementGuide,
+        '\n</文档规范>\n',
+      ] : []),
       '\n## 允许使用的类库\n',
       '\n---\n\n',
       libraryDocsContent,

@@ -15,6 +15,7 @@ import { debugLogs } from '../context/debugLogs';
 import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
 import { uuid } from '../../utils';
+import { verify as eslintVerify } from '../eslint';
 
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,10 @@ function buildProject(comId: string) {
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
     getCodeRules: () => context.projectConfig.codeRules ?? '',
     getDesignRules: () => context.projectConfig.designRules ?? '',
+    getLintResults: () => {
+      const files: any[] = aiComParams?.data?.files ?? [];
+      return eslintVerify(files);
+    },
   });
 }
 
@@ -298,6 +303,12 @@ export function registerSandbox(comId: string): void {
             path: f.fileName,
             content: decodeURIComponent(f.source),
           }));
+      },
+
+      async verify() {
+        const aiComParams = context.getAiComParams(comId);
+        const files: any[] = aiComParams?.data?.files ?? [];
+        return eslintVerify(files);
       },
 
       async updateFiles(files: Array<{ path: string; content: string }>) {
