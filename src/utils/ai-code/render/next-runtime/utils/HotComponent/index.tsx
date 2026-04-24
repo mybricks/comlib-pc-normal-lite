@@ -1,4 +1,4 @@
-import React, { memo, useReducer, useEffect } from 'react'
+import React, { memo, useReducer, useLayoutEffect } from 'react'
 // [TODO] 循环引用
 import type { FilesMap } from '../fileSystem'
 import { PROXY_MARKER } from '../hackProxy'
@@ -12,7 +12,7 @@ const genHotComponent = ({ entry, LoadingView }: HotComponentProps) => {
   return memo((props) => {
     const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       if (!entry.forceUpdateSet) entry.forceUpdateSet = new Set()
       entry.forceUpdateSet.add(forceUpdate)
       return () => {
