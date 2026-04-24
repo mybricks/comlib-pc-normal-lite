@@ -39,3 +39,6 @@ export type Vibing = boolean
 export type OnRuntimeError = (error: Error, errorInfo: ErrorInfo) => void
 
 export type LoadingView = (props: { tip: string, withContainer: boolean }) => JSX.Element
+
+/** 环境变量替换 */
+export type Definitions = Record<string, string>

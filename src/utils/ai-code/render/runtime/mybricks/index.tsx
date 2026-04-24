@@ -650,6 +650,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         )
       }
 
+      if (props._standalone) {
+        /**
+         * 独立渲染，不使用默认的react-router-dom
+         */
+        return <ObservedComponent {...props} _env={_env}/>
+      }
+
       return (
         <RuntimeRoute
           {...props}

@@ -11,6 +11,7 @@ import type {
   Vibing,
   DataSource,
   LoadingView,
+  Definitions,
   Dependencies,
   OnRuntimeError,
 } from '../types'
@@ -26,6 +27,7 @@ interface RenderProps {
   // [TODO]
   onFileChange: (params: { filename: string, type: string }) => void
   LoadingView: LoadingView
+  definitions: Definitions
 }
 interface RenderRef {
   fileSystem: FileSystem
@@ -37,7 +39,8 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     css: props.css,
     entryFile: props.entryFile,
     LoadingView: props.LoadingView,
-    onRuntimeError: props.onRuntimeError
+    onRuntimeError: props.onRuntimeError,
+    definitions: props.definitions
   }))
   const [isInitialized, setIsInitialized] = useState(false)
   const [vibingEnded, setVibingEnded] = useState(false)

@@ -9,6 +9,7 @@ import type {
   Css,
   Vibing,
   LoadingView,
+  Definitions,
   OnRuntimeError
 } from '../../types'
 
@@ -16,6 +17,7 @@ interface LoadModuleParams {
   filename: string
   compiled: string
   dependencies: Dependencies
+  definitions: Definitions
 }
 interface ModuleExports {
   default: any
@@ -23,7 +25,12 @@ interface ModuleExports {
   [key: string]: any
 }
 const loadModule = (params: LoadModuleParams): ModuleExports => {
-  const { filename, compiled, dependencies } = params
+  const {
+    filename,
+    compiled,
+    definitions,
+    dependencies
+  } = params
 
   const exports = {
     default: null,
@@ -35,7 +42,9 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
 
   try {
     eval(`(function(exports, require) {
-      ${compiled}
+      ${Object.entries(definitions).reduce((pre, [key, value]) => {
+        return pre.replaceAll(key, value)
+      }, compiled)}
       //# sourceURL=_mybricks_ai/${filename}
     })`)(exports, (packageName: string) => {
     if (packageName === 'mybricks') {
@@ -178,6 +187,7 @@ interface FileSystemParams {
 
   LoadingView: LoadingView
   onRuntimeError: OnRuntimeError
+  definitions: Definitions
 }
 
 type FilesMap = Record<string, {
@@ -362,7 +372,8 @@ class FileSystem {
       const module = loadModule({
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
-        dependencies: this.proxyDependencies(resolvedFilename)
+        dependencies: this.proxyDependencies(resolvedFilename),
+        definitions: this.params.definitions
       })
 
       module.__default = module.default
@@ -375,7 +386,8 @@ class FileSystem {
       const module = loadModule({
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
-        dependencies: this.proxyDependencies(resolvedFilename)
+        dependencies: this.proxyDependencies(resolvedFilename),
+        definitions: this.params.definitions
       })
 
       entry.module = module
@@ -456,7 +468,8 @@ class FileSystem {
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
-          dependencies: this.proxyDependencies(filename)
+          dependencies: this.proxyDependencies(filename),
+          definitions: this.params.definitions
         })
         entry.file = file
         entry.module!.__default = module.default
@@ -486,7 +499,8 @@ class FileSystem {
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
-          dependencies: this.proxyDependencies(filename)
+          dependencies: this.proxyDependencies(filename),
+          definitions: this.params.definitions
         })
         tempEntry.module!.__default = module.default
         tempEntry.currentImpl = module.default || (() => null)
@@ -496,7 +510,8 @@ class FileSystem {
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
-          dependencies: this.proxyDependencies(filename)
+          dependencies: this.proxyDependencies(filename),
+          definitions: this.params.definitions
         })
         entry.file = file
         entry.module = module
@@ -518,7 +533,8 @@ class FileSystem {
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
-          dependencies: this.proxyDependencies(filename)
+          dependencies: this.proxyDependencies(filename),
+          definitions: this.params.definitions
         })
         this.filesMap[filename].module = module
       }
@@ -604,7 +620,8 @@ class FileSystem {
         const reloadedModule = loadModule({
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
-          dependencies: this.proxyDependencies(dependentFilename)
+          dependencies: this.proxyDependencies(dependentFilename),
+          definitions: this.params.definitions
         })
         
         dependentEntry.module!.__default = reloadedModule.default
@@ -616,7 +633,8 @@ class FileSystem {
         const reloadedModule = loadModule({
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
-          dependencies: this.proxyDependencies(dependentFilename)
+          dependencies: this.proxyDependencies(dependentFilename),
+          definitions: this.params.definitions
         })
         
         dependentEntry.module = reloadedModule

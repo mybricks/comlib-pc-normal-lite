@@ -486,6 +486,10 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               }
             }}
             LoadingView={LoadingView}
+            definitions={{
+              'process.env.MODE': JSON.stringify(env.runtime ? 'runtime' : 'design'),
+              'process.env.DEBUG_TARGET': JSON.stringify(env._debugTarget ?? {})
+            }}
           />
         )
         // return (
