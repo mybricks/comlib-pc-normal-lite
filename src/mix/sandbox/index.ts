@@ -62,25 +62,25 @@ function hasSourceChanged(files: any[], previousSnapshot?: Map<string, string>):
 function buildProject(comId: string) {
   const aiComParams = context.getAiComParams(comId);
 
-  const themesContent = (() => {
-    try {
-      const theme = context.resolveActiveTheme(aiComParams?.data);
-      return (
-        '- 设计风格：' +
-        (theme?.vars?.length
-          ? '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' +
-            theme.vars.reduce((pre: string, cur: any) => {
-              return (
-                pre +
-                `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}${cur.desc ? ` [${cur.desc}]` : ''}`
-              );
-            }, '')
-          : '\n  当前项目没有定义主题变量，禁止创造变量，风格根据需求自由发挥即可')
-      );
-    } catch {
-      return '';
-    }
-  })();
+  // const themesContent = (() => {
+  //   try {
+  //     const theme = context.resolveActiveTheme(aiComParams?.data);
+  //     return (
+  //       '- 设计风格：' +
+  //       (theme?.vars?.length
+  //         ? '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' +
+  //           theme.vars.reduce((pre: string, cur: any) => {
+  //             return (
+  //               pre +
+  //               `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}${cur.desc ? ` [${cur.desc}]` : ''}`
+  //             );
+  //           }, '')
+  //         : '\n  当前项目没有定义主题变量，禁止创造变量，风格根据需求自由发挥即可')
+  //     );
+  //   } catch {
+  //     return '';
+  //   }
+  // })();
 
   let runtimeError: any = null
   const events = context.getAiComEvents(comId);
@@ -90,7 +90,7 @@ function buildProject(comId: string) {
 
   return createProject({
     getFiles: () => aiComParams?.data?.files ?? [],
-    getThemesContent: () => themesContent,
+    getThemesContent: () => "", // themesContent
     getDesignerState: () => aiComParams?.data?._designerState,
     getFileSystem: () => {
       // 获取文件状态，vibing状态下，有部分文件可能还没编写完成
