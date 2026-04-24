@@ -9,6 +9,7 @@
 import type { LintMessage } from './types';
 import { createNoConsoleRule } from './rules/no-console';
 import { createNoWindowLocationRule } from './rules/no-window-location';
+import { createRequireDatasourceAsyncRule } from './rules/require-datasource-async';
 
 export type { LintMessage };
 
@@ -30,6 +31,8 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
 
   const noConsole = createNoConsoleRule();
   const noWindowLocation = createNoWindowLocationRule();
+  const isDataSourceFile = fileName.includes('dataSource');
+  const requireDatasourceAsync = isDataSourceFile ? createRequireDatasourceAsyncRule() : null;
 
   try {
     Babel.transform(code, {
@@ -43,6 +46,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
         ['transform-typescript', { isTSX: true }],
         noConsole.plugin,
         noWindowLocation.plugin,
+        ...(requireDatasourceAsync ? [requireDatasourceAsync.plugin] : []),
       ],
       retainLines: true,
     });
@@ -53,6 +57,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
   const messages: LintMessage[] = [
     ...noConsole.getMessages(),
     ...noWindowLocation.getMessages(),
+    ...(requireDatasourceAsync?.getMessages() ?? []),
   ].map((msg) => ({ ...msg, fileName }));
 
   return messages;

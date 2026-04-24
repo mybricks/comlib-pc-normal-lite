@@ -74,7 +74,7 @@ export function createEnvRunner(collectDebugLogs?: (entry: { type: string; metho
         spiedMethods.push({ target, method, original });
         target[method] = (...callArgs: any[]) => {
           collectDebugLogs?.({ type: 'spyOn', method, args: callArgs, result: value });
-          return value;
+          return Promise.resolve(value);
         };
       },
       mockRestore() {

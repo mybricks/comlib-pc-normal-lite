@@ -84,7 +84,7 @@ export function createMyBricksTesting(params: { collectDebugLogs?: (entry: { typ
         spiedMethods.push({ target, method, original });
         target[method] = (...callArgs: any[]) => {
           collectDebugLogs?.({ type: 'spyOn', method, args: callArgs, result: value });
-          return value;
+          return Promise.resolve(value);
         };
       },
       mockRestore() {
