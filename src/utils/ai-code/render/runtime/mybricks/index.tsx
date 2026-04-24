@@ -163,8 +163,10 @@ function observer<P extends object>(Component: React.FC<P>): React.FC<P> {
     }
 
     // ── 提交阶段：订阅依赖 ──
-    // useEffect 无依赖数组 = 每次渲染后都重新订阅，确保依赖始终最新
-    useEffect(() => {
+    // useLayoutEffect（同步）= 每次渲染后立即订阅，消除 store 热更新时 handler 注册的窗口期
+    // 若用 useEffect（异步），store 热更新导致 observer remount 时，
+    // 在渲染完成到 useEffect 执行之间若 store 发生变更，handler 尚未注册，响应式丢失
+    useLayoutEffect(() => {
       subscribe();
       // 组件卸载时清理所有订阅，防止内存泄漏
       return () => {
@@ -257,7 +259,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const regex = new RegExp(`^${regexStr}$`)
     const match = pathname.match(regex)
     if (!match) return null
-    const params = Object.fromEntries(keys.map((k, i) => [k, match[i + 1]]))
+    const designMode = isDesign()
+    const params = Object.fromEntries(keys.map((k, i) => {
+      const value = match[i + 1]
+      return [k, designMode ? (`:${k}` === value ? undefined : value) : value as any]
+    }))
     return { params }
   }
 
