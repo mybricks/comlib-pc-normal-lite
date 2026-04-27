@@ -41,6 +41,16 @@ const dataCompatible = (props) => {
         }
       })
     }
+
+    data.files.forEach((file) => {
+      const { fileName, source, compiled } = file
+      if (fileName.endsWith('.less')) {
+        if (!compiled?.includes('%7B%22cssContent%22%3A%22')) {
+          // 编译为新的cssmodule形式
+          context.updateFile(id, { fileName, content: decodeURIComponent(source) })
+        }
+      }
+    })
   } catch {}
 }
 

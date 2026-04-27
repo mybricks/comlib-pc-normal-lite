@@ -89,6 +89,8 @@ function buildProject(comId: string) {
     runtimeError = error
   })
 
+  let fileSystem
+
   return createProject({
     getFiles: () => aiComParams?.data?.files ?? [],
     getThemesContent: () => "", // themesContent
@@ -97,7 +99,19 @@ function buildProject(comId: string) {
       // 获取文件状态，vibing状态下，有部分文件可能还没编写完成
       return context.fileSystemMap[comId]
     },
-    getErrors: () => (runtimeError ? [runtimeError] : []).concat(aiComParams?.data?._errors || []),
+    getErrors: () => {
+      if (!fileSystem) {
+        fileSystem = context.fileSystemMap[comId]
+      }
+
+      const errors: any[] = [];
+
+      if (fileSystem) {
+        errors.push(...fileSystem.getErrors())
+      }
+
+      return errors.concat(aiComParams?.data?._errors || [])
+    },
     getLogs: () => debugLogs.get(comId),
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
     getCodeRules: () => context.projectConfig.codeRules ?? '',

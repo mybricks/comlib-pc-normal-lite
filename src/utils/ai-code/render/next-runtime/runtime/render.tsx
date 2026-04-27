@@ -9,7 +9,7 @@ import { matchfile, FileSystem, extractMissingFiles } from '../utils'
 import type {
   Css,
   Vibing,
-  DataSource,
+  ErrorView,
   LoadingView,
   Definitions,
   Dependencies,
@@ -18,7 +18,6 @@ import type {
 
 interface RenderProps {
   dependencies: Dependencies
-  DataSource: DataSource
   css: Css
   vibing: Vibing
   onMount: (params: { fileSystem: FileSystem }) => void
@@ -27,6 +26,7 @@ interface RenderProps {
   // [TODO]
   onFileChange: (params: { filename: string, type: string }) => void
   LoadingView: LoadingView
+  ErrorView: ErrorView
   definitions: Definitions
 }
 interface RenderRef {
@@ -40,8 +40,10 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     entryFile: props.entryFile,
     LoadingView: props.LoadingView,
     onRuntimeError: props.onRuntimeError,
+    ErrorView: props.ErrorView,
     definitions: props.definitions
   }))
+  const [error, setError] = useState<Error | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [vibingEnded, setVibingEnded] = useState(false)
 
@@ -56,6 +58,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     fileSystem.current.get(props.entryFile, { isEntry: true })
     fileSystem.current.events.on('fileChange', ({ filename, type }) => {
       if (matchfile(props.entryFile, filename) && type === 'create') {
+        fileSystem.current.error = null
         // 监听入口文件，是否有必要，好像也可以用loading替代
         setIsInitialized(true)
       }
@@ -87,8 +90,10 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     if (vibingEnded) {
       // vibe 结束
       if (!isInitialized) {
+        const error = new Error(`入口文件 \`${props.entryFile}\` 缺失，组件无法渲染`)
+        fileSystem.current.error = error
         // 缺失入口文件
-        throw new Error(`入口文件 \`${props.entryFile}\` 缺失，组件无法渲染`)
+        setError(error)
       } else {
         const { tempFilesMap } = fileSystem.current
         
@@ -102,21 +107,28 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
             })
             .join('')
           
-          throw new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`)
+          setError(new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`))
         }
       }
+    } else {
+      setError(null)
     }
   }, [vibingEnded, isInitialized])
 
   const Entry = useMemo(() => {
-    if (!isInitialized) {
-      const { LoadingView } = props
-      // [TODO] 提出去作为一个组件
-      return () => <LoadingView tip="入口文件编写中..." withContainer={true}/>
-    }
+    // if (!isInitialized) {
+    //   const { LoadingView } = props
+    //   // [TODO] 提出去作为一个组件
+    //   return () => <LoadingView tip="入口文件编写中..." withContainer={true}/>
+    // }
     // [TODO] 配置入口文件
     return fileSystem.current.get(props.entryFile, { isEntry: true })?.default;
   }, [isInitialized])
+
+  if (error) {
+    const ErrorView = props.ErrorView
+    return <ErrorView error={error} />
+  }
 
   return <Entry />
 })

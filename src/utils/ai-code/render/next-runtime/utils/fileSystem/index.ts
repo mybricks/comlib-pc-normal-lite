@@ -1,13 +1,16 @@
-import { ReactElement } from 'react'
+import { ReactElement, createElement } from 'react'
 import { Events } from '../events'
+import ErrorBoundary from '../HotComponent/ErrorBoundary'
 import createHotComponent from '../HotComponent'
 import { hackProxy } from '../hackProxy'
-import { FileWatcher } from './watcher' 
+import { FileWatcher } from './watcher'
+import { extractMissingFiles } from '..'
 import type {
   Files,
   Dependencies,
   Css,
   Vibing,
+  ErrorView,
   LoadingView,
   Definitions,
   OnRuntimeError
@@ -18,6 +21,7 @@ interface LoadModuleParams {
   compiled: string
   dependencies: Dependencies
   definitions: Definitions
+  ErrorView: ErrorView
 }
 interface ModuleExports {
   default: any
@@ -29,7 +33,8 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     filename,
     compiled,
     definitions,
-    dependencies
+    dependencies,
+    ErrorView
   } = params
 
   const exports = {
@@ -52,7 +57,21 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       return {
         ...result,
         popupRef: (Component, params = {}) => {
-          return result.popupRef(Component, { filename, ...params })
+          return result.popupRef(Component, {
+            filename,
+            ...params,
+            ErrorView: ({ children }) => {
+              return createElement(ErrorBoundary, {
+                onError() {
+
+                },
+                resetKey: 1,
+                ErrorView,
+                // @ts-ignore 引擎特殊处理逻辑
+                _onError_() {}
+              }, children)
+            }
+          })
         },
         comRef: (Component, params = {}) => {
           return result.comRef(Component, { filename, ...params })
@@ -186,6 +205,7 @@ interface FileSystemParams {
   entryFile: string;
 
   LoadingView: LoadingView
+  ErrorView: ErrorView
   onRuntimeError: OnRuntimeError
   definitions: Definitions
 }
@@ -208,6 +228,11 @@ type FilesMap = Record<string, {
   clearTempFiles?: (filename: string) => void
   /** 是否入口文件 */
   isEntry?: boolean
+  /** 错误信息 */
+  errors: {
+    /** 运行时错误 */
+    runtime: Error | null
+  }
 }>
 
 class FileSystem {
@@ -233,6 +258,8 @@ class FileSystem {
   private _onError: ((event: ErrorEvent) => void) | null = null
 
   fileWatcher: FileWatcher = new FileWatcher(this)
+
+  error: Error | null = null
 
   constructor(params: FileSystemParams) {
     this.params = params
@@ -328,10 +355,13 @@ class FileSystem {
             Reflect.deleteProperty(this.tempFilesMap, `${filename}/index${ext}`)
           })
         },
-        isEntry
+        isEntry,
+        errors: {
+          runtime: null
+        }
       }
 
-      const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
+      const HotComponent = this.createHotComponent({ entry: tempEntry })
       module.default = HotComponent
 
       if (from) {
@@ -369,25 +399,23 @@ class FileSystem {
     const resolvedFilename = entry.file.filename
 
     if (isJsxModule(resolvedFilename)) {
-      const module = loadModule({
+      const module = this.loadModule({
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
         dependencies: this.proxyDependencies(resolvedFilename),
-        definitions: this.params.definitions
       })
 
       module.__default = module.default
       // 将实际的组件函数赋值给 currentImpl
       entry.currentImpl = module.__default || (() => null)
-      const HotComponent = createHotComponent({ entry, LoadingView: this.params.LoadingView  })
+      const HotComponent = this.createHotComponent({ entry })
       module.default = HotComponent
       entry.module = module
     } else if (isJsModule(resolvedFilename)) {
-      const module = loadModule({
+      const module = this.loadModule({
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
         dependencies: this.proxyDependencies(resolvedFilename),
-        definitions: this.params.definitions
       })
 
       entry.module = module
@@ -462,14 +490,21 @@ class FileSystem {
         }
       }
     }
+
+    if (entry) {
+      // 清除错误信息
+      entry.errors = {
+        runtime: null
+      }
+    }
+
     // update用于新增和修改
     if (isJsxModule(filename) || matchfile(filename, this.params.entryFile)) {
       if (entry) {
-        const module = loadModule({
+        const module = this.loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
         })
         entry.file = file
         entry.module!.__default = module.default
@@ -491,27 +526,28 @@ class FileSystem {
           dependencies: new Set<string>(),
           dependedBy: new Set<string>(),
           forceUpdateSet: new Set<() => void>(),
-          currentImpl: () => null
+          currentImpl: () => null,
+          errors: {
+            runtime: null
+          }
         }
-        const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
+        const HotComponent = this.createHotComponent({ entry: tempEntry })
         tempModule.default = HotComponent
         this.filesMap[filename] = tempEntry
-        const module = loadModule({
+        const module = this.loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
         })
         tempEntry.module!.__default = module.default
         tempEntry.currentImpl = module.default || (() => null)
       }
     } else if (isJsModule(filename)) {
       if (entry) {
-        const module = loadModule({
+        const module = this.loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
         })
         entry.file = file
         entry.module = module
@@ -528,13 +564,15 @@ class FileSystem {
           dependencies: new Set(),
           dependedBy: new Set(),
           forceUpdateSet: new Set<() => void>(),
-          currentImpl: () => null
+          currentImpl: () => null,
+          errors: {
+            runtime: null
+          }
         }
-        const module = loadModule({
+        const module = this.loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
         })
         this.filesMap[filename].module = module
       }
@@ -560,7 +598,10 @@ class FileSystem {
           dependencies: new Set(),
           dependedBy: new Set(),
           forceUpdateSet: new Set<() => void>(),
-          currentImpl: () => null
+          currentImpl: () => null,
+          errors: {
+            runtime: null
+          }
         }
         refresh = true
       }
@@ -617,11 +658,10 @@ class FileSystem {
       if (isJsxModule(dependentFilename)) {
         // 如果依赖者是 JSX 组件,触发其 forceUpdate
         // 重新加载该组件模块(清除缓存)
-        const reloadedModule = loadModule({
+        const reloadedModule = this.loadModule({
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
           dependencies: this.proxyDependencies(dependentFilename),
-          definitions: this.params.definitions
         })
         
         dependentEntry.module!.__default = reloadedModule.default
@@ -630,11 +670,10 @@ class FileSystem {
       } else if (isJsModule(dependentFilename)) {
         // 被 JS 依赖，递归刷新依赖链
         // 重新加载 JS 模块
-        const reloadedModule = loadModule({
+        const reloadedModule = this.loadModule({
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
           dependencies: this.proxyDependencies(dependentFilename),
-          definitions: this.params.definitions
         })
         
         dependentEntry.module = reloadedModule
@@ -645,7 +684,66 @@ class FileSystem {
   }
 
   setVibing(vibing: Vibing) {
-    this.vibing = vibing
+    if (this.vibing !== vibing) {
+      this.vibing = vibing
+      Object.entries(this.filesMap).forEach(([_, entry]) => {
+        if (entry.errors.runtime) {
+          entry.forceUpdateSet.forEach(fn => fn())
+        }
+      })
+    }
+  }
+
+  loadModule(params) {
+    return loadModule({
+      ...params,
+      definitions: this.params.definitions,
+      ErrorView: this.params.ErrorView
+    })
+  }
+
+  createHotComponent(params: { entry: FilesMap[string] }) {
+    return createHotComponent({
+      ...params,
+      LoadingView: this.params.LoadingView,
+      ErrorView: this.params.ErrorView,
+      getVibing: () => {
+        return this.vibing
+      },
+      onRuntimeError: (error: Error) => {
+        params.entry.errors.runtime = error
+        this.params.onRuntimeError(error, params.entry.file)
+      }
+    })
+  }
+
+  getErrors() {
+    const errors: Error[] = []
+    if (this.error) {
+      errors.push(this.error)
+    }
+    Object.entries(this.filesMap).forEach(([_, value]: any) => {
+      const error = value.errors.runtime
+      if (error) {
+        errors.push(error)
+      }
+    })
+
+    const { tempFilesMap } = this
+            
+    if (Object.keys(tempFilesMap).length > 0) {
+      const missingFiles = extractMissingFiles(tempFilesMap)
+      // 构建详细的错误信息，包含依赖关系
+      const errorDetails = Object.entries(missingFiles)
+        .map(([file, info], index) => {
+          return `${index ? '、' : ''}\`${file}\``
+        })
+        .join('')
+
+      errors.push(new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`))
+    }
+
+    return errors
   }
 }
 

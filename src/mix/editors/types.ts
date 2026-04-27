@@ -23,4 +23,17 @@ export interface FigmaImportItem {
   value: Record<string, string>;
   /** AL 容器节点的直接子节点 selectors（仅二进制剪贴板路径填充） */
   childSelectors?: string[];
+  /** 附加元数据（用于同步阶段决策） */
+  meta?: {
+    dimension?: {
+      sizingHorizontal?: string;
+      sizingVertical?: string;
+      sourceSize?: {
+        x?: number;
+        y?: number;
+      };
+      hasAutoLayout?: boolean;
+      stackMode?: string;
+    };
+  };
 }
