@@ -7,24 +7,24 @@ const MB_TAG_RE = /\[mb:([^\]]+)\]/i;
 // ─── 非 flex DOM CSS 升级辅助 ─────────────────────────────────────────────────
 
 /**
- * 在 baseline 的所有文件中查找 selector 对应的属性 block。
- * 多文件编码格式：.filePrefix-className → 直接用 .className 查 baseline。
+ * 在实时参考快照的所有文件中查找 selector 对应的属性 block。
+ * 多文件编码格式：.filePrefix-className → 直接用 .className 查参考快照。
  */
-function findBaselineProps(
+function findLiveBaselineProps(
   selector: string,
-  baseline: FigmaSyncBaseline | null
+  liveBaseline: FigmaSyncLiveBaseline | null
 ): Record<string, string> | null {
-  if (!baseline) return null;
-  // 多文件编码格式：.filePrefix-className → 直接用 .className 查 baseline
+  if (!liveBaseline) return null;
+  // 多文件编码格式：.filePrefix-className → 直接用 .className 查实时参考快照
   let effectiveSel = selector;
   if (selector.startsWith('.')) {
     const inner = selector.slice(1);
     const dashIdx = inner.indexOf('-');
     if (dashIdx > 0) effectiveSel = '.' + inner.substring(dashIdx + 1);
   }
-  for (const fileName of Object.keys(baseline)) {
+  for (const fileName of Object.keys(liveBaseline)) {
     if (fileName === '_domComputed') continue;
-    const fileObj = (baseline as Record<string, Record<string, Record<string, string>>>)[fileName];
+    const fileObj = (liveBaseline as Record<string, Record<string, Record<string, string>>>)[fileName];
     if (!fileObj) continue;
     const key = Object.keys(fileObj).find(
       (k) => k === effectiveSel || k.endsWith(' ' + effectiveSel)
@@ -34,8 +34,8 @@ function findBaselineProps(
   return null;
 }
 
-function isFlexInBaseline(selector: string, baseline: FigmaSyncBaseline | null): boolean {
-  const props = findBaselineProps(selector, baseline);
+function isFlexInLiveBaseline(selector: string, liveBaseline: FigmaSyncLiveBaseline | null): boolean {
+  const props = findLiveBaselineProps(selector, liveBaseline);
   if (!props) return false;
   const d = props['display'];
   if (d === 'flex' || d === 'inline-flex') return true;
@@ -43,15 +43,18 @@ function isFlexInBaseline(selector: string, baseline: FigmaSyncBaseline | null):
   return false;
 }
 
-function isGridInBaseline(selector: string, baseline: FigmaSyncBaseline | null): boolean {
-  const props = findBaselineProps(selector, baseline);
+function isGridInLiveBaseline(selector: string, liveBaseline: FigmaSyncLiveBaseline | null): boolean {
+  const props = findLiveBaselineProps(selector, liveBaseline);
   if (!props) return false;
   const d = props['display'];
   return d === 'grid' || d === 'inline-grid';
 }
 
-function isAbsoluteInBaseline(selector: string, baseline: FigmaSyncBaseline | null): boolean {
-  const props = findBaselineProps(selector, baseline);
+function isAbsoluteInLiveBaseline(
+  selector: string,
+  liveBaseline: FigmaSyncLiveBaseline | null
+): boolean {
+  const props = findLiveBaselineProps(selector, liveBaseline);
   if (!props) return false;
   return props['position'] === 'absolute';
 }
@@ -66,14 +69,14 @@ const MARGIN_CAMEL_TO_HYPHEN: Record<string, string> = {
 };
 
 /**
- * 找出该 selector 在 baseline 中有实际值（非 0、非 var()）的 margin 属性，
+ * 找出该 selector 在实时参考快照中有实际值（非 0、非 var()）的 margin 属性，
  * 返回 CSS hyphen 格式（如 'margin-bottom'）。
  */
-function findMarginKeysInBaseline(
+function findMarginKeysInLiveBaseline(
   selector: string,
-  baseline: FigmaSyncBaseline | null
+  liveBaseline: FigmaSyncLiveBaseline | null
 ): string[] {
-  const props = findBaselineProps(selector, baseline);
+  const props = findLiveBaselineProps(selector, liveBaseline);
   if (!props) return [];
   const result: string[] = [];
   for (const camel of Object.keys(MARGIN_CAMEL_TO_HYPHEN)) {
@@ -86,16 +89,97 @@ function findMarginKeysInBaseline(
   return result;
 }
 
+type DimensionAxis = 'width' | 'height';
+
+function hasExplicitDimensionInLiveBaseline(
+  selector: string,
+  axis: DimensionAxis,
+  liveBaseline: FigmaSyncLiveBaseline | null
+): boolean {
+  const props = findLiveBaselineProps(selector, liveBaseline);
+  if (!props) return false;
+  const raw = props[axis];
+  if (raw == null) return false;
+  const value = String(raw).trim();
+  if (!value) return false;
+  // auto/initial/inherit/unset 不是显式固定尺寸意图
+  if (value === 'auto' || value === 'initial' || value === 'inherit' || value === 'unset') return false;
+  return true;
+}
+
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : null;
+  if (typeof value !== 'string') return null;
+  const n = Number.parseFloat(value.trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseFlexGrowFromShorthand(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (!v) return null;
+  if (v === 'none') return 0;
+  if (v === 'auto') return 1;
+  const first = v.split(/\s+/)[0];
+  return parsePositiveNumber(first);
+}
+
+function isElasticItemInLiveBaseline(
+  selector: string,
+  _axis: DimensionAxis,
+  liveBaseline: FigmaSyncLiveBaseline | null
+): boolean {
+  const props = findLiveBaselineProps(selector, liveBaseline);
+  if (!props) return false;
+  const growVal = props['flexGrow'] ?? props['flex-grow'];
+  if (parsePositiveNumber(growVal) != null) return true;
+  const flexVal = props['flex'];
+  const growFromFlex = parseFlexGrowFromShorthand(flexVal);
+  if (growFromFlex != null && growFromFlex > 0) return true;
+  return false;
+}
+
+function shouldApplyDimension(options: {
+  selector: string;
+  cssKey: string;
+  figmaValue: string;
+  item: FigmaImportItem;
+  liveBaseline: FigmaSyncLiveBaseline | null;
+}): boolean {
+  const { selector, cssKey, figmaValue, item, liveBaseline } = options;
+  if (cssKey !== 'width' && cssKey !== 'height') return true;
+  const axis: DimensionAxis = cssKey;
+
+  // 实时参考快照显示是弹性项（如 flex:1 / flex-grow>0）时，不回写尺寸，避免把分配结果固化为像素。
+  if (isElasticItemInLiveBaseline(selector, axis, liveBaseline)) return false;
+
+  const dimensionMeta = item.meta?.dimension;
+  const sizingMode = axis === 'width'
+    ? dimensionMeta?.sizingHorizontal
+    : dimensionMeta?.sizingVertical;
+
+  // Auto Layout 的 FILL 是“由父容器分配空间”，不应固化成 width/height。
+  if (dimensionMeta?.hasAutoLayout && sizingMode === 'FILL') return false;
+
+  // 该轴在实时参考快照有显式尺寸声明，则允许回写（代表用户本来就有尺寸意图）。
+  if (hasExplicitDimensionInLiveBaseline(selector, axis, liveBaseline)) return true;
+
+  // 实时参考快照无显式声明时，仅保留明确 FIXED + 像素值的尺寸意图。
+  if (sizingMode === 'FIXED' && /px$/i.test(figmaValue.trim())) return true;
+
+  return false;
+}
+
 /**
  * 对「非 flex DOM 容器在 Figma 中修改了 AutoLayout」的场景：
- * 1. 给父容器追加 display:flex（非 flex/grid baseline → CSS 升级）
- * 2. 给子节点 emit margin 清零 items（仅清 baseline 中有实际值的 margin 属性）
+ * 1. 给父容器追加 display:flex（非 flex/grid 实时参考快照 → CSS 升级）
+ * 2. 给子节点 emit margin 清零 items（仅清实时参考快照中有实际值的 margin 属性）
  *
  * 依赖 FigmaImportItem.childSelectors（由 to-import-items.ts 填充）。
  */
 function expandNonFlexUpgradeItems(
   items: FigmaImportItem[],
-  baseline: FigmaSyncBaseline | null
+  liveBaseline: FigmaSyncLiveBaseline | null
 ): FigmaImportItem[] {
   // 构建 selector→items 反查 Map（支持同 selector 多 item，merge 时写入所有）
   const selectorToItems = new Map<string, FigmaImportItem[]>();
@@ -120,9 +204,9 @@ function expandNonFlexUpgradeItems(
     const parentSelector = item.selectors[0];
     if (!parentSelector) continue;
 
-    // 已是 flex 或 grid → 跳过（方案 D baseline diff 已处理）
-    if (isFlexInBaseline(parentSelector, baseline)) continue;
-    if (isGridInBaseline(parentSelector, baseline)) continue;
+    // 已是 flex 或 grid → 跳过（方案 D 实时 diff 已处理）
+    if (isFlexInLiveBaseline(parentSelector, liveBaseline)) continue;
+    if (isGridInLiveBaseline(parentSelector, liveBaseline)) continue;
 
     // 非 flex 容器：在已有 item 的 value 里追加 display:flex，若无则新建
     let parentItem = selectorToItem.get(parentSelector);
@@ -136,9 +220,9 @@ function expandNonFlexUpgradeItems(
 
     // 遍历直接子节点，emit margin 清零
     for (const childSelector of item.childSelectors) {
-      if (isAbsoluteInBaseline(childSelector, baseline)) continue;
+      if (isAbsoluteInLiveBaseline(childSelector, liveBaseline)) continue;
 
-      const marginKeys = findMarginKeysInBaseline(childSelector, baseline);
+      const marginKeys = findMarginKeysInLiveBaseline(childSelector, liveBaseline);
       if (!marginKeys.length) continue;
 
       const clearValue: Record<string, string> = {};
@@ -214,7 +298,9 @@ function parseMultiFileSelector(
 
 /** 多文件同步场景下，antd 等第三方 class 应写入 :global(.ant-*)，便于覆盖组件库样式 */
 function isMultiFileScopedAntClass(selector: string): boolean {
-  return /^\.ant-/.test(selector);
+  if (/^\.ant-/.test(selector)) return true;
+  const bare = bareSelectorInsideGlobalKey(selector);
+  return !!(bare && /^\.ant-/.test(bare));
 }
 
 function bareSelectorInsideGlobalKey(cssObjKey: string): string | null {
@@ -228,10 +314,12 @@ function resolveLessMergeCssObjKey(
   useGlobalAntWrapper: boolean
 ): string {
   if (useGlobalAntWrapper && isMultiFileScopedAntClass(selector)) {
-    const globalKey = `:global(${selector})`;
-    if (cssObj[globalKey] && typeof cssObj[globalKey] === 'object') return globalKey;
-    // 不回退到裸 selector：Less 里可能存在旧的错误写入（无 :global 的裸 ant 类），
-    // 回退会导致继续向裸 key 写入而非正确的 :global() 块。
+    const bareSelector =
+      selector.startsWith('.')
+        ? selector
+        : (bareSelectorInsideGlobalKey(selector) ?? selector);
+    const globalKey = `:global(${bareSelector})`;
+    // 简化策略：写入阶段只产出 :global(.ant-*)，不对历史裸 .ant-* 做迁移/清理。
     return globalKey;
   }
   let cssObjKey =
@@ -264,22 +352,72 @@ function looksLikeMultiFileEncodedSelector(
   return encodedFilePrefixes.has(prefix);
 }
 
-const BASELINE_KEY_PREFIX = 'figma_sync_baseline_';
-
 /** 与 Figma extractSimpleStyles 同维度的稳定计算属性子集，排除 width/height 等布局噪音 */
 const DOM_COMPUTED_STABLE_PROPS = ['backgroundColor', 'color', 'fontSize', 'fontFamily'] as const;
 
 type DomComputedSnapshot = Record<string, Record<string, string>>;
 
-type FigmaSyncBaseline = {
+type FigmaSyncLiveBaseline = {
   _domComputed?: DomComputedSnapshot;
   [fileName: string]: Record<string, Record<string, string>> | undefined;
 };
 
+function buildLiveBaseline(
+  files: Array<{ fileName: string; source?: string }>,
+  rootEl?: Element | null
+): FigmaSyncLiveBaseline {
+  const liveBaseline: FigmaSyncLiveBaseline = {};
+
+  for (const file of files) {
+    if (!file.fileName.endsWith('.less') || !file.source) continue;
+    try {
+      liveBaseline[file.fileName] = parseLess(decodeURIComponent(file.source));
+    } catch {}
+  }
+
+  if (rootEl) {
+    try {
+      const domComputed: DomComputedSnapshot = {};
+      // 优先穿透 shadowRoot（MyBricks 组件渲染在 shadow DOM 内）
+      const rootNode = typeof rootEl.getRootNode === 'function' ? rootEl.getRootNode() : null;
+      const shadowHostRoot = rootNode instanceof ShadowRoot ? rootNode : null;
+      const queryRoot: Element | ShadowRoot =
+        (rootEl as any).shadowRoot || shadowHostRoot || rootEl;
+
+      const antEls = queryRoot.querySelectorAll('[class*="ant-"]');
+      const seenSelectors = new Set<string>();
+      antEls.forEach((el) => {
+        const className = (el as HTMLElement).className;
+        if (!className || typeof className !== 'string') return;
+        const classes = className.trim().split(/\s+/);
+        classes
+          .filter((c) => c.startsWith('ant-'))
+          .forEach((cls) => {
+            const sel = '.' + cls;
+            if (seenSelectors.has(sel)) return;
+            seenSelectors.add(sel);
+            try {
+              const cs = window.getComputedStyle(el);
+              const snap: Record<string, string> = {};
+              DOM_COMPUTED_STABLE_PROPS.forEach((prop) => {
+                const raw = (cs as unknown as Record<string, string>)[prop] || '';
+                snap[prop] = /color/i.test(prop) ? normalizeColorForCompare(raw) : raw;
+              });
+              domComputed[sel] = snap;
+            } catch {}
+          });
+      });
+      liveBaseline._domComputed = domComputed;
+    } catch {}
+  }
+
+  return liveBaseline;
+}
+
 /** 把 #RRGGBB / #RGB 等 hex 色值统一转为 rgb(r, g, b)，其余原样返回 */
 function normalizeColorForCompare(v: string): string {
   if (!v) return v;
-  const s = v.trim();
+  const s = v.trim().toLowerCase();
   const hex6 = s.match(/^#([0-9a-f]{6})$/i);
   if (hex6) {
     const n = parseInt(hex6[1], 16);
@@ -290,7 +428,42 @@ function normalizeColorForCompare(v: string): string {
     const [r, g, b] = hex3[1].split('').map((c) => parseInt(c + c, 16));
     return `rgb(${r}, ${g}, ${b})`;
   }
+  const rgbLike = s.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbLike) {
+    const parts = rgbLike[1].split(',').map((p) => p.trim());
+    if (parts.length >= 3) {
+      const r = Math.round(Number(parts[0]));
+      const g = Math.round(Number(parts[1]));
+      const b = Math.round(Number(parts[2]));
+      if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return s;
+      if (parts.length === 3) return `rgb(${r}, ${g}, ${b})`;
+      const a = Number(parts[3]);
+      if (!Number.isFinite(a)) return s;
+      if (a >= 1 - 1e-4) return `rgb(${r}, ${g}, ${b})`;
+      return `rgba(${r}, ${g}, ${b}, ${Math.round(a * 1000) / 1000})`;
+    }
+  }
   return s;
+}
+
+/** 归一化 font-family，去引号、统一大小写与空格。 */
+function normalizeFontFamilyForCompare(v: string): string {
+  if (!v) return '';
+  return v
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      let out = part;
+      if (
+        (out.startsWith("'") && out.endsWith("'")) ||
+        (out.startsWith('"') && out.endsWith('"'))
+      ) {
+        out = out.slice(1, -1);
+      }
+      return out.trim().toLowerCase().replace(/\s+/g, ' ');
+    })
+    .join(',');
 }
 
 /**
@@ -303,6 +476,15 @@ function valuesEqualForSync(
 ): boolean {
   const sa = String(a ?? '');
   const sb = String(b ?? '');
+  if (camelKey === 'fontFamily') {
+    const fa = normalizeFontFamilyForCompare(sa);
+    const fb = normalizeFontFamilyForCompare(sb);
+    if (fa === fb) return true;
+    // 容忍 fallback 差异：主字体一致就视为未变更（如 "PingFang SC" vs "'PingFang SC', sans-serif"）。
+    const faPrimary = fa.split(',')[0] || '';
+    const fbPrimary = fb.split(',')[0] || '';
+    return !!faPrimary && faPrimary === fbPrimary;
+  }
   const isColor =
     /color/i.test(camelKey) ||
     /^(#|rgb\b|rgba\b)/.test(sa) ||
@@ -357,18 +539,18 @@ function resolveLogicSelector(
  * 多候选择一：按优先级返回「应写入」的那条，null 表示整组跳过。
  *
  * 优先级：
- *   1. baseline._domComputed[selector]  → 与 DOM 快照相比不同的第一条
- *   2. baseline[targetFileName][selector] → 与 Less 快照相比不同的第一条
+ *   1. liveBaseline._domComputed[selector]  → 与 DOM 快照相比不同的第一条
+ *   2. liveBaseline[targetFileName][selector] → 与 Less 快照相比不同的第一条
  *   3. 无法用 1/2 区分时不猜测（不再使用频次启发式），整组跳过并 warn，避免误改无关样式。
  */
 function pickBestCandidate(
   group: ResolvedItem[],
   selector: string,
   targetFileName: string,
-  baseline: FigmaSyncBaseline | null
+  liveBaseline: FigmaSyncLiveBaseline | null
 ): ResolvedItem | null {
-  // Priority 1: DOM computed baseline
-  const domSnap = baseline?._domComputed?.[selector];
+  // Priority 1: DOM computed live baseline
+  const domSnap = liveBaseline?._domComputed?.[selector];
   if (domSnap) {
     for (const ri of group) {
       const differs = Object.entries(ri.item.value).some(([cssKey, figmaValue]) => {
@@ -382,22 +564,22 @@ function pickBestCandidate(
     return null;
   }
 
-  // Priority 2: Less baseline for targetFileName
-  const baselineFileObj = (baseline as Record<string, Record<string, Record<string, string>>> | null)?.[targetFileName];
-  if (baselineFileObj) {
-    const baselineSelectorKey = Object.keys(baselineFileObj).find(
+  // Priority 2: Less live baseline for targetFileName
+  const liveBaselineFileObj = (liveBaseline as Record<string, Record<string, Record<string, string>>> | null)?.[targetFileName];
+  if (liveBaselineFileObj) {
+    const liveBaselineSelectorKey = Object.keys(liveBaselineFileObj).find(
       (k) =>
         k === selector ||
         k.endsWith(' ' + selector) ||
         k === `:global(${selector})` ||
         k.endsWith(` :global(${selector})`)
     );
-    if (baselineSelectorKey) {
-      const baselineSnap = baselineFileObj[baselineSelectorKey];
+    if (liveBaselineSelectorKey) {
+      const liveBaselineSnap = liveBaselineFileObj[liveBaselineSelectorKey];
       for (const ri of group) {
         const differs = Object.entries(ri.item.value).some(([cssKey, figmaValue]) => {
           const camelKey = convertHyphenToCamel(cssKey);
-          return !valuesEqualForSync(camelKey, figmaValue, baselineSnap[camelKey]);
+          return !valuesEqualForSync(camelKey, figmaValue, liveBaselineSnap[camelKey]);
         });
         if (differs) return ri;
       }
@@ -408,66 +590,6 @@ function pickBestCandidate(
   return null;
 }
 
-/**
- * 在导出到 Figma 之前调用：将当前各 .less 文件的 class 样式快照以及 antd 节点的 DOM computed
- * 样式快照一并保存到 localStorage。每个用户在自己的浏览器中独立保存，不影响协作端。
- */
-export function saveFigmaSyncBaseline(comId: string, rootEl?: Element | null): void {
-  const aiComParams = context.getAiComParams(comId);
-  if (!aiComParams?.data) return;
-  const files: Array<{ fileName: string; source?: string }> = aiComParams.data.files || [];
-  const baseline: FigmaSyncBaseline = {};
-  for (const file of files) {
-    if (!file.fileName.endsWith('.less') || !file.source) continue;
-    try {
-      baseline[file.fileName] = parseLess(decodeURIComponent(file.source));
-    } catch {}
-  }
-
-  // DOM computed 快照：遍历 rootEl 内带 ant- 前缀的节点，取稳定属性子集
-  if (rootEl) {
-    try {
-      const domComputed: DomComputedSnapshot = {};
-      // 优先穿透 shadowRoot（MyBricks 组件渲染在 shadow DOM 内）
-      const hasShadowRoot = !!(rootEl as any).shadowRoot;
-      // getRootNode() 若返回 ShadowRoot，说明 rootEl 本身在某个 shadow DOM 内，往上取 host
-      const rootNode = typeof rootEl.getRootNode === 'function' ? rootEl.getRootNode() : null;
-      const shadowHostRoot = (rootNode instanceof ShadowRoot) ? rootNode : null;
-      const queryRoot: Element | ShadowRoot =
-        (rootEl as any).shadowRoot || shadowHostRoot || rootEl;
-
-      const antEls = queryRoot.querySelectorAll('[class*="ant-"]');
-      const seenSelectors = new Set<string>();
-      antEls.forEach((el) => {
-        const className = (el as HTMLElement).className;
-        if (!className || typeof className !== 'string') return;
-        const classes = className.trim().split(/\s+/);
-        classes
-          .filter((c) => c.startsWith('ant-'))
-          .forEach((cls) => {
-            const sel = '.' + cls;
-            if (seenSelectors.has(sel)) return;
-            seenSelectors.add(sel);
-            try {
-              const cs = window.getComputedStyle(el);
-              const snap: Record<string, string> = {};
-              DOM_COMPUTED_STABLE_PROPS.forEach((prop) => {
-                const raw = (cs as unknown as Record<string, string>)[prop] || '';
-                snap[prop] = /color/i.test(prop) ? normalizeColorForCompare(raw) : raw;
-              });
-              domComputed[sel] = snap;
-            } catch {}
-          });
-      });
-      baseline._domComputed = domComputed;
-    } catch (e) {}
-  }
-
-  try {
-    localStorage.setItem(BASELINE_KEY_PREFIX + comId, JSON.stringify(baseline));
-  } catch (e) {}
-}
-
 /** 从 Figma JSON（含 selectors）同步样式到组件各 less 文件，只同步有差异的部分 */
 export function syncStylesFromFigmaJson(
   comId: string,
@@ -476,20 +598,14 @@ export function syncStylesFromFigmaJson(
 ): number {
   const aiComParams = context.getAiComParams(comId);
   if (!aiComParams?.data) return 0;
-
-  // 读取本地基线（用户导出时保存），用于 baseline diff
-  let baseline: FigmaSyncBaseline | null = null;
-  try {
-    const raw = localStorage.getItem(BASELINE_KEY_PREFIX + comId);
-    if (raw) baseline = JSON.parse(raw);
-  } catch {}
-
   const files: Array<{ fileName: string; source: string }> = aiComParams.data.files || [];
+  // 同步时实时采样当前 less + DOM computed 作为参考快照，不再使用持久化快照
+  const liveBaseline = buildLiveBaseline(files, options?.rootEl ?? null);
 
-  // 非 flex DOM 升级：检测有 AutoLayout 但 baseline 里不是 flex 的容器，追加 display:flex 及子节点 margin 清零
+  // 非 flex DOM 升级：检测有 AutoLayout 但实时参考快照里不是 flex 的容器，追加 display:flex 及子节点 margin 清零
   const hasChildSelectors = figmaItems.some(it => it.childSelectors?.length);
   if (hasChildSelectors) {
-    figmaItems = expandNonFlexUpgradeItems(figmaItems, baseline);
+    figmaItems = expandNonFlexUpgradeItems(figmaItems, liveBaseline);
   }
 
   const encodedFilePrefixes = new Set(
@@ -594,65 +710,69 @@ export function syncStylesFromFigmaJson(
         useGlobal
       );
 
-      let pickedItem: ResolvedItem | null;
-      let useBaselineCheck: boolean;
-
-      if (group.length === 1) {
-        pickedItem = group[0];
-        useBaselineCheck = true; // 单条：逐属性 baseline 检查，避免写入 Figma 未改的属性
-      } else {
-        pickedItem = pickBestCandidate(group, selector, targetFileName, baseline);
-        useBaselineCheck = false; // 多条已在 pickBestCandidate 层面做了整体比较
-      }
+      const pickedItem =
+        group.length === 1
+          ? group[0]
+          : pickBestCandidate(group, selector, targetFileName, liveBaseline);
 
       if (!pickedItem) return;
 
       Object.entries(pickedItem.item.value).forEach(([cssKey, figmaValue]) => {
+        if (
+          !shouldApplyDimension({
+            selector,
+            cssKey,
+            figmaValue,
+            item: pickedItem.item,
+            liveBaseline,
+          })
+        ) {
+          return;
+        }
         const camelKey = convertHyphenToCamel(cssKey);
         // 惰性读取：block 可能尚未创建（还没写入过），此时 currentValue 视为 undefined
         const existingBlock = cssObj[cssObjKey] as Record<string, unknown> | undefined;
         const currentValue = existingBlock?.[camelKey];
 
-        if (useBaselineCheck) {
-          const baselineFileObj = (baseline as Record<string, Record<string, Record<string, string>>> | null)?.[targetFileName];
+        const liveBaselineFileObj = (liveBaseline as Record<string, Record<string, Record<string, string>>> | null)?.[targetFileName];
+        const globalBare = bareSelectorInsideGlobalKey(cssObjKey);
+        const liveBaselineSelectorKey =
+          liveBaselineFileObj
+            ? (Object.keys(liveBaselineFileObj).find(
+                (k) =>
+                  k === cssObjKey ||
+                  k.endsWith(' ' + cssObjKey) ||
+                  (globalBare != null &&
+                    (k === globalBare || k.endsWith(' ' + globalBare)))
+              ) ?? cssObjKey)
+            : cssObjKey;
+        const referenceVal = liveBaselineFileObj?.[liveBaselineSelectorKey]?.[camelKey];
+
+        // `:global(.ant-*)` 选择器：始终优先用 _domComputed 判断 Figma 是否真的改过。
+        // 这条规则对单条/多条候选都生效，避免多候选场景整块噪音覆写。
+        if (cssObjKey.startsWith(':global(.ant-')) {
           const globalBare = bareSelectorInsideGlobalKey(cssObjKey);
-          const baselineSelectorKey =
-            baselineFileObj
-              ? (Object.keys(baselineFileObj).find(
-                  (k) =>
-                    k === cssObjKey ||
-                    k.endsWith(' ' + cssObjKey) ||
-                    (globalBare != null &&
-                      (k === globalBare || k.endsWith(' ' + globalBare)))
-                ) ?? cssObjKey)
-              : cssObjKey;
-          const baselineVal = baselineFileObj?.[baselineSelectorKey]?.[camelKey];
-
-          // `:global(.ant-*)` 选择器：用 _domComputed 判断 Figma 是否真的改过。
-          // - 有 _domComputed 快照：Figma 值 = 计算值 → 未改，跳过；不等 → 用户改过，写入。
-          // - 无 _domComputed 快照：降级用 Less 文件基线；若基线也无值则跳过（防止噪音注入）。
-          if (cssObjKey.startsWith(':global(.ant-')) {
-            const globalBare = bareSelectorInsideGlobalKey(cssObjKey);
-            const domSnap = globalBare ? baseline?._domComputed?.[globalBare] : null;
-            if (domSnap) {
-              const domVal = domSnap[camelKey as keyof typeof domSnap] as string | undefined;
-              if (domVal !== undefined) {
-                if (valuesEqualForSync(camelKey, figmaValue, domVal)) return; // Figma = DOM computed，未改
-                // Figma ≠ DOM computed，用户改过 → 继续走写入逻辑
-              } else {
-                return; // _domComputed 里没有这个属性（antd 内部属性），跳过
-              }
-            } else if (baselineVal == null || baselineVal === '') {
-              return; // 无任何基线参考，跳过防止噪音注入
+          const domSnap = globalBare ? liveBaseline?._domComputed?.[globalBare] : null;
+          if (domSnap) {
+            const domVal = domSnap[camelKey as keyof typeof domSnap] as string | undefined;
+            if (domVal !== undefined) {
+              if (valuesEqualForSync(camelKey, figmaValue, domVal)) return; // Figma = DOM computed，未改
+              // Figma ≠ DOM computed，用户改过 → 继续走写入逻辑
+            } else {
+              return; // _domComputed 里没有这个属性（antd 内部属性），跳过
             }
+          } else if (referenceVal == null || referenceVal === '') {
+            return; // 无任何参考值，跳过防止噪音注入
           }
+        }
 
-          const isChangedInFigma =
-            !baseline || !valuesEqualForSync(camelKey, figmaValue, baselineVal ?? '');
-          const isCurrentDeviatedFromBaseline =
-            !baseline || !valuesEqualForSync(camelKey, String(currentValue ?? ''), baselineVal ?? '');
-          // 仅当 Figma 与当前 Less 都与 baseline 一致时跳过，保证“改回初始值”也能回写。
-          if (!isChangedInFigma && !isCurrentDeviatedFromBaseline) {
+        // 参考值存在时，逐属性判断是否为真实变更：
+        // 仅当「Figma 未改」且「当前 Less 也未偏离参考」时跳过。
+        if (liveBaseline && referenceVal != null && referenceVal !== '') {
+          const isChangedInFigma = !valuesEqualForSync(camelKey, figmaValue, referenceVal);
+          const isCurrentDeviatedFromReference =
+            !valuesEqualForSync(camelKey, String(currentValue ?? ''), referenceVal);
+          if (!isChangedInFigma && !isCurrentDeviatedFromReference) {
             return;
           }
         }
