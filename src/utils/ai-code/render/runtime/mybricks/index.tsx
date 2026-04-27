@@ -695,6 +695,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const popupRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
+    const { ErrorView } = params;
     const DialogRoot = (props) => {
       if (isDesign() && !props.__mybricks_show) {
         return null
@@ -807,12 +808,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             }}>
             {container && (
               <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
-                <ObservedComponent
-                  {...props}
-                  _env={_env}
-                  popupNode={container}
-                  wrapper={container}
-                />
+                <ErrorView>
+                  <ObservedComponent
+                    {...props}
+                    _env={_env}
+                    popupNode={container}
+                    wrapper={container}
+                  />
+                </ErrorView>
               </PageContext.Provider>
             )}
           </div>

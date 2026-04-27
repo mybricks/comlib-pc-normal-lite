@@ -9,7 +9,7 @@ import { matchfile, FileSystem, extractMissingFiles } from '../utils'
 import type {
   Css,
   Vibing,
-  DataSource,
+  ErrorView,
   LoadingView,
   Definitions,
   Dependencies,
@@ -18,7 +18,6 @@ import type {
 
 interface RenderProps {
   dependencies: Dependencies
-  DataSource: DataSource
   css: Css
   vibing: Vibing
   onMount: (params: { fileSystem: FileSystem }) => void
@@ -27,6 +26,7 @@ interface RenderProps {
   // [TODO]
   onFileChange: (params: { filename: string, type: string }) => void
   LoadingView: LoadingView
+  ErrorView: ErrorView
   definitions: Definitions
 }
 interface RenderRef {
@@ -40,6 +40,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     entryFile: props.entryFile,
     LoadingView: props.LoadingView,
     onRuntimeError: props.onRuntimeError,
+    ErrorView: props.ErrorView,
     definitions: props.definitions
   }))
   const [isInitialized, setIsInitialized] = useState(false)

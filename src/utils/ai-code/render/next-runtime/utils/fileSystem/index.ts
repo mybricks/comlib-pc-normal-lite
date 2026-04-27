@@ -1,5 +1,6 @@
-import { ReactElement } from 'react'
+import { ReactElement, createElement } from 'react'
 import { Events } from '../events'
+import ErrorBoundary from '../HotComponent/ErrorBoundary'
 import createHotComponent from '../HotComponent'
 import { hackProxy } from '../hackProxy'
 import { FileWatcher } from './watcher' 
@@ -8,6 +9,7 @@ import type {
   Dependencies,
   Css,
   Vibing,
+  ErrorView,
   LoadingView,
   Definitions,
   OnRuntimeError
@@ -18,6 +20,7 @@ interface LoadModuleParams {
   compiled: string
   dependencies: Dependencies
   definitions: Definitions
+  ErrorView: ErrorView
 }
 interface ModuleExports {
   default: any
@@ -29,7 +32,8 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     filename,
     compiled,
     definitions,
-    dependencies
+    dependencies,
+    ErrorView
   } = params
 
   const exports = {
@@ -52,7 +56,21 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       return {
         ...result,
         popupRef: (Component, params = {}) => {
-          return result.popupRef(Component, { filename, ...params })
+          return result.popupRef(Component, {
+            filename,
+            ...params,
+            ErrorView: ({ children }) => {
+              return createElement(ErrorBoundary, {
+                onError() {
+
+                },
+                resetKey: 1,
+                ErrorView,
+                // @ts-ignore 引擎特殊处理逻辑
+                _onError_() {}
+              }, children)
+            }
+          })
         },
         comRef: (Component, params = {}) => {
           return result.comRef(Component, { filename, ...params })
@@ -186,6 +204,7 @@ interface FileSystemParams {
   entryFile: string;
 
   LoadingView: LoadingView
+  ErrorView: ErrorView
   onRuntimeError: OnRuntimeError
   definitions: Definitions
 }
@@ -331,7 +350,7 @@ class FileSystem {
         isEntry
       }
 
-      const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
+      const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView, ErrorView: this.params.ErrorView })
       module.default = HotComponent
 
       if (from) {
@@ -373,13 +392,14 @@ class FileSystem {
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
         dependencies: this.proxyDependencies(resolvedFilename),
-        definitions: this.params.definitions
+        definitions: this.params.definitions,
+        ErrorView: this.params.ErrorView
       })
 
       module.__default = module.default
       // 将实际的组件函数赋值给 currentImpl
       entry.currentImpl = module.__default || (() => null)
-      const HotComponent = createHotComponent({ entry, LoadingView: this.params.LoadingView  })
+      const HotComponent = createHotComponent({ entry, LoadingView: this.params.LoadingView, ErrorView: this.params.ErrorView  })
       module.default = HotComponent
       entry.module = module
     } else if (isJsModule(resolvedFilename)) {
@@ -387,7 +407,8 @@ class FileSystem {
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
         dependencies: this.proxyDependencies(resolvedFilename),
-        definitions: this.params.definitions
+        definitions: this.params.definitions,
+        ErrorView: this.params.ErrorView
       })
 
       entry.module = module
@@ -469,7 +490,8 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
+          definitions: this.params.definitions,
+          ErrorView: this.params.ErrorView
         })
         entry.file = file
         entry.module!.__default = module.default
@@ -493,14 +515,15 @@ class FileSystem {
           forceUpdateSet: new Set<() => void>(),
           currentImpl: () => null
         }
-        const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView })
+        const HotComponent = createHotComponent({ entry: tempEntry, LoadingView: this.params.LoadingView, ErrorView: this.params.ErrorView })
         tempModule.default = HotComponent
         this.filesMap[filename] = tempEntry
         const module = loadModule({
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
+          definitions: this.params.definitions,
+          ErrorView: this.params.ErrorView
         })
         tempEntry.module!.__default = module.default
         tempEntry.currentImpl = module.default || (() => null)
@@ -511,7 +534,8 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
+          definitions: this.params.definitions,
+          ErrorView: this.params.ErrorView
         })
         entry.file = file
         entry.module = module
@@ -534,7 +558,8 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
-          definitions: this.params.definitions
+          definitions: this.params.definitions,
+          ErrorView: this.params.ErrorView
         })
         this.filesMap[filename].module = module
       }
@@ -621,7 +646,8 @@ class FileSystem {
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
           dependencies: this.proxyDependencies(dependentFilename),
-          definitions: this.params.definitions
+          definitions: this.params.definitions,
+          ErrorView: this.params.ErrorView
         })
         
         dependentEntry.module!.__default = reloadedModule.default
@@ -634,7 +660,8 @@ class FileSystem {
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
           dependencies: this.proxyDependencies(dependentFilename),
-          definitions: this.params.definitions
+          definitions: this.params.definitions,
+          ErrorView: this.params.ErrorView
         })
         
         dependentEntry.module = reloadedModule

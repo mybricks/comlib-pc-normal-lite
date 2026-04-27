@@ -2,15 +2,17 @@ import React, { memo, useReducer, useLayoutEffect } from 'react'
 // [TODO] 循环引用
 import type { FilesMap } from '../fileSystem'
 import { PROXY_MARKER } from '../hackProxy'
-import type { LoadingView } from '../../types'
+import type { LoadingView, ErrorView } from '../../types'
+import ErrorBoundary from './ErrorBoundary'
 
 interface HotComponentProps {
   entry: FilesMap[string]
   LoadingView: LoadingView
+  ErrorView: ErrorView
 }
-const genHotComponent = ({ entry, LoadingView }: HotComponentProps) => {
+const genHotComponent = ({ entry, LoadingView, ErrorView }: HotComponentProps) => {
   return memo((props) => {
-    const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
+    const [resetKey, forceUpdate] = useReducer((n: number) => n + 1, 0)
 
     useLayoutEffect(() => {
       if (!entry.forceUpdateSet) entry.forceUpdateSet = new Set()
@@ -26,7 +28,17 @@ const genHotComponent = ({ entry, LoadingView }: HotComponentProps) => {
       return <LoadingView tip='加载中...' withContainer={false}/>
     }
 
-    return <Impl {...props}/>
+    return (
+      <ErrorBoundary
+        onError={() => {}}
+        resetKey={resetKey}
+        ErrorView={ErrorView}
+        // @ts-ignore 引擎特殊处理逻辑
+        _onError_={() => {}}
+      >
+        <Impl {...props}/>
+      </ErrorBoundary>
+    )
   }) 
 }
 

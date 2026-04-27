@@ -431,7 +431,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               )
             }}
             dependencies={dependencies}
-            DataSource={DataSource}
             css={{
               set(filename, css) {
                 const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
@@ -478,6 +477,9 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             }}
             onRuntimeError={(error) => {
               context.getAiComEvents(id).emit('runtimeError', error)
+            }}
+            ErrorView={({ error }) => {
+              return <ErrorView error={error} comId={id} />
             }}
             entryFile={window._sandbox_.config.componentRuntime?.entryFile || 'index'}
             onFileChange={({ filename, type }) => {

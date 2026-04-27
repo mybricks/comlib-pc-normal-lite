@@ -19,12 +19,6 @@ export type Files = {
   source: string
 }[]
 
-export class EmptyDataSource {
-  constructor() {}
-}
-
-export type DataSource = typeof EmptyDataSource
-
 export type Css = {
   /** 注入样式 */
   set(filename: string, css: string): void
@@ -42,3 +36,6 @@ export type LoadingView = (props: { tip: string, withContainer: boolean }) => JS
 
 /** 环境变量替换 */
 export type Definitions = Record<string, string>
+
+/** 渲染报错信息UI */
+export type ErrorView = (props: { error: Error }) => JSX.Element
