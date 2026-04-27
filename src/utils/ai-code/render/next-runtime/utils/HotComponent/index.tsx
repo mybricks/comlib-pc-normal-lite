@@ -42,7 +42,7 @@ const genHotComponent = ({
         resetKey={resetKey}
         ErrorView={({ error }) => {
           if (getVibing()) {
-            return <LoadingView tip='运行错误，正在修复...' withContainer={false}/>
+            return <LoadingView tip='检测到运行错误，正在修复...' withContainer={false}/>
           }
           return <ErrorView error={error}/>
         }}

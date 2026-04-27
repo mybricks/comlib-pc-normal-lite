@@ -1,10 +1,11 @@
-import { Component, ReactNode, ErrorInfo } from 'react'
+import React, { Component, ReactNode, ErrorInfo } from 'react'
 
-import type { OnRuntimeError } from '../types'
+import type { ErrorView } from '../types'
 
 interface ErrorBoundaryProps {
   children: ReactNode
-  onError: OnRuntimeError
+  onError: (error: Error) => void
+  ErrorView: ErrorView
 }
 
 interface ErrorBoundaryState {
@@ -33,15 +34,15 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       errorInfo
     })
     const { onError } = this.props
-    onError(error, errorInfo)
+    onError(error)
   }
 
   render(): ReactNode {
-    const { hasError } = this.state
-    const { children } = this.props
+    const { hasError, error } = this.state
+    const { children, ErrorView } = this.props
 
     if (hasError) {
-      return null
+      return <ErrorView error={error!}/>
     }
 
     return children

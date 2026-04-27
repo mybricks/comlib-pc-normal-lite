@@ -15,7 +15,10 @@ const NextRuntime = forwardRef<NextRuntimeRef, NextRuntimeProps>((props, ref) =>
 
 	return (
 		<WrapperComponent>
-			<ErrorBoundary onError={props.onRuntimeError}>
+			<ErrorBoundary
+				ErrorView={props.ErrorView}
+				onError={() => {}}
+			>
 				<Render
 					ref={ref}
 					{...props}

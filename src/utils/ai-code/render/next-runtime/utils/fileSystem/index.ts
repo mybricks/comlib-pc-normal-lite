@@ -3,7 +3,8 @@ import { Events } from '../events'
 import ErrorBoundary from '../HotComponent/ErrorBoundary'
 import createHotComponent from '../HotComponent'
 import { hackProxy } from '../hackProxy'
-import { FileWatcher } from './watcher' 
+import { FileWatcher } from './watcher'
+import { extractMissingFiles } from '..'
 import type {
   Files,
   Dependencies,
@@ -258,6 +259,8 @@ class FileSystem {
 
   fileWatcher: FileWatcher = new FileWatcher(this)
 
+  error: Error | null = null
+
   constructor(params: FileSystemParams) {
     this.params = params
   }
@@ -470,6 +473,7 @@ class FileSystem {
   }
 
   update(filename: string, file: Files[0]) {
+    console.log('update',  filename, file)
     filename = filename.replace(/^\//, '')
     file.filename = filename
     // [TODO] 考虑编译报错的情况
@@ -681,7 +685,14 @@ class FileSystem {
   }
 
   setVibing(vibing: Vibing) {
-    this.vibing = vibing
+    if (this.vibing !== vibing) {
+      this.vibing = vibing
+      Object.entries(this.filesMap).forEach(([_, entry]) => {
+        if (entry.errors.runtime) {
+          entry.forceUpdateSet.forEach(fn => fn())
+        }
+      })
+    }
   }
 
   loadModule(params) {
@@ -705,6 +716,35 @@ class FileSystem {
         this.params.onRuntimeError(error, params.entry.file)
       }
     })
+  }
+
+  getErrors() {
+    const errors: Error[] = []
+    if (this.error) {
+      errors.push(this.error)
+    }
+    Object.entries(this.filesMap).forEach(([_, value]: any) => {
+      const error = value.errors.runtime
+      if (error) {
+        errors.push(error)
+      }
+    })
+
+    const { tempFilesMap } = this
+            
+    if (Object.keys(tempFilesMap).length > 0) {
+      const missingFiles = extractMissingFiles(tempFilesMap)
+      // 构建详细的错误信息，包含依赖关系
+      const errorDetails = Object.entries(missingFiles)
+        .map(([file, info], index) => {
+          return `${index ? '、' : ''}\`${file}\``
+        })
+        .join('')
+
+      errors.push(new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`))
+    }
+
+    return errors
   }
 }
 

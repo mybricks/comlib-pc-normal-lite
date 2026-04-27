@@ -107,12 +107,7 @@ function buildProject(comId: string) {
       const errors: any[] = [];
 
       if (fileSystem) {
-        Object.entries(fileSystem.filesMap).forEach(([_, value]: any) => {
-          const error = value.errors.runtime
-          if (error) {
-            errors.push(error)
-          }
-        })
+        errors.push(...fileSystem.getErrors())
       }
 
       return errors.concat(aiComParams?.data?._errors || [])
