@@ -4,7 +4,7 @@ import type { OnRuntimeError, ErrorView } from '../../types'
 
 interface ErrorBoundaryProps {
   children: ReactNode
-  onError: OnRuntimeError
+  onError: (error: Error) => void
   resetKey: number
   ErrorView: ErrorView
 }
@@ -49,7 +49,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       errorInfo
     })
     const { onError } = this.props
-    onError(error, errorInfo)
+    onError(error)
   }
 
   render(): ReactNode {

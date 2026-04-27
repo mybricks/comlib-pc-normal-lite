@@ -197,17 +197,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       }
     }, [])
 
-    const [runtimeError, setRuntimeError] = useState<any>(null);
-
-    useEffect(() => {
-      const offError = context.getAiComEvents(id).on("runtimeError", (err) => {
-        setRuntimeError(err)
-      }, true)
-
-      return () => {
-        offError?.()
-      }
-    }, [])
 
     // 设计态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
     useEffect(() => {
@@ -415,9 +404,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
 
-      if (runtimeError) {
-        return <ErrorView error={runtimeError} comId={id}/>
-      }
 
       if (data.files.length) {
         return (

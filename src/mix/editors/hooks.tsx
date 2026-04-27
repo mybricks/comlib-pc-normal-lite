@@ -18,8 +18,10 @@ const errorSet = new Set();
 export function buildHooks(props: Props) {
   return {
     '@error': (err: Error) => {
+      debugger
       console.log("[@error - message]", err.message)
       console.log("[@error - stack]", err.stack)
+      console.log("@error:请保留现场并联系开发者")
 
       const events = context.getAiComEvents(props.id);
       events.emit('runtimeError', err)
