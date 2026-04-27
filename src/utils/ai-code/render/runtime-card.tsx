@@ -250,8 +250,27 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     useEffect(() => {
       // 如果宿主应用在组件初始化前通过 window.__vibePendingMessage__ 预置了消息，
       // 则在 StartView 挂载后立即触发发送，实现自动开始对话的效果。
-      const pendingMessage = (window as any).__vibePendingMessage__;
+      let pendingMessage = (window as any).__vibePendingMessage__;
       (window as any).__vibePendingMessage__ = null;
+
+      // 如果 URL 参数有 id，并且 localStorage 里 mybricks_ai_pending_msg_${urlId} 有值，
+      // 解析后若包含 message 字段，则将解析出的整个对象作为 pendingMessage 发送。
+      if (!pendingMessage) {
+        try {
+          const urlId = new URLSearchParams(location.search).get('id');
+          if (urlId) {
+            const stored = localStorage.getItem(`mybricks_ai_pending_msg_${urlId}`);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed && parsed.message) {
+                pendingMessage = parsed;
+                localStorage.removeItem(`mybricks_ai_pending_msg_${urlId}`);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       if (pendingMessage) {
         setTimeout(() => {
           (window as any)._sandbox_?.helpers?.sendToAgent?.(id, pendingMessage);
