@@ -473,7 +473,6 @@ class FileSystem {
   }
 
   update(filename: string, file: Files[0]) {
-    console.log('update',  filename, file)
     filename = filename.replace(/^\//, '')
     file.filename = filename
     // [TODO] 考虑编译报错的情况
