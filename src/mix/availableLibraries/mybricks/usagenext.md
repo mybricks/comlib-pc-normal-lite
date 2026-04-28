@@ -138,8 +138,8 @@ describe('mock', () => {
 // 按需：用户需要的话，需要配置中文名
 describe('预发环境', () => {
   // 预发请求staging环境接口和特殊headers
-  dataSource.axios.defaults.baseURL = 'https://api.staging.com';
-  dataSource.axios.defaults.headers.common['x-env'] = 'staging';
+  dataSource.axios.baseURL = 'https://api.staging.com';
+  dataSource.axios.headers.common['x-env'] = 'staging';
 })
 
 // 按需：用户需要的话，需要配置中文名
