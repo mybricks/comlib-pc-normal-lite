@@ -495,7 +495,7 @@ class Context {
   /**
    * 手动编辑保存后,添加 manual 类型版本记录
    */
-  async saveManualVersion(comId: string): Promise<void> {
+  async saveManualVersion(comId: string, updateFiles: string[]): Promise<void> {
     const history = this.getHistory(comId);
     if (!history) return;
 
@@ -508,13 +508,6 @@ class Context {
       }));
 
     const existingVersions = await history.listVersions();
-    const lastRecord = existingVersions[existingVersions.length - 1];
-
-    if (lastRecord?.type === 'manual') {
-      // 手动修改的版本合并，更新版本记录
-      await history.updateVersion(lastRecord.id, { files });
-      return;
-    }
 
     // 新增版本记录
     const record = {
@@ -526,6 +519,12 @@ class Context {
     };
 
     await history.addVersion(record, files);
+    await history.updateVersion(record.id, {
+      summary: '更新文件:' + 
+       updateFiles.reduce((pre, filename) => {
+        return pre + `\n- ${filename}`
+       }, '')
+    })
 
     const updated = await history.listVersions();
     this.notifyVersionsChange(comId, updated);

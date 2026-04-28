@@ -8,7 +8,6 @@ import { buildHooks } from './hooks';
 import { genStyleValue, genResizer } from './styleProxy';
 import type { Props, Actions } from './types';
 import { registerResourcesCode } from './registerResourcesCode';
-import { registerSandbox } from '../sandbox';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
 
 export default function (props: Props, actions: Actions) {
@@ -42,9 +41,6 @@ export default function (props: Props, actions: Actions) {
       ...value
     }
   }))
-
-  // 注册沙箱：将 mix 组件的文件系统和上下文桥接给 plugin-ai 的 CodeAgent
-  registerSandbox(comId);
 
   return {
     ...focusAreaConfigs,

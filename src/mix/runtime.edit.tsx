@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useState, useRef, useEffect } from 'react';
 import Runtime from './runtime';
 import context from './context';
+import { registerSandbox } from './sandbox';
 
 const dataCompatible = (props) => {
   try {
@@ -61,6 +62,7 @@ export default (props: any) => {
 
   const [debugTarget, setDebugTarget] = useState<any>(null);
   const [fileChangeKey, setFileChangeKey] = useState<number>(0);
+  const [render, setRender] = useState(false)
 
   useLayoutEffect(() => {
     const events = context.getAiComEvents(props.id);
@@ -71,25 +73,25 @@ export default (props: any) => {
         setFileChangeKey((key) => key + 1)
       }
     });
+
+    // 注册沙箱：将 mix 组件的文件系统和上下文桥接给 plugin-ai 的 CodeAgent
+    registerSandbox(props.id).then(() => {
+      console.error('[初始化成功]', {
+        context,
+        props
+      })
+    }).catch((error) => {
+      console.error('[初始化错误]', error)
+    }).finally(() => {
+      setRender(true)
+    });
+
     return () => {
       cancelListenDebugTarget();
       cancelListenFileChange();
     }
   }, [])
 
-    // // 用稳定的 key 字符串表示 files 快照，用于监听变化
-    // const filesKey = data.files.map((f) => `${f.fileName}:${f.source}`).join('|');
-  
-    // // 监听 files 变化：刷新当前选中文件内容 / 处理文件被删除的情况
-    // const prevFilesKeyRef = useRef<string>('');
-    // useEffect(() => {
-    //   if (prevFilesKeyRef.current === filesKey) return;
-    //   prevFilesKeyRef.current = filesKey;
-
-    //   setFileChangeKey((c) => c + 1);
-    // }, [filesKey]);
-
-  // const debugTarget = data?.debugTarget;
   const isPageDebug = debugTarget?.type === 'page';
 
   // 页面调试模式：覆盖 env，让整个组件树以完整 runtime 态运行
@@ -112,7 +114,6 @@ export default (props: any) => {
   const runtimeKey = `${isPageDebug
     ? `page-debug-${debugTarget.pageIndex}`
     : 'component-edit'}` + fileChangeKey;
-// key={runtimeKey} 
 
-  return <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
+  return render && <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
 };

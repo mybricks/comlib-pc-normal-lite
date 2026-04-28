@@ -43,7 +43,7 @@ const item = {
         const after = source.slice(loc.jsx.start, loc.tag.end) + source.slice(loc.tag.end, loc.jsx.end).replace(source.slice(textloc.jsx.start, textloc.jsx.end).trim(), nextValue)
         const newCode = source.replace(before, after)
         context.updateFile(id, {fileName, content: newCode, type: ''})
-        context.saveManualVersion(id)
+        context.saveManualVersion(id, [fileName])
       } catch (e) {
         console.error('[data-zone-text-editable]: set', e)
       }

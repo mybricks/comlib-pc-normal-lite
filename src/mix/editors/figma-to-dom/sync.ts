@@ -632,6 +632,7 @@ export function syncStylesFromFigmaJson(
   let anyChange = false;
   let actualChangedCount = 0;
   const hasExplicitFileGroup = Array.from(fileGroups.keys()).some((k) => k !== null);
+  const updateFiles = new Set<string>()
 
   fileGroups.forEach((items, groupFileName) => {
     // 多文件模式下，跳过 null 回退分组，避免后续覆盖明确分组结果
@@ -798,11 +799,12 @@ export function syncStylesFromFigmaJson(
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: targetFileName, content: cssStr, type: undefined });
       anyChange = true;
+      updateFiles.add(targetFileName)
     }
   });
 
   if (anyChange) {
-    context.saveManualVersion(comId);
+    context.saveManualVersion(comId, Array.from(updateFiles));
   }
   return actualChangedCount;
 }

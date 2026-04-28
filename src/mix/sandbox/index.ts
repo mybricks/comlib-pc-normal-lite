@@ -282,11 +282,16 @@ export function createDesignerLoading(
 
 // ─── 注册沙箱 ─────────────────────────────────────────────────────────────────
 
+const REGISTER_COMIDS = new Set<string>()
 /**
  * 注册组件沙箱到 plugin-ai。
  * 在 editors/index.tsx 中 context.setAiCom 之后调用。
  */
-export function registerSandbox(comId: string): void {
+export async function registerSandbox(comId: string): Promise<void> {
+  if (REGISTER_COMIDS.has(comId)) {
+    return
+  }
+  REGISTER_COMIDS.add(comId)
   const connectToAI = (window as any)._sandbox_?.connectToAI;
   if (typeof connectToAI !== 'function') {
     console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
@@ -478,6 +483,27 @@ export function registerSandbox(comId: string): void {
 
     // 5. 触发保存（保持与原逻辑一致）
     (window as any)._mybricksOnEdit_?.({ autoSave: true });
+  }
+  
+  // 初始化加载
+  const list = await history.listVersions()
+  // 没有历史记录，默认加一下初始化
+  if (!list.length) {
+    const data = context.getAiComParams(comId)?.data;
+    const files = (data?.files ?? [])
+      .filter((f: any) => f.source)
+      .map((f: any) => ({
+        path: f.fileName,
+        content: decodeURIComponent(f.source),
+      }));
+    const record = {
+      id: crypto.randomUUID(),
+      turnId: '',
+      label: `V${0}`,
+      type: 'init' as const,
+      createdAt: Date.now(),
+    };
+    await history.addVersion(record, files);
   }
 
   (context as any).setRollback(comId, rollbackToVersion);

@@ -310,7 +310,7 @@ export default function LowcodeView(params: Params) {
       });
 
       // 手动编辑保存后，添加 manual 类型版本记录
-      await context.saveManualVersion(comId);
+      await context.saveManualVersion(comId, [fileName]);
     }
   }, [selectFile, modifiedContent, params.model]);
 
