@@ -3,6 +3,9 @@ import { parseLess, stringifyLess } from '../../utils/transform/less';
 import { convertHyphenToCamel } from '../../../utils/string';
 import type { FigmaImportItem } from '../types';
 const MB_TAG_RE = /\[mb:([^\]]+)\]/i;
+const FIGMA_SYNC_DIMENSION_DEBUG_FLAG = '__MB_FIGMA_SYNC_DIMENSION_DEBUG__';
+/** 开启后在控制台输出 [figma-sync][antd]：DOM 快照、择一、antd 守卫跳过原因（排查背景色等） */
+const FIGMA_SYNC_ANT_DEBUG_FLAG = '__MB_FIGMA_SYNC_ANT_DEBUG__';
 
 // ─── 非 flex DOM CSS 升级辅助 ─────────────────────────────────────────────────
 
@@ -139,6 +142,19 @@ function isElasticItemInLiveBaseline(
   return false;
 }
 
+function hasDifferentDimensionFromLiveBaseline(
+  selector: string,
+  axis: DimensionAxis,
+  figmaValue: string,
+  liveBaseline: FigmaSyncLiveBaseline | null
+): boolean {
+  const props = findLiveBaselineProps(selector, liveBaseline);
+  if (!props) return false;
+  const liveVal = props[axis];
+  if (liveVal == null || String(liveVal).trim() === '') return false;
+  return !valuesEqualForSync(axis, figmaValue, String(liveVal));
+}
+
 function shouldApplyDimension(options: {
   selector: string;
   cssKey: string;
@@ -166,6 +182,16 @@ function shouldApplyDimension(options: {
 
   // 实时参考快照无显式声明时，仅保留明确 FIXED + 像素值的尺寸意图。
   if (sizingMode === 'FIXED' && /px$/i.test(figmaValue.trim())) return true;
+
+  // 放宽策略：
+  // 1) sizing 信息缺失/不稳定，但 Figma 给了像素尺寸且与实时基线不同，允许回写；
+  // 2) 实时基线未声明该轴尺寸时，也允许写入像素尺寸（用户可从 Figma 新增尺寸）。
+  if (/px$/i.test(figmaValue.trim())) {
+    if (hasDifferentDimensionFromLiveBaseline(selector, axis, figmaValue, liveBaseline)) return true;
+    const props = findLiveBaselineProps(selector, liveBaseline);
+    const liveVal = props?.[axis];
+    if (liveVal == null || String(liveVal).trim() === '') return true;
+  }
 
   return false;
 }
@@ -352,8 +378,50 @@ function looksLikeMultiFileEncodedSelector(
   return encodedFilePrefixes.has(prefix);
 }
 
+/**
+ * 导出侧 ir 往往只有全局 ant class（图层 `ant-btn [mb:.ant-btn]`），没有 `.{encoded}-…` 多文件前缀。
+ * 此类选择器 parseMultiFileSelector 为 null，会落入 null 分组；与带编码前缀的节点同批时 null 分组会被整组跳过。
+ */
+function isBareAntFigmaSelector(
+  rawSelector: string,
+  files: Array<{ fileName: string }>
+): boolean {
+  const s = rawSelector.trim();
+  if (!s.startsWith('.')) return false;
+  if (parseMultiFileSelector(s, files)) return false;
+  return /^\.ant-/.test(s);
+}
+
+/** 本批导入项里多文件编码选择器出现最多的目标 less，用于承接无前缀的 `.ant-*` */
+function pickDominantLessFromFigmaItems(
+  items: FigmaImportItem[],
+  files: Array<{ fileName: string }>
+): string | null {
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const raw = extractPreferredSelector(it.selectors?.[0] ?? '');
+    const parsed = parseMultiFileSelector(raw, files);
+    if (parsed) counts.set(parsed.fileName, (counts.get(parsed.fileName) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestN = -1;
+  for (const [fn, n] of counts) {
+    if (n > bestN) {
+      best = fn;
+      bestN = n;
+    }
+  }
+  return best;
+}
+
 /** 与 Figma extractSimpleStyles 同维度的稳定计算属性子集，排除 width/height 等布局噪音 */
-const DOM_COMPUTED_STABLE_PROPS = ['backgroundColor', 'color', 'fontSize', 'fontFamily'] as const;
+const DOM_COMPUTED_STABLE_PROPS = [
+  'backgroundColor',
+  'color',
+  'fontSize',
+  'fontFamily',
+  'boxShadow',
+] as const;
 
 type DomComputedSnapshot = Record<string, Record<string, string>>;
 
@@ -401,14 +469,37 @@ function buildLiveBaseline(
               const snap: Record<string, string> = {};
               DOM_COMPUTED_STABLE_PROPS.forEach((prop) => {
                 const raw = (cs as unknown as Record<string, string>)[prop] || '';
-                snap[prop] = /color/i.test(prop) ? normalizeColorForCompare(raw) : raw;
+                const isSolidColorProp = prop === 'backgroundColor' || prop === 'color';
+                snap[prop] = isSolidColorProp ? normalizeColorForCompare(raw) : raw;
               });
               domComputed[sel] = snap;
             } catch {}
           });
       });
       liveBaseline._domComputed = domComputed;
-    } catch {}
+      debugFigmaSyncAnt({
+        action: 'dom-computed-built',
+        hasRootEl: Boolean(rootEl),
+        usedShadowQueryRoot: Boolean(
+          rootEl && ((rootEl as HTMLElement & { shadowRoot?: ShadowRoot }).shadowRoot || shadowHostRoot)
+        ),
+        antSelectorCount: Object.keys(domComputed).length,
+        antSelectorsSorted: Object.keys(domComputed).sort(),
+        btnSnapshots: Object.fromEntries(
+          Object.entries(domComputed).filter(([k]) => k.includes('btn'))
+        ),
+      });
+    } catch (e) {
+      debugFigmaSyncAnt({
+        action: 'dom-computed-error',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  } else {
+    debugFigmaSyncAnt({
+      action: 'dom-computed-skipped-no-rootEl',
+      hint: 'pagePanel 注入的 rootEl 为空时无法采样 ant 计算样式，antd 守卫会跳过或降级',
+    });
   }
 
   return liveBaseline;
@@ -444,6 +535,128 @@ function normalizeColorForCompare(v: string): string {
     }
   }
   return s;
+}
+
+/** 按顶层逗号拆分 box-shadow（忽略 rgba() 内逗号） */
+function splitCssBoxShadowLayers(input: string): string[] {
+  const s = input.trim();
+  if (!s || /^none$/i.test(s)) return [];
+  const layers: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ',' && depth === 0) {
+      const chunk = s.slice(start, i).trim();
+      if (chunk) layers.push(chunk);
+      start = i + 1;
+    }
+  }
+  const last = s.slice(start).trim();
+  if (last) layers.push(last);
+  return layers;
+}
+
+type ParsedShadowLayer = {
+  inset: boolean;
+  x: number;
+  y: number;
+  blur: number;
+  spread: number;
+  color: string;
+};
+
+function roundShadowNum(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** 从单层 shadow 串解析数值与归一化颜色（支持颜色在首或尾，如 Chrome computed 色在前） */
+function parseOneShadowLayer(layer: string): ParsedShadowLayer | null {
+  let s = layer.trim().replace(/\s+/g, ' ');
+  let inset = false;
+  if (/^inset\b/i.test(s)) {
+    inset = true;
+    s = s.replace(/^inset\s+/i, '').trim();
+  }
+  let rest = s;
+  let colorRaw = '';
+  const mEndRgb = rest.match(/\s+(rgba?\([^)]+\))\s*$/i);
+  if (mEndRgb && mEndRgb.index != null) {
+    colorRaw = mEndRgb[1];
+    rest = rest.slice(0, mEndRgb.index).trim();
+  } else {
+    const mEndHex = rest.match(/\s+(#[0-9a-f]{3,8})\s*$/i);
+    if (mEndHex && mEndHex.index != null) {
+      colorRaw = mEndHex[1];
+      rest = rest.slice(0, mEndHex.index).trim();
+    } else {
+      const mStartRgb = rest.match(/^(rgba?\([^)]+\))\s+(.+)$/i);
+      if (mStartRgb) {
+        colorRaw = mStartRgb[1];
+        rest = mStartRgb[2].trim();
+      } else {
+        const mStartHex = rest.match(/^(#[0-9a-f]{3,8})\s+(.+)$/i);
+        if (mStartHex) {
+          colorRaw = mStartHex[1];
+          rest = mStartHex[2].trim();
+        }
+      }
+    }
+  }
+  if (!colorRaw) return null;
+  const color = normalizeColorForCompare(colorRaw);
+  const tokens = rest.split(/\s+/).filter(Boolean);
+  const nums: number[] = [];
+  for (const t of tokens) {
+    const n = parseFloat(t.replace(/px$/i, ''));
+    if (Number.isFinite(n)) nums.push(n);
+  }
+  const x = nums[0] ?? 0;
+  const y = nums[1] ?? 0;
+  const blur = nums[2] ?? 0;
+  const spread = nums[3] ?? 0;
+  return {
+    inset,
+    x: roundShadowNum(x),
+    y: roundShadowNum(y),
+    blur: roundShadowNum(blur),
+    spread: roundShadowNum(spread),
+    color,
+  };
+}
+
+function shadowLayerStructEqual(a: ParsedShadowLayer, b: ParsedShadowLayer): boolean {
+  if (a.inset !== b.inset || a.color !== b.color) return false;
+  const eps = 0.05;
+  return (
+    Math.abs(a.x - b.x) <= eps &&
+    Math.abs(a.y - b.y) <= eps &&
+    Math.abs(a.blur - b.blur) <= eps &&
+    Math.abs(a.spread - b.spread) <= eps
+  );
+}
+
+/** 比较两条 box-shadow：容忍浏览器 computed 与 Figma 回写顺序（色值在首/尾）及 px 舍入 */
+function boxShadowValuesLooselyEqual(a: string | undefined, b: string | undefined): boolean {
+  const sa = String(a ?? '').trim();
+  const sb = String(b ?? '').trim();
+  if (!sa && !sb) return true;
+  if (!sa || !sb) return false;
+  const la = splitCssBoxShadowLayers(sa);
+  const lb = splitCssBoxShadowLayers(sb);
+  if (la.length !== lb.length) return false;
+  for (let i = 0; i < la.length; i++) {
+    const pa = parseOneShadowLayer(la[i]);
+    const pb = parseOneShadowLayer(lb[i]);
+    if (pa && pb) {
+      if (!shadowLayerStructEqual(pa, pb)) return false;
+    } else if (la[i].replace(/\s+/g, ' ').toLowerCase() !== lb[i].replace(/\s+/g, ' ').toLowerCase()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** 归一化 font-family，去引号、统一大小写与空格。 */
@@ -485,6 +698,9 @@ function valuesEqualForSync(
     const fbPrimary = fb.split(',')[0] || '';
     return !!faPrimary && faPrimary === fbPrimary;
   }
+  if (camelKey === 'boxShadow') {
+    return boxShadowValuesLooselyEqual(sa, sb);
+  }
   const isColor =
     /color/i.test(camelKey) ||
     /^(#|rgb\b|rgba\b)/.test(sa) ||
@@ -511,6 +727,94 @@ interface ResolvedItem {
   item: FigmaImportItem;
   /** 逻辑选择器，如 .ant-table-cell */
   selector: string;
+}
+
+function hasConflictingDimensionValuesInGroup(
+  group: ResolvedItem[],
+  cssKey: string
+): boolean {
+  if (cssKey !== 'width' && cssKey !== 'height') return false;
+  const values = new Set<string>();
+  for (const ri of group) {
+    const v = ri.item.value?.[cssKey];
+    if (typeof v !== 'string') continue;
+    const normalized = v.trim();
+    if (!normalized) continue;
+    values.add(normalized);
+    if (values.size > 1) return true;
+  }
+  return false;
+}
+
+function collectDimensionValuesInGroup(
+  group: ResolvedItem[],
+  cssKey: string
+): string[] {
+  if (cssKey !== 'width' && cssKey !== 'height') return [];
+  const values = new Set<string>();
+  for (const ri of group) {
+    const v = ri.item.value?.[cssKey];
+    if (typeof v !== 'string') continue;
+    const normalized = v.trim();
+    if (!normalized) continue;
+    values.add(normalized);
+  }
+  return Array.from(values);
+}
+
+function isFigmaSyncDimensionDebugEnabled(): boolean {
+  try {
+    const g = globalThis as typeof globalThis & {
+      [FIGMA_SYNC_DIMENSION_DEBUG_FLAG]?: unknown;
+      localStorage?: Storage;
+    };
+    if (Boolean(g[FIGMA_SYNC_DIMENSION_DEBUG_FLAG])) return true;
+    const ls = g.localStorage;
+    if (!ls) return false;
+    const raw = ls.getItem(FIGMA_SYNC_DIMENSION_DEBUG_FLAG);
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function debugFigmaSyncDimension(payload: Record<string, unknown>): void {
+  if (!isFigmaSyncDimensionDebugEnabled()) return;
+  try {
+    console.info('[figma-sync][dimension]', payload);
+  } catch {}
+}
+
+function isFigmaSyncAntDebugEnabled(): boolean {
+  try {
+    const g = globalThis as typeof globalThis & {
+      [FIGMA_SYNC_ANT_DEBUG_FLAG]?: unknown;
+      localStorage?: Storage;
+    };
+    if (Boolean(g[FIGMA_SYNC_ANT_DEBUG_FLAG])) return true;
+    const ls = g.localStorage;
+    if (!ls) return false;
+    const raw = ls.getItem(FIGMA_SYNC_ANT_DEBUG_FLAG);
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function debugFigmaSyncAnt(payload: Record<string, unknown>): void {
+  if (!isFigmaSyncAntDebugEnabled()) return;
+  try {
+    console.info('[figma-sync][antd]', payload);
+  } catch {}
+}
+
+/** 多文件编码还原后是否为 antd 逻辑 class（与 to-import-items resolveLogicalSelectorForAntCheck 一致） */
+function isAntdRelatedLogicalSelector(selector: string): boolean {
+  if (/^\.ant-/.test(selector)) return true;
+  const inner = selector.startsWith('.') ? selector.slice(1) : selector;
+  const dashIdx = inner.indexOf('-');
+  const bare = dashIdx > 0 ? '.' + inner.substring(dashIdx + 1) : selector;
+  return /^\.ant-/.test(bare);
 }
 
 /** 从单个 item 中解析出逻辑选择器（不修改 cssObj） */
@@ -549,6 +853,8 @@ function pickBestCandidate(
   targetFileName: string,
   liveBaseline: FigmaSyncLiveBaseline | null
 ): ResolvedItem | null {
+  const antDebug = isAntdRelatedLogicalSelector(selector) && isFigmaSyncAntDebugEnabled();
+
   // Priority 1: DOM computed live baseline
   const domSnap = liveBaseline?._domComputed?.[selector];
   if (domSnap) {
@@ -560,6 +866,34 @@ function pickBestCandidate(
         return !valuesEqualForSync(camelKey, figmaValue, snapVal);
       });
       if (differs) return ri;
+    }
+    if (antDebug) {
+      debugFigmaSyncAnt({
+        action: 'pickBestCandidate-null',
+        reason: 'domSnap-exists-but-no-candidate-differs-on-sampled-props',
+        selector,
+        targetFileName,
+        candidateCount: group.length,
+        domSnap,
+        perCandidate: group.map((ri) => ({
+          value: ri.item.value,
+          propDetails: Object.entries(ri.item.value).map(([cssKey, figmaValue]) => {
+            const camelKey = convertHyphenToCamel(cssKey);
+            const snapVal = domSnap[camelKey];
+            const inSnap = snapVal !== undefined;
+            const equal =
+              inSnap && valuesEqualForSync(camelKey, figmaValue, snapVal as string);
+            return {
+              cssKey,
+              camelKey,
+              figmaValue,
+              snapVal: inSnap ? snapVal : '(not in DOM_COMPUTED_STABLE_PROPS snapshot)',
+              inDomSnap: inSnap,
+              countsAsDiff: inSnap && !valuesEqualForSync(camelKey, figmaValue, snapVal as string),
+            };
+          }),
+        })),
+      });
     }
     return null;
   }
@@ -583,8 +917,33 @@ function pickBestCandidate(
         });
         if (differs) return ri;
       }
+      if (antDebug) {
+        debugFigmaSyncAnt({
+          action: 'pickBestCandidate-null',
+          reason: 'less-baseline-exists-but-no-candidate-differs',
+          selector,
+          targetFileName,
+          liveBaselineSelectorKey,
+          liveBaselineSnap,
+          candidateCount: group.length,
+          candidatesValues: group.map((ri) => ri.item.value),
+        });
+      }
       return null;
     }
+  }
+
+  if (antDebug) {
+    debugFigmaSyncAnt({
+      action: 'pickBestCandidate-null',
+      reason: 'no-domSnap-for-selector-and-no-less-baseline-key',
+      selector,
+      targetFileName,
+      hasDomComputedGlobally: Boolean(liveBaseline?._domComputed),
+      domComputedKeysSample: liveBaseline?._domComputed
+        ? Object.keys(liveBaseline._domComputed).filter((k) => k.includes('btn')).slice(0, 40)
+        : [],
+    });
   }
 
   return null;
@@ -601,6 +960,24 @@ export function syncStylesFromFigmaJson(
   const files: Array<{ fileName: string; source: string }> = aiComParams.data.files || [];
   // 同步时实时采样当前 less + DOM computed 作为参考快照，不再使用持久化快照
   const liveBaseline = buildLiveBaseline(files, options?.rootEl ?? null);
+
+  if (isFigmaSyncAntDebugEnabled()) {
+    const antIncoming = figmaItems.filter((it) => {
+      const raw = extractPreferredSelector(it.selectors?.[0] ?? '');
+      return raw && (raw.includes('ant-') || raw.includes('_ant-'));
+    });
+    debugFigmaSyncAnt({
+      action: 'sync-start',
+      comId,
+      hasRootEl: Boolean(options?.rootEl),
+      figmaItemCount: figmaItems.length,
+      antRelatedIncomingCount: antIncoming.length,
+      antIncomingSample: antIncoming.slice(0, 15).map((it) => ({
+        selectors: it.selectors,
+        value: it.value,
+      })),
+    });
+  }
 
   // 非 flex DOM 升级：检测有 AutoLayout 但实时参考快照里不是 flex 的容器，追加 display:flex 及子节点 margin 清零
   const hasChildSelectors = figmaItems.some(it => it.childSelectors?.length);
@@ -628,6 +1005,33 @@ export function syncStylesFromFigmaJson(
     if (!fileGroups.has(groupKey)) fileGroups.set(groupKey, []);
     fileGroups.get(groupKey)!.push(item);
   });
+
+  // 无前缀 `.ant-*` 与 `.{encoded}-…` 同批时落在 null；多文件模式会跳过整个 null 分组 → ant 样式静默丢失。
+  // 将 bare ant 并入本批出现最多的 less（无则 pickPrimaryLessFile），与页面主体同源。
+  const hasAnyEncodedGroup = Array.from(fileGroups.keys()).some((k) => k !== null);
+  if (hasAnyEncodedGroup) {
+    const nullBucket = fileGroups.get(null);
+    if (nullBucket?.length) {
+      const dominantLess = pickDominantLessFromFigmaItems(figmaItems, files);
+      const targetForBareAnt =
+        dominantLess ?? pickPrimaryLessFile(files)?.fileName ?? null;
+      if (targetForBareAnt) {
+        const remaining: FigmaImportItem[] = [];
+        const reroute: FigmaImportItem[] = [];
+        for (const it of nullBucket) {
+          const raw = extractPreferredSelector(it.selectors?.[0] ?? '');
+          if (isBareAntFigmaSelector(raw, files)) reroute.push(it);
+          else remaining.push(it);
+        }
+        if (reroute.length) {
+          if (!fileGroups.has(targetForBareAnt)) fileGroups.set(targetForBareAnt, []);
+          fileGroups.get(targetForBareAnt)!.push(...reroute);
+        }
+        if (remaining.length) fileGroups.set(null, remaining);
+        else fileGroups.delete(null);
+      }
+    }
+  }
 
   let anyChange = false;
   let actualChangedCount = 0;
@@ -716,9 +1120,33 @@ export function syncStylesFromFigmaJson(
           ? group[0]
           : pickBestCandidate(group, selector, targetFileName, liveBaseline);
 
-      if (!pickedItem) return;
+      if (!pickedItem) {
+        if (isAntdRelatedLogicalSelector(selector) && isFigmaSyncAntDebugEnabled()) {
+          debugFigmaSyncAnt({
+            action: 'skip-whole-selector-no-pickedItem',
+            selector,
+            targetFileName,
+            groupLength: group.length,
+            note: '多候选时 pickBestCandidate 返回 null，整组不写',
+          });
+        }
+        return;
+      }
 
       Object.entries(pickedItem.item.value).forEach(([cssKey, figmaValue]) => {
+        // 多候选同 selector 且尺寸值冲突时，不能稳定判断“哪一个才是用户想写回的尺寸”。
+        // 继续写会导致每次同步在不同候选间来回切换（典型表现：height 规律震荡）。
+        if (group.length > 1 && hasConflictingDimensionValuesInGroup(group, cssKey)) {
+          debugFigmaSyncDimension({
+            action: 'skip-conflicting-dimension',
+            selector,
+            cssKey,
+            pickedValue: figmaValue,
+            candidateValues: collectDimensionValuesInGroup(group, cssKey),
+            candidateCount: group.length,
+          });
+          return;
+        }
         if (
           !shouldApplyDimension({
             selector,
@@ -728,6 +1156,15 @@ export function syncStylesFromFigmaJson(
             liveBaseline,
           })
         ) {
+          if (cssKey === 'width' || cssKey === 'height') {
+            debugFigmaSyncDimension({
+              action: 'skip-by-shouldApplyDimension',
+              selector,
+              cssKey,
+              figmaValue,
+              itemDimensionMeta: pickedItem.item.meta?.dimension ?? null,
+            });
+          }
           return;
         }
         const camelKey = convertHyphenToCamel(cssKey);
@@ -757,12 +1194,67 @@ export function syncStylesFromFigmaJson(
           if (domSnap) {
             const domVal = domSnap[camelKey as keyof typeof domSnap] as string | undefined;
             if (domVal !== undefined) {
-              if (valuesEqualForSync(camelKey, figmaValue, domVal)) return; // Figma = DOM computed，未改
+              if (valuesEqualForSync(camelKey, figmaValue, domVal)) {
+                if (
+                  camelKey === 'backgroundColor' ||
+                  camelKey === 'color' ||
+                  camelKey === 'fontSize' ||
+                  camelKey === 'fontFamily'
+                ) {
+                  debugFigmaSyncAnt({
+                    action: 'skip-ant-guard-figma-equals-dom',
+                    cssObjKey,
+                    globalBare,
+                    cssKey,
+                    camelKey,
+                    figmaValue,
+                    domVal,
+                  });
+                }
+                return; // Figma = DOM computed，未改
+              }
+              if (
+                camelKey === 'backgroundColor' ||
+                camelKey === 'color' ||
+                camelKey === 'fontSize' ||
+                camelKey === 'fontFamily'
+              ) {
+                debugFigmaSyncAnt({
+                  action: 'ant-guard-pass-will-consider-write',
+                  cssObjKey,
+                  globalBare,
+                  cssKey,
+                  camelKey,
+                  figmaValue,
+                  domVal,
+                });
+              }
               // Figma ≠ DOM computed，用户改过 → 继续走写入逻辑
             } else {
+              debugFigmaSyncAnt({
+                action: 'skip-ant-guard-prop-not-in-dom-snapshot',
+                cssObjKey,
+                globalBare,
+                cssKey,
+                camelKey,
+                figmaValue,
+                hint: '_domComputed 仅含 backgroundColor/color/fontSize/fontFamily/boxShadow，其余属性一律跳过',
+              });
               return; // _domComputed 里没有这个属性（antd 内部属性），跳过
             }
           } else if (referenceVal == null || referenceVal === '') {
+            debugFigmaSyncAnt({
+              action: 'skip-ant-guard-no-domSnap-for-selector',
+              cssObjKey,
+              globalBare,
+              cssKey,
+              figmaValue,
+              hasGlobalBare: Boolean(globalBare),
+              domComputedHasKey: globalBare
+                ? Boolean(liveBaseline?._domComputed && globalBare in (liveBaseline._domComputed as object))
+                : false,
+              hint: '图层解析出的 class 与页面上采样的 ant class 不一致时常见（如 .ant-btn vs 仅有子节点）',
+            });
             return; // 无任何参考值，跳过防止噪音注入
           }
         }
@@ -774,6 +1266,19 @@ export function syncStylesFromFigmaJson(
           const isCurrentDeviatedFromReference =
             !valuesEqualForSync(camelKey, String(currentValue ?? ''), referenceVal);
           if (!isChangedInFigma && !isCurrentDeviatedFromReference) {
+            if (
+              cssObjKey.startsWith(':global(.ant-') &&
+              (camelKey === 'backgroundColor' || camelKey === 'color')
+            ) {
+              debugFigmaSyncAnt({
+                action: 'skip-liveBaseline-inert',
+                cssObjKey,
+                camelKey,
+                figmaValue,
+                referenceVal,
+                currentValueInLess: currentValue,
+              });
+            }
             return;
           }
         }
@@ -790,6 +1295,29 @@ export function syncStylesFromFigmaJson(
             camelKey,
             before: currentValue,
             after: figmaValue,
+          });
+          if (
+            cssObjKey.startsWith(':global(.ant-') &&
+            (camelKey === 'backgroundColor' || camelKey === 'color')
+          ) {
+            debugFigmaSyncAnt({
+              action: 'wrote-less-property',
+              cssObjKey,
+              camelKey,
+              before: currentValue,
+              after: figmaValue,
+            });
+          }
+        } else if (
+          cssObjKey.startsWith(':global(.ant-') &&
+          (camelKey === 'backgroundColor' || camelKey === 'color')
+        ) {
+          debugFigmaSyncAnt({
+            action: 'skip-less-already-matches-figma',
+            cssObjKey,
+            camelKey,
+            figmaValue,
+            currentValueInLess: currentValue,
           });
         }
       });
