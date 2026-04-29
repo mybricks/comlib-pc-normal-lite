@@ -57,10 +57,14 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     // 预加载入口文件
     fileSystem.current.get(props.entryFile, { isEntry: true })
     fileSystem.current.events.on('fileChange', ({ filename, type }) => {
-      if (matchfile(props.entryFile, filename) && type === 'create') {
+      if (matchfile(props.entryFile, filename)) {
         fileSystem.current.error = null
-        // 监听入口文件，是否有必要，好像也可以用loading替代
-        setIsInitialized(true)
+        if (type === 'create') {
+          // 监听入口文件，是否有必要，好像也可以用loading替代
+          setIsInitialized(true)
+        } else if (type === 'update') {
+          setError(null)
+        }
       }
       props.onFileChange({ filename, type })
     })
