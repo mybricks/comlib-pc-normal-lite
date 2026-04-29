@@ -272,42 +272,21 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
      * runtime 错误由 ErrorBoundary 在内部捕获并渲染 RuntimeErrorView，不在此处处理。
      */
     const errorInfo = useMemo(() => {
-      // 只取 compile 错误（有 file 字段且 type 不是 runtime）
-      const compileErrors = data._errors && Array.isArray(data._errors)
-        ? data._errors.filter((e: any) => e.type !== 'runtime')
-        : [];
+      if (vibing) {
+        return
+      }
+      const compileErrors = Array.isArray(data._errors) ? data._errors : []
 
       if (compileErrors.length > 0) {
         const firstError = compileErrors[0];
         const fileLabel = firstError.file ? ` (${firstError.file})` : '';
-        const titleMap: Record<string, string> = {
-          'runtime.jsx': 'JSX 编译失败',
-          'style.less': 'Less 编译失败',
-          'store.js': 'Store 执行失败',
-        };
-        const title = titleMap[firstError.file] || '编译失败';
         return {
-          title: title + fileLabel,
+          title: '编译失败' + fileLabel,
           desc: firstError.message,
           errors: compileErrors,
         };
       }
-
-      // 向后兼容旧字段（逐步迁移后可删除）
-      if (!!data._jsxErr) {
-        return {
-          title: 'JSX 编译失败',
-          desc: data._jsxErr,
-        }
-      }
-
-      if (!!data._cssErr) {
-        return {
-          title: 'Less 编译失败',
-          desc: data._cssErr,
-        }
-      }
-    }, [data._errors, data._jsxErr, data._cssErr])
+    }, [data._errors, vibing])
 
     const Wrapper = useMemo(() => {
       let comp = ({children, env, canvasContainer}) => <>{children}</>
@@ -419,10 +398,10 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           </div>
         );
       }
+
       if (errorInfo) {
         return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
-
 
       if (data.files.length) {
         return (
