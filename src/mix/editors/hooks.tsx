@@ -181,8 +181,11 @@ export function buildHooks(props: Props) {
       const envNames: string[] = data?._debugEnvs ?? [];
       const debugEnvOptions: { label: string; value: string }[] = [{label: '正式环境', value: 'prod'}];
 
+      let defaultEnv = 'prod'
+
       if (envNames.includes('mock')) {
-        debugEnvOptions.push({label: '测试环境', value: 'mock'});
+        debugEnvOptions.unshift({label: '测试环境', value: 'mock'})
+        defaultEnv = 'mock'
       }
       envNames.forEach(name => {
         if (name !== 'mock' && name !== 'prod') {
@@ -190,7 +193,7 @@ export function buildHooks(props: Props) {
         }
       });
       // 默认prod模式
-      data._activeDebugEnv = 'prod'
+      data._activeDebugEnv = defaultEnv
 
       return debugEnvOptions;
     },
