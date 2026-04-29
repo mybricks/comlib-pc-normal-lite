@@ -130,7 +130,13 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     return <ErrorView error={error} />
   }
 
-  return <Entry />
+  return (
+    <Entry
+      _onError_={(error) => {
+        setError(error)
+      }}
+    />
+  )
 })
 
 export type { RenderProps, RenderRef }
