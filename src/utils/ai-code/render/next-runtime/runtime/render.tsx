@@ -136,9 +136,10 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
 
   return (
     <Entry
-      _onError_={(error) => {
-        setError(error)
-      }}
+      _onError_={null}
+      // _onError_={(error) => {
+      //   setError(error)
+      // }}
     />
   )
 })
