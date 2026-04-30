@@ -388,7 +388,6 @@ export default function LowcodeView(params: Params) {
       }
 
       const position = target?.position;
-
       // 点击时如果 move 没有设置 relativePath，则重新计算
       if (!relativePath && position) {
         const result = getRelativeImportAtPosition({ column: position.column, lineContent: model!.getLineContent(position.lineNumber)});
@@ -418,16 +417,14 @@ export default function LowcodeView(params: Params) {
         return pre;
       }, {})
 
-      const candidates = [selectFileName, `${selectFileName}.jsx`, `${selectFileName}.js`, `${selectFileName}/index.jsx`, `${selectFileName}/index.js`];
-      let file;
-      let resolvedFileName = selectFileName;
-      for (const candidate of candidates) {
-        file = filesMap[candidate];
-        if (file) {
-          resolvedFileName = candidate;
-          break;
-        }
-      }
+      const extensions = ['jsx', 'js', 'tsx', 'ts'];
+      const candidates = [
+        selectFileName,
+        ...extensions.map(ext => `${selectFileName}.${ext}`),
+        ...extensions.map(ext => `${selectFileName}/index.${ext}`)
+      ];
+      const resolvedFileName = candidates.find(candidate => filesMap[candidate]) || selectFileName;
+      const file = filesMap[resolvedFileName];
 
       if (file) {
         lowcodeViewEvents.emit('viewCode', {
