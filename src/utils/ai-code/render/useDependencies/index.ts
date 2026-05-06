@@ -33,6 +33,9 @@ const useDependencies = (params: Params) => {
         super();
         return new Proxy(this, {
           get(target, key: string) {
+            if (key === 'axios') {
+              return target[key]
+            }
             const val = (target as any)[key]
             if (typeof val === 'function' && key !== 'constructor') {
               return (...args: any[]) => {

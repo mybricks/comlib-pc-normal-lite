@@ -82,12 +82,61 @@ export class DataSource {
         delete: makeRequest('DELETE'),
         patch: makeRequest('PATCH'),
       };
-    } else {
-      this.axios = axiosLib?.create?.() ?? {
-        get: () => Promise.reject(new Error('axios not available')),
-        post: () => Promise.reject(new Error('axios not available')),
+    } else if (window['__IS_AICODE__']) {
+      const makeRequest = (method: string) => (url: string, dataOrConfig?: any, config?: any) => {
+        const isBodyless = method === 'GET' || method === 'DELETE';
+        const cfg = isBodyless ? (dataOrConfig ?? {}) : (config ?? {});
+        const body = isBodyless ? undefined : dataOrConfig;
+        const { baseURL, headers } = this.axios.defaults
+
+        return window['__IS_AICODE__'].requestProxy
+          .request({
+            method,
+            url,
+            headers: cfg.headers,
+            body: body ?? cfg.data,
+            params: cfg.params,
+          }, {
+            proxyHost: baseURL || undefined,
+            proxyHeaders: headers,
+          })
+      }
+
+      this.axios = {
         defaults: { baseURL: '', headers: { common: {} } },
+        get: makeRequest('GET'),
+        post: makeRequest('POST'),
+        put: makeRequest('PUT'),
+        delete: makeRequest('DELETE'),
+        patch: makeRequest('PATCH'),
       };
+    } else {
+      const axios = axiosLib?.create?.()
+
+      if (axios) {
+        this.axios = axios
+        this.axios.interceptors.request.use((config: any) => {
+          if (config.headers) {
+            delete config.headers['cookie'];
+            delete config.headers['Cookie'];
+          }
+          return config;
+        });
+      } else {
+        const makeRequest = (method: string) => {
+          return () => {
+            return Promise.reject(new Error('axios not available'))
+          }
+        }
+        this.axios = {
+          get: makeRequest('GET'),
+          post: makeRequest('POST'),
+          put: makeRequest('PUT'),
+          delete: makeRequest('DELETE'),
+          patch: makeRequest('PATCH'),
+          defaults: { baseURL: '', headers: { common: {} } },
+        };
+      }
     }
   }
 }
