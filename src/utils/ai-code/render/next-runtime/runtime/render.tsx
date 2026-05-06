@@ -136,10 +136,10 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
 
   return (
     <Entry
-      _onError_={null}
-      // _onError_={(error) => {
-      //   setError(error)
-      // }}
+      // _onError_={null}
+      _onError_={(location.pathname.startsWith('/design') || location.pathname.startsWith('/vibe-design')) ? (error) => {
+        setError(error)
+      } : null}
     />
   )
 })
