@@ -30,7 +30,7 @@ export type Css = {
 export type Vibing = boolean
 
 /** 运行时错误 */
-export type OnRuntimeError = (error: Error, file: Files[number]) => void
+export type OnRuntimeError = (error: Error, file?: Files[number]) => void
 
 export type LoadingView = (props: { tip: string, withContainer: boolean }) => JSX.Element
 
