@@ -624,6 +624,11 @@ class FileSystem {
           return target[key];
         }
 
+        // 判断是依赖还是相对路径，依赖直接抛出错误
+        if (!key.startsWith('.')) {
+          throw new Error(`使用了不允许的依赖：'${key}'`)
+        }
+
         let currentPath = filename.split('/');
         currentPath = currentPath.slice(0, currentPath.length - 1)
         const targetPath = key.split('/');
