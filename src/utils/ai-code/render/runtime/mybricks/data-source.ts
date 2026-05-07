@@ -55,7 +55,7 @@ export class DataSource {
             method,
             url,
             headers: cfg.headers,
-            body: body ?? cfg.data,
+            data: body ?? cfg.data,
             params: cfg.params,
           })
         }
@@ -68,7 +68,7 @@ export class DataSource {
             method,
             url: `http://localhost:${port}${path}`,
             headers: cfg.headers,
-            body: body ?? cfg.data,
+            data: body ?? cfg.data,
             params: cfg.params,
           });
         });
@@ -94,7 +94,7 @@ export class DataSource {
             method,
             url,
             headers: cfg.headers,
-            body: body ?? cfg.data,
+            data: body ?? cfg.data,
             params: cfg.params,
           }, {
             proxyHost: baseURL || undefined,
