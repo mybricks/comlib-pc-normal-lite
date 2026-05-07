@@ -5,12 +5,18 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 type SummaryRelation = { type: string; name: string }
 /** 单个事件：id、标题、mermaid 流程图、可选关联组件 */
 type SummaryEvent = { id: string; title: string; mermaid: string; relation?: SummaryRelation }
-/** 单个区块：标题、摘要、类型，以及可选的 events 列表 */
+/** 单个数据源：id、apis列表 */
+type SummaryDatasource = { 
+  id: string; 
+  apis: Array<{ name: string; type?: string; desc?: string }> 
+}
+/** 单个区块：标题、摘要、类型，以及可选的 events 列表和 datasource 列表 */
 type SummaryBlock = {
   title?: string
   summary?: string
   type?: string
   events?: SummaryEvent[]
+  datasource?: SummaryDatasource[]
 }
 /** 解析结果：区块名 -> 区块数据 */
 type ParsedSummary = Record<string, SummaryBlock>
@@ -125,6 +131,77 @@ function parseEventsItem(item: AstNode): SummaryEvent[] {
 }
 
 /**
+ * 解析 datasource 的 listItem。
+ * AST 结构（四层嵌套）：
+ *   listItem (paragraph → "datasource:")
+ *     list
+ *       listItem           ← 数据源 ID (如 homeStatApi)
+ *         paragraph → "homeStatApi"   （无冒号）
+ *         list
+ *           listItem       ← API 名称 (如 getStudentList)
+ *             paragraph → "getStudentList"
+ *             list
+ *               listItem → "type: use"
+ *               listItem → "desc: 展示学生总数统计"
+ */
+function parseDatasourceItem(item: AstNode): SummaryDatasource[] {
+  const datasources: SummaryDatasource[] = []
+  const dsNestedList = getNestedList(item)
+  if (!dsNestedList) return datasources
+
+  // 第一层：遍历数据源 ID
+  for (const dsItem of dsNestedList.children ?? []) {
+    if (dsItem.type !== 'listItem') continue
+    const idText = getListItemText(dsItem).trim()
+    const id = idText.endsWith(':') ? idText.slice(0, -1).trim() : idText
+    if (!id) continue
+
+    const apisList = getNestedList(dsItem)
+    if (!apisList) {
+      datasources.push({ id, apis: [] })
+      continue
+    }
+
+    const apis: Array<{ name: string; type?: string; desc?: string }> = []
+
+    // 第二层：遍历 API 名称
+    for (const apiItem of apisList.children ?? []) {
+      if (apiItem.type !== 'listItem') continue
+      const apiNameText = getListItemText(apiItem).trim()
+      const apiName = apiNameText.endsWith(':') ? apiNameText.slice(0, -1).trim() : apiNameText
+      if (!apiName) continue
+
+      const propsList = getNestedList(apiItem)
+      if (!propsList) {
+        apis.push({ name: apiName })
+        continue
+      }
+
+      let type: string | undefined
+      let desc: string | undefined
+
+      // 第三层：遍历属性
+      for (const propItem of propsList.children ?? []) {
+        if (propItem.type !== 'listItem') continue
+        const text = getListItemText(propItem)
+        const colonIdx = text.indexOf(':')
+        if (colonIdx === -1) continue
+        const key = text.slice(0, colonIdx).trim()
+        const value = text.slice(colonIdx + 1).trim()
+        if (key === 'type') type = value
+        else if (key === 'desc') desc = value
+      }
+
+      apis.push({ name: apiName, type, desc })
+    }
+
+    datasources.push({ id, apis })
+  }
+
+  return datasources
+}
+
+/**
  * 将 summary.md 解析为结构化数据。
  * 约定：根节点 children 顺序为 [heading, list?, thematicBreak?]*；
  * - heading：当前区块 key（# 或 ## 或 ### 的文本）
@@ -153,6 +230,11 @@ const parsemd = (md: string): ParsedSummary => {
 
         if (lineText === 'events:') {
           result[currentKey].events = parseEventsItem(item)
+          continue
+        }
+
+        if (lineText === 'datasource:') {
+          result[currentKey].datasource = parseDatasourceItem(item)
           continue
         }
 

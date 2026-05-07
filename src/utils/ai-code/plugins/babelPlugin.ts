@@ -9,7 +9,7 @@ import {
   getComRefForJSXPath,
   getPageRefForJSXPath,
   getPopupRefForJSXPath,
-  getEvents,
+  parseJSXComments,
   getJSXElementNameString,
   hasEditableTextContent
 } from "./utils";
@@ -271,7 +271,11 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 // }
               }
 
-              const events = getEvents(node);
+              const { events, datasource } = parseJSXComments(node)
+        
+
+              // const events = getEvents(node);
+
               // const jsdoc = jsdocStack[jsdocStack.length - 1];);
 
               // const eventsMap = (jsdoc?.events || []).reduce((pre, cur) => {
@@ -291,6 +295,10 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
                 // 用于展示事件小黄点
                 pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
+              }
+
+              if (datasource) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-datasource", datasource);
               }
 
               // if (comRef) {

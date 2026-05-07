@@ -58,8 +58,8 @@ export function parseJSDocComment(raw: string): { summary?: string; props?: Arra
   return result;
 }
 
-/** 匹配注释中的「属性名:处理函数名」，提取冒号后的 handler 名 */
-const EVENT_COMMENT_REGEX = /\b\w+\s*:\s*(\w+)\b/g;
+/** 匹配注释中的「属性名:处理函数名」，提取冒号后的 handler 名（排除datasource） */
+const EVENT_COMMENT_REGEX = /\b(?!datasource\b)(\w+)\s*:\s*(\w+)\b/g;
 
 function extractHandlerNamesFromCommentValue(value: string): string[] {
   if (value == null || typeof value !== "string") return [];
@@ -68,19 +68,33 @@ function extractHandlerNamesFromCommentValue(value: string): string[] {
   let m;
   EVENT_COMMENT_REGEX.lastIndex = 0;
   while ((m = EVENT_COMMENT_REGEX.exec(normalized)) !== null) {
-    names.push(m[1]);
+    // m[1]是属性名（如onClick），m[2]是handler名（如primaryClick）
+    names.push(m[2]);
   }
   return names;
 }
 
 /**
  * 遍历 openingElement.attributes，从各属性的 leadingComments / trailingComments 中
- * 解析形如 /** onClick:primaryClick *\/ 的注释，提取出 handler 名（如 primaryClick）。
- * 因同一行注释可能同时出现在前一个的 trailing 与后一个的 leading，结果会去重。
+ * 解析形如 /** onClick:primaryClick *\/ 的注释（提取events）和 
+ * /** datasource:studentListApi *\/ 的注释（提取datasource）。
+ * events会去重，datasource只取第一个匹配到的值。
  */
-export function getEvents(node: { openingElement?: { attributes?: Array<{ leadingComments?: Array<{ value?: string }>; trailingComments?: Array<{ value?: string }> }> } }): string[] {
+export function parseJSXComments(node: {
+  openingElement?: { 
+    attributes?: Array<{ 
+      leadingComments?: Array<{ value?: string }>; 
+      trailingComments?: Array<{ value?: string }> 
+    }> 
+  } 
+}): { 
+  events: string[]; 
+  datasource?: string;
+} {
   const eventNames = new Set<string>();
+  let datasourceKey: string | undefined;
   const attrs = node.openingElement?.attributes ?? [];
+  
   for (const attribute of attrs) {
     const comments = [
       ...(attribute.leadingComments ?? []),
@@ -88,9 +102,30 @@ export function getEvents(node: { openingElement?: { attributes?: Array<{ leadin
     ];
     for (const comment of comments) {
       const value = comment.value ?? "";
+      // 提取events（排除datasource）
       const names = extractHandlerNamesFromCommentValue(value);
       names.forEach((name) => eventNames.add(name));
+      
+      // 提取datasource（只取第一个）
+      if (!datasourceKey) {
+        datasourceKey = extractDatasourceFromCommentValue(value);
+      }
     }
   }
-  return Array.from(eventNames);
+  
+  return {
+    events: Array.from(eventNames),
+    datasource: datasourceKey,
+  };
+}
+
+/** 匹配 datasource:xxx 格式的注释 */
+const DATASOURCE_COMMENT_REGEX = /^\s*datasource\s*:\s*(\w+)\s*$/;
+
+/** 从注释value中提取datasource的key */
+function extractDatasourceFromCommentValue(value: string): string | undefined {
+  if (value == null || typeof value !== "string") return undefined;
+  const normalized = value.replace(/\s*\*\s?/g, " ").trim();
+  const match = normalized.match(DATASOURCE_COMMENT_REGEX);
+  return match ? match[1] : undefined;
 }
