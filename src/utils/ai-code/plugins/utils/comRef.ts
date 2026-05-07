@@ -2,7 +2,7 @@ import * as types from "../types";
 import { parseJSDocComment } from "./jsdoc";
 
 
-type RefKind = "comRef" | "pageRef" | "popupRef";
+type InternalRefKind = "comRef" | "pageRef" | "popupRef";
 
 /**
  * 从「组件定义」AST 节点上，取出 comRef(...) / pageRef(...) 对应的调用节点（CallExpression）。
@@ -11,7 +11,7 @@ type RefKind = "comRef" | "pageRef" | "popupRef";
  * - const MainBtn = comRef(() => {...})  → 调用在 VariableDeclarator.init 上
  * - export default comRef(() => {...})   → 调用在 ExportDefaultDeclaration.declaration 上
  */
-function getRefCallFromComponentPath(componentPath: any, refKind: RefKind): any {
+function getRefCallFromComponentPath(componentPath: any, refKind: InternalRefKind): any {
   const node = componentPath.node;
   let call: any = null;
   if (node.type === "VariableDeclarator") call = node.init;
@@ -45,7 +45,7 @@ function getRefCallFromComponentPath(componentPath: any, refKind: RefKind): any 
  * 3. 剥掉外层括号：return ( <div> ) 在 AST 里是 ParenthesizedExpression，要取 .expression 直到得到 JSXElement
  * 4. 只有最外层是「单个 JSX 元素」才返回；如果是 Fragment（<>...</>）或别的类型就返回 null
  */
-function getComponentRootJSXNode(componentPath: any, refKind: RefKind): any {
+function getComponentRootJSXNode(componentPath: any, refKind: InternalRefKind): any {
   const call = getRefCallFromComponentPath(componentPath, refKind);
   if (!call) return null;
   const fn = call.arguments[0];
@@ -133,31 +133,82 @@ function getPageRootJSXNode(componentPath: any): any {
  * - comRef(...)           → Identifier，name === 'comRef'
  * - something.comRef(...) → MemberExpression，property.name === 'comRef'
  */
-function isComRefCall(callee: any): boolean {
+export function isComRefCall(callee: any): boolean {
   if (types.isIdentifier(callee)) return callee.name === "comRef";
-  if (callee?.type === "MemberExpression" && callee.property?.type === "Identifier")
-    return callee.property.name === "comRef";
-  return false;
+  return callee?.property?.name === "comRef";
 }
 
 /**
  * 判断当前「调用」的 callee 是不是 pageRef。
  */
-function isPageRefCall(callee: any): boolean {
+export function isPageRefCall(callee: any): boolean {
   if (types.isIdentifier(callee)) return callee.name === "pageRef";
-  if (callee?.type === "MemberExpression" && callee.property?.type === "Identifier")
-    return callee.property.name === "pageRef";
-  return false;
+  return callee?.property?.name === "pageRef";
 }
 
 /**
  * 判断当前「调用」的 callee 是不是 popupRef
  */
-function isPopupRefCall(callee: any): boolean {
+export function isPopupRefCall(callee: any): boolean {
   if (types.isIdentifier(callee)) return callee.name === "popupRef";
-  if (callee?.type === "MemberExpression" && callee.property?.type === "Identifier")
-    return callee.property.name === "popupRef";
-  return false;
+  return callee?.property?.name === "popupRef";
+}
+
+/**
+ * 判断当前「调用」的 callee 是不是 appRef。
+ */
+export function isAppRefCall(callee: any): boolean {
+  if (types.isIdentifier(callee)) return callee.name === "appRef";
+  return callee?.property?.name === "appRef";
+}
+
+export type RefKind = 'comRef' | 'popupRef' | 'appRef';
+
+export type RefNodeInfo = {
+  /** 组件变量名。VariableDeclarator 取变量名；ExportDefaultDeclaration 取 fallbackName 或 'default'（appRef） */
+  name: string;
+  kind: RefKind;
+};
+
+/**
+ * 从 VariableDeclarator AST 节点中提取 ref 信息。
+ * 匹配：const Xxx = comRef(...) / popupRef(...)
+ * 不匹配：appRef（appRef 只用 export default）
+ *
+ * @returns RefNodeInfo | null
+ */
+export function extractRefFromVariableDeclarator(node: any): RefNodeInfo | null {
+  if (!node || node.type !== 'VariableDeclarator') return null;
+  const { id, init } = node;
+  if (!id || id.type !== 'Identifier') return null;
+  if (!init || init.type !== 'CallExpression') return null;
+
+  const { callee } = init;
+  const varName = id.name as string;
+
+  if (isComRefCall(callee)) return { name: varName, kind: 'comRef' };
+  if (isPopupRefCall(callee)) return { name: varName, kind: 'popupRef' };
+  return null;
+}
+
+/**
+ * 从 ExportDefaultDeclaration AST 节点中提取 ref 信息。
+ * 匹配：export default appRef(...) / comRef(...) / popupRef(...)
+ *
+ * @param node         ExportDefaultDeclaration 节点
+ * @param fallbackName 文件路径派生的组件名，用于 comRef/popupRef 的 export default 场景
+ * @returns RefNodeInfo | null
+ */
+export function extractRefFromExportDefault(node: any, fallbackName: string): RefNodeInfo | null {
+  if (!node || node.type !== 'ExportDefaultDeclaration') return null;
+  const decl = node.declaration;
+  if (!decl || decl.type !== 'CallExpression') return null;
+
+  const { callee } = decl;
+  if (isAppRefCall(callee)) return { name: 'default', kind: 'appRef' };
+  if (isComRefCall(callee)) return { name: fallbackName, kind: 'comRef' };
+  if (isPopupRefCall(callee)) return { name: fallbackName, kind: 'popupRef' };
+  return null;
 }
 
 /**

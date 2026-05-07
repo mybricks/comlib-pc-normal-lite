@@ -2,16 +2,16 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 
 // --- 目标结构类型（与 summary.md 约定一致）---
 /** 单个关联组件 */
-type SummaryRelation = { type: string; name: string }
+export type SummaryRelation = { type: string; name: string }
 /** 单个事件：id、标题、mermaid 流程图、可选关联组件 */
-type SummaryEvent = { id: string; title: string; mermaid: string; relation?: SummaryRelation }
+export type SummaryEvent = { id: string; title: string; mermaid: string; relation?: SummaryRelation }
 /** 单个数据源：id、apis列表 */
-type SummaryDatasource = { 
+export type SummaryDatasource = { 
   id: string; 
   apis: Array<{ name: string; type?: string; desc?: string }> 
 }
 /** 单个区块：标题、摘要、类型，以及可选的 events 列表和 datasource 列表 */
-type SummaryBlock = {
+export type SummaryBlock = {
   title?: string
   summary?: string
   type?: string
@@ -19,7 +19,7 @@ type SummaryBlock = {
   datasource?: SummaryDatasource[]
 }
 /** 解析结果：区块名 -> 区块数据 */
-type ParsedSummary = Record<string, SummaryBlock>
+export type ParsedSummary = Record<string, SummaryBlock>
 
 type AstNode = { type: string; value?: string; children?: AstNode[] }
 

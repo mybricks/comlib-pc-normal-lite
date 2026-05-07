@@ -149,8 +149,8 @@ ${missingFilesEntries.map(([file, info], index) => {
     if (lintMessages.length > 0) {
       const lines = lintMessages.map((msg, i) => {
         const severity = msg.severity === 2 ? 'error' : 'warn';
-        const loc = `${msg.fileName ?? ''}:${msg.line}:${msg.column}`;
-        return `  ${i + 1}. [${severity}] ${loc} (${msg.ruleId}) ${msg.message}`;
+        const loc = msg.line > 0 ? `${msg.fileName ?? ''}:${msg.line}:${msg.column}` : (msg.fileName ?? '');
+        return `  ${i + 1}. [${severity}] ${loc} ${msg.message}`;
       }).join('\n');
       lintSection = `\n# 代码检查信息\n共 ${lintMessages.length} 个问题，必须自动修复：\n${lines}\n`;
     } else {

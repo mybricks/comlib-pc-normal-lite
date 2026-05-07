@@ -11,7 +11,11 @@ import {
   getPopupRefForJSXPath,
   parseJSXComments,
   getJSXElementNameString,
-  hasEditableTextContent
+  hasEditableTextContent,
+  isComRefCall,
+  isPopupRefCall,
+  extractRefFromVariableDeclarator,
+  extractRefFromExportDefault,
 } from "./utils";
 
 /** 从文件路径派生组件名：folder/index.jsx → folder 名；直接文件 → 文件名（去扩展名） */
@@ -99,9 +103,7 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
             if (
               types.isIdentifier(id) &&
               types.isCallExpression(init) &&
-              (types.isIdentifier(init.callee)
-                ? init.callee.name === 'comRef' || init.callee.name === 'popupRef'
-                : init.callee?.property?.name === 'comRef' || init.callee?.property?.name === 'popupRef') &&
+              (isComRefCall(init.callee) || isPopupRefCall(init.callee)) &&
               init.arguments.length === 1
             ) {
               const widgetName = (id as any).name as string;
@@ -126,7 +128,7 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
             if (
               declaration &&
               declaration.type === 'CallExpression' &&
-              (types.isIdentifier(declaration.callee) ? declaration.callee.name === 'comRef' || declaration.callee.name === 'popupRef' : declaration.callee?.property?.name === 'comRef' || declaration.callee?.property?.name === 'popupRef') &&
+              (isComRefCall(declaration.callee) || isPopupRefCall(declaration.callee)) &&
               declaration.arguments.length === 1
             ) {
               declaration.arguments.push({
