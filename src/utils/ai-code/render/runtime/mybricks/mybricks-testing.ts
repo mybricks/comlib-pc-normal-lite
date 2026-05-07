@@ -90,7 +90,7 @@ export function createEnvRunner(collectDebugLogs?: (entry: { type: string; metho
     collectDebugLogs?.({ type: 'envActivate', method: 'activate', args: [name] });
     const fn = registry[name];
     if (!fn) {
-      console.warn(`[mybricks/testing] Environment "${name}" not found.`);
+      // console.warn(`[mybricks/testing] Environment "${name}" not found.`);
       return;
     }
     fn();

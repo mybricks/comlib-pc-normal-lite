@@ -100,7 +100,7 @@ export function createMyBricksTesting(params: { collectDebugLogs?: (entry: { typ
     collectDebugLogs?.({ type: 'envActivate', method: 'activate', args: [name] });
     const fn = registry[name];
     if (!fn) {
-      console.warn(`[mybricks/testing] Environment "${name}" not found.`);
+      // console.warn(`[mybricks/testing] Environment "${name}" not found.`);
       return;
     }
     fn();

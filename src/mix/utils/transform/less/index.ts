@@ -133,7 +133,7 @@ class Parse {
         cssObjs.push(res);
       } else {
         // @ts-ignore
-        console.log("其它 => ", rule.type);
+        // console.log("其它 => ", rule.type);
       }
     })
 
@@ -341,11 +341,11 @@ export const parseLess = (code: string) => {
   try {
     less.render(sanitized, (error, output) => {
       if (error) {
-        console.error(error);
+        // console.error(error);
       } else {
         (less as any).parse(output!.css.replace(/\/\*[\s\S]*?\*\//g, ""), (error: any, output: any) => {
           if (error) {
-            console.error(error);
+            // console.error(error);
           } else {
             const parse = new Parse(output);
             cssObj = restoreGlobals(parse.get(), globalMap);
@@ -354,7 +354,7 @@ export const parseLess = (code: string) => {
       }
     })
   } catch (error) {
-    console.error(error);
+    // console.error(error);
   }
 
   return cssObj

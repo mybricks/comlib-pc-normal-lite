@@ -44,7 +44,7 @@ export async function exportCode(
   const exportCodeToVSCode = (window as any).exportCodeToVSCode;
   if (typeof exportCodeToVSCode === 'function') {
     // 使用 VSCode 导出，返回实际使用的目录路径
-    console.log('[代码导出] 使用 VSCode 导出');
+    // console.log('[代码导出] 使用 VSCode 导出');
     const usedDir: string = await exportCodeToVSCode(files, { folderName, outputDir, onProgress });
     return usedDir;
   }
@@ -57,7 +57,7 @@ export async function exportCode(
   }
 
   // 使用浏览器文件系统 API 导出
-  console.log('[代码导出] 使用浏览器文件系统 API');
+  // console.log('[代码导出] 使用浏览器文件系统 API');
   
   try {
     // 1. 请求用户选择目录
@@ -88,11 +88,11 @@ export async function exportCode(
       });
     }
 
-    console.log(`[浏览器导出] 成功导出 ${totalFiles} 个文件到: ${folderName}`);
+    // console.log(`[浏览器导出] 成功导出 ${totalFiles} 个文件到: ${folderName}`);
   } catch (error) {
     // 用户取消选择
     if ((error as any).name === 'AbortError') {
-      console.log('[浏览器导出] 用户取消导出');
+      // console.log('[浏览器导出] 用户取消导出');
       throw new Error('用户取消导出');
     }
     throw error;

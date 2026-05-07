@@ -82,7 +82,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     return dependencies[packageName]
   })
   } catch (e: any) {
-    console.error('[loadModule]', e)
+    // console.error('[loadModule]', e)
     // [TODO] 复制的代码，关注下错误信息收集是否准确
     // 构造带有文件位置信息的运行时错误
     const fileLabel = filename ? `[${filename}] ` : ''

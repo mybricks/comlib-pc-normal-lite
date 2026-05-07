@@ -11,7 +11,7 @@ export function evalConfigJsCompiled(code: string) {
   try {
     return eval(evalStr);
   } catch (error) {
-    console.error('eval执行失败：', error);
+    // console.error('eval执行失败：', error);
     return null;
   }
 }

@@ -172,7 +172,7 @@ export function genStyleValue(params: { comId: string }) {
 
       const fullSelector = params.selector;
 
-      console.log("editConfig.value.set 组件侧接收params.selector",fullSelector)
+      // console.log("editConfig.value.set 组件侧接收params.selector",fullSelector)
 
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];

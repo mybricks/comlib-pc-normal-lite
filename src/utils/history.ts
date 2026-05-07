@@ -28,7 +28,7 @@ const DebugActions = {
     if (!url) {
       message.info(`路由地址不能为空`);
     }
-    console.log(`pushState`, { state, title, url });
+    // console.log(`pushState`, { state, title, url });
   },
   replace: (val) => {
     const { state, title, url } = getHistoryParams(val);
@@ -36,36 +36,36 @@ const DebugActions = {
     if (!url) {
       message.info(`路由地址不能为空`);
     }
-    console.log(`replaceState`, { state, title, url });
+    // console.log(`replaceState`, { state, title, url });
   },
   back: () => {
     message.info(`back`);
-    console.log(`back`);
+    // console.log(`back`);
   },
   forward: () => {
     message.info(`forward`);
-    console.log(`forward`);
+    // console.log(`forward`);
   },
   redirect: (val) => {
     message.info(`redirect: ${val}`);
     if (typeof val !== 'string') {
       message.info(`路由地址不合法`);
     }
-    console.log(`redirect`, val);
+    // console.log(`redirect`, val);
   },
   openWindow: (val) => {
     message.info(`openWindow: ${val}`);
     if (typeof val !== 'string') {
       message.info(`路由地址不合法`);
     }
-    console.log(`openWindow`, val);
+    // console.log(`openWindow`, val);
   },
   openTab: (val) => {
     message.info(`openTab: ${val}`);
     if (typeof val !== 'string') {
       message.info(`路由地址不合法`);
     }
-    console.log(`openTab`, val);
+    // console.log(`openTab`, val);
   }
 };
 
@@ -75,7 +75,7 @@ const RuntimeActions = {
     if (url) {
       history.pushState(state, title, url);
     } else {
-      console.warn(`路由地址不能为空`, val);
+      // console.warn(`路由地址不能为空`, val);
     }
   },
   replace: (val) => {
@@ -83,7 +83,7 @@ const RuntimeActions = {
     if (url) {
       history.replaceState(state, title, url);
     } else {
-      console.warn(`路由地址不能为空`, val);
+      // console.warn(`路由地址不能为空`, val);
     }
   },
   back: () => {
@@ -96,21 +96,21 @@ const RuntimeActions = {
     if (typeof val === 'string') {
       window.location.replace(val);
     } else {
-      console.warn(`路由地址不合法`, val);
+      // console.warn(`路由地址不合法`, val);
     }
   },
   openWindow: (val) => {
     if (typeof val === 'string') {
       window.open(val);
     } else {
-      console.warn(`路由地址不合法`, val);
+      // console.warn(`路由地址不合法`, val);
     }
   },
   openTab: (val) => {
     if (typeof val === 'string') {
       window.open(val, '_blank');
     } else {
-      console.warn(`路由地址不合法`, val);
+      // console.warn(`路由地址不合法`, val);
     }
   }
 };

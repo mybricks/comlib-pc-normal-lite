@@ -325,7 +325,7 @@ class Context {
               fileSystem.update(fileName, {...file, filename: fileName })
             }
           } catch (e: any) {
-            console.error("[@transformTsx error]", e);
+            // console.error("[@transformTsx error]", e);
             updateFileContent({
               fileName,
               files,
@@ -364,7 +364,7 @@ class Context {
               fileSystem.update(fileName, {...file, filename: fileName })
             }
           } catch (e: any) {
-            console.error("[@transformLess error]", e);
+            // console.error("[@transformLess error]", e);
             updateFileContent({
               fileName,
               files,
@@ -403,7 +403,7 @@ class Context {
               fileSystem.update(fileName, {...file, filename: fileName })
             }
           } catch (e: any) {
-            console.error("[@transformTsx error]", e);
+            // console.error("[@transformTsx error]", e);
             updateFileContent({
               fileName,
               files,
@@ -481,7 +481,7 @@ class Context {
           });
           this.getAiComEvents(id)?.emit("fileChange", { filename: fileName })
         } catch (e) {
-          console.error("[@parsemd error]", e);
+          // console.error("[@parsemd error]", e);
         }
       }
 
@@ -496,7 +496,7 @@ class Context {
             }
           })
         } catch (e) {
-          console.error("[@parseRequirement error]", e);
+          // console.error("[@parseRequirement error]", e);
         }
       }
 

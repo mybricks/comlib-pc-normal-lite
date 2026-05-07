@@ -428,7 +428,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }
             }
           } catch (e) {
-            console.error(`[@动态解析]`, e)
+            // console.error(`[@动态解析]`, e)
           }
         }
       })
@@ -798,7 +798,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }
             }
           } catch (e) {
-            console.error(`[@动态解析]`, e)
+            // console.error(`[@动态解析]`, e)
           }
         }, [container])
 

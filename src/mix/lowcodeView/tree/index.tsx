@@ -283,7 +283,7 @@ const useSlots = <Config extends SlotConfig>(children: React.ReactNode, config: 
     const slotKey = keys[index]
 
     if (slots[slotKey]) {
-      console.warn(true, `Found duplicate "${String(slotKey)}" slot. Only the first will be rendered.`)
+      // console.warn(true, `Found duplicate "${String(slotKey)}" slot. Only the first will be rendered.`)
       return
     }
 

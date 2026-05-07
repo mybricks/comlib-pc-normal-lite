@@ -178,7 +178,7 @@ export const genFormatting = (formatData: TformattersValue) => {
         ? nullValueHandlingValue
         : formatter?.genFormatting(editValue)(v);
     } catch (e) {
-      console.error(`[${formatterName}]:格式转化错误, 格式器参数为`, editValue, `待转化数据为`, v)
+      // console.error(`[${formatterName}]:格式转化错误, 格式器参数为`, editValue, `待转化数据为`, v)
     }
   }
   return formatting

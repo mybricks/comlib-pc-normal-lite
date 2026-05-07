@@ -152,7 +152,7 @@ function updateComponentFiles(
     if (!multi.ok && multi.results.length > 0) {
       const firstFail = multi.results.find((r) => !r.ok);
       if (firstFail?.message) {
-        console.error(`[@开发模块 - 文件${fileName} 替换失败]`, firstFail.message);
+        // console.error(`[@开发模块 - 文件${fileName} 替换失败]`, firstFail.message);
       }
     }
 

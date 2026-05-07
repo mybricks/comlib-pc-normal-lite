@@ -294,7 +294,7 @@ export async function registerSandbox(comId: string): Promise<void> {
   REGISTER_COMIDS.add(comId)
   const connectToAI = (window as any)._sandbox_?.connectToAI;
   if (typeof connectToAI !== 'function') {
-    console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
+    // console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
   }
 

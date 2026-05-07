@@ -43,7 +43,7 @@ export function registerResourcesCode(comId: string, comName: string) {
           result.push({ id: instance.id, name: instance.name, files, data: instance.getData() });
         }
       } catch (e) {
-        console.error('[_getResourcesCode_] 实例导出失败', key, e);
+        // console.error('[_getResourcesCode_] 实例导出失败', key, e);
       }
     }
     return result;

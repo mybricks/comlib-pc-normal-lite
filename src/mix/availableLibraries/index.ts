@@ -86,7 +86,7 @@ export function validateCode(
       const result = validator.validate(code, ctx)
       errors.push(...result)
     } catch (e) {
-      console.warn(`[@validateCode] ${validator.libraryName} 字符串校验器异常:`, e)
+      // console.warn(`[@validateCode] ${validator.libraryName} 字符串校验器异常:`, e)
     }
   }
 
@@ -121,7 +121,7 @@ export function getValidatorPlugins(
     try {
       plugins.push(validator.validatePlugin(ctx))
     } catch (e) {
-      console.warn(`[@getValidatorPlugins] ${validator.libraryName} 获取 plugin 异常:`, e)
+      // console.warn(`[@getValidatorPlugins] ${validator.libraryName} 获取 plugin 异常:`, e)
     }
   }
 

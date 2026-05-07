@@ -48,7 +48,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
     }
 
   } catch (error) {
-    console.error("[@transformTsx error]", error);
+    // console.error("[@transformTsx error]", error);
     throw error
   }
 
@@ -137,7 +137,7 @@ export function transformLess(code, prefix = "") {
     ],
   }, (error, result) => {
     if (error) {
-      console.error(error)
+      // console.error(error)
       throw new Error(`Less 代码编译失败: ${error.message}`)
     } else {
       cssModule.cssContent = result?.css

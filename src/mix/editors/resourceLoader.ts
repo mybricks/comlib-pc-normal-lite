@@ -20,7 +20,7 @@ function loadResource(resource: LibraryResource): Promise<void> {
       script.src = url;
       script.onload = () => resolve();
       script.onerror = () => {
-        console.warn(`[loadResource] 加载 JS 资源失败: ${url}`);
+        // console.warn(`[loadResource] 加载 JS 资源失败: ${url}`);
         resolve();
       };
       document.head.appendChild(script);
@@ -57,5 +57,5 @@ async function loadAllLibraryResources() {
 }
 
 loadAllLibraryResources().catch((err) => {
-  console.warn('[loadAllLibraryResources] 外部资源加载出错:', err);
+  // console.warn('[loadAllLibraryResources] 外部资源加载出错:', err);
 });

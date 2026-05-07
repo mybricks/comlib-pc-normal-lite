@@ -37,7 +37,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
 
   const Babel = (window as any).Babel;
   if (!Babel) {
-    console.warn('[mix/eslint] window.Babel 未就绪，跳过 verify');
+    // console.warn('[mix/eslint] window.Babel 未就绪，跳过 verify');
     return [];
   }
 

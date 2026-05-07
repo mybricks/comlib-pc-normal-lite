@@ -43,7 +43,7 @@ export class PromiseStack {
         }
       }
     } catch (e) {
-      console.error(e)
+      // console.error(e)
       if (catchNext) {
         this.currentPromise = null;
         this.run();

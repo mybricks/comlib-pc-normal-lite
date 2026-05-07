@@ -55,11 +55,11 @@ export async function loadExternalAssetsDeps(deps: AssetsDep[]) {
               break;
             } catch (fallbackError) {
               // @ts-ignore
-              console.error(fallbackError.message);
+              // console.error(fallbackError.message);
             }
           }
           if (!loaded) {
-            console.error(`load ${asset.name} failed for ${dep.url}`);
+            // console.error(`load ${asset.name} failed for ${dep.url}`);
           }
         }
       })();

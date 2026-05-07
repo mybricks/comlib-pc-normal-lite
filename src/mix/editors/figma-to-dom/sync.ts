@@ -781,7 +781,7 @@ function isFigmaSyncDimensionDebugEnabled(): boolean {
 function debugFigmaSyncDimension(payload: Record<string, unknown>): void {
   if (!isFigmaSyncDimensionDebugEnabled()) return;
   try {
-    console.info('[figma-sync][dimension]', payload);
+    // console.info('[figma-sync][dimension]', payload);
   } catch {}
 }
 
@@ -804,7 +804,7 @@ function isFigmaSyncAntDebugEnabled(): boolean {
 function debugFigmaSyncAnt(payload: Record<string, unknown>): void {
   if (!isFigmaSyncAntDebugEnabled()) return;
   try {
-    console.info('[figma-sync][antd]', payload);
+    // console.info('[figma-sync][antd]', payload);
   } catch {}
 }
 

@@ -17,7 +17,7 @@ class ErrorBoundary extends Component<any, any> {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.log('erirs', error, errorInfo)
+    // console.log('erirs', error, errorInfo)
     this.setState({ errorInfo });
     // 添加运行时错误到统一错误列表
     const { data, onError } = this.props as any;
@@ -39,10 +39,10 @@ class ErrorBoundary extends Component<any, any> {
 
       context.getAiComEvents(this.props.comId).emit("runtimeError", error)
 
-      console.log('捕获到运行时错误:', {
-        error,
-        errorInfo
-      });
+      // console.log('捕获到运行时错误:', {
+      //   error,
+      //   errorInfo
+      // });
     }
     onError?.();
   }

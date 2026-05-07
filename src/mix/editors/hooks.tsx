@@ -18,10 +18,9 @@ const errorSet = new Set();
 export function buildHooks(props: Props) {
   return {
     '@error': (err: Error) => {
-      debugger
-      console.log("[@error - message]", err.message)
-      console.log("[@error - stack]", err.stack)
-      console.log("@error:请保留现场并联系开发者")
+      // console.log("[@error - message]", err.message)
+      // console.log("[@error - stack]", err.stack)
+      // console.log("@error:请保留现场并联系开发者")
 
       const events = context.getAiComEvents(props.id);
       events.emit('runtimeError', err)
@@ -92,7 +91,7 @@ export function buildHooks(props: Props) {
           }
         }
       } catch (e) {
-        console.error('[@getDocs syncTheme error]', e);
+        // console.error('[@getDocs syncTheme error]', e);
       }
 
       try {
@@ -120,7 +119,7 @@ export function buildHooks(props: Props) {
           }
         }
       } catch (e) {
-        console.error('[@getDocs error]', e);
+        // console.error('[@getDocs error]', e);
       }
 
       return result;
@@ -214,10 +213,10 @@ export function buildHooks(props: Props) {
           const {start, end} = codeLine;
           lowcodeViewEvents.emit('viewCode', {fileName: files.jsx, codeLine: [start, end]});
         } else {
-          console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
+          // console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
         }
       } else {
-        console.error('[@viewCode] 未找到 data-loc', params);
+        // console.error('[@viewCode] 未找到 data-loc', params);
       }
     },
 

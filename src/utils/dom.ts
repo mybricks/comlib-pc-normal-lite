@@ -71,7 +71,7 @@ export function dragable(e, dragingFn, options?) {
       try {
         handleMouseMove(e)
       } catch (ex) {
-        console.error(ex)
+        // console.error(ex)
       }
     }
 

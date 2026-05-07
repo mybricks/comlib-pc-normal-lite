@@ -145,7 +145,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
       }
     } catch (error) {
       if (!(error as any)?.message?.includes('取消')) {
-        console.error('[选择目录] 失败', error);
+        // console.error('[选择目录] 失败', error);
       }
     }
   }, [comId]);
@@ -155,7 +155,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
 
     const aiComParams = context.getAiComParams(comId);
     if (!aiComParams?.data) {
-      console.error('[导出为代码] 组件数据不存在');
+      // console.error('[导出为代码] 组件数据不存在');
       return;
     }
 
@@ -173,7 +173,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
         folderName: 'App',
         outputDir: isVSCode ? outputDir : undefined,
         onProgress: (progress) => {
-          console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
+          // console.log(`[导出进度] ${progress.progress}% - ${progress.currentFile}`);
         },
       });
 
@@ -192,11 +192,11 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
       setLoadingType(null);
 
       if ((error as any)?.message?.includes('取消')) {
-        console.log('[导出为代码] 用户取消导出');
+        // console.log('[导出为代码] 用户取消导出');
       } else {
         if (message) message.error(`导出失败: ${(error as any)?.message || '未知错误'}`);
         else alert(`导出失败: ${(error as any)?.message || '未知错误'}`);
-        console.error('[导出为代码] 导出失败', error);
+        // console.error('[导出为代码] 导出失败', error);
       }
     }
   }, [comId, isVSCode, outputDir]);

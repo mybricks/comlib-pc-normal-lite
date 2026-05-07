@@ -91,7 +91,7 @@ export class FileWatcher {
         try {
           listener(event)
         } catch (error) {
-          console.error('[FileWatcher] 监听器执行出错:', error)
+          // console.error('[FileWatcher] 监听器执行出错:', error)
         }
       })
     }

@@ -22,7 +22,7 @@ const item = {
           .replace(/ ?\uE000 ?/g, '\n')         // 3. 恢复为换行，移除br前后的空格
           .trim()                               // 4. 移除首尾空白
       } catch (e) {
-        console.error('[data-zone-text-editable]: set', e)
+        // console.error('[data-zone-text-editable]: set', e)
       }
       return focusArea.ele.innerText
     },
@@ -45,7 +45,7 @@ const item = {
         context.updateFile(id, {fileName, content: newCode, type: ''})
         context.saveManualVersion(id, [fileName])
       } catch (e) {
-        console.error('[data-zone-text-editable]: set', e)
+        // console.error('[data-zone-text-editable]: set', e)
       }
     }
   }

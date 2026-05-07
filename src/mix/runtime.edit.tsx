@@ -76,12 +76,12 @@ export default (props: any) => {
 
     // 注册沙箱：将 mix 组件的文件系统和上下文桥接给 plugin-ai 的 CodeAgent
     registerSandbox(props.id).then(() => {
-      console.log('[初始化成功]', {
-        context,
-        props
-      })
+      // console.log('[初始化成功]', {
+      //   context,
+      //   props
+      // })
     }).catch((error) => {
-      console.error('[初始化错误]', error)
+      // console.error('[初始化错误]', error)
     }).finally(() => {
       setRender(true)
     });
