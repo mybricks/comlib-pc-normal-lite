@@ -86,6 +86,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     if (!props.vibing) {
       setVibingEnded(true)
     } else {
+      fileSystem.current.tempDependencies.clear()
       setVibingEnded(false)
     }
   }, [props.vibing])
@@ -99,7 +100,9 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
         // 缺失入口文件
         setError(error)
       } else {
-        const { tempFilesMap } = fileSystem.current
+        const { tempFilesMap, tempDependencies } = fileSystem.current
+
+        let errorMessage = ''
         
         if (Object.keys(tempFilesMap).length > 0) {
           const missingFiles = extractMissingFiles(tempFilesMap)
@@ -110,8 +113,16 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
               return `${index ? '、' : ''}\`${file}\``
             })
             .join('')
-          
-          setError(new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`))
+
+          errorMessage += `缺失以下依赖文件，组件无法渲染：${errorDetails}\n`
+        }
+
+        if (tempDependencies.size) {
+          errorMessage += `使用了不允许的三方依赖：${Array.from(tempDependencies).join(', ')}`
+        }
+
+        if (errorMessage) {
+          setError(new Error(errorMessage))
         }
       }
     } else {

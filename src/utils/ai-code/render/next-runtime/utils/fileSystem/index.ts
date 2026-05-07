@@ -254,6 +254,9 @@ class FileSystem {
   /** 临时文件存储 */
   tempFilesMap: FilesMap = {}
 
+  /** 临时依赖存储，使用了未注入的依赖 */
+  tempDependencies = new Set<string>()
+
   /** 全局错误监听器引用 */
   private _onError: ((event: ErrorEvent) => void) | null = null
 
@@ -626,7 +629,11 @@ class FileSystem {
 
         // 判断是依赖还是相对路径，依赖直接抛出错误
         if (!key.startsWith('.')) {
-          throw new Error(`使用了不允许的依赖：'${key}'`)
+          that.tempDependencies.add(key)
+          return {
+            default: hackProxy(),
+            __default: null
+          }
         }
 
         let currentPath = filename.split('/');
