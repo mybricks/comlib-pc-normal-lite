@@ -107,24 +107,6 @@ export function buildHooks(props: Props) {
               result['title'] = docs.title;
               result['summary'] = docs.summary;
               result['type'] = focusElement.getAttribute('data-zone-type');
-
-              const datasourceList = docs.datasource
-              if (Array.isArray(datasourceList)) {
-                const datasourceID = focusElement.getAttribute('data-zone-datasource');
-                if (datasourceID) {
-                  const datasource = datasourceList.find((ds) => ds.id === datasourceID)
-
-                  if (Array.isArray(datasource?.apis)) {
-                    result['serviceList'] = datasource.apis.map(({ name, type, desc }) => {
-                      return {
-                        title: name,
-                        type: type === 'use' ? 'down' : 'up',
-                        desc
-                      }
-                    })
-                  }
-                }
-              }
               const events = focusElement.getAttribute('data-zone-events');
               if (events) {
                 const eventsArray = JSON.parse(events);
