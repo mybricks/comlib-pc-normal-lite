@@ -24,7 +24,7 @@ const expressionFormatter: TFormatterInfo = {
       try {
         return sandbox.executeWithTemplate(editorValue)
       } catch (e) {
-        console.error(`格式化表达式出错错误`, e)
+        // console.error(`格式化表达式出错错误`, e)
       }
     }
   },
