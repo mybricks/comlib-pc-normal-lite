@@ -374,14 +374,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         onPageInfo: (params) => {
           try {
             if (containerRef.current) {
+              let widgetName = params?.widgetName
+              if (!widgetName) {
+                const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+                widgetName = firstWidget?.getAttribute('data-widget-name');
+              }
               if (mdCompiled) {
-                let widgetName = params?.widgetName
-
-                if (!widgetName) {
-                  const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
-                  widgetName = firstWidget?.getAttribute('data-widget-name');
-                }
-                
                 const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
                 const title = docs?.title;
                 if (title) {
@@ -389,7 +387,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 }
               }
 
-              const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+              const container = containerRef.current?.querySelector(`[data-widget-name="${widgetName}"]`)
+              let dataLoc = container?.getAttribute('data-loc') || container?.querySelector('[data-loc]')?.getAttribute('data-loc')
+
+              if (!dataLoc) {
+                dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+              }
 
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
@@ -727,9 +730,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         useEffect(() => {
           try {
             if (containerRef.current && container) {
-              if (mdCompiled) {
+              let widgetName = params?.widgetName
+              if (!widgetName) {
                 const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
-                const widgetName = firstWidget?.getAttribute('data-widget-name');
+                widgetName = firstWidget?.getAttribute('data-widget-name');
+              }
+              if (mdCompiled) {
                 const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
                 const title = docs?.title;
                 if (title) {
@@ -737,7 +743,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 }
               }
 
-              const dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+              const container = containerRef.current?.querySelector(`[data-widget-name="${widgetName}"]`)
+              let dataLoc = container?.getAttribute('data-loc') || container?.querySelector('[data-loc]')?.getAttribute('data-loc')
+
+              if (!dataLoc) {
+                dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+              }
+
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
                 const { files } = loc;
