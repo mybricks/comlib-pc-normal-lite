@@ -440,24 +440,42 @@ class Context {
           })
 
           const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
+          const events: any = []
           const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
           const store: Array<{ refSelector:string, field:string, description:string }> = []
           for (const [blockName, block] of Object.entries(compiled)) {
             if (Array.isArray(block.events)) {
               for (const ev of block.events) {
-                if (!ev.relation) continue
-                relations.push({
-                  from: {
-                    selector: [
-                      `[data-widget-name="${blockName}"][data-zone-events*="${ev.id}"]`,
-                      `[data-widget-name="${blockName}"] [data-zone-events*="${ev.id}"]`,
-                    ].join(', '),
-                  },
-                  to: {
+                const refSelector = [
+                  `[data-widget-name="${blockName}"][data-zone-events*="${ev.id}"]`,
+                  `[data-widget-name="${blockName}"] [data-zone-events*="${ev.id}"]`,
+                ].join(', ')
+                if (ev.relation) {
+                  relations.push({
+                    from: {
+                      selector: refSelector,
+                    },
+                    to: {
+                      type: ev.relation.type,
+                      selector: `[data-widget-name="${ev.relation.name}"]`,
+                    },
+                  })
+                }
+
+                const result: any = {
+                  refSelector,
+                  title: ev.title,
+                  mermaid: ev.mermaid,
+                }
+
+                if (ev.relation) {
+                  result.relation = {
                     type: ev.relation.type,
-                    selector: `[data-widget-name="${ev.relation.name}"]`,
-                  },
-                })
+                    refSelector: `[data-widget-name="${ev.relation.name}"]`,
+                  }
+                }
+
+                events.push(result)
               }
             }
             if (block.datasource) {
@@ -488,7 +506,8 @@ class Context {
           this.getAiCom(id)?.actions?.notifyChanged?.({
             relations,
             services,
-            store
+            store,
+            events
           });
           this.getAiComEvents(id)?.emit("fileChange", { filename: fileName })
         } catch (e) {
