@@ -18,7 +18,8 @@ const VALID_NAMES = new Set([
   '_collectDebugLogs',
   'PopupVisible',
   'useDesignToken',
-  '_refreshPopups'
+  '_refreshPopups',
+  'DataSource'
 ])
 
 // ── 校验器实现 ────────────────────────────────────────────────────────────────
