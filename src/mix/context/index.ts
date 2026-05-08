@@ -577,6 +577,19 @@ class Context {
     const updated = await history.listVersions();
     this.notifyVersionsChange(comId, updated);
   }
+
+  getCanvasList(comId: string) {
+    let componentId: string | undefined
+    if (comId && this.aiComParamsMap[comId]) {
+      componentId = comId
+    } else {
+      componentId = Object.keys(this.aiComParamsMap)[0]
+    }
+    if (componentId) {
+      return document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot?.querySelectorAll(`#${componentId} [data-desn-page]`) || []
+    }
+    return []
+  }
 }
 
 export default new Context();
