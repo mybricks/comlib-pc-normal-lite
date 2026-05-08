@@ -273,7 +273,7 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 // }
               }
 
-              const { events, datasource } = parseJSXComments(node)
+              const { events, datasource, store } = parseJSXComments(node)
         
 
               // const events = getEvents(node);
@@ -301,6 +301,10 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
 
               if (datasource) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-datasource", datasource);
+              }
+
+              if (store) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-store", store);
               }
 
               // if (comRef) {

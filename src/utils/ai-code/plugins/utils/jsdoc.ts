@@ -58,8 +58,8 @@ export function parseJSDocComment(raw: string): { summary?: string; props?: Arra
   return result;
 }
 
-/** 匹配注释中的「属性名:处理函数名」，提取冒号后的 handler 名（排除datasource） */
-const EVENT_COMMENT_REGEX = /\b(?!datasource\b)(\w+)\s*:\s*(\w+)\b/g;
+/** 匹配注释中的「属性名:处理函数名」，提取冒号后的 handler 名（排除datasource和store） */
+const EVENT_COMMENT_REGEX = /\b(?!datasource\b|store\b)(\w+)\s*:\s*(\w+)\b/g;
 
 function extractHandlerNamesFromCommentValue(value: string): string[] {
   if (value == null || typeof value !== "string") return [];
@@ -76,9 +76,10 @@ function extractHandlerNamesFromCommentValue(value: string): string[] {
 
 /**
  * 遍历 openingElement.attributes，从各属性的 leadingComments / trailingComments 中
- * 解析形如 /** onClick:primaryClick *\/ 的注释（提取events）和 
- * /** datasource:studentListApi *\/ 的注释（提取datasource）。
- * events会去重，datasource只取第一个匹配到的值。
+ * 解析形如 /** onClick:primaryClick *\/ 的注释（提取events）、
+ * /** datasource:studentListApi *\/ 的注释（提取datasource）和
+ * /** store:user *\/ 的注释（提取store）。
+ * events会去重，datasource和store只取第一个匹配到的值。
  */
 export function parseJSXComments(node: {
   openingElement?: { 
@@ -90,9 +91,11 @@ export function parseJSXComments(node: {
 }): { 
   events: string[]; 
   datasource?: string;
+  store?: string;
 } {
   const eventNames = new Set<string>();
   let datasourceKey: string | undefined;
+  let storeKey: string | undefined;
   const attrs = node.openingElement?.attributes ?? [];
   
   for (const attribute of attrs) {
@@ -110,12 +113,18 @@ export function parseJSXComments(node: {
       if (!datasourceKey) {
         datasourceKey = extractDatasourceFromCommentValue(value);
       }
+      
+      // 提取store（只取第一个）
+      if (!storeKey) {
+        storeKey = extractStoreFromCommentValue(value);
+      }
     }
   }
   
   return {
     events: Array.from(eventNames),
     datasource: datasourceKey,
+    store: storeKey,
   };
 }
 
@@ -127,5 +136,16 @@ function extractDatasourceFromCommentValue(value: string): string | undefined {
   if (value == null || typeof value !== "string") return undefined;
   const normalized = value.replace(/\s*\*\s?/g, " ").trim();
   const match = normalized.match(DATASOURCE_COMMENT_REGEX);
+  return match ? match[1] : undefined;
+}
+
+/** 匹配 store:xxx 格式的注释 */
+const STORE_COMMENT_REGEX = /^\s*store\s*:\s*(\w+)\s*$/;
+
+/** 从注释value中提取store的key */
+function extractStoreFromCommentValue(value: string): string | undefined {
+  if (value == null || typeof value !== "string") return undefined;
+  const normalized = value.replace(/\s*\*\s?/g, " ").trim();
+  const match = normalized.match(STORE_COMMENT_REGEX);
   return match ? match[1] : undefined;
 }

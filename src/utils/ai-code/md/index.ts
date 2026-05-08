@@ -5,18 +5,28 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 export type SummaryRelation = { type: string; name: string }
 /** 单个事件：id、标题、mermaid 流程图、可选关联组件 */
 export type SummaryEvent = { id: string; title: string; mermaid: string; relation?: SummaryRelation }
-/** 单个数据源：id、apis列表 */
-export type SummaryDatasource = { 
-  id: string; 
-  apis: Array<{ name: string; type?: string; desc?: string }> 
+/** 单个数据源：root节点包含多个API，每个API有desc */
+export type SummaryDatasource = {
+  root: Record<string, { desc?: string }>
 }
-/** 单个区块：标题、摘要、类型，以及可选的 events 列表和 datasource 列表 */
+/** 单个store项：path、field、desc */
+export type SummaryStoreItem = {
+  path: string;
+  field: string;
+  desc?: string;
+}
+
+/** 单个store分组：组名 -> 项列表 */
+export type SummaryStoreGroup = Record<string, SummaryStoreItem[]>
+
+/** 单个区块：标题、摘要、类型，以及可选的 events 列表、datasource 列表和 store 信息 */
 export type SummaryBlock = {
   title?: string
   summary?: string
   type?: string
   events?: SummaryEvent[]
-  datasource?: SummaryDatasource[]
+  datasource?: SummaryDatasource
+  store?: SummaryStoreGroup
 }
 /** 解析结果：区块名 -> 区块数据 */
 export type ParsedSummary = Record<string, SummaryBlock>
@@ -65,6 +75,80 @@ function parseRelation(listNode: AstNode): SummaryRelation {
     if (key) kv[key] = value
   }
   return { type: kv['type'] ?? '', name: kv['name'] ?? '' }
+}
+
+/**
+ * 解析 store 的 listItem。
+ * AST 结构（四层嵌套）：
+ *   listItem (paragraph → "store:")
+ *     list
+ *       listItem           ← 分组名 (如 statData)
+ *         paragraph → "statData"   （无冒号）
+ *         list
+ *           listItem       ← path 项（纯文本路径，无 key）
+ *             paragraph → "/pages/HomePage/store.js"
+ *             list
+ *               listItem → "field: studentCount"
+ *               listItem → "desc: 展示学生总数"
+ */
+function parseStoreItem(item: AstNode): SummaryStoreGroup {
+  const storeGroup: SummaryStoreGroup = {}
+  const storeNestedList = getNestedList(item)
+  if (!storeNestedList) return storeGroup
+
+  // 第一层：遍历分组名
+  for (const groupItem of storeNestedList.children ?? []) {
+    if (groupItem.type !== 'listItem') continue
+    const groupNameText = getListItemText(groupItem).trim()
+    const groupName = groupNameText.endsWith(':') ? groupNameText.slice(0, -1).trim() : groupNameText
+    if (!groupName) continue
+
+    const itemsList = getNestedList(groupItem)
+    if (!itemsList) {
+      storeGroup[groupName] = []
+      continue
+    }
+
+    const items: SummaryStoreItem[] = []
+
+    // 第二层：遍历 path 项（纯文本路径，无 key）
+    for (const pathItem of itemsList.children ?? []) {
+      if (pathItem.type !== 'listItem') continue
+      const pathText = getListItemText(pathItem).trim()
+      // 路径是纯文本，无冒号（可能以 / 开头，也可能不带）
+      // 如果包含冒号则说明不是路径项，跳过
+      if (pathText.includes(':')) continue
+      if (!pathText) continue
+      const pathValue = pathText
+
+      const fieldList = getNestedList(pathItem)
+      if (!fieldList) {
+        items.push({ path: pathValue, field: '' })
+        continue
+      }
+
+      let field = ''
+      let desc: string | undefined
+
+      // 第三层：遍历属性（field/desc 为 key-value 形式）
+      for (const fieldItem of fieldList.children ?? []) {
+        if (fieldItem.type !== 'listItem') continue
+        const text = getListItemText(fieldItem)
+        const fieldColonIdx = text.indexOf(':')
+        if (fieldColonIdx === -1) continue
+        const fieldKey = text.slice(0, fieldColonIdx).trim()
+        const fieldValue = text.slice(fieldColonIdx + 1).trim()
+        if (fieldKey === 'field') field = fieldValue
+        else if (fieldKey === 'desc') desc = fieldValue
+      }
+
+      items.push({ path: pathValue, field, desc })
+    }
+
+    storeGroup[groupName] = items
+  }
+
+  return storeGroup
 }
 
 /**
@@ -135,70 +219,60 @@ function parseEventsItem(item: AstNode): SummaryEvent[] {
  * AST 结构（四层嵌套）：
  *   listItem (paragraph → "datasource:")
  *     list
- *       listItem           ← 数据源 ID (如 homeStatApi)
- *         paragraph → "homeStatApi"   （无冒号）
+ *       listItem           ← "root"（分组名）
+ *         paragraph → "root"   （无冒号）
  *         list
- *           listItem       ← API 名称 (如 getStudentList)
- *             paragraph → "getStudentList"
+ *           listItem       ← API 名称（如 getStudentDetail）
+ *             paragraph → "getStudentDetail"   （无冒号）
  *             list
- *               listItem → "type: use"
- *               listItem → "desc: 展示学生总数统计"
+ *               listItem → "desc: 页面初始化时调用接口获取学生详情"
  */
-function parseDatasourceItem(item: AstNode): SummaryDatasource[] {
-  const datasources: SummaryDatasource[] = []
+function parseDatasourceItem(item: AstNode): SummaryDatasource | undefined {
   const dsNestedList = getNestedList(item)
-  if (!dsNestedList) return datasources
+  if (!dsNestedList) return undefined
 
-  // 第一层：遍历数据源 ID
+  // 查找 root 节点
   for (const dsItem of dsNestedList.children ?? []) {
     if (dsItem.type !== 'listItem') continue
-    const idText = getListItemText(dsItem).trim()
-    const id = idText.endsWith(':') ? idText.slice(0, -1).trim() : idText
-    if (!id) continue
+    const keyText = getListItemText(dsItem).trim()
+    const key = keyText.endsWith(':') ? keyText.slice(0, -1).trim() : keyText
+    if (key !== 'root') continue
 
-    const apisList = getNestedList(dsItem)
-    if (!apisList) {
-      datasources.push({ id, apis: [] })
-      continue
-    }
+    const apiList = getNestedList(dsItem)
+    if (!apiList) return { root: {} }
 
-    const apis: Array<{ name: string; type?: string; desc?: string }> = []
+    const apis: Record<string, { desc?: string }> = {}
 
-    // 第二层：遍历 API 名称
-    for (const apiItem of apisList.children ?? []) {
+    // 遍历 API 项（第三层）
+    for (const apiItem of apiList.children ?? []) {
       if (apiItem.type !== 'listItem') continue
       const apiNameText = getListItemText(apiItem).trim()
       const apiName = apiNameText.endsWith(':') ? apiNameText.slice(0, -1).trim() : apiNameText
       if (!apiName) continue
 
       const propsList = getNestedList(apiItem)
-      if (!propsList) {
-        apis.push({ name: apiName })
-        continue
-      }
-
-      let type: string | undefined
       let desc: string | undefined
 
-      // 第三层：遍历属性
-      for (const propItem of propsList.children ?? []) {
-        if (propItem.type !== 'listItem') continue
-        const text = getListItemText(propItem)
-        const colonIdx = text.indexOf(':')
-        if (colonIdx === -1) continue
-        const key = text.slice(0, colonIdx).trim()
-        const value = text.slice(colonIdx + 1).trim()
-        if (key === 'type') type = value
-        else if (key === 'desc') desc = value
+      // 遍历属性（第四层）
+      if (propsList) {
+        for (const propItem of propsList.children ?? []) {
+          if (propItem.type !== 'listItem') continue
+          const text = getListItemText(propItem)
+          const colonIdx = text.indexOf(':')
+          if (colonIdx === -1) continue
+          const propKey = text.slice(0, colonIdx).trim()
+          const propValue = text.slice(colonIdx + 1).trim()
+          if (propKey === 'desc') desc = propValue
+        }
       }
 
-      apis.push({ name: apiName, type, desc })
+      apis[apiName] = { desc }
     }
 
-    datasources.push({ id, apis })
+    return { root: apis }
   }
 
-  return datasources
+  return undefined
 }
 
 /**
@@ -234,7 +308,13 @@ const parsemd = (md: string): ParsedSummary => {
         }
 
         if (lineText === 'datasource:') {
-          result[currentKey].datasource = parseDatasourceItem(item)
+          const ds = parseDatasourceItem(item)
+          if (ds) result[currentKey].datasource = ds
+          continue
+        }
+
+        if (lineText === 'store:') {
+          result[currentKey].store = parseStoreItem(item)
           continue
         }
 

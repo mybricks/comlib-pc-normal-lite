@@ -440,7 +440,8 @@ class Context {
           })
 
           const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
-          const services: Array<{ title: string; refSelector: string; type: string; description: string }>= []
+          const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
+          const store: Array<{ refSelector:string, field:string, description:string }> = []
           for (const [blockName, block] of Object.entries(compiled)) {
             if (Array.isArray(block.events)) {
               for (const ev of block.events) {
@@ -459,25 +460,35 @@ class Context {
                 })
               }
             }
-            if (Array.isArray(block.datasource)) {
-              block.datasource.forEach((value) => {
-                const { id, apis } = value
-
-
-                services.push(...apis.map((api) => {
-                  return {
-                    title: api.name,
-                    refSelector: id === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-datasource*="${id}"], [data-widget-name="${blockName}"] [data-zone-datasource*="${id}"]`,
-                    type: api.type === 'use' ? 'down' : 'up',
-                    description: api.desc || ""
-                  }
-                }))
+            if (block.datasource) {
+              Object.entries(block.datasource).forEach(([key, value]) => {
+                Object.entries(value).forEach(([api, { desc }]) => {
+                  services.push({
+                    title: api,
+                    type: 'up',
+                    refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-datasource*="${key}"], [data-widget-name="${blockName}"] [data-zone-datasource*="${key}"]`,
+                    description: desc || ""
+                  })
+                })
+              })
+            }
+            if (block.store) {
+              Object.entries(block.store).forEach(([key, value]) => {
+                value.forEach(({ field, path, desc }) => {
+                  store.push({
+                    field,
+                    refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-store*="${key}"], [data-widget-name="${blockName}"] [data-zone-store*="${key}"]`,
+                    description: desc || ""
+                  })
+                })
               })
             }
           }
+
           this.getAiCom(id)?.actions?.notifyChanged?.({
             relations,
-            services
+            services,
+            store
           });
           this.getAiComEvents(id)?.emit("fileChange", { filename: fileName })
         } catch (e) {
