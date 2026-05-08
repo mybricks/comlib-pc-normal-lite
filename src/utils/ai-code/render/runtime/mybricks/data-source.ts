@@ -111,7 +111,9 @@ export class DataSource {
         patch: makeRequest('PATCH'),
       };
     } else {
-      const axios = axiosLib?.create?.()
+      const axios = axiosLib?.create?.({
+        baseURL: ''
+      })
 
       if (axios) {
         this.axios = axios
