@@ -208,6 +208,13 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 }
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-library-source", source);
+                // 提取静态 JSX props，供 dom-to-figma 的变体库匹配使用。
+                // 格式：{ component: "Button", props: { type: "primary", size: "large" } }
+                // component 字段在消费侧用于确定性地筛选同类组件候选，避免跨组件类型误匹配。
+                if (tagName && /^[A-Z]/.test(tagName)) {
+                  const figmaPropsPayload = extractFigmaProps(node, tagName);
+                  pushDataAttr(node.openingElement.attributes, "data-figma-props", JSON.stringify(figmaPropsPayload));
+                }
               }
   
               if (cnList.length > 0) {
@@ -356,4 +363,57 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
       }
     };
   }
+}
+
+/**
+ * 从 JSX 节点的 AST 中提取静态 props，供 Figma 变体库匹配。
+ * 只提取静态字面量（StringLiteral / BooleanLiteral），动态表达式跳过。
+ *
+ * 返回结构：
+ *   { component: "Button", props: { type: "primary", size: "large", hasIcon: true } }
+ *
+ * component 字段为 JSX 组件名，消费侧用于确定性地筛选同类组件候选，
+ * 与 props（JSX props 快照）职责分离，避免命名冲突。
+ */
+function extractFigmaProps(node: any, tagName: string): { component: string; props: Record<string, any> } {
+    // prefix/suffix 存实际字符串值，消费侧（component-library-resolver）用 !! 判断是否有前/后缀；
+    // showCount 存布尔值，供 Input 字数计数变体匹配。
+    const SCALAR_PROPS = ['type', 'size', 'danger', 'ghost', 'loading', 'disabled', 'shape', 'prefix', 'suffix', 'showCount'];
+  const props: Record<string, any> = {};
+
+  try {
+    const attrs = node.openingElement?.attributes;
+    if (Array.isArray(attrs)) {
+      for (const attr of attrs) {
+        if (attr.type !== 'JSXAttribute' || !attr.name) continue;
+        const propName: string = typeof attr.name.name === 'string' ? attr.name.name : '';
+        if (!propName) continue;
+
+        if (propName === 'icon') {
+          props.hasIcon = true;
+          continue;
+        }
+
+        if (!SCALAR_PROPS.includes(propName)) continue;
+
+        if (!attr.value) {
+          // <Button disabled> 形式——布尔属性无值，等价于 true
+          props[propName] = true;
+          continue;
+        }
+
+        if (attr.value.type === 'StringLiteral') {
+          props[propName] = attr.value.value;
+        } else if (attr.value.type === 'JSXExpressionContainer') {
+          const expr = attr.value.expression;
+          if (expr && expr.type === 'BooleanLiteral') {
+            props[propName] = expr.value;
+          }
+          // 动态表达式（标识符、三元等）无法静态求值，跳过
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  return { component: tagName, props };
 }
