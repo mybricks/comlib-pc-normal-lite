@@ -23,7 +23,7 @@ export function buildExportCodeConfig(props: Props) {
       value: {
         get() {
           return {
-            getCanvasList: () => context.getCanvasList(props.id),
+            getCanvasList: () => context.getCanvasList(),
             onSync: (items: FigmaImportItem[], rootEl?: Element | null) => {}
           };
         },
