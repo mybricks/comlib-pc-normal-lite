@@ -1,10 +1,9 @@
 import React from 'react';
 import ExportCodePanel, { ViewRequirementBtn } from '../../../utils/code-export/render';
 import context from '../../context';
-import type { Props } from '../types';
+import type { Props, FigmaImportItem } from '../types';
 
 export function buildExportCodeConfig(props: Props) {
-  
 
   return [
     {
@@ -18,6 +17,18 @@ export function buildExportCodeConfig(props: Props) {
         render: () => <ViewRequirementBtn comId={props.id} />,
       },
     },
+    {
+      title: 'Figma',
+      type: 'figma',
+      value: {
+        get() {
+          return {
+            getCanvasList: () => context.getCanvasList(props.id),
+            onSync: (items: FigmaImportItem[], rootEl?: Element | null) => {}
+          };
+        },
+      },
+    }
     // {
     //   title: '导出',
     //   items: [

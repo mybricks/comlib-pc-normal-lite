@@ -19,6 +19,7 @@ export function buildPagePanel(props: Props) {
               value: {
                 get() {
                   return {
+                    getCanvasList: () => context.getCanvasList(props.id),
                     onSync: (items: FigmaImportItem[], rootEl?: Element | null) =>
                       syncStylesFromFigmaJson(comId, items, { rootEl: rootEl ?? null }),
                   };
