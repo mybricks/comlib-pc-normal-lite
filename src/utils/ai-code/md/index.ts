@@ -3,12 +3,12 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 // --- 目标结构类型（与 summary.md 约定一致）---
 /** 单个关联组件 */
 export type SummaryRelation = { type: string; name: string }
-/** 单个事件：id、标题、mermaid 流程图、可选关联组件 */
-export type SummaryEvent = { id: string; title: string; mermaid: string; relation?: SummaryRelation }
-/** 单个数据源：root节点包含多个API，每个API有desc */
-export type SummaryDatasource = {
-  root: Record<string, { desc?: string }>
-}
+/** 单个事件处理器：handlerName、标题、mermaid 流程图、可选关联组件 */
+export type SummaryEventHandler = { handler: string; title: string; mermaid: string; relation?: SummaryRelation }
+/** 单个事件：组件id、处理器列表 */
+export type SummaryEvent = { id: string; handlers: SummaryEventHandler[] }
+/** 单个数据源：顶层key（root或组件id）-> API名 -> { desc } */
+export type SummaryDatasource = Record<string, Record<string, { desc?: string }>>
 /** 单个store项：path、field、desc */
 export type SummaryStoreItem = {
   path: string;
@@ -152,19 +152,59 @@ function parseStoreItem(item: AstNode): SummaryStoreGroup {
 }
 
 /**
- * 解析 events 的 listItem。
+ * 解析单个 handler 属性列表（title/mermaid/relation）。
  * AST 结构：
+ *   list
+ *     listItem → "title: 打开弹窗"
+ *     listItem → "mermaid: flowchart LR; ..."
+ *     listItem (paragraph → "relation:")
+ *       list
+ *         listItem → "type: popup"
+ *         listItem → "name: ConfirmModal"
+ */
+function parseHandlerProps(propsListNode: AstNode): { title: string; mermaid: string; relation?: SummaryRelation } {
+  let title = ''
+  let mermaid = ''
+  let relation: SummaryRelation | undefined
+
+  for (const propItem of propsListNode.children ?? []) {
+    if (propItem.type !== 'listItem') continue
+    const text = getListItemText(propItem)
+
+    if (text === 'relation:') {
+      const relList = getNestedList(propItem)
+      if (relList) relation = parseRelation(relList)
+      continue
+    }
+
+    const colonIdx = text.indexOf(':')
+    if (colonIdx === -1) continue
+    const key = text.slice(0, colonIdx).trim()
+    const value = text.slice(colonIdx + 1).trim()
+    if (key === 'title') title = value
+    else if (key === 'mermaid') mermaid = value
+  }
+
+  return { title, mermaid, relation }
+}
+
+/**
+ * 解析 events 的 listItem。
+ * AST 结构（三层嵌套）：
  *   listItem (paragraph → "events:")
  *     list
- *       listItem           ← 每个事件
- *         paragraph → "openModal"   （无冒号）
+ *       listItem           ← 组件 id（如 searchInput）
+ *         paragraph → "searchInput"
  *         list
- *           listItem → "title: 打开弹窗"
- *           listItem → "mermaid: flowchart LR; ..."
- *           listItem (paragraph → "relation:")
+ *           listItem       ← 事件处理器名（如 onChange）
+ *             paragraph → "onChange"
  *             list
- *               listItem → "type: popup"
- *               listItem → "name: ConfirmModal"
+ *               listItem → "title: 输入搜索关键词"
+ *               listItem → "mermaid: flowchart LR; ..."
+ *               listItem (paragraph → "relation:")
+ *                 list
+ *                   listItem → "type: popup"
+ *                   listItem → "name: ConfirmModal"
  */
 function parseEventsItem(item: AstNode): SummaryEvent[] {
   const events: SummaryEvent[] = []
@@ -173,42 +213,37 @@ function parseEventsItem(item: AstNode): SummaryEvent[] {
 
   for (const evItem of eventsNestedList.children ?? []) {
     if (evItem.type !== 'listItem') continue
-    // id: 纯文本，无冒号（旧格式兼容：末尾有冒号则去掉）
     const idText = getListItemText(evItem).trim()
     const id = idText.endsWith(':') ? idText.slice(0, -1).trim() : idText
     if (!id) continue
 
-    const propsListNode = getNestedList(evItem)
-    if (!propsListNode) {
-      events.push({ id, title: '', mermaid: '' })
+    const handlersListNode = getNestedList(evItem)
+    if (!handlersListNode) {
+      events.push({ id, handlers: [] })
       continue
     }
 
-    let title = ''
-    let mermaid = ''
-    let relation: SummaryRelation | undefined
+    const handlers: SummaryEventHandler[] = []
 
-    for (const propItem of propsListNode.children ?? []) {
-      if (propItem.type !== 'listItem') continue
-      const text = getListItemText(propItem)
+    for (const handlerItem of handlersListNode.children ?? []) {
+      if (handlerItem.type !== 'listItem') continue
+      const handlerText = getListItemText(handlerItem).trim()
+      const handler = handlerText.endsWith(':') ? handlerText.slice(0, -1).trim() : handlerText
+      if (!handler) continue
 
-      if (text === 'relation:') {
-        const relList = getNestedList(propItem)
-        if (relList) relation = parseRelation(relList)
+      const propsListNode = getNestedList(handlerItem)
+      if (!propsListNode) {
+        handlers.push({ handler, title: '', mermaid: '' })
         continue
       }
 
-      const colonIdx = text.indexOf(':')
-      if (colonIdx === -1) continue
-      const key = text.slice(0, colonIdx).trim()
-      const value = text.slice(colonIdx + 1).trim()
-      if (key === 'title') title = value
-      else if (key === 'mermaid') mermaid = value
+      const { title, mermaid, relation } = parseHandlerProps(propsListNode)
+      const h: SummaryEventHandler = { handler, title, mermaid }
+      if (relation) h.relation = relation
+      handlers.push(h)
     }
 
-    const ev: SummaryEvent = { id, title, mermaid }
-    if (relation) ev.relation = relation
-    events.push(ev)
+    events.push({ id, handlers })
   }
 
   return events
@@ -231,15 +266,20 @@ function parseDatasourceItem(item: AstNode): SummaryDatasource | undefined {
   const dsNestedList = getNestedList(item)
   if (!dsNestedList) return undefined
 
-  // 查找 root 节点
+  const result: SummaryDatasource = {}
+
+  // 遍历所有顶层 key（root、组件id 等）
   for (const dsItem of dsNestedList.children ?? []) {
     if (dsItem.type !== 'listItem') continue
     const keyText = getListItemText(dsItem).trim()
     const key = keyText.endsWith(':') ? keyText.slice(0, -1).trim() : keyText
-    if (key !== 'root') continue
+    if (!key) continue
 
     const apiList = getNestedList(dsItem)
-    if (!apiList) return { root: {} }
+    if (!apiList) {
+      result[key] = {}
+      continue
+    }
 
     const apis: Record<string, { desc?: string }> = {}
 
@@ -269,10 +309,10 @@ function parseDatasourceItem(item: AstNode): SummaryDatasource | undefined {
       apis[apiName] = { desc }
     }
 
-    return { root: apis }
+    result[key] = apis
   }
 
-  return undefined
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 /**

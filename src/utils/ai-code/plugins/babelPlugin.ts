@@ -173,7 +173,7 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               // extractCssClassNames 现在返回 CssClassName[]，这里提取 .name 并去重
               // 保持 cnList 为 string[]，data-loc 和 constituency.className 的下游消费者无需改动
               const cnList = [...new Set(extractCssClassNames(classNameExpr, false, cssModuleNames).map(c => c.name))];
-  
+              pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(','));
               const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
               const tagName = getJSXElementNameString(node.openingElement.name)?.split(".")[0];
               if (!tagName) {

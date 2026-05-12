@@ -440,69 +440,154 @@ class Context {
             }
           })
 
+          // const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
+          // const events: any = []
+          // const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
+          // const store: Array<{ refSelector:string, field:string, description:string }> = []
+          // for (const [blockName, block] of Object.entries(compiled)) {
+          //   if (Array.isArray(block.events)) {
+          //     for (const ev of block.events) {
+          //       const refSelector = [
+          //         `[data-widget-name="${blockName}"][data-zone-events*="${ev.id}"]`,
+          //         `[data-widget-name="${blockName}"] [data-zone-events*="${ev.id}"]`,
+          //       ].join(', ')
+          //       if (ev.relation) {
+          //         relations.push({
+          //           from: {
+          //             selector: refSelector,
+          //           },
+          //           to: {
+          //             type: ev.relation.type,
+          //             selector: `[data-widget-name="${ev.relation.name}"]`,
+          //           },
+          //         })
+          //       }
+
+          //       const result: any = {
+          //         refSelector,
+          //         title: ev.title,
+          //         mermaid: ev.mermaid,
+          //       }
+
+          //       if (ev.relation) {
+          //         result.relation = {
+          //           type: ev.relation.type,
+          //           refSelector: `[data-widget-name="${ev.relation.name}"]`,
+          //         }
+          //       }
+
+          //       events.push(result)
+          //     }
+          //   }
+          //   if (block.datasource) {
+          //     Object.entries(block.datasource).forEach(([key, value]) => {
+          //       Object.entries(value).forEach(([api, { desc }]) => {
+          //         services.push({
+          //           title: api,
+          //           type: 'up',
+          //           refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-datasource*="${key}"], [data-widget-name="${blockName}"] [data-zone-datasource*="${key}"]`,
+          //           description: desc || ""
+          //         })
+          //       })
+          //     })
+          //   }
+          //   if (block.store) {
+          //     Object.entries(block.store).forEach(([key, value]) => {
+          //       value.forEach(({ field, path, desc }) => {
+          //         store.push({
+          //           field,
+          //           refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-store*="${key}"], [data-widget-name="${blockName}"] [data-zone-store*="${key}"]`,
+          //           description: desc || ""
+          //         })
+          //       })
+          //     })
+          //   }
+          // }
+
           const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
           const events: any = []
           const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
           const store: Array<{ refSelector:string, field:string, description:string }> = []
-          for (const [blockName, block] of Object.entries(compiled)) {
-            if (Array.isArray(block.events)) {
-              for (const ev of block.events) {
-                const refSelector = [
-                  `[data-widget-name="${blockName}"][data-zone-events*="${ev.id}"]`,
-                  `[data-widget-name="${blockName}"] [data-zone-events*="${ev.id}"]`,
-                ].join(', ')
-                if (ev.relation) {
-                  relations.push({
-                    from: {
-                      selector: refSelector,
-                    },
-                    to: {
-                      type: ev.relation.type,
-                      selector: `[data-widget-name="${ev.relation.name}"]`,
-                    },
-                  })
-                }
 
-                const result: any = {
-                  refSelector,
-                  title: ev.title,
-                  mermaid: ev.mermaid,
-                }
-
-                if (ev.relation) {
-                  result.relation = {
-                    type: ev.relation.type,
-                    refSelector: `[data-widget-name="${ev.relation.name}"]`,
-                  }
-                }
-
-                events.push(result)
-              }
-            }
-            if (block.datasource) {
-              Object.entries(block.datasource).forEach(([key, value]) => {
+          Object.entries(compiled).forEach(([componentName, info]) => {
+            // 接口
+            if (info.datasource) {
+              Object.entries(info.datasource).forEach(([classname, value]) => {
                 Object.entries(value).forEach(([api, { desc }]) => {
+                  const widgetSelector = `[data-widget-name="${componentName}"]`
+                  const classSelector = `[data-zone-classnames*="${classname}"]`
                   services.push({
                     title: api,
                     type: 'up',
-                    refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-datasource*="${key}"], [data-widget-name="${blockName}"] [data-zone-datasource*="${key}"]`,
+                    refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
                     description: desc || ""
                   })
                 })
               })
             }
-            if (block.store) {
-              Object.entries(block.store).forEach(([key, value]) => {
-                value.forEach(({ field, path, desc }) => {
+
+            // 事件
+            if (Array.isArray(info.events)) {
+              info.events.forEach((event) => {
+                const { id, handlers } = event
+                const widgetSelector = `[data-widget-name="${componentName}"]`
+                const classSelector = `[data-zone-classnames*="${id}"]`
+
+                // 临时
+                handlers.forEach(({ handler, title, mermaid, relation }) => {
+                  const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
+                  const result: any = {
+                    refSelector,
+                    title: handler,
+                    mermaid,
+                    description: title
+                  }
+
+                  if (relation) {
+                    relations.push({
+                      from: {
+                        selector: refSelector,
+                      },
+                      to: {
+                        type: relation.type,
+                        selector: `[data-widget-name="${relation.name}"]`,
+                      },
+                    })
+
+                    result.relation = {
+                      type: relation.type,
+                      refSelector: `[data-widget-name="${relation.name}"]`,
+                    }
+                  }
+
+                  events.push(result)
+                })
+              })
+            }
+
+            // store
+            if (info.store) {
+              Object.entries(info.store).forEach(([classname, value]) => {
+                value.forEach(({ desc, field, path }) => {
+                  const widgetSelector = `[data-widget-name="${componentName}"]`
+                  const classSelector = `[data-zone-classnames*="${classname}"]`
+
                   store.push({
                     field,
-                    refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-store*="${key}"], [data-widget-name="${blockName}"] [data-zone-store*="${key}"]`,
+                    refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
                     description: desc || ""
                   })
                 })
               })
             }
-          }
+          })
+
+          console.log('[notifyChanged]', {
+            // relations,
+            services,
+            store,
+            events
+          })
 
           this.getAiCom(id)?.actions?.notifyChanged?.({
             relations,
