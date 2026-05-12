@@ -424,6 +424,20 @@ class Context {
 
           this.getAiCom(id)?.actions?.notifyChanged?.();
           break;
+        case 'yaml':
+        case 'yml':
+        case 'txt':
+        case 'json':
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+            }
+          });
+          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+          this.getAiCom(id)?.actions?.notifyChanged?.();
+          break;
         default:
           break;
       }

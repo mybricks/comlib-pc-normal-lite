@@ -16,14 +16,54 @@
 
 import type { LintMessage } from './types';
 import type { ParsedSummary } from '../../utils/ai-code/md';
-import { createNoConsoleRule } from './rules/no-console';
-import { createNoWindowLocationRule } from './rules/no-window-location';
-import { createRequireDatasourceAsyncRule } from './rules/require-datasource-async';
+import { createNoConsoleRule, RULE_ID as NO_CONSOLE_RULE_ID } from './rules/no-console';
+import { createNoWindowLocationRule, RULE_ID as NO_WINDOW_LOC_RULE_ID } from './rules/no-window-location';
+import { createRequireDatasourceAsyncRule, RULE_ID as DS_ASYNC_RULE_ID } from './rules/require-datasource-async';
 import { createExtractComRefsRule, type ComRefInfo } from './rules/extract-comrefs';
 import { checkReadme, RULE_ID as README_RULE_ID } from './rules/readme';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
 
 export type { LintMessage };
+
+/** 所有可用规则的 ruleId 常量 */
+export const RULE_IDS = {
+  NO_CONSOLE: NO_CONSOLE_RULE_ID,
+  NO_WINDOW_LOCATION: NO_WINDOW_LOC_RULE_ID,
+  REQUIRE_DATASOURCE_ASYNC: DS_ASYNC_RULE_ID,
+  README_CHECK: README_RULE_ID,
+  REQUIREMENT_CHECK: REQ_RULE_ID,
+} as const;
+
+/**
+ * 规则严重程度，与 ESLint 保持一致：
+ * - `-1` / `'off'`  — 禁用
+ * - `1`  / `'warn'` — 警告
+ * - `2`  / `'error'`— 错误
+ */
+export type RuleSeverity = -1 | 1 | 2 | 'off' | 'warn' | 'error';
+
+/** 与 ESLint config.rules 格式一致的规则配置表 */
+export type RulesConfig = Record<string, RuleSeverity | [RuleSeverity, ...unknown[]]>;
+
+/** 与 ESLint Linter.verify() 第二个参数对齐的配置对象 */
+export interface VerifyConfig {
+  rules?: RulesConfig;
+}
+
+/** 将 ESLint 风格的 severity 值归一化为数字 -1 / 1 / 2 */function normalizeSeverity(raw: RuleSeverity): -1 | 1 | 2 {
+  if (raw === 'off') return -1;
+  if (raw === 'warn') return 1;
+  if (raw === 'error') return 2;
+  return raw;
+}
+
+/** 从 RulesConfig 中解析某条规则的最终 severity（-1 = 禁用）*/
+function getRuleSeverity(rules: RulesConfig, ruleId: string, defaultSeverity: 1 | 2): -1 | 1 | 2 {
+  if (!(ruleId in rules)) return defaultSeverity;
+  const entry = rules[ruleId];
+  const raw: RuleSeverity = Array.isArray(entry) ? entry[0] : entry;
+  return normalizeSeverity(raw);
+}
 
 /**
  * 对单文件代码执行所有轻量 Babel 规则扫描。
@@ -128,7 +168,11 @@ function isJsxFile(fileName: string): boolean {
  *              对于 README.md，compiled 为 context.ts 写入时 parsemd() 产生的 ParsedSummary
  * @returns     所有文件的 LintMessage[] 聚合，按文件顺序排列
  */
-export function verify(files: Array<{ fileName: string; source: string; compiled?: unknown }>): LintMessage[] {
+export function verify(
+  files: Array<{ fileName: string; source: string; compiled?: unknown }>,
+  config?: VerifyConfig,
+): LintMessage[] {
+  const rules: RulesConfig = config?.rules ?? {};
   const results: LintMessage[] = [];
 
   // ─── 准备工作：解码文件内容 ───
@@ -151,10 +195,11 @@ export function verify(files: Array<{ fileName: string; source: string; compiled
   const fileNames = new Set(decodedFiles.map(f => f.fileName));
 
   // ─── 文件存在性校验 ───
-  if (!fileNames.has('README.md')) {
+  const readmeSeverity = getRuleSeverity(rules, README_RULE_ID, 2);
+  if (readmeSeverity !== -1 && !fileNames.has('README.md')) {
     results.push({
       ruleId: README_RULE_ID,
-      severity: 2,
+      severity: readmeSeverity,
       message: `[文档校验] 项目缺少 README.md 文件，必须包含此文件。`,
       line: 1,
       column: 0,
@@ -163,10 +208,11 @@ export function verify(files: Array<{ fileName: string; source: string; compiled
     });
   }
 
-  if (!fileNames.has('requirement.md')) {
+  const reqSeverity = getRuleSeverity(rules, REQ_RULE_ID, 2);
+  if (reqSeverity !== -1 && !fileNames.has('requirement.md')) {
     results.push({
       ruleId: REQ_RULE_ID,
-      severity: 2,
+      severity: reqSeverity,
       message: `[文档校验] 项目缺少 requirement.md 文件，必须包含此文件。`,
       line: 1,
       column: 0,
@@ -193,21 +239,26 @@ export function verify(files: Array<{ fileName: string; source: string; compiled
     }
 
     // README.md → 格式校验 + 跨文件节点一致性校验
-    // 优先使用 context.ts 编译时产生的 ParsedSummary（compiled），降级时实时解析
     if (fileName === 'README.md') {
+      if (readmeSeverity === -1) continue;
       let parsedReadme: ParsedSummary | null = null;
       if (compiled && typeof compiled === 'object' && !Array.isArray(compiled)) {
         parsedReadme = compiled as ParsedSummary;
       }
       if (parsedReadme) {
-        results.push(...checkReadme(parsedReadme, fileName, allComRefInfos));
+        const msgs = checkReadme(parsedReadme, fileName, allComRefInfos)
+          .map(msg => ({ ...msg, severity: readmeSeverity }));
+        results.push(...msgs);
       }
       continue;
     }
 
-    // requirement.md → 仅文件存在性（已在上方处理）
+    // requirement.md → 内容校验
     if (fileName === 'requirement.md') {
-      results.push(...checkRequirement(code, fileName));
+      if (reqSeverity === -1) continue;
+      const msgs = checkRequirement(code, fileName)
+        .map(msg => ({ ...msg, severity: reqSeverity }));
+      results.push(...msgs);
       continue;
     }
   }

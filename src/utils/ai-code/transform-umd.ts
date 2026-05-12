@@ -1,6 +1,7 @@
 import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
 import { getValidatorPlugins } from '../../mix/availableLibraries'
+import functionPropsPlugin from './plugins/functionPropsPlugin'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
   let transformCode
@@ -36,6 +37,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         ...babelPlugins,
         babelPlugin({ constituency, fileName: ctx?.fileName }),
         ...validatorPlugins,
+        functionPropsPlugin(),
       ],
       retainLines: true,
     }
