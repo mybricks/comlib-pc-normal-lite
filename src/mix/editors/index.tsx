@@ -5,7 +5,7 @@ import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
-import { genStyleValue, genResizer } from './styleProxy';
+import { genStyleValue, genResizer, genImgSrcReplacer } from './styleProxy';
 import type { Props, Actions } from './types';
 import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
@@ -65,16 +65,12 @@ export default function (props: Props, actions: Actions) {
     },
     '[data-library-source]': {},
     '[class]': {},
-    'img': {//测试代码，可删除
+    'img': {
       items: [
         {
           type: 'button',
-          title:'更改图片',
-          value: {
-            set() {
-              debugger
-            }
-          }
+          title: '更改图片',
+          value: genImgSrcReplacer(),
         }
       ]
     },
