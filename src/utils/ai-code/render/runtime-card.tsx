@@ -474,6 +474,8 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             }}
             LoadingView={LoadingView}
             definitions={{
+              'process.env.POPUP_VISIBLE': JSON.stringify(env.runtime ? false : true),
+              'process.env.POPUP_NODE': '_mybricks_props.popupNode',
               'process.env.MODE': JSON.stringify(env.runtime ? 'runtime' : 'design'),
               'process.env.DEBUG_TARGET': JSON.stringify(env._debugTarget ?? {})
             }}
