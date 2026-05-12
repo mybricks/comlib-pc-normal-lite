@@ -1,3 +1,5 @@
+import { deepCopy } from '../../../../../utils'
+
 /**
  * DataSource 基类
  * 每个实例拥有独立的 axios 实例，可通过 this.axios.defaults 修改 baseURL / headers。
@@ -88,6 +90,25 @@ export class DataSource {
         const cfg = isBodyless ? (dataOrConfig ?? {}) : (config ?? {});
         const body = isBodyless ? undefined : dataOrConfig;
         const { baseURL, headers } = this.axios.defaults
+        const proxyHeaders = deepCopy(headers)
+        const cookie = cfg.headers?.cookie || cfg.headers?.Cookie
+
+        if (cookie) {
+          Reflect.deleteProperty(cfg.headers, 'cookie')
+          Reflect.deleteProperty(cfg.headers, 'Cookie')
+
+          if (proxyHeaders.cookie || proxyHeaders.Cookie) {
+            Reflect.deleteProperty(proxyHeaders, 'cookie')
+            Reflect.deleteProperty(proxyHeaders, 'Cookie')
+          }
+          proxyHeaders.Cookie = cookie
+        }
+
+        if (proxyHeaders.common) {
+          if (!Object.keys(proxyHeaders.common).length) {
+            Reflect.deleteProperty(proxyHeaders, 'common')
+          }
+        }
 
         return window['__IS_AICODE__'].requestProxy
           .request({
@@ -98,7 +119,7 @@ export class DataSource {
             params: cfg.params,
           }, {
             proxyHost: baseURL || undefined,
-            proxyHeaders: headers,
+            proxyHeaders,
           })
       }
 

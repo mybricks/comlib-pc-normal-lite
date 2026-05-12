@@ -3,6 +3,7 @@ import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
 import { parsemd, parseRequirement } from "../../utils/ai-code/md";
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
+import { randomUUID } from '../utils/uuid'
 
 export interface LogMessage {
   method: 'log' | 'info' | 'warn' | 'error';
@@ -573,7 +574,7 @@ class Context {
 
     // 新增版本记录
     const record = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       turnId: '',
       label: `V${existingVersions.length}`,
       type: 'manual' as const,

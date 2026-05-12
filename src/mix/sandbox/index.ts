@@ -16,6 +16,7 @@ import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
 import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
+import { randomUUID } from '../utils/uuid'
 
 const VERIFY_CONFIG = {
   rules: {
@@ -175,7 +176,7 @@ async function persistAiVersionAfterTurn(
   if (turn?.id && existingVersions.some((v: VersionRecord) => v.turnId === turn.id)) return;
 
   const record: VersionRecord = {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     turnId: turn?.id ?? '',
     label: `V${existingVersions.length}`,
     type: 'ai',
@@ -474,7 +475,7 @@ export async function registerSandbox(comId: string): Promise<void> {
     // 3. 新增一条 rollback 类型版本记录
     const existingVersions = await history.listVersions();
     const rollbackRecord: VersionRecord = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       turnId: targetMeta.turnId,
       label: `V${existingVersions.length}`,
       type: 'rollback',
@@ -503,7 +504,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         content: decodeURIComponent(f.source),
       }));
     const record = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       turnId: '',
       label: `V${0}`,
       type: 'init' as const,
