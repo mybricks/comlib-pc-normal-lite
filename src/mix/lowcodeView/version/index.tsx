@@ -4,6 +4,7 @@ import context from "../../context";
 import type { VersionRecord } from "../../context";
 import * as lazyCss from "./index.lazy.less";
 import { getLazyCss } from "../utils/css";
+import { randomUUID } from "../../utils/uuid"
 
 const css = getLazyCss(lazyCss)
 
@@ -209,7 +210,7 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
               content: decodeURIComponent(f.source),
             }));
           const record = {
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             turnId: '',
             label: `V${0}`,
             type: 'init' as const,
