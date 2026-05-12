@@ -206,6 +206,59 @@ export function genStyleValue(params: { comId: string }) {
   };
 }
 
+export function genImgSrcReplacer() {
+  return {
+    get(params: any) {
+      return params.focusArea?.ele?.getAttribute?.('src') ?? '';
+    },
+    set(params: any) {
+      const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
+      const jsxPath = loc.files?.jsx;
+      if (!jsxPath) return;
+
+      const comId = params.id;
+      const aiComParams = context.getAiComParams(comId);
+      const jsxFile = aiComParams?.data?.files?.find(
+        (f: { fileName: string; source: string }) => f.fileName === jsxPath
+      );
+      if (!jsxFile) return;
+      const source = decodeURIComponent(jsxFile.source);
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+
+        const uploadFn = params.env?.uploadFile;
+        let newSrc: string;
+        if (typeof uploadFn === 'function') {
+          const res = await uploadFn([file]);
+          newSrc = res?.url ?? '';
+        } else {
+          newSrc = await new Promise<string>(resolve => {
+            const fr = new FileReader();
+            fr.readAsDataURL(file);
+            fr.onload = ev => resolve((ev.currentTarget as FileReader).result as string);
+          });
+        }
+
+        const snippet = source.slice(loc.jsx.start, loc.jsx.end);
+        const newSnippet = snippet.replace(
+          /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/,
+          `src="${newSrc}"`
+        );
+        const newSource = source.slice(0, loc.jsx.start) + newSnippet + source.slice(loc.jsx.end);
+
+        context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
+        context.saveManualVersion(comId, [jsxPath]);
+      };
+      input.click();
+    }
+  };
+}
+
 export function genResizer() {
   let cssObj: Record<string, any> = {};
   let cssObjKey = '';
