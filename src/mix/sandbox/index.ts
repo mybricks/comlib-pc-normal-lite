@@ -15,9 +15,14 @@ import { debugLogs } from '../context/debugLogs';
 import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
 import { uuid } from '../../utils';
-import { verify as eslintVerify } from '../eslint';
+import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 
+const VERIFY_CONFIG = {
+  rules: {
+    // [RULE_IDS.README_CHECK]: 'off' as const,
+  },
+};
 
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
@@ -120,7 +125,7 @@ function buildProject(comId: string) {
     getDesignRules: () => context.projectConfig.designRules ?? '',
     getLintResults: async () => {
       const files: any[] = aiComParams?.data?.files ?? [];
-      return eslintVerify(files);
+      return eslintVerify(files, VERIFY_CONFIG);
     },
   });
 }
@@ -329,7 +334,7 @@ export async function registerSandbox(comId: string): Promise<void> {
       async verify() {
         const aiComParams = context.getAiComParams(comId);
         const files: any[] = aiComParams?.data?.files ?? [];
-        return await eslintVerify(files);
+        return await eslintVerify(files, VERIFY_CONFIG);
       },
 
       async updateFiles(files: Array<{ path: string; content: string }>) {
