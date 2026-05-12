@@ -14,7 +14,7 @@ export interface ProjectConfig {
   getCodeRules?: () => string;
   getDesignRules?: () => string;
   getFileSystem?: () => FileSystem;
-  getLintResults?: () => LintMessage[];
+  getLintResults?: () => Promise<LintMessage[]>;
 }
 
 export class Project {
@@ -141,7 +141,7 @@ ${missingFilesEntries.map(([file, info], index) => {
 
     let lintMessages: import('../../eslint').LintMessage[] = [];
     try {
-      lintMessages = this.config.getLintResults?.() ?? [];
+      lintMessages = await (this.config.getLintResults?.() ?? Promise.resolve([]));
     } catch {
       lintMessages = [];
     }

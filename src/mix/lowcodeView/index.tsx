@@ -10,6 +10,7 @@ import TreeView from "./tree";
 import { filesJsonToTree } from "./filesToTree";
 import type { FileTreeNode } from "./filesToTree";
 import { getLazyCss } from './utils/css';
+import { registerLowcodeViewMonacoContext } from '../eslint/monaco-language-service';
 
 const css = getLazyCss(lazyCss)
 
@@ -344,6 +345,15 @@ export default function LowcodeView(params: Params) {
   const mountRef = useRef<any>(null)
 
   const handleEditorMount = (editor: StandaloneCodeEditor, monaco: Monaco) => {
+    if (componentId) {
+      registerLowcodeViewMonacoContext({
+        componentId,
+        monaco,
+        editor,
+        files,
+      });
+    }
+
     if (mountRef.current) {
       mountRef.current();
       mountRef.current = null;

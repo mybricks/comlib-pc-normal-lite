@@ -1,8 +1,157 @@
 import type { LintMessage } from '../types';
 import type { ComRefInfo } from './extract-comrefs';
-import type { ParsedSummary } from '../../../utils/ai-code/md';
+import type { ParsedSummary, SummaryBlock } from '../../../utils/ai-code/md';
 
 export const RULE_ID = 'readme-check';
+
+function createMessage(message: string, nodeType = 'list'): LintMessage {
+  return {
+    ruleId: RULE_ID,
+    severity: 2,
+    message: `[文档校验] ${message}`,
+    line: 1,
+    column: 0,
+    nodeType,
+  };
+}
+
+function hasRecordItems(record?: Record<string, unknown>): boolean {
+  return !!record && Object.values(record).some(items => Array.isArray(items) && items.length > 0);
+}
+
+function getExpectedInfo(comRefInfos: ComRefInfo[], name: string): ComRefInfo | undefined {
+  return comRefInfos.find(info => info.name === name);
+}
+
+function checkDuplicate(
+  seen: Set<string>,
+  key: string,
+  label: string,
+  messages: LintMessage[],
+) {
+  if (seen.has(key)) {
+    messages.push(createMessage(label));
+    return;
+  }
+  seen.add(key);
+}
+
+function checkEvents(blockName: string, block: SummaryBlock, expected: ComRefInfo | undefined, messages: LintMessage[]) {
+  const events = block.events ?? [];
+  if (!expected) return;
+
+  // 收集 README 中所有已声明的事件 handler（不区分 selector）
+  const documentedHandlers = new Set<string>();
+  for (const event of events) {
+    for (const handler of event.handlers ?? []) {
+      if (handler.handler) documentedHandlers.add(handler.handler);
+    }
+  }
+
+  // 收集代码中实际使用的所有事件 handler，保留 className 信息用于报错
+  const expectedByClassName = Object.entries(expected.events);
+  const missingEntries: { className: string; handlers: string[] }[] = [];
+  for (const [className, handlers] of expectedByClassName) {
+    const missing = handlers.filter(handler => !documentedHandlers.has(handler));
+    if (missing.length > 0) {
+      missingEntries.push({ className, handlers: missing });
+    }
+  }
+  if (missingEntries.length > 0) {
+    const details = missingEntries.map(({ className, handlers }) => `.${className} 节点配置了 ${handlers.join(',')}`).join('；');
+    messages.push(createMessage(`组件 ${blockName} 源码在 ${details}，未在 README events 中声明。`));
+  }
+}
+
+function checkDatasource(blockName: string, block: SummaryBlock, expected: ComRefInfo | undefined, messages: LintMessage[]) {
+  const datasource = block.datasource;
+  const seen = new Set<string>();
+
+  for (const [className, apis] of Object.entries(datasource ?? {})) {
+    if (!className) {
+      messages.push(createMessage(`组件 ${blockName} 的 datasource 存在空 className/root 标识。`));
+      continue;
+    }
+
+    const apiEntries = Object.entries(apis ?? {});
+
+    for (const [api, meta] of apiEntries) {
+      if (!api) {
+        messages.push(createMessage(`组件 ${blockName} 的 datasource.${className} 存在空接口名。`));
+        continue;
+      }
+
+      checkDuplicate(
+        seen,
+        api,
+        `组件 ${blockName} 的 datasource.${api} 重复声明。`,
+        messages,
+      );
+    }
+  }
+
+  if (!expected) return;
+
+  // 收集 README 中所有已声明的 datasource api（不区分 selector）
+  const documentedApis = new Set<string>();
+  for (const apis of Object.values(datasource ?? {})) {
+    for (const api of Object.keys(apis ?? {})) {
+      if (api) documentedApis.add(api);
+    }
+  }
+
+  // 收集代码中实际调用的所有 datasource api（不区分 selector）
+  const expectedApis = new Set<string>();
+  for (const apis of Object.values(expected.datasource)) {
+    for (const api of apis) {
+      expectedApis.add(api);
+    }
+  }
+
+  const missingApis = Array.from(expectedApis).filter(api => !documentedApis.has(api));
+  if (missingApis.length > 0) {
+    messages.push(createMessage(`组件 ${blockName} 调用了 datasource 的 ${missingApis.join(',')} 方法，需要在 README datasource 中声明。`));
+  }
+}
+
+function checkStore(blockName: string, block: SummaryBlock, expected: ComRefInfo | undefined, messages: LintMessage[]) {
+  const store = block.store;
+
+  for (const [className, items] of Object.entries(store ?? {})) {
+    if (!className) {
+      messages.push(createMessage(`组件 ${blockName} 的 store 存在空 className/root 标识。`));
+      continue;
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      messages.push(createMessage(`组件 ${blockName} 的 store.${className} 缺少字段项。`));
+      continue;
+    }
+  }
+
+  if (!expected) return;
+
+  // 收集 README 中所有已声明的 store 字段（不区分 selector）
+  const documentedFields = new Set<string>();
+  for (const items of Object.values(store ?? {})) {
+    for (const item of items ?? []) {
+      if (item.field) documentedFields.add(item.field);
+    }
+  }
+
+  // 收集代码中实际消费的所有 store 字段（不区分 selector）
+  const expectedFields = new Set<string>();
+  for (const fields of Object.values(expected.store)) {
+    for (const field of fields) {
+      expectedFields.add(field);
+    }
+  }
+
+  const missingFields = Array.from(expectedFields).filter(field => !documentedFields.has(field));
+  if (missingFields.length > 0) {
+    messages.push(createMessage(`组件 ${blockName} 源码中对 store 的 ${missingFields.join(',')} 字段进行了消费，未在 README store 中声明。`));
+  }
+}
 
 /**
  * README.md 文档规范校验规则。
@@ -70,6 +219,11 @@ export function checkReadme(
         nodeType: 'list',
       });
     }
+
+    const expected = getExpectedInfo(comRefInfos, name);
+    checkEvents(name, block, expected, messages);
+    checkDatasource(name, block, expected, messages);
+    checkStore(name, block, expected, messages);
   }
 
   // ─── 3. 跨文件节点一致性校验 ───

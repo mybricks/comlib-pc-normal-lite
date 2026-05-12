@@ -118,7 +118,7 @@ function buildProject(comId: string) {
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
     getCodeRules: () => context.projectConfig.codeRules ?? '',
     getDesignRules: () => context.projectConfig.designRules ?? '',
-    getLintResults: () => {
+    getLintResults: async () => {
       const files: any[] = aiComParams?.data?.files ?? [];
       return eslintVerify(files);
     },
@@ -329,7 +329,7 @@ export async function registerSandbox(comId: string): Promise<void> {
       async verify() {
         const aiComParams = context.getAiComParams(comId);
         const files: any[] = aiComParams?.data?.files ?? [];
-        return eslintVerify(files);
+        return await eslintVerify(files);
       },
 
       async updateFiles(files: Array<{ path: string; content: string }>) {

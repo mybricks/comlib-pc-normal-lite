@@ -10,6 +10,8 @@ import type { Props, Actions } from './types';
 import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
 
+import { verify as eslintVerify } from '../eslint';
+
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
 
@@ -26,6 +28,7 @@ export default function (props: Props, actions: Actions) {
   }
 
   context.setAiCom(props.id, {params: props, actions});
+  (window as any).__mybricksEslintVerify = () => eslintVerify(props.data.files);
 
   if ((window as any)._getProjectConfig_) {
     context.projectConfig = (window as any)._getProjectConfig_();

@@ -19,9 +19,11 @@ import type { ParsedSummary } from '../../utils/ai-code/md';
 import { createNoConsoleRule } from './rules/no-console';
 import { createNoWindowLocationRule } from './rules/no-window-location';
 import { createRequireDatasourceAsyncRule } from './rules/require-datasource-async';
-import { createExtractComRefsRule, type ComRefInfo } from './rules/extract-comrefs';
+import { createExtractComRefsRule, type ComRefInfo, type StoreDatasourceMap } from './rules/extract-comrefs';
 import { checkReadme, RULE_ID as README_RULE_ID } from './rules/readme';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
+import { getLowcodeViewStoreDatasource, refreshLowcodeViewStoreDatasource } from './monaco-language-service';
+export { getLowcodeViewStoreDatasource };
 
 export type { LintMessage };
 
@@ -109,6 +111,32 @@ function extractComRefs(code: string, fileName: string): ComRefInfo[] {
   return rule.getResults();
 }
 
+function enrichDatasourceFromStoreCalls(comRefInfos: ComRefInfo[], storeDatasource: StoreDatasourceMap): ComRefInfo[] {
+  return comRefInfos.map(info => {
+    const datasourceSets = Object.entries(info.datasource).reduce<Record<string, Set<string>>>((acc, [className, apis]) => {
+      acc[className] = new Set(apis);
+      return acc;
+    }, {});
+
+    for (const [className, methods] of Object.entries(info.storeCalls)) {
+      for (const methodName of methods) {
+        for (const api of storeDatasource[methodName] ?? []) {
+          if (!datasourceSets[className]) datasourceSets[className] = new Set<string>();
+          datasourceSets[className].add(api);
+        }
+      }
+    }
+
+    return {
+      ...info,
+      datasource: Object.entries(datasourceSets).reduce<Record<string, string[]>>((acc, [k, v]) => {
+        acc[k] = Array.from(v);
+        return acc;
+      }, {}),
+    };
+  });
+}
+
 /**
  * 判断文件名是否为 JSX/JS 文件。
  */
@@ -128,7 +156,7 @@ function isJsxFile(fileName: string): boolean {
  *              对于 README.md，compiled 为 context.ts 写入时 parsemd() 产生的 ParsedSummary
  * @returns     所有文件的 LintMessage[] 聚合，按文件顺序排列
  */
-export function verify(files: Array<{ fileName: string; source: string; compiled?: unknown }>): LintMessage[] {
+export async function verify(files: Array<{ fileName: string; source: string; compiled?: unknown }>): Promise<LintMessage[]> {
   const results: LintMessage[] = [];
 
   // ─── 准备工作：解码文件内容 ───
@@ -176,11 +204,10 @@ export function verify(files: Array<{ fileName: string; source: string; compiled
   }
 
   // ─── Pass 1：提取 comRef/popupRef/appRef 节点信息 ───
-  const allComRefInfos: ComRefInfo[] = [];
   const jsxFiles = decodedFiles.filter(f => isJsxFile(f.fileName));
-  for (const file of jsxFiles) {
-    allComRefInfos.push(...extractComRefs(file.code, file.fileName));
-  }
+  let allComRefInfos: ComRefInfo[] = jsxFiles.flatMap(file => extractComRefs(file.code, file.fileName));
+  const storeDatasource = await refreshLowcodeViewStoreDatasource();
+  allComRefInfos = enrichDatasourceFromStoreCalls(allComRefInfos, storeDatasource);
 
   // ─── Pass 2：按文件类型分别校验 ───
   for (const file of decodedFiles) {
