@@ -1,132 +1,104 @@
-/**
- * Babel 插件：将 process.env.xxxx ? A : 'B' 替换为 'B'
- * 
- * 原理：
- * 1. 遍历 ConditionalExpression 节点（三元表达式）
- * 2. 检测 test 部分是否为 process.env.xxx 形式
- * 3. 如果是，用 alternate（false 分支）替换整个表达式
- * 4. 生成替换后的代码
- */
+const get = (obj: Record<string, unknown>, key: string) => obj[key];
+const has = (obj: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(obj, key);
+const find = <T>(arr: T[], predicate: (item: T) => boolean): T | undefined => arr.find(predicate);
 
-/**
- * 判断节点是否为 process.env.xxx 形式
- */
-function isProcessEnvMemberExpression(node: any): boolean {
-  if (node?.type !== 'MemberExpression') return false;
-  
-  // 检查 process.env
-  const obj = node.object;
-  if (obj?.type !== 'MemberExpression') return false;
-  if (obj.object?.type !== 'Identifier' || obj.object.name !== 'process') return false;
-  if (obj.property?.type !== 'Identifier' || obj.property.name !== 'env') return false;
-  
-  // 检查 xxx 属性
-  const prop = node.property;
-  return prop?.type === 'Identifier' && typeof prop.name === 'string';
+const OBJECT_VALUES = {
+  "process.env.POPUP_VISIBLE": false,
+  "process.env.POPUP_NODE": null,
 }
+const OBJECT_PATHS = Object.keys(OBJECT_VALUES)
 
 /**
- * 处理 process.env 条件表达式的转换
- * @param code 源代码
- * @returns 转换后的代码
+ * Replace a node with a given value. If the replacement results in a BinaryExpression, it will be
+ * evaluated. For example, if the result of the replacement is `var x = "production" === "production"`
+ * The evaluation will make a second replacement resulting in `var x = true`
+ * @param  {function}   replaceFn    The function used to replace the node
+ * @param  {babelNode}  nodePath     The node to evaluate
+ * @param  {*}          replacement  The value the node will be replaced with
+ * @return {undefined}
  */
-export function transformProcessEnv(code: string): string {
-  const Babel = (window as any).Babel;
-  if (!Babel) {
-    throw new Error('window.Babel 未就绪，请先加载 Babel 编译器');
-  }
+const replaceAndEvaluateNode = (replaceFn, nodePath, replacement) => {
+  nodePath.replaceWith(replaceFn(replacement));
 
-  // 解析代码为 AST
-  const ast = Babel.parse(code, {
-    sourceType: 'module',
-    plugins: ['jsx', 'typescript'],
-  });
-
-  // 创建 Babel 插件
-  const plugin = () => ({
-    visitor: {
-      ConditionalExpression(path: any) {
-        const { test, alternate } = path.node;
-        
-        // 检测 test 是否为 process.env.xxx
-        if (isProcessEnvMemberExpression(test)) {
-          // 用 alternate（false 分支）替换整个条件表达式
-          path.replaceWith(alternate);
-        }
-      },
-    },
-  });
-
-  // 转换 AST 并生成代码
-  const result = Babel.transformFromAst(ast, code, {
-    plugins: [plugin],
-    code: true,
-    ast: false,
-  });
-
-  return result.code;
-}
-
-/**
- * 批量处理多个文件中的 process.env 条件表达式
- * @param files 文件映射 { fileName: code }
- * @returns 处理后的文件映射
- */
-export function transformProcessEnvBatch(files: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {};
-  
-  for (const [fileName, code] of Object.entries(files)) {
-    try {
-      result[fileName] = transformProcessEnv(code);
-    } catch (error) {
-      // console.error(`[transformProcessEnvBatch] 处理文件 ${fileName} 失败:`, error);
-      result[fileName] = code; // 失败时保留原代码
+  // Evaluate BinaryExpression: e.g. "production" === "production" → true
+  if (nodePath.parentPath.isBinaryExpression()) {
+    const result = nodePath.parentPath.evaluate();
+    if (result.confident) {
+      nodePath.parentPath.replaceWith(replaceFn(result.value));
     }
   }
-  
-  return result;
-}
+
+  // Simplify LogicalExpression: false || x → x, true || x → true, true && x → x, false && x → false
+  if (nodePath.parentPath.isLogicalExpression()) {
+    const logical = nodePath.parentPath;
+    const { operator, left, right } = logical.node;
+    const leftResult = logical.get('left').evaluate();
+    if (leftResult.confident) {
+      const leftVal = leftResult.value;
+      if (operator === '||') {
+        if (!leftVal) {
+          logical.replaceWith(right);
+        } else {
+          logical.replaceWith(left);
+        }
+      } else if (operator === '&&') {
+        if (leftVal) {
+          logical.replaceWith(right);
+        } else {
+          logical.replaceWith(left);
+        }
+      }
+    }
+  }
+
+  // Remove dead if/else branches: if (false) { ... } → remove; if (true) { ... } → keep consequent
+  if (nodePath.parentPath.isIfStatement()) {
+    const ifPath = nodePath.parentPath;
+    const testResult = ifPath.get('test').evaluate();
+    if (testResult.confident) {
+      if (!testResult.value) {
+        // condition is always false: remove the if, keep alternate if present
+        if (ifPath.node.alternate) {
+          ifPath.replaceWith(ifPath.node.alternate);
+        } else {
+          ifPath.remove();
+        }
+      } else {
+        // condition is always true: replace with consequent body
+        ifPath.replaceWith(ifPath.node.consequent);
+      }
+    }
+  }
+};
 
 /**
- * 创建可复用的 Babel 插件（用于注入到 transformTsx 的 plugins 数组中）
+ * Finds the first replacement in sorted object paths for replacements that causes comparator
+ * to return true.  If one is found, replaces the node with it.
+ * @param  {Object}     replacements The object to search for replacements
+ * @param  {babelNode}  nodePath     The node to evaluate
+ * @param  {function}   replaceFn    The function used to replace the node
+ * @param  {function}   comparator   The function used to evaluate whether a node matches a value in `replacements`
+ * @return {undefined}
  */
-export default function processEnvPlugin() {
-  return function () {
-    return {
-      visitor: {
-        ConditionalExpression(path: any) {
-          const { test, alternate } = path.node;
-          
-          if (isProcessEnvMemberExpression(test)) {
-            path.replaceWith(alternate);
-          }
-        },
-      },
-    };
-  };
-}
+// eslint-disable-next-line max-params
+const processNode = (replacements, nodePath, replaceFn, comparator) => {
+  const replacementKey = find(OBJECT_PATHS,
+    (value) => comparator(nodePath, value));
+  if (replacementKey !== undefined && has(replacements, replacementKey)) {
+    replaceAndEvaluateNode(replaceFn, nodePath, get(replacements, replacementKey));
+  }
+};
 
-// 使用示例：
-// 
-// // 方式1：单独使用
-// const code = `
-//   const a = process.env.NODE_ENV === 'production' ? 'prod' : 'dev';
-//   const b = process.env.DEBUG ? debug() : 'production';
-// `;
-// const result = transformProcessEnv(code);
-// console.log(result);
-// // 输出：
-// // const a = process.env.NODE_ENV === 'production' ? 'prod' : 'dev';  // 不符合 process.env.xxx ? A : B 模式，不处理
-// // const b = 'production';  // 符合条件，替换为 'B'
-//
-// // 方式2：作为 Babel 插件注入到 transformTsx
-// import processEnvPlugin from './processEnvPlugin';
-// 
-// const options = {
-//   presets: [...],
-//   plugins: [
-//     ...,
-//     processEnvPlugin(),  // 注入插件
-//   ],
-// };
-// const result = window.Babel.transform(code, options);
+const memberExpressionComparator = (nodePath, value) => nodePath.matchesPattern(value);
+
+const plugin = function ({ types: t }) {
+  return {
+    visitor: {
+      MemberExpression(nodePath) {
+        processNode(OBJECT_VALUES, nodePath, t.valueToNode, memberExpressionComparator);
+      },
+    }
+  };
+};
+
+export default plugin;

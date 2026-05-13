@@ -90,13 +90,13 @@ function buildDestructureDeclaration(properties: any[], t: any): any {
 /**
  * 处理函数参数并在函数体开头插入解构声明（如需要）
  */
-function transformFunctionParams(funcNode: any, t: any): void {
+function transformFunctionParams(funcNode: any, t: any): any {
   const params: any[] = funcNode.params;
 
   if (params.length === 0) {
     // 情况2：无参数，直接注入 _mybricks_props
     funcNode.params = [t.identifier(PROPS_PARAM_NAME)];
-    return;
+    return 'crawl'; // signal that scope needs re-crawl
   }
 
   const firstParam = params[0];
@@ -112,17 +112,16 @@ function transformFunctionParams(funcNode: any, t: any): void {
     if (body?.type === 'BlockStatement') {
       body.body.unshift(buildDestructureDeclaration(properties, t));
     }
+    return 'crawl'; // signal that scope needs re-crawl
   } else if (firstParam.type === 'Identifier') {
     // 情况3：具名参数 (props) => {}
     const originalName: string = firstParam.name;
-    if (originalName === PROPS_PARAM_NAME) return; // 已经是目标名称，无需处理
+    if (originalName === PROPS_PARAM_NAME) return null; // 已经是目标名称，无需处理
 
-    // 将参数名替换为 _mybricks_props，其他参数保持不变
-    funcNode.params = [t.identifier(PROPS_PARAM_NAME), ...restParams];
-
-    // 函数体内所有对旧参数名的引用都会由 Scope rename 处理（见下方 visitor）
-    funcNode.__propsRename__ = { from: originalName, to: PROPS_PARAM_NAME };
+    // 使用 scope.rename 统一处理参数名和所有引用，避免手动创建新标识符导致重复声明
+    return { renameFrom: originalName, renameTo: PROPS_PARAM_NAME };
   }
+  return null;
 }
 
 /**
@@ -131,15 +130,21 @@ function transformFunctionParams(funcNode: any, t: any): void {
 function processPath(path: any): void {
   if (!shouldTransform(path)) return;
 
-  transformFunctionParams(path.node, path.t);
+  const result = transformFunctionParams(path.node, path.t);
 
-  const rename = path.node.__propsRename__;
-  if (rename) {
-    delete path.node.__propsRename__;
-    const binding = path.scope.getBinding(rename.from);
+  // Handle rename signal (case 3: Identifier param)
+  // scope.rename 会同时重命名参数节点和所有引用，不会产生重复声明
+  if (result && typeof result === 'object' && result.renameFrom) {
+    const binding = path.scope.getBinding(result.renameFrom);
     if (binding) {
-      path.scope.rename(rename.from, rename.to);
+      path.scope.rename(result.renameFrom, result.renameTo);
     }
+  }
+
+  // Handle scope re-crawl signal (case 1 & 2: new identifier created)
+  // 重新注册 scope 以让 Babel 正确追踪新注入的 _mybricks_props 参数绑定
+  if (result === 'crawl') {
+    path.scope.crawl();
   }
 }
 
