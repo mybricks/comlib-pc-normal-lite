@@ -1,7 +1,7 @@
 import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
-import { parsemd, parseRequirement } from "../../utils/ai-code/md";
+import { parsemd, parseRequirement, SummaryBlock } from "../../utils/ai-code/md";
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 import { randomUUID } from '../utils/uuid'
 
@@ -522,12 +522,27 @@ class Context {
           const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
           const store: Array<{ refSelector:string, field:string, description:string }> = []
 
-          Object.entries(compiled).forEach(([componentName, info]) => {
+          /**
+           * 递归处理每个 block：
+           * - ancestorSelector: 祖先链拼接的 selector（如 "[data-widget-name="A"] [data-widget-name="B"]"）
+           *   当前块有数据时，在祖先基础上追加自身，最终生成完整的父子 selector 前缀
+           */
+          const processBlock = (componentName: string, info: SummaryBlock, ancestorSelector: string | null = null) => {
+            // 顶层为分组/页面，跳过自身 selector 构建，直接递归子块
+            if (ancestorSelector === null && info.children && !info.datasource && !info.events && !info.store) {
+              Object.entries(info.children).forEach(([childName, childInfo]) => {
+                processBlock(childName, childInfo, null)
+              })
+              return
+            }
+
+            const selfSelector = `[data-widget-name="${componentName}"]`
+            const widgetSelector = ancestorSelector ? `${ancestorSelector} ${selfSelector}` : selfSelector
+
             // 接口
             if (info.datasource) {
               Object.entries(info.datasource).forEach(([classname, value]) => {
                 Object.entries(value).forEach(([api, { desc }]) => {
-                  const widgetSelector = `[data-widget-name="${componentName}"]`
                   const classSelector = `[data-zone-classnames*="${classname}"]`
                   services.push({
                     title: api,
@@ -543,10 +558,8 @@ class Context {
             if (Array.isArray(info.events)) {
               info.events.forEach((event) => {
                 const { id, handlers } = event
-                const widgetSelector = `[data-widget-name="${componentName}"]`
                 const classSelector = `[data-zone-classnames*="${id}"]`
 
-                // 临时
                 handlers.forEach(({ handler, title, mermaid, relations }) => {
                   const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
                   const result: any = {
@@ -571,8 +584,7 @@ class Context {
             // store
             if (info.store) {
               Object.entries(info.store).forEach(([classname, value]) => {
-                value.forEach(({ desc, field, path }) => {
-                  const widgetSelector = `[data-widget-name="${componentName}"]`
+                value.forEach(({ desc, field }) => {
                   const classSelector = `[data-zone-classnames*="${classname}"]`
 
                   store.push({
@@ -583,8 +595,20 @@ class Context {
                 })
               })
             }
+
+            // 递归处理子块，将当前完整 widgetSelector 作为祖先传递
+            if (info.children) {
+              Object.entries(info.children).forEach(([childName, childInfo]) => {
+                processBlock(childName, childInfo, widgetSelector)
+              })
+            }
+          }
+
+          Object.entries(compiled).forEach(([componentName, info]) => {
+            processBlock(componentName, info, null)
           })
 
+          console.log('[compiled]', compiled)
           console.log('[notifyChanged]', {
             // relations,
             services,

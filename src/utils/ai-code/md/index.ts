@@ -27,11 +27,12 @@ export type SummaryBlock = {
   events?: SummaryEvent[]
   datasource?: SummaryDatasource
   store?: SummaryStoreGroup
+  children?: Record<string, SummaryBlock>
 }
 /** 解析结果：区块名 -> 区块数据 */
 export type ParsedSummary = Record<string, SummaryBlock>
 
-type AstNode = { type: string; value?: string; children?: AstNode[] }
+type AstNode = { type: string; value?: string; children?: AstNode[]; depth?: number }
 
 /**
  * 从 mdast 节点及其子节点中递归提取纯文本
@@ -342,36 +343,64 @@ function parseDatasourceItem(item: AstNode): SummaryDatasource | undefined {
 const parsemd = (md: string): ParsedSummary => {
   const ast = fromMarkdown(md)
   const result: ParsedSummary = {}
-  const children = (ast as unknown as AstNode).children ?? []
-  let currentKey = ''
+  const astChildren = (ast as unknown as AstNode).children ?? []
 
-  for (const node of children) {
+  /** Stack tracks { depth, block } so we always have a direct reference to the current block */
+  const stack: { depth: number; block: SummaryBlock }[] = []
+
+  const getCurrentBlock = (): SummaryBlock | null =>
+    stack.length > 0 ? stack[stack.length - 1].block : null
+
+  for (const node of astChildren) {
     if (node.type === 'heading') {
-      currentKey = getNodeText(node)
-      if (currentKey && !result[currentKey]) result[currentKey] = {}
+      const headingText = getNodeText(node)
+      const depth = node.depth ?? 1
+
+      // Pop entries whose depth >= current depth (they are no longer ancestors)
+      while (stack.length > 0 && stack[stack.length - 1].depth >= depth) {
+        stack.pop()
+      }
+
+      let newBlock: SummaryBlock
+      if (stack.length === 0) {
+        // No parent: top-level entry in result
+        if (!result[headingText]) result[headingText] = {}
+        newBlock = result[headingText]
+      } else {
+        // Has parent: insert into parent's children
+        const parentBlock = stack[stack.length - 1].block
+        if (!parentBlock.children) parentBlock.children = {}
+        if (!parentBlock.children[headingText]) parentBlock.children[headingText] = {}
+        newBlock = parentBlock.children[headingText]
+      }
+
+      stack.push({ depth, block: newBlock })
       continue
     }
 
     if (node.type === 'thematicBreak') continue
 
-    if (node.type === 'list' && currentKey) {
+    if (node.type === 'list') {
+      const block = getCurrentBlock()
+      if (!block) continue
+
       for (const item of node.children ?? []) {
         if (item.type !== 'listItem') continue
         const lineText = getListItemText(item)
 
         if (lineText === 'events:') {
-          result[currentKey].events = parseEventsItem(item)
+          block.events = parseEventsItem(item)
           continue
         }
 
         if (lineText === 'datasource:') {
           const ds = parseDatasourceItem(item)
-          if (ds) result[currentKey].datasource = ds
+          if (ds) block.datasource = ds
           continue
         }
 
         if (lineText === 'store:') {
-          result[currentKey].store = parseStoreItem(item)
+          block.store = parseStoreItem(item)
           continue
         }
 
@@ -379,8 +408,8 @@ const parsemd = (md: string): ParsedSummary => {
         if (colonIdx !== -1) {
           const key = lineText.slice(0, colonIdx).trim()
           const value = lineText.slice(colonIdx + 1).trim()
-          if (key && (result[currentKey] as Record<string, unknown>)[key] === undefined) {
-            (result[currentKey] as Record<string, unknown>)[key] = value
+          if (key && (block as Record<string, unknown>)[key] === undefined) {
+            (block as Record<string, unknown>)[key] = value
           }
         }
       }
