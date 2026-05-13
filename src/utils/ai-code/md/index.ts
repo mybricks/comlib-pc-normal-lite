@@ -4,7 +4,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 /** 单个关联组件 */
 export type SummaryRelation = { type: string; name: string }
 /** 单个事件处理器：handlerName、标题、mermaid 流程图、可选关联组件 */
-export type SummaryEventHandler = { handler: string; title: string; mermaid: string; relation?: SummaryRelation }
+export type SummaryEventHandler = { handler: string; title: string; mermaid: string; relations?: SummaryRelation[] }
 /** 单个事件：组件id、处理器列表 */
 export type SummaryEvent = { id: string; handlers: SummaryEventHandler[] }
 /** 单个数据源：顶层key（root或组件id）-> API名 -> { desc } */
@@ -58,23 +58,37 @@ function getNestedList(item: AstNode): AstNode | undefined {
 }
 
 /**
- * 解析 relation 列表节点。
- * 每个 listItem 为独立的 key: value 行：
- *   - type: popup
- *   - name: ConfirmModal
+ * 解析 relations 列表节点。
+ * 每个 listItem 的首行文本为关联组件名，嵌套 list 为属性（如 type: popup）。
+ * 示例：
+ *   - MessageDetailModal
+ *     - type: popup
  */
-function parseRelation(listNode: AstNode): SummaryRelation {
-  const kv: Record<string, string> = {}
+function parseRelations(listNode: AstNode): SummaryRelation[] {
+  const relations: SummaryRelation[] = []
   for (const item of listNode.children ?? []) {
     if (item.type !== 'listItem') continue
-    const text = getListItemText(item)
-    const colonIdx = text.indexOf(':')
-    if (colonIdx === -1) continue
-    const key = text.slice(0, colonIdx).trim()
-    const value = text.slice(colonIdx + 1).trim()
-    if (key) kv[key] = value
+    const nameText = getListItemText(item).trim()
+    const name = nameText.endsWith(':') ? nameText.slice(0, -1).trim() : nameText
+    if (!name) continue
+
+    let type = ''
+    const propsList = getNestedList(item)
+    if (propsList) {
+      for (const propItem of propsList.children ?? []) {
+        if (propItem.type !== 'listItem') continue
+        const text = getListItemText(propItem)
+        const colonIdx = text.indexOf(':')
+        if (colonIdx === -1) continue
+        const key = text.slice(0, colonIdx).trim()
+        const value = text.slice(colonIdx + 1).trim()
+        if (key === 'type') type = value
+      }
+    }
+
+    relations.push({ type, name })
   }
-  return { type: kv['type'] ?? '', name: kv['name'] ?? '' }
+  return relations
 }
 
 /**
@@ -162,18 +176,21 @@ function parseStoreItem(item: AstNode): SummaryStoreGroup {
  *         listItem → "type: popup"
  *         listItem → "name: ConfirmModal"
  */
-function parseHandlerProps(propsListNode: AstNode): { title: string; mermaid: string; relation?: SummaryRelation } {
+function parseHandlerProps(propsListNode: AstNode): { title: string; mermaid: string; relations?: SummaryRelation[] } {
   let title = ''
   let mermaid = ''
-  let relation: SummaryRelation | undefined
+  let relations: SummaryRelation[] | undefined
 
   for (const propItem of propsListNode.children ?? []) {
     if (propItem.type !== 'listItem') continue
     const text = getListItemText(propItem)
 
-    if (text === 'relation:') {
+    if (text === 'relations:') {
       const relList = getNestedList(propItem)
-      if (relList) relation = parseRelation(relList)
+      if (relList) {
+        const parsed = parseRelations(relList)
+        if (parsed.length > 0) relations = parsed
+      }
       continue
     }
 
@@ -185,7 +202,7 @@ function parseHandlerProps(propsListNode: AstNode): { title: string; mermaid: st
     else if (key === 'mermaid') mermaid = value
   }
 
-  return { title, mermaid, relation }
+  return { title, mermaid, relations }
 }
 
 /**
@@ -237,9 +254,9 @@ function parseEventsItem(item: AstNode): SummaryEvent[] {
         continue
       }
 
-      const { title, mermaid, relation } = parseHandlerProps(propsListNode)
+      const { title, mermaid, relations } = parseHandlerProps(propsListNode)
       const h: SummaryEventHandler = { handler, title, mermaid }
-      if (relation) h.relation = relation
+      if (relations && relations.length > 0) h.relations = relations
       handlers.push(h)
     }
 

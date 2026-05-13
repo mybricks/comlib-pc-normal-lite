@@ -518,7 +518,6 @@ class Context {
           //   }
           // }
 
-          const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
           const events: any = []
           const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
           const store: Array<{ refSelector:string, field:string, description:string }> = []
@@ -548,7 +547,7 @@ class Context {
                 const classSelector = `[data-zone-classnames*="${id}"]`
 
                 // 临时
-                handlers.forEach(({ handler, title, mermaid, relation }) => {
+                handlers.forEach(({ handler, title, mermaid, relations }) => {
                   const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
                   const result: any = {
                     refSelector,
@@ -557,21 +556,11 @@ class Context {
                     description: title
                   }
 
-                  if (relation) {
-                    relations.push({
-                      from: {
-                        selector: refSelector,
-                      },
-                      to: {
-                        type: relation.type,
-                        selector: `[data-widget-name="${relation.name}"]`,
-                      },
-                    })
-
-                    result.relation = {
-                      type: relation.type,
-                      refSelector: `[data-widget-name="${relation.name}"]`,
-                    }
+                  if (relations && relations.length > 0) {
+                    result.relations = relations.map(r => ({
+                      type: r.type,
+                      refSelector: `[data-widget-name="${r.name}"]`,
+                    }))
                   }
 
                   events.push(result)
@@ -604,7 +593,6 @@ class Context {
           })
 
           this.getAiCom(id)?.actions?.notifyChanged?.({
-            relations,
             services,
             store,
             events
