@@ -33,8 +33,8 @@ const dataCompatible = (props) => {
       }
     }
 
-    if (!data.version) {
-      data.version = 1
+    if (!data.version || data.version === 1) {
+      data.version = 2
       data.files.forEach((file) => {
         const { fileName, source } = file
         if (fileName.endsWith('.jsx')) {
