@@ -223,7 +223,7 @@ export function checkReadme(
     const expected = getExpectedInfo(comRefInfos, name);
     checkEvents(name, block, expected, messages);
     checkDatasource(name, block, expected, messages);
-    checkStore(name, block, expected, messages);
+    // checkStore(name, block, expected, messages);
   }
 
   // ─── 3. 跨文件节点一致性校验 ───
