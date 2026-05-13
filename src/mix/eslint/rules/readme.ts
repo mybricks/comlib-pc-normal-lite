@@ -15,12 +15,47 @@ function createMessage(message: string, nodeType = 'list'): LintMessage {
   };
 }
 
-function hasRecordItems(record?: Record<string, unknown>): boolean {
-  return !!record && Object.values(record).some(items => Array.isArray(items) && items.length > 0);
+type ReadmeBlockEntry = {
+  name: string;
+  block: SummaryBlock;
+  path: string;
+};
+
+function collectReadmeBlockEntries(
+  blocks: Record<string, SummaryBlock> | undefined,
+  parentPath: string[] = [],
+): ReadmeBlockEntry[] {
+  if (!blocks) return [];
+
+  const entries: ReadmeBlockEntry[] = [];
+  for (const [name, block] of Object.entries(blocks)) {
+    const pathParts = [...parentPath, name];
+    entries.push({ name, block, path: pathParts.join(' > ') });
+    entries.push(...collectReadmeBlockEntries(block.children, pathParts));
+  }
+
+  return entries;
 }
 
-function getExpectedInfo(comRefInfos: ComRefInfo[], name: string): ComRefInfo | undefined {
-  return comRefInfos.find(info => info.name === name);
+function createExpectedQueues(comRefInfos: ComRefInfo[]): Map<string, ComRefInfo[]> {
+  const queues = new Map<string, ComRefInfo[]>();
+  for (const info of comRefInfos) {
+    const queue = queues.get(info.name) ?? [];
+    queue.push(info);
+    queues.set(info.name, queue);
+  }
+  return queues;
+}
+
+function consumeExpected(
+  queues: Map<string, ComRefInfo[]>,
+  name: string,
+): ComRefInfo | undefined {
+  return queues.get(name)?.shift();
+}
+
+function getSourceLabel(expected: ComRefInfo | undefined, fallbackName: string): string {
+  return `组件 ${expected?.name ?? fallbackName}`;
 }
 
 function checkDuplicate(
@@ -36,7 +71,12 @@ function checkDuplicate(
   seen.add(key);
 }
 
-function checkEvents(blockName: string, block: SummaryBlock, expected: ComRefInfo | undefined, messages: LintMessage[]) {
+function checkEvents(
+  entry: ReadmeBlockEntry,
+  expected: ComRefInfo | undefined,
+  messages: LintMessage[],
+) {
+  const { block } = entry;
   const events = block.events ?? [];
   if (!expected) return;
 
@@ -59,17 +99,22 @@ function checkEvents(blockName: string, block: SummaryBlock, expected: ComRefInf
   }
   if (missingEntries.length > 0) {
     const details = missingEntries.map(({ className, handlers }) => `.${className} 节点配置了 ${handlers.join(',')}`).join('；');
-    messages.push(createMessage(`组件 ${blockName} 源码在 ${details}，未在 README events 中声明。`));
+    messages.push(createMessage(`${getSourceLabel(expected, entry.name)} 源码在 ${details}，未在 README 的 ${entry.path} -> events 中声明。`));
   }
 }
 
-function checkDatasource(blockName: string, block: SummaryBlock, expected: ComRefInfo | undefined, messages: LintMessage[]) {
+function checkDatasource(
+  entry: ReadmeBlockEntry,
+  expected: ComRefInfo | undefined,
+  messages: LintMessage[],
+) {
+  const { block } = entry;
   const datasource = block.datasource;
   const seen = new Set<string>();
 
   for (const [className, apis] of Object.entries(datasource ?? {})) {
     if (!className) {
-      messages.push(createMessage(`组件 ${blockName} 的 datasource 存在空 className/root 标识。`));
+      messages.push(createMessage(`README 的 ${entry.path} -> datasource 存在空 className/root 标识。`));
       continue;
     }
 
@@ -77,14 +122,14 @@ function checkDatasource(blockName: string, block: SummaryBlock, expected: ComRe
 
     for (const [api, meta] of apiEntries) {
       if (!api) {
-        messages.push(createMessage(`组件 ${blockName} 的 datasource.${className} 存在空接口名。`));
+        messages.push(createMessage(`README 的 ${entry.path} -> datasource.${className} 存在空接口名。`));
         continue;
       }
 
       checkDuplicate(
         seen,
         api,
-        `组件 ${blockName} 的 datasource.${api} 重复声明。`,
+        `README 的 ${entry.path} -> datasource.${api} 重复声明。`,
         messages,
       );
     }
@@ -110,21 +155,26 @@ function checkDatasource(blockName: string, block: SummaryBlock, expected: ComRe
 
   const missingApis = Array.from(expectedApis).filter(api => !documentedApis.has(api));
   if (missingApis.length > 0) {
-    messages.push(createMessage(`组件 ${blockName} 调用了 datasource 的 ${missingApis.join(',')} 方法，需要在 README datasource 中声明。`));
+    messages.push(createMessage(`${getSourceLabel(expected, entry.name)} 调用了 datasource 的 ${missingApis.join(',')} 方法，需要在 README 的 ${entry.path} -> datasource 中声明。`));
   }
 }
 
-function checkStore(blockName: string, block: SummaryBlock, expected: ComRefInfo | undefined, messages: LintMessage[]) {
+function checkStore(
+  entry: ReadmeBlockEntry,
+  expected: ComRefInfo | undefined,
+  messages: LintMessage[],
+) {
+  const { block } = entry;
   const store = block.store;
 
   for (const [className, items] of Object.entries(store ?? {})) {
     if (!className) {
-      messages.push(createMessage(`组件 ${blockName} 的 store 存在空 className/root 标识。`));
+      messages.push(createMessage(`README 的 ${entry.path} -> store 存在空 className/root 标识。`));
       continue;
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      messages.push(createMessage(`组件 ${blockName} 的 store.${className} 缺少字段项。`));
+      messages.push(createMessage(`README 的 ${entry.path} -> store.${className} 缺少字段项。`));
       continue;
     }
   }
@@ -149,7 +199,7 @@ function checkStore(blockName: string, block: SummaryBlock, expected: ComRefInfo
 
   const missingFields = Array.from(expectedFields).filter(field => !documentedFields.has(field));
   if (missingFields.length > 0) {
-    messages.push(createMessage(`组件 ${blockName} 源码中对 store 的 ${missingFields.join(',')} 字段进行了消费，未在 README store 中声明。`));
+    messages.push(createMessage(`${getSourceLabel(expected, entry.name)} 源码中对 store 的 ${missingFields.join(',')} 字段进行了消费，未在 README 的 ${entry.path} -> store 中声明。`));
   }
 }
 
@@ -187,13 +237,18 @@ export function checkReadme(
     });
   }
 
+  const readmeEntries = collectReadmeBlockEntries(parsed);
+  const expectedQueues = createExpectedQueues(comRefInfos);
+  const matchedEntries: ReadmeBlockEntry[] = [];
+
   // ─── 2. 每个节点必须有 title、summary、type 字段 ───
-  for (const [name, block] of Object.entries(parsed)) {
+  for (const entry of readmeEntries) {
+    const { name, block, path } = entry;
     if (!block.title) {
       messages.push({
         ruleId: RULE_ID,
         severity: 2,
-        message: `[文档校验] 节点 "${name}" 缺少 title 字段。`,
+        message: `[文档校验] 节点 "${path}" 缺少 title 字段。`,
         line: 1,
         column: 0,
         nodeType: 'list',
@@ -203,7 +258,7 @@ export function checkReadme(
       messages.push({
         ruleId: RULE_ID,
         severity: 2,
-        message: `[文档校验] 节点 "${name}" 缺少 summary 字段。`,
+        message: `[文档校验] 节点 "${path}" 缺少 summary 字段。`,
         line: 1,
         column: 0,
         nodeType: 'list',
@@ -213,32 +268,30 @@ export function checkReadme(
       messages.push({
         ruleId: RULE_ID,
         severity: 2,
-        message: `[文档校验] 节点 "${name}" 缺少 type 字段。`,
+        message: `[文档校验] 节点 "${path}" 缺少 type 字段。`,
         line: 1,
         column: 0,
         nodeType: 'list',
       });
     }
 
-    const expected = getExpectedInfo(comRefInfos, name);
-    checkEvents(name, block, expected, messages);
-    checkDatasource(name, block, expected, messages);
-    // checkStore(name, block, expected, messages);
+    const expected = consumeExpected(expectedQueues, name);
+    if (expected) matchedEntries.push(entry);
+    checkEvents(entry, expected, messages);
+    checkDatasource(entry, expected, messages);
+    // checkStore(entry, expected, messages);
   }
 
   // ─── 3. 跨文件节点一致性校验 ───
-  const jsxNodeNames = new Set<string>(comRefInfos.map(info => info.name));
-  const readmeNodeNames = new Set<string>(
-    Object.keys(parsed).filter(name => name !== 'default')
-  );
+  const matchedEntrySet = new Set(matchedEntries);
 
   // 3.1 README 中有但 JSX 中没有的节点
-  for (const name of readmeNodeNames) {
-    if (!jsxNodeNames.has(name)) {
+  for (const entry of readmeEntries) {
+    if (entry.name !== 'default' && !matchedEntrySet.has(entry)) {
       messages.push({
         ruleId: RULE_ID,
         severity: 2,
-        message: `[文档校验] 节点 "${name}" 在源码中不存在。`,
+        message: `[文档校验] README 的 "${entry.path}" 在源码中不存在。`,
         line: 1,
         column: 0,
         nodeType: 'heading',
@@ -247,7 +300,7 @@ export function checkReadme(
   }
 
   // 3.2 JSX 中有但 README 中没有的节点
-  for (const info of comRefInfos) {
+  for (const info of Array.from(expectedQueues.values()).flat()) {
     if (info.name === 'default') {
       // appRef 对应 README 的 "default" 根节点
       if (!parsed['default']) {
@@ -262,16 +315,14 @@ export function checkReadme(
       }
       continue;
     }
-    if (!readmeNodeNames.has(info.name)) {
-      messages.push({
-        ruleId: RULE_ID,
-        severity: 2,
-        message: `[文档校验] 源码中的 "${info.name}" 在文档中未声明。`,
-        line: 1,
-        column: 0,
-        nodeType: 'heading',
-      });
-    }
+    messages.push({
+      ruleId: RULE_ID,
+      severity: 2,
+      message: `[文档校验] ${getSourceLabel(info, info.name)} 在文档中未声明。`,
+      line: 1,
+      column: 0,
+      nodeType: 'heading',
+    });
   }
 
   return messages.map(msg => ({ ...msg, fileName }));
