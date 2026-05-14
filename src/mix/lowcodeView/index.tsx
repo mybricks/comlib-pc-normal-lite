@@ -53,17 +53,6 @@ export default function LowcodeView(params: Params) {
 
   // 兼容老版本数据：data.files 不存在时，从旧字段迁移
   const data = params.data;
-  if (data && !Array.isArray(data.files)) {
-    data.files = [];
-    const migrate = (fileName: string, source: string, compiled: string) => {
-      if (source || compiled) data.files.push({ fileName, source: source || '', compiled: compiled || '' });
-    };
-    migrate('index.jsx', data.runtimeJsxSource, data.runtimeJsxCompiled);
-    migrate('index.less', data.styleSource, data.styleCompiled);
-    migrate('config.js', data.configJsSource, data.configJsCompiled);
-    migrate('store.js', data.storeJsSource, data.storeJsCompiled);
-    migrate('service.js', data.serviceJsSource, data.serviceJsCompiled);
-  }
   const files: Array<{ fileName: string; source: string; compiled?: string }> = data.files ?? [];
 
   const [selectFile, setSelectFile] = useState<{ path: string, source: string, fileName: string } | null>(null);

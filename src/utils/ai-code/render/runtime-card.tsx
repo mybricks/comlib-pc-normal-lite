@@ -319,19 +319,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       DataSource
     })
 
-    // 兼容老版本数据：data.files 不存在时，从旧字段迁移
-    if (data && !Array.isArray(data.files)) {
-      data.files = [];
-      const migrate = (fileName: string, compiled: string) => {
-        if (compiled) data.files.push({ fileName, compiled });
-      };
-      migrate('index.jsx', data.runtimeJsxCompiled);
-      migrate('index.less', data.styleCompiled);
-      migrate('config.js', data.configJsCompiled);
-      migrate('store.js', data.storeJsCompiled);
-      migrate('service.js', data.serviceJsCompiled);
-    }
-
     const shouldRenderSender = !!(window as any)._sandbox_?.helpers?.renders?.renderStartView;
 
     const renderSender = useMemo(() => {

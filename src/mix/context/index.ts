@@ -2,6 +2,7 @@ import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
 import { parsemd, parseRequirement, SummaryBlock } from "../../utils/ai-code/md";
+import { transformForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 import { randomUUID } from '../utils/uuid'
 
@@ -197,19 +198,6 @@ class Context {
       this.aiComParamsMap[id] = { aiComParams: params, actions };
       // 兼容老版本数据：将旧字段迁移到 files 数组
       const data = params?.data;
-      if (data && !Array.isArray(data.files)) {
-        data.files = [];
-        const migrate = (fileName: string, source: string, compiled: string) => {
-          if (source || compiled) {
-            data.files.push({ fileName, source: source || '', compiled: compiled || '' });
-          }
-        };
-        migrate('index.jsx', data.runtimeJsxSource, data.runtimeJsxCompiled);
-        migrate('index.less', data.styleSource, data.styleCompiled);
-        migrate('config.js', data.configJsSource, data.configJsCompiled);
-        migrate('store.js', data.storeJsSource, data.storeJsCompiled);
-        migrate('service.js', data.serviceJsSource, data.serviceJsCompiled);
-      }
       if (data && !Array.isArray(data._errors)) {
         data._errors = [];
       }
@@ -285,8 +273,10 @@ class Context {
   updateFile(id: any, payload: { fileName: string; content: string; type?: string }): void;
   updateFile(id, { fileName, content, type }) {
     // 现在只有 jsx、less、js 三种文件
-    const aiComParams = this.getAiComParams(id);
+    const aiCom = this.getAiCom(id);
+    const aiComParams = aiCom.aiComParams;
     const files = aiComParams.data.files;
+    const suffix = fileName.split('.').pop();
 
     if (type === "delete") {
       const deleteIndex = files.findIndex((f) => f.fileName === fileName);
@@ -298,11 +288,9 @@ class Context {
         files.splice(deleteIndex, 1)
       }
       aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-      this.getAiCom(id)?.actions?.notifyChanged?.();
+      this.actionsNotifyChanged(id, ['jsx', 'tsx', 'less'].includes(suffix) ? 'update' : 'empty')
       this.getAiComEvents(id).emit("compileError", aiComParams.data._errors)
     } else {
-      const suffix = fileName.split('.').pop();
-
       switch (suffix) {
         case 'jsx':
         case 'tsx':
@@ -343,7 +331,8 @@ class Context {
               }
             ];
           }
-          this.getAiCom(id)?.actions?.notifyChanged?.();
+
+          this.actionsNotifyChanged(id, 'update')
           break;
         case 'less':
           try {
@@ -382,7 +371,7 @@ class Context {
               }
             ];
           }
-          this.getAiCom(id)?.actions?.notifyChanged?.();
+          this.actionsNotifyChanged(id, 'update')
           break;
         case 'js':
         case 'ts':
@@ -454,173 +443,9 @@ class Context {
             }
           })
 
-          // const relations: Array<{ from: { selector: string }; to: { type: string; selector: string } }> = []
-          // const events: any = []
-          // const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
-          // const store: Array<{ refSelector:string, field:string, description:string }> = []
-          // for (const [blockName, block] of Object.entries(compiled)) {
-          //   if (Array.isArray(block.events)) {
-          //     for (const ev of block.events) {
-          //       const refSelector = [
-          //         `[data-widget-name="${blockName}"][data-zone-events*="${ev.id}"]`,
-          //         `[data-widget-name="${blockName}"] [data-zone-events*="${ev.id}"]`,
-          //       ].join(', ')
-          //       if (ev.relation) {
-          //         relations.push({
-          //           from: {
-          //             selector: refSelector,
-          //           },
-          //           to: {
-          //             type: ev.relation.type,
-          //             selector: `[data-widget-name="${ev.relation.name}"]`,
-          //           },
-          //         })
-          //       }
-
-          //       const result: any = {
-          //         refSelector,
-          //         title: ev.title,
-          //         mermaid: ev.mermaid,
-          //       }
-
-          //       if (ev.relation) {
-          //         result.relation = {
-          //           type: ev.relation.type,
-          //           refSelector: `[data-widget-name="${ev.relation.name}"]`,
-          //         }
-          //       }
-
-          //       events.push(result)
-          //     }
-          //   }
-          //   if (block.datasource) {
-          //     Object.entries(block.datasource).forEach(([key, value]) => {
-          //       Object.entries(value).forEach(([api, { desc }]) => {
-          //         services.push({
-          //           title: api,
-          //           type: 'up',
-          //           refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-datasource*="${key}"], [data-widget-name="${blockName}"] [data-zone-datasource*="${key}"]`,
-          //           description: desc || ""
-          //         })
-          //       })
-          //     })
-          //   }
-          //   if (block.store) {
-          //     Object.entries(block.store).forEach(([key, value]) => {
-          //       value.forEach(({ field, path, desc }) => {
-          //         store.push({
-          //           field,
-          //           refSelector: key === 'root' ? `[data-widget-name="${blockName}"]` : `[data-widget-name="${blockName}"][data-zone-store*="${key}"], [data-widget-name="${blockName}"] [data-zone-store*="${key}"]`,
-          //           description: desc || ""
-          //         })
-          //       })
-          //     })
-          //   }
-          // }
-
-          const events: any = []
-          const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
-          const store: Array<{ refSelector:string, field:string, description:string }> = []
-
-          /**
-           * 递归处理每个 block：
-           * - ancestorSelector: 祖先链拼接的 selector（如 "[data-widget-name="A"] [data-widget-name="B"]"）
-           *   当前块有数据时，在祖先基础上追加自身，最终生成完整的父子 selector 前缀
-           */
-          const processBlock = (componentName: string, info: SummaryBlock, ancestorSelector: string | null = null) => {
-            // 顶层为分组/页面，跳过自身 selector 构建，直接递归子块
-            if (ancestorSelector === null && info.children && !info.datasource && !info.events && !info.store) {
-              Object.entries(info.children).forEach(([childName, childInfo]) => {
-                processBlock(childName, childInfo, null)
-              })
-              return
-            }
-
-            const selfSelector = `[data-widget-name="${componentName}"]`
-            const widgetSelector = ancestorSelector ? `${ancestorSelector} ${selfSelector}` : selfSelector
-
-            // 接口
-            if (info.datasource) {
-              Object.entries(info.datasource).forEach(([classname, value]) => {
-                Object.entries(value).forEach(([api, { desc }]) => {
-                  const classSelector = `[data-zone-classnames*="${classname}"]`
-                  services.push({
-                    title: api,
-                    type: 'up',
-                    refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
-                    description: desc || ""
-                  })
-                })
-              })
-            }
-
-            // 事件
-            if (Array.isArray(info.events)) {
-              info.events.forEach((event) => {
-                const { id, handlers } = event
-                const classSelector = `[data-zone-classnames*="${id}"]`
-
-                handlers.forEach(({ handler, title, mermaid, relations }) => {
-                  const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
-                  const result: any = {
-                    refSelector,
-                    title: handler,
-                    mermaid,
-                    description: title
-                  }
-
-                  if (relations && relations.length > 0) {
-                    result.relations = relations.map(r => ({
-                      type: r.type,
-                      refSelector: `[data-widget-name="${r.name}"]`,
-                    }))
-                  }
-
-                  events.push(result)
-                })
-              })
-            }
-
-            // store
-            if (info.store) {
-              Object.entries(info.store).forEach(([classname, value]) => {
-                value.forEach(({ desc, field }) => {
-                  const classSelector = `[data-zone-classnames*="${classname}"]`
-
-                  store.push({
-                    field,
-                    refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
-                    description: desc || ""
-                  })
-                })
-              })
-            }
-
-            // 递归处理子块，将当前完整 widgetSelector 作为祖先传递
-            if (info.children) {
-              Object.entries(info.children).forEach(([childName, childInfo]) => {
-                processBlock(childName, childInfo, widgetSelector)
-              })
-            }
-          }
-
-          Object.entries(compiled).forEach(([componentName, info]) => {
-            processBlock(componentName, info, null)
-          })
-
-          console.log('[compiled]', compiled)
-          console.log('[notifyChanged]', {
-            // relations,
-            services,
-            store,
-            events
-          })
-
-          this.getAiCom(id)?.actions?.notifyChanged?.({
-            services,
-            store,
-            events
-          });
+          const notifyChangedValue = transformForNotifyChanged(compiled)
+          aiCom.notifyChangedValue = notifyChangedValue
+          this.getAiCom(id)?.actions?.notifyChanged?.(notifyChangedValue);
           this.getAiComEvents(id)?.emit("fileChange", { filename: fileName })
         } catch (e) {
           // console.error("[@parsemd error]", e);
@@ -648,6 +473,32 @@ class Context {
     this.getAiComEvents(id)?.emit('fileChange', null);
     (window as any)._mybricksOnEdit_?.();
     aiComParams?.notify?.edit();
+  }
+
+  actionsNotifyChanged(id, type: 'update' | 'empty') {
+    const aiCom = this.getAiCom(id)
+    const aiComParams = aiCom.aiComParams
+
+    if (type === 'empty') {
+      aiCom?.actions?.notifyChanged?.();
+      return
+    }
+
+    let notifyChangedValue = aiCom.notifyChangedValue
+
+    if (!notifyChangedValue) {
+      const readme = aiComParams.data.files.find((file) => file.fileName === "README.md")
+      if (readme && readme.compiled) {
+        notifyChangedValue = transformForNotifyChanged(readme.compiled)
+        aiCom.notifyChangedValue = notifyChangedValue
+      }
+    }
+
+    if (notifyChangedValue) {
+      aiCom?.actions?.notifyChanged?.(notifyChangedValue);
+    } else {
+      aiCom?.actions?.notifyChanged?.();
+    }
   }
 
   fileSystemMap: Record<string, FileSystem> = {}
