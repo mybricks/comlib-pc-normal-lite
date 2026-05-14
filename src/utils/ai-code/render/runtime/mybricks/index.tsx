@@ -221,10 +221,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   };
   const debugTarget: any =
     env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
-  const filesMap = data.files.reduce((pre, file) => {
-    pre[file.fileName] = file
-    return pre
-  }, {})
 
   /** 向 debugLogs 追加一条日志记录（按打印顺序入栈） */
   const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
@@ -353,7 +349,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const theme = mixContext.resolveActiveTheme(data);
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue | null>(null);
-    const [style, setStyle] = useState<React.CSSProperties>({
+    const [style, setStyle] = useState<React.CSSProperties>({      
       width: canvasWidth,
       minHeight: canvasHeight
     });
@@ -376,22 +372,22 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             if (containerRef.current) {
               let widgetName = params?.widgetName
               if (!widgetName) {
-                const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
+                const firstWidget = containerRef.current.querySelector('[data-widget-name]');
                 widgetName = firstWidget?.getAttribute('data-widget-name');
               }
               if (mdCompiled) {
                 const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
                 const title = docs?.title;
                 if (title) {
-                  containerRef.current!.setAttribute("data-zone-title", title);
+                  containerRef.current.setAttribute("data-zone-title", title);
                 }
               }
 
-              const container = containerRef.current?.querySelector(`[data-widget-name="${widgetName}"]`)
+              const container = containerRef.current.querySelector(`[data-widget-name="${widgetName}"]`)
               let dataLoc = container?.getAttribute('data-loc') || container?.querySelector('[data-loc]')?.getAttribute('data-loc')
 
               if (!dataLoc) {
-                dataLoc = containerRef.current?.querySelector('[data-loc]')?.getAttribute('data-loc')
+                dataLoc = containerRef.current.querySelector('[data-loc]')?.getAttribute('data-loc')
               }
 
               if (dataLoc) {
@@ -417,6 +413,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                         }
                         if (height) {
                           style.minHeight = height
+                        } else {
+                          const bcr = containerRef.current!.getBoundingClientRect()
+                          if (bcr.height) {
+                            Reflect.deleteProperty(style, 'minHeight')
+                          }
                         }
                         setStyle(style)
                       }
@@ -443,7 +444,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         data-zone-title='页面'
         style={{
           // [TODO]
-          height: '100%',
+          // height: '100%',
+          width: 'fit-content',
+          height: 'fit-content',
           ...style,
           // ...(data?.frameStyle?.width
           //   ? { width: data.frameStyle.width }
@@ -781,20 +784,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
                 }
-                // if (files?.less) {
-                //   const file = filesMap[files.less]
-                //   const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
-                //   const { width, height } = parseFrameSize(lessCode);
-                //   if (width) {
-                //     const numberWidth = parseInt(width)
-                //     style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
-                //   }
-                //   if (height) {
-                //     style.height = height
-                //   }
-                // } else {
-                //   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
-                // }
               }
             }
           } catch (e) {
