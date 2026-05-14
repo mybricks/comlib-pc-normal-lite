@@ -5,8 +5,6 @@ import * as antd from "antd";
 import * as icons from "@ant-design/icons"
 import { StyleProvider } from '@ant-design/cssinjs'
 import dayjs from "dayjs";
-// import {AIJsxRuntime} from './index'
-import { AIJsxRuntime } from "./runtime"
 import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
@@ -174,12 +172,6 @@ interface AIRuntimeProps {
   /** logger 对象或 logger 工厂函数（接受组件 id 返回 logger 对象） */
   logger: any | ((id: string) => any);
 }
-
-// const mybricks = {
-//   Container: ({ children, ...props}) => {
-//     return <div {...props}>{children}</div>
-//   }
-// }
 
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, id}: any) => {
@@ -354,8 +346,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       }
     }, [])
 
-    const resolvedLogger = typeof logger === 'function' ? logger({ id, mode: env.runtime ? 'runtime' : 'design'}) : logger;
-
     // 1. loading：生成中流式界面（含 generate.error 时同风格错误面板）
     // 2. document：需求文档展示（或旧 loading 态），有 document 且尚未有编译代码时
     // 3. error：Less/Babel 编译失败或 generate 的 error，统一错误样式
@@ -468,27 +458,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             }}
           />
         )
-        // return (
-        //   <StyleProvider hashPriority='low'>
-        //     <AIJsxRuntime
-        //       env={env}
-        //       logger={resolvedLogger}
-        //       id={id}
-        //       data={data}
-        //       runtimeMode={runtimeMode}
-        //       placeholder={shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples}/>}
-        //       renderRuntimeError={(props) => <RuntimeErrorView title={props.title} desc={props.desc} errors={props.errors} comId={id} />}
-        //       dependencies={{
-        //         'dayjs': dayjs,
-        //         ...(getDependencies?.() ?? {}),
-        //         'react': React,
-        //         'react-dom': ReactDom,
-        //         '@ant-design/icons': icons,
-        //       }}
-        //       inMybricksGeoWebview={!!canvasContainer}
-        //     />
-        //   </StyleProvider>
-        // );
       }
 
       return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;
