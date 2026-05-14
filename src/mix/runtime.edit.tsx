@@ -33,26 +33,32 @@ const dataCompatible = (props) => {
       }
     }
 
-    if (!data.version || data.version === 1) {
-      data.version = 2
+    if (!data.version || data.version < 3) {
+      data.version = 3
+      const readme = data.files.find((file) => file.fileName === "README.md")
+      if (readme?.source) {
+        context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
+      }
+
       data.files.forEach((file) => {
-        const { fileName, source } = file
+        const { fileName, source, compiled } = file
         if (fileName.endsWith('.jsx')) {
           context.updateFile(id, { fileName, content: decodeURIComponent(source) })
+        } else if (fileName.endsWith('.less')) {
+          if (!compiled?.includes('%7B%22cssContent%22%3A%22')) {
+            // 老数据兼容
+            // 编译为新的cssmodule形式
+            context.updateFile(id, { fileName, content: decodeURIComponent(source) })
+          } else if (source?.includes('%40import')) {
+            // 自动修复@import
+            context.updateFile(id, { fileName, content: decodeURIComponent(source) })
+          }
         }
       })
     }
-
-    data.files.forEach((file) => {
-      const { fileName, source, compiled } = file
-      if (fileName.endsWith('.less')) {
-        if (!compiled?.includes('%7B%22cssContent%22%3A%22')) {
-          // 编译为新的cssmodule形式
-          context.updateFile(id, { fileName, content: decodeURIComponent(source) })
-        }
-      }
-    })
-  } catch {}
+  } catch (e) {
+    console.log('[初始化报错]', e)
+  }
 }
 
 export default (props: any) => {
