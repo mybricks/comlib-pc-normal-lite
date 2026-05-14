@@ -58,9 +58,10 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
 }
 
 export function transformLess(code, prefix = "") {
-  const cssModule = {
+  const cssModule: any = {
     cssContent: "",
-    classMap: {}
+    classMap: {},
+    imports: []
   }
 
   if (!code || code.length === 0) {
@@ -74,6 +75,14 @@ export function transformLess(code, prefix = "") {
         install: function (less, pluginManager) {
           pluginManager.addPreProcessor({
             process: function (src, _extra) {
+              const importRegex = /@import\s+(?:\([^)]*\)\s*)?['"]([^'"]+)['"]\s*;?/g
+              let im: RegExpExecArray | null
+              while ((im = importRegex.exec(src)) !== null) {
+                cssModule.imports.push(im[1])
+              }
+              // 移除所有 @import 语句，避免浏览器环境下尝试通过 HTTP 加载文件
+              src = src.replace(/@import\s+(?:(?:['"][^'"]*['"])|(?:\([^)]*\)\s*['"][^'"]*['"]))\s*;?/g, '')
+
               // 在预处理阶段收集类名
               // 先收集所有 :global(...) 和 :global { ... } 的范围，跳过其中的类名
               const globalRanges: Array<[number, number]> = []

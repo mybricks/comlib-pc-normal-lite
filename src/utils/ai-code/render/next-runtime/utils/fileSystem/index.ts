@@ -122,18 +122,27 @@ const isJsxModule = (filename: string): boolean => {
 interface LoadCssParams {
   file: Files[0]
   css: Css
+  dependencies: Dependencies
 }
 const loadCssModule = (params: LoadCssParams) => {
-  const { file, css } = params;
+  const { file, css, dependencies } = params;
   const compiled = decodeURIComponent(file.compiled)
   const cssModule = JSON.parse(compiled);
-  const { cssContent, classMap } = cssModule;
+  const { cssContent, classMap, imports } = cssModule;
+  const importModules: any = []
+  if (imports) {
+    imports.forEach((path) => {
+      importModules.unshift(dependencies[path])
+    })
+  }
   const proxy = new Proxy({}, {
     get(_, key) {
       if (key === 'default') {
         return proxy
       }
-      return classMap[key] || key
+      return importModules.reduce((pre, cur) => {
+        return cur?.classMap?.[key] || pre
+      }, classMap[key] || key)
     }
   })
 
@@ -423,7 +432,7 @@ class FileSystem {
 
       entry.module = module
     } else if (isCssModule(resolvedFilename)) {
-      const { module } = loadCssModule({ file: entry.file, css: this.params.css })
+      const { module } = loadCssModule({ file: entry.file, css: this.params.css, dependencies: this.proxyDependencies(filename), })
 
       entry.module = module
     }
@@ -584,20 +593,32 @@ class FileSystem {
     } else if (isCssModule(filename)) {
       // 如果是less文件，解析后再次调用css即可
       // [TODO] 目前不存在引用关系
-      const { module } = loadCssModule({ file, css: this.params.css })
-
       let refresh = false
 
       if (entry) {
+        const { module } = loadCssModule({ file, css: this.params.css, dependencies: this.proxyDependencies(filename), })
         if (!entry.module.classMap || (Object.keys(entry.module.classMap).join('') !== Object.keys(module.classMap).join(''))) {
           refresh = true
         }
         entry.file = file
         entry.module = module
       } else {
+        const proxy = new Proxy({}, {
+        get(_, key) {
+          if (key === 'default') {
+            return proxy
+          }
+          return key
+        }
+      })
+
+      const tempModule = {
+        default: proxy,
+        classMap: {}
+      }
         this.filesMap[filename] = {
           file,
-          module,
+          module: tempModule,
           dependencies: new Set(),
           dependedBy: new Set(),
           forceUpdateSet: new Set<() => void>(),
@@ -606,6 +627,8 @@ class FileSystem {
             runtime: null
           }
         }
+        const { module } = loadCssModule({ file, css: this.params.css, dependencies: this.proxyDependencies(filename), })
+        this.filesMap[filename].module = module
         refresh = true
       }
 
