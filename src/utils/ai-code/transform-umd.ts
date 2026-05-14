@@ -57,7 +57,9 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
   return { transformCode, constituency }
 }
 
-export function transformLess(code, prefix = "") {
+export function transformLess(code, filename: string) {
+  const prefix = filename.replace(/[^0-9a-zA-Z_]/g, '_')
+  const useCssModule = filename.endsWith('.module.less')
   const cssModule: any = {
     cssContent: "",
     classMap: {},
@@ -121,6 +123,10 @@ export function transformLess(code, prefix = "") {
               let processed = src.replace(
                 /\.([a-zA-Z][a-zA-Z0-9_-]*)/g,
                 (match, className, offset) => {
+                  if (!useCssModule) {
+                    // *.less 文件：不做 CSS Module 转换，直接返回原始类名
+                    return match
+                  }
                   if (isInGlobal(offset)) {
                     cssModule.classMap[className] = className
                     return match
