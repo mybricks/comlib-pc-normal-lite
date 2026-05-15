@@ -22,7 +22,10 @@ import { createRequireDatasourceAsyncRule, RULE_ID as DS_ASYNC_RULE_ID } from '.
 import { createExtractComRefsRule, type ComRefInfo, StoreDatasourceMap } from './rules/extract-comrefs';
 import { checkReadme, RULE_ID as README_RULE_ID } from './rules/readme';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
+import { checkJSDoc, RULE_ID as JSDOC_RULE_ID } from './rules/jsdoc';
 import { getLowcodeViewStoreDatasource, refreshLowcodeViewStoreDatasource } from './monaco-language-service';
+import type { MybricksJSDoc } from '../../utils/ai-code/plugins/utils/parseMybricksJSDoc';
+import collectJsDocPlugin from '../../utils/ai-code/plugins/collectJsDocPlugin';
 export { getLowcodeViewStoreDatasource };
 
 export type { LintMessage };
@@ -34,6 +37,7 @@ export const RULE_IDS = {
   REQUIRE_DATASOURCE_ASYNC: DS_ASYNC_RULE_ID,
   README_CHECK: README_RULE_ID,
   REQUIREMENT_CHECK: REQ_RULE_ID,
+  JSDOC_CHECK: JSDOC_RULE_ID,
 } as const;
 
 /**
@@ -151,6 +155,40 @@ function extractComRefs(code: string, fileName: string): ComRefInfo[] {
   return rule.getResults();
 }
 
+/**
+ * 从单个 JSX/JS 文件中提取 @mybricks JSDoc 注释（使用 collectJsDocPlugin）。
+ *
+ * @param code     文件源码字符串
+ * @param fileName 文件名
+ * @returns        Map<componentName, MybricksJSDoc>
+ */
+function extractJsDocs(code: string, fileName: string): Map<string, MybricksJSDoc> {
+  const Babel = (window as any).Babel;
+  if (!Babel) return new Map();
+
+  const jsdocMap = new Map<string, MybricksJSDoc>();
+
+  try {
+    Babel.transform(code, {
+      presets: [
+        ['env', { modules: 'commonjs' }],
+        'react',
+      ],
+      plugins: [
+        ['proposal-decorators', { legacy: true }],
+        'proposal-class-properties',
+        ['transform-typescript', { isTSX: true }],
+        [collectJsDocPlugin, { result: jsdocMap, fileName }],
+      ],
+      retainLines: true,
+    });
+  } catch {
+    // 提取阶段不关心语法错误
+  }
+
+  return jsdocMap;
+}
+
 function enrichDatasourceFromStoreCalls(comRefInfos: ComRefInfo[], storeDatasource: StoreDatasourceMap): ComRefInfo[] {
   return comRefInfos.map(info => {
     const datasourceSets = Object.entries(info.datasource).reduce<Record<string, Set<string>>>((acc, [className, apis]) => {
@@ -251,9 +289,40 @@ export async function verify(
 
   // ─── Pass 1：提取 comRef/popupRef/appRef 节点信息 ───
   const jsxFiles = decodedFiles.filter(f => isJsxFile(f.fileName));
-  let allComRefInfos: ComRefInfo[] = jsxFiles.flatMap(file => extractComRefs(file.code, file.fileName));
+
+  // 同时采集 JSDoc（与 comRef 共用一轮 Babel transform，避免重复解析）
+  const jsdocSeverity = getRuleSeverity(rules, JSDOC_RULE_ID, 2);
+  const jsdocMapByFile = new Map<string, Map<string, MybricksJSDoc>>();
+
+  const perFileComRefInfos = new Map<string, ComRefInfo[]>();
+  for (const file of jsxFiles) {
+    const comRefInfos = extractComRefs(file.code, file.fileName);
+    perFileComRefInfos.set(file.fileName, comRefInfos);
+
+    if (jsdocSeverity !== -1) {
+      const jsdocMap = extractJsDocs(file.code, file.fileName);
+      if (jsdocMap.size > 0) {
+        jsdocMapByFile.set(file.fileName, jsdocMap);
+      }
+    }
+  }
+
+  let allComRefInfos: ComRefInfo[] = Array.from(perFileComRefInfos.values()).flat();
   const storeDatasource = await refreshLowcodeViewStoreDatasource();
   allComRefInfos = enrichDatasourceFromStoreCalls(allComRefInfos, storeDatasource);
+
+  // ─── Pass 1.5：JSDoc 校验（基于组件侧注释，不依赖 README.md）───
+  if (jsdocSeverity !== -1) {
+    for (const [fileName, jsdocMap] of jsdocMapByFile) {
+      // 使用 Pass 1 已解析好的 comRefInfos（含 storeDatasource 补全）
+      const fileComRefInfos = allComRefInfos.filter(
+        info => perFileComRefInfos.get(fileName)?.some(r => r.name === info.name) ?? false,
+      );
+      const msgs = checkJSDoc(jsdocMap, fileComRefInfos, fileName)
+        .map(msg => ({ ...msg, severity: jsdocSeverity }));
+      results.push(...msgs);
+    }
+  }
 
   // ─── Pass 2：按文件类型分别校验 ───
   for (const file of decodedFiles) {
