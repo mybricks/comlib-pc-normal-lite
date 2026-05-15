@@ -13,6 +13,7 @@
  *
  * 处理三种参数情况：
  * 1. 解构参数：({ name, age }) => {} → (_mybricks_props) => { const { name, age } = _mybricks_props; ... }
+ *    注意：箭头函数简写体（concise body）会自动转换为块体（block body）再插入解构声明
  * 2. 无参数：() => {} → (_mybricks_props) => {}
  * 3. 具名参数：(props) => { props.name } → (_mybricks_props) => { _mybricks_props.name }
  */
@@ -108,10 +109,15 @@ function transformFunctionParams(funcNode: any, t: any): any {
     funcNode.params = [t.identifier(PROPS_PARAM_NAME), ...restParams];
 
     // 在函数体首部插入 const { name, age } = _mybricks_props;
-    const body = funcNode.body;
-    if (body?.type === 'BlockStatement') {
-      body.body.unshift(buildDestructureDeclaration(properties, t));
+    let body = funcNode.body;
+    if (body?.type !== 'BlockStatement') {
+      // 箭头函数简写体（concise body）：(props) => expr
+      // 需要转换为块体：(props) => { return expr; }
+      const returnStatement = t.returnStatement(body);
+      body = t.blockStatement([returnStatement]);
+      funcNode.body = body;
     }
+    body.body.unshift(buildDestructureDeclaration(properties, t));
     return 'crawl'; // signal that scope needs re-crawl
   } else if (firstParam.type === 'Identifier') {
     // 情况3：具名参数 (props) => {}
