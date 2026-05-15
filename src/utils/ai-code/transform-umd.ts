@@ -2,11 +2,13 @@ import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
 import { getValidatorPlugins } from '../../mix/availableLibraries'
 import functionPropsPlugin from './plugins/functionPropsPlugin'
+import collectJsDocPlugin from './plugins/collectJsDocPlugin'
 
-export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any } {
+export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
   const constituency: any = [];
   const { fileName } = ctx
+  const jsDocMap = new Map()
 
   try {
     const validatorPlugins = getValidatorPlugins({ fileName })
@@ -38,6 +40,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         babelPlugin({ constituency, fileName: ctx?.fileName }),
         ...validatorPlugins,
         functionPropsPlugin(),
+        [collectJsDocPlugin, { result: jsDocMap, fileName }]
       ],
       retainLines: true,
     }
@@ -50,11 +53,11 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
     }
 
   } catch (error) {
-    // console.error("[@transformTsx error]", error);
+    console.error("[@transformTsx error]", error);
     throw error
   }
 
-  return { transformCode, constituency }
+  return { transformCode, constituency, jsDocMap }
 }
 
 export function transformLess(code, prefix = "") {

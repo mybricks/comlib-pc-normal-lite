@@ -20,7 +20,7 @@ import { randomUUID } from '../utils/uuid'
 
 const VERIFY_CONFIG = {
   rules: {
-    // [RULE_IDS.README_CHECK]: 'off' as const,
+    [RULE_IDS.README_CHECK]: 'off' as const,
   },
 };
 

@@ -2,7 +2,7 @@ import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { Events } from "../../utils/events";
 import { getTimestamp } from "../../utils/time"
 import { parsemd, parseRequirement, SummaryBlock } from "../../utils/ai-code/md";
-import { transformForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
+import { transformForNotifyChanged, transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 import { randomUUID } from '../utils/uuid'
 
@@ -288,21 +288,37 @@ class Context {
         files.splice(deleteIndex, 1)
       }
       aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-      this.actionsNotifyChanged(id, ['jsx', 'tsx', 'less'].includes(suffix) ? 'update' : 'empty')
+      // this.actionsNotifyChanged(id, ['jsx', 'tsx', 'less'].includes(suffix) ? 'update' : 'empty')
+
+      if ( ['jsx', 'tsx'].includes(suffix)) {
+        aiCom?.actions?.notifyChanged?.(fileName, 'delete');
+      }
       this.getAiComEvents(id).emit("compileError", aiComParams.data._errors)
     } else {
       switch (suffix) {
         case 'jsx':
         case 'tsx':
           try {
-            const { transformCode, constituency } = transformTsx(content, { fileName });
+            const { transformCode, constituency, jsDocMap } = transformTsx(content, { fileName });
+            const transformJsDoc = jsDocMap.entries().reduce((pre, [key, value]) => {
+              pre[key] = value
+              return pre
+            }, {})
+            const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
+            console.log('[transformJsDoc]', transformJsDoc)
+            console.log('[转换]', notifyChangedValue)
+            aiCom?.actions?.notifyChanged?.(fileName, 'update', notifyChangedValue);
             updateFileContent({
               fileName,
               files,
               content: {
                 source: encodeURIComponent(content),
                 compiled: encodeURIComponent(transformCode),
-                constituency
+                constituency,
+                jsDocMap: encodeURIComponent(JSON.stringify(jsDocMap.entries().reduce((pre, [key, value]) => {
+                  pre[key] = value
+                  return pre
+                }, {})))
               }
             })
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
@@ -332,7 +348,7 @@ class Context {
             ];
           }
 
-          this.actionsNotifyChanged(id, 'update')
+          // this.actionsNotifyChanged(id, 'update')
           break;
         case 'less':
           try {
@@ -371,7 +387,7 @@ class Context {
               }
             ];
           }
-          this.actionsNotifyChanged(id, 'update')
+          // this.actionsNotifyChanged(id, 'update')
           break;
         case 'js':
         case 'ts':
@@ -445,7 +461,7 @@ class Context {
 
           const notifyChangedValue = transformForNotifyChanged(compiled)
           aiCom.notifyChangedValue = notifyChangedValue
-          this.getAiCom(id)?.actions?.notifyChanged?.(notifyChangedValue);
+          // this.getAiCom(id)?.actions?.notifyChanged?.(notifyChangedValue); // 去掉，没有README.md了
           this.getAiComEvents(id)?.emit("fileChange", { filename: fileName })
         } catch (e) {
           // console.error("[@parsemd error]", e);

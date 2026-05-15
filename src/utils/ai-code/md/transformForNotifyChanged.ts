@@ -99,3 +99,120 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
 }
 
 export { transformForNotifyChanged }
+
+// ─── New JSON format transformer ─────────────────────────────────────────────
+
+/** 新版 JSON 数据格式中每个组件/页面的结构 */
+export type NewSummaryItem = {
+  name: string
+  title?: string
+  summary?: string
+  type?: string
+  /** store: classname → { storeFilePath → { fieldName → { desc } } } */
+  store?: Record<string, Record<string, Record<string, { desc?: string }>>>
+  /** events: classname → { eventName → { title, mermaid } } */
+  events?: Record<string, Record<string, { title?: string; mermaid?: string; relations?: Record<string, any> }>>
+  /** datasource: classname → { apiName → { desc } } */
+  datasource?: Record<string, Record<string, { desc?: string }>>
+}
+
+/** 新版 JSON 数据格式：组件名 → 组件描述 */
+export type NewSummaryData = Record<string, NewSummaryItem>
+
+/**
+ * 将新版 JSON 格式的数据转换为 notifyChanged 所需的结构。
+ *
+ * 与旧版的差异：
+ * - 新版数据为扁平结构，无页面节点/children 概念
+ * - store 结构改为 classname → storeFilePath → fieldName → { desc }
+ * - events 结构改为 classname → eventName → { title, mermaid }（不再是 handler 数组）
+ * - 通过传入文件名 (filename) 构建 refSelector 前缀，确保全局唯一定位
+ *
+ * @param data      新版 JSON 格式的组件数据
+ * @param filename  当前文件名（如 "LoginPage"），写入 data-zone-filename 以保证唯一定位
+ */
+const transformNewFormatForNotifyChanged = (
+  data: NewSummaryData,
+  filename: string,
+) => {
+  const events: any[] = []
+  const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }> = []
+  const store: Array<{ refSelector: string; field: string; description: string }> = []
+
+  const fileSelector = `[data-zone-filename="${filename}"]`
+
+  Object.entries(data).forEach(([componentName, info]) => {
+    const widgetSelector = `${fileSelector} [data-widget-name="${componentName}"]`
+
+    // 接口
+    if (info.datasource) {
+      Object.entries(info.datasource).forEach(([classname, apis]) => {
+        Object.entries(apis).forEach(([apiName, { desc }]) => {
+          const classSelector = `[data-zone-classnames*="${classname}"]`
+          services.push({
+            title: apiName,
+            type: 'up',
+            refSelector: classname === 'root'
+              ? widgetSelector
+              : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
+            description: desc || ''
+          })
+        })
+      })
+    }
+
+    // 事件
+    if (info.events) {
+      Object.entries(info.events).forEach(([classname, handlers]) => {
+        const classSelector = `[data-zone-classnames*="${classname}"]`
+        const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
+
+        Object.entries(handlers).forEach(([eventName, { title, mermaid, relations }]) => {
+          const result: any = {
+            refSelector,
+            title: eventName,
+            mermaid: mermaid || '',
+            description: title || ''
+          }
+          if (relations) {
+            result.relations = Object.entries(relations).map(([name, { type }]) => {
+              return {
+                type,
+                refSelector: `[data-widget-name="${name}"]`,
+              }
+            })
+          }
+          events.push(result)
+        })
+      })
+    }
+
+    // store
+    if (info.store) {
+      Object.entries(info.store).forEach(([classname, storeFiles]) => {
+        const classSelector = `[data-zone-classnames*="${classname}"]`
+        const refSelector = classname === 'root'
+          ? widgetSelector
+          : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
+
+        Object.values(storeFiles).forEach((fields) => {
+          Object.entries(fields).forEach(([field, { desc }]) => {
+            store.push({
+              field,
+              refSelector,
+              description: desc || ''
+            })
+          })
+        })
+      })
+    }
+  })
+
+  return {
+    events,
+    services,
+    store
+  }
+}
+
+export { transformNewFormatForNotifyChanged }

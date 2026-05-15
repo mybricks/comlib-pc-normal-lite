@@ -330,7 +330,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   interface PageContextValue {
     container: HTMLElement
-    onPageInfo: (params: { widgetName?: string | null }) => void
+    onPageInfo: (params: { widgetName?: string | null, filename: string }) => void
   }
   const PageContext = createContext<PageContextValue>({
     container: document.body,
@@ -370,6 +370,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         onPageInfo: (params) => {
           try {
             if (containerRef.current) {
+              containerRef.current.setAttribute('data-zone-filename', params.filename)
               let widgetName = params?.widgetName
               if (!widgetName) {
                 const firstWidget = containerRef.current.querySelector('[data-widget-name]');
