@@ -105,9 +105,9 @@ export { transformForNotifyChanged }
 /** 新版 JSON 数据格式中每个组件/页面的结构 */
 export type NewSummaryItem = {
   name: string
-  title?: string
-  summary?: string
-  type?: string
+  title: string
+  summary: string
+  type: string
   /** store: classname → { storeFilePath → { fieldName → { desc } } } */
   store?: Record<string, Record<string, Record<string, { desc?: string }>>>
   /** events: classname → { eventName → { title, mermaid } } */
@@ -138,10 +138,12 @@ const transformNewFormatForNotifyChanged = (
   const events: any[] = []
   const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }> = []
   const store: Array<{ refSelector: string; field: string; description: string }> = []
+  const docs: Array<{ refSelector: string; name: string; title: string; summary: string; type: string }> = []
 
   const fileSelector = `[data-zone-filename="${filename}"]`
 
   Object.entries(data).forEach(([componentName, info]) => {
+    const { name, summary, title, type } = info
     const widgetSelector = `${fileSelector} [data-widget-name="${componentName}"]`
 
     // 接口
@@ -206,12 +208,24 @@ const transformNewFormatForNotifyChanged = (
         })
       })
     }
+
+    if (type !== 'app') {
+      // 当前仅处理组件
+      docs.push({
+        refSelector: widgetSelector,
+        name,
+        title,
+        summary,
+        type
+      })
+    }
   })
 
   return {
     events,
     services,
-    store
+    store,
+    docs
   }
 }
 
