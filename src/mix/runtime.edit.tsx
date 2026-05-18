@@ -33,8 +33,8 @@ const dataCompatible = (props) => {
       }
     }
 
-    if (!data.version || data.version < 5) {
-      data.version = 5
+    if (!data.version || data.version < 6) {
+      data.version = 6
       const readme = data.files.find((file) => file.fileName === "README.md")
       if (readme?.source) {
         context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
@@ -61,6 +61,8 @@ const dataCompatible = (props) => {
         if (file.source && (file.fileName.endsWith('.tsx') || file.fileName.endsWith('.ts') || file.fileName.endsWith('.jsx') || file.fileName.endsWith('.js'))) {
           let decoded = decodeURIComponent(file.source)
           decoded = decoded.replace(/(?<=from\s+['"][^'"]*?)(?<!\.module)(\.less)(?=['"])/g, '.module.less')
+          // 处理无 from 的副作用导入：import './index.less' → import './index.module.less'
+          decoded = decoded.replace(/(?<=import\s+['"][^'"]*?)(?<!\.module)(\.less)(?=['"])/g, '.module.less')
           // 移除 import 语句中依赖路径末尾的 .js 扩展名
           // e.g. import store from "./store.js" → import store from "./store"
           decoded = decoded.replace(
