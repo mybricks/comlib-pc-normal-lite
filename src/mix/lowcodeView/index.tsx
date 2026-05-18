@@ -64,7 +64,7 @@ export default function LowcodeView(params: Params) {
 
   // 辅助：从 files 中找到初始/回退选中的文件
   const findFallbackFile = useCallback((fileList: typeof files) => {
-    const indexFile = fileList.find((f) => f.fileName === "index.jsx");
+    const indexFile = fileList.find((f) => f.fileName === "index.tsx");
     return indexFile ?? fileList[0] ?? null;
   }, []);
 
@@ -487,7 +487,7 @@ export default function LowcodeView(params: Params) {
           <>
             <div className={css['file-list']}>
               <TreeView
-                defaultCurrent={selectFile?.fileName ?? "index.jsx"}
+                defaultCurrent={selectFile?.fileName ?? "index.tsx"}
                 expandIds={treeExpandIds}
                 isDark={isDark}
               >
