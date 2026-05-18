@@ -33,27 +33,44 @@ const dataCompatible = (props) => {
       }
     }
 
-    if (!data.version || data.version < 4) {
-      data.version = 4
+    if (!data.version || data.version < 5) {
+      data.version = 5
       const readme = data.files.find((file) => file.fileName === "README.md")
       if (readme?.source) {
         context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
       }
 
       data.files.forEach((file) => {
-        const { fileName, source, compiled } = file
-        if (fileName.endsWith('.jsx')) {
-          context.updateFile(id, { fileName, content: decodeURIComponent(source) })
-        } else if (fileName.endsWith('.less')) {
-          if (!compiled?.includes('%7B%22cssContent%22%3A%22')) {
-            // 老数据兼容
-            // 编译为新的cssmodule形式
-            context.updateFile(id, { fileName, content: decodeURIComponent(source) })
-          } else if (source?.includes('%40import')) {
-            // 自动修复@import
-            context.updateFile(id, { fileName, content: decodeURIComponent(source) })
+        if (/(?<!\.module)\.less$/.test(file.fileName)) {
+          file.fileName = file.fileName.replace(/\.less$/, '.module.less')
+          if (file.source?.includes('%40import')) {
+            // 将 @import 引用的 .less 路径也改为 .module.less
+            file.source = encodeURIComponent(
+              decodeURIComponent(file.source).replace(/(?<!\.module)\.less(['")])/g, '.module.less$1')
+            )
           }
         }
+        // jsx → tsx，js → ts（不影响 .json 等其他扩展名）
+        if (/\.jsx$/.test(file.fileName)) {
+          file.fileName = file.fileName.replace(/\.jsx$/, '.tsx')
+        } else if (/\.js$/.test(file.fileName)) {
+          file.fileName = file.fileName.replace(/\.js$/, '.ts')
+        }
+
+        // 将源码中的 .less 引用（非 .module.less）改为 .module.less
+        if (file.source && (file.fileName.endsWith('.tsx') || file.fileName.endsWith('.ts') || file.fileName.endsWith('.jsx') || file.fileName.endsWith('.js'))) {
+          let decoded = decodeURIComponent(file.source)
+          decoded = decoded.replace(/(?<=from\s+['"][^'"]*?)(?<!\.module)(\.less)(?=['"])/g, '.module.less')
+          // 移除 import 语句中依赖路径末尾的 .js 扩展名
+          // e.g. import store from "./store.js" → import store from "./store"
+          decoded = decoded.replace(
+            /(from\s+['"](?:[^'"]*?))\.js(['"])/g,
+            '$1$2'
+          )
+          file.source = encodeURIComponent(decoded)
+        }
+
+        context.updateFile(id, { fileName: file.fileName, content: decodeURIComponent(file.source) })
       })
     }
   } catch (e) {
