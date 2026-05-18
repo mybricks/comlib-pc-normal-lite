@@ -175,7 +175,10 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               const cnList = [...new Set(extractCssClassNames(classNameExpr, false, cssModuleNames).map(c => c.name))];
               pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(','));
               const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
-              const tagName = getJSXElementNameString(node.openingElement.name)?.split(".")[0];
+              // fullComponentName 保留完整 JSX 组件名（如 "Input.Search"），用于 data-figma-props 变体库匹配
+              const fullComponentName = getJSXElementNameString(node.openingElement.name);
+              // tagName 取根对象名（如 "Input"），用于 findRelyAndSource / selector 等后续逻辑
+              const tagName = fullComponentName?.split(".")[0];
               if (!tagName) {
                 return;
               }
@@ -212,7 +215,8 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 // 格式：{ component: "Button", props: { type: "primary", size: "large" } }
                 // component 字段在消费侧用于确定性地筛选同类组件候选，避免跨组件类型误匹配。
                 if (tagName && /^[A-Z]/.test(tagName)) {
-                  const figmaPropsPayload = extractFigmaProps(node, tagName);
+                  // 使用完整组件名（如 "Input.Search"）而非基础名（"Input"），确保变体库匹配时能区分子组件
+                  const figmaPropsPayload = extractFigmaProps(node, fullComponentName || tagName);
                   pushDataAttr(node.openingElement.attributes, "data-figma-props", JSON.stringify(figmaPropsPayload));
                 }
               }
@@ -376,9 +380,11 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
  * 与 props（JSX props 快照）职责分离，避免命名冲突。
  */
 function extractFigmaProps(node: any, tagName: string): { component: string; props: Record<string, any> } {
-    // prefix/suffix 存实际字符串值，消费侧（component-library-resolver）用 !! 判断是否有前/后缀；
-    // showCount 存布尔值，供 Input 字数计数变体匹配。
-    const SCALAR_PROPS = ['type', 'size', 'danger', 'ghost', 'loading', 'disabled', 'shape', 'prefix', 'suffix', 'showCount'];
+    // prefix/suffix 存实际字符串值（或 true 表示有动态内容），消费侧用 !! 判断是否有内嵌前/后缀；
+    // addonBefore/addonAfter 存字符串值，供 Input 外置前/后置区域变体匹配；
+    // showCount 存布尔值，供 Input 字数计数变体匹配；
+    // enterButton 存字符串值（如 "搜索"）或 true，供 Input.Search 文字按钮维度匹配。
+    const SCALAR_PROPS = ['type', 'size', 'danger', 'ghost', 'loading', 'disabled', 'shape', 'prefix', 'suffix', 'showCount', 'addonBefore', 'addonAfter', 'enterButton'];
   const props: Record<string, any> = {};
 
   try {
@@ -408,8 +414,12 @@ function extractFigmaProps(node: any, tagName: string): { component: string; pro
           const expr = attr.value.expression;
           if (expr && expr.type === 'BooleanLiteral') {
             props[propName] = expr.value;
+          } else if ((propName === 'prefix' || propName === 'suffix') && expr) {
+            // prefix/suffix 传入 JSX 图标或变量时，无法静态求值，但记录为 true 表示有内嵌内容，
+            // 供 component-library-resolver 选择正确的"无图标=off"变体。
+            props[propName] = true;
           }
-          // 动态表达式（标识符、三元等）无法静态求值，跳过
+          // 其他动态表达式（标识符、三元等）无法静态求值，跳过
         }
       }
     }
