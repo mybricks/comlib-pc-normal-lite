@@ -20,6 +20,8 @@ export class DataSource {
   constructor() {
     const axiosLib = typeof window !== 'undefined' ? (window as any).axios : undefined;
     const vsCodeMessage = typeof window !== 'undefined' ? (window as any).webViewMessageApi : undefined;
+    // [TEMP] window['__IS_AICODE__'] 为过度兼容逻辑，应用上线后可删除
+    const requestProxy = window._sandbox_?.config?.componentRuntime?.requestProxy || window['__IS_AICODE__']?.requestProxy
 
     if (vsCodeMessage) {
       // VSCode 环境：不走 axios，直接通过 vsCodeMessage 代理请求
@@ -84,7 +86,7 @@ export class DataSource {
         delete: makeRequest('DELETE'),
         patch: makeRequest('PATCH'),
       };
-    } else if (window['__IS_AICODE__']) {
+    } else if (requestProxy) {
       const makeRequest = (method: string) => (url: string, dataOrConfig?: any, config?: any) => {
         const isBodyless = method === 'GET' || method === 'DELETE';
         const cfg = isBodyless ? (dataOrConfig ?? {}) : (config ?? {});
@@ -110,7 +112,7 @@ export class DataSource {
           }
         }
 
-        return window['__IS_AICODE__'].requestProxy
+        return requestProxy
           .request({
             method,
             url,
