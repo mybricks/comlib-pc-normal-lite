@@ -7,6 +7,7 @@ import createPublicValidator from './public/validator'
 import context from '../context'
 
 export type { ValidationError, LibraryValidator, LibraryMeta, LibraryResource, CodeValidationResult, ValidateContext } from './types'
+export type EffectiveLibrary = { name: string; version: string; usage: string }
 
 /**
  * 第一层：基础库，无论何时都需要加载。
@@ -147,13 +148,17 @@ function formatValidationErrors(errors: import('./types').ValidationError[]): st
 
 // ── Library Doc ────────────────────────────────────────────────────────────────
 
-function getLibraryDocDescription(library: { name: string; version: string; usage: string | ((params: { useStore: boolean }) => string) }) {
+function getLibraryUsage(library: { name: string; version: string; usage: string | ((params: { useStore: boolean }) => string); usagenext?: string }): string {
   // @ts-ignore [TODO] 临时usagenext
   const usage = library.name === 'mybricks' && window._sandbox_?.config?.componentRuntime?.entryFile ? library.usagenext : library.usage
   const reactivity = window._sandbox_?.config?.componentRuntime?.reactivity
   const useStore = reactivity?.type !== 'native'
 
-  return `---\nname: ${library.name}\nversion: ${library.version}\n---\n${typeof usage === 'function' ? usage({ useStore }) : usage}`
+  return typeof usage === 'function' ? usage({ useStore }) : (usage ?? '')
+}
+
+function getLibraryDocDescription(library: { name: string; version: string; usage: string | ((params: { useStore: boolean }) => string); usagenext?: string }) {
+  return `---\nname: ${library.name}\nversion: ${library.version}\n---\n${getLibraryUsage(library)}`
 }
 
 /** 获取指定内置库的文档描述（用于注入 AI 提示词） */
@@ -191,6 +196,22 @@ export function getAddonLibraryDocs(): string {
  */
 export function getEffectiveLibraryDocs(): string {
   return [getBaseLibraryDocs(), getAddonLibraryDocs()].filter(Boolean).join('\n\n')
+}
+
+/**
+ * 获取全部有效库的结构化文档（基础库 + 附加库），由 plugin 侧决定如何拼接提示词。
+ */
+export function getEffectiveLibraries(): EffectiveLibrary[] {
+  const projectLibs = context.projectConfig?.availableLibraries ?? []
+  const addonLibs = projectLibs.length > 0
+    ? projectLibs.map((lib) => toLibraryMeta(lib))
+    : PRESET_ADDON_LIBS
+
+  return [...BASE_LIBS, ...addonLibs].map((lib) => ({
+    name: lib.name,
+    version: lib.version ?? '',
+    usage: getLibraryUsage(lib),
+  }))
 }
 
 // ── 外部资源 ───────────────────────────────────────────────────────────────────

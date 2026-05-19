@@ -1,12 +1,11 @@
-import { getEffectiveLibraryDocs } from '../../availableLibraries';
+import { getEffectiveLibraries, type EffectiveLibrary } from '../../availableLibraries';
 import { FileSystem } from "../../../utils/ai-code/render/next-runtime/utils";
 import { extractMissingFiles } from "../../../utils/ai-code/render/next-runtime/utils"
 import type { LintMessage } from '../../eslint';
 
 export interface ProjectConfig {
   getFiles: () => any[];
-  getThemesContent: () => string;
-  getDesignerState?: () => { pages: string[]; popups: string[]; mode?: string } | undefined;
+  getDesignerState?: () => { pages: Array<{ name: string; visible: boolean }>; popups: Array<{ name: string; visible: boolean }>; mode?: string } | undefined;
   getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
   getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number; mode?: string }> | undefined;
   snapshotRuntimeMode?: string;
@@ -167,91 +166,8 @@ ${missingFilesEntries.map(([file, info], index) => {
     ].join('\n');
   }
 
-  async exportToMessage(): Promise<string> {
-    const { getFiles, getThemesContent, getCodeRules, getDesignRules } = this.config;
-    const promptSections = (window as any)._sandbox_?.config?.promptSections;
-    const developeGuide = promptSections?.developeGuide ?? {};
-    const designGuide = promptSections?.designGuide ?? {};
-    const documentGuide = promptSections?.documentGuide ?? {};
-
-    const codeRules = getCodeRules?.() ?? '';
-    const designRules = getDesignRules?.() ?? '';
-
-    const codeRulesSection = codeRules.trim()
-      ? `\n<code_rules>\n${codeRules.trim()}\n</code_rules>\n`
-      : '';
-
-    const designRulesSection = designRules.trim()
-      ? `\n<design_rules>\n${designRules.trim()}\n</design_rules>\n`
-      : '';
-
-    const bestPracticesContent = [
-      codeRulesSection.length ? '#### 代码规范：\n' + codeRulesSection : undefined,
-      developeGuide.assetsUsageSection ? '#### 图片和图标使用：\n' + developeGuide.assetsUsageSection : undefined,
-      developeGuide.examplesSection ? '#### 开发示例：\n' + developeGuide.examplesSection : undefined,
-    ].filter(Boolean).join('\n');
-
-    const bestDesignPracticesContent = [
-      designRulesSection.length  ? designRulesSection : undefined,
-    ].filter(Boolean).join('\n');
-
-    const architectureContent = developeGuide.architectureSection ?? '';
-
-    const themesContent = getThemesContent();
-    const designContent = [
-      designGuide.firstOfAll,
-      themesContent,
-    ].filter(Boolean).join('\n');
-
-    const libraryDocsContent = getEffectiveLibraryDocs();
-    const fileSectionParts: string[] = [];
-
-    fileSectionParts.push('\n## 源代码\n');
-    fileSectionParts.push('包含项目中的各代码文件。\n');
-
-    const files = getFiles();
-    if (files.length === 0) {
-      fileSectionParts.push('这是一个空项目，没有任何代码文件。\n');
-    } else {
-      files.forEach((file) => {
-        const { fileName, source } = file;
-        const content = decodeURIComponent(source);
-        const suffix = fileName.split('.').pop() ?? '';
-        fileSectionParts.push(`\n#### ${fileName}\n\n\`\`\`${suffix}\n${content}\n\`\`\`\n`);
-      });
-    }
-
-    return [
-      '\n# 开发指南\n',
-      developeGuide.firstOfAll,
-      '\n## 项目架构\n',
-      architectureContent,
-      '\n## 环境变量\n',
-      [
-        '以下是系统注入的环境变量，可在组件代码中通过 `process.env.<变量名>` 访问，**禁止自行声明或覆盖这些变量**：\n',
-        '| 变量名 | 类型 | 设计态值 | 运行态值 | 说明 |',
-        '|--------|------|----------|----------|------|',
-        '| `process.env.POPUP_VISIBLE` | `boolean` | `true` | `false` | 控制浮层（弹窗/抽屉等）的默认显示状态。设计态下为 `true` 使浮层保持展开，方便设计者选中浮层内元素进行编辑；运行态下为 `false`，由业务逻辑控制显隐。**浮层组件必须将此变量与业务状态做 `||` 合并使用**，例如：`visible={process.env.POPUP_VISIBLE \\|\\| store.modalVisible}` |',
-        '| `process.env.POPUP_NODE` | `HTMLElement` | 设计器画布容器节点 | 页面容器节点 | 浮层的挂载容器。设计、运行态下均指向设计器画布，确保浮层渲染在画布内部。例如一些三方库的指定挂载节点：`getContainer={() => process.env.POPUP_NODE}` |',
-      ].join('\n') + '\n',
-      '\n## 最佳实践\n',
-      bestPracticesContent,
-      developeGuide.end,
-      '\n## 设计规范\n',
-      designContent,
-      bestDesignPracticesContent,
-      ...(documentGuide && (documentGuide.firstOfAll || documentGuide.requirementGuide) ? [
-        '\n## 文档规范\n',
-        '<文档规范>\n',
-        documentGuide.firstOfAll,
-        '\n',
-        documentGuide.requirementGuide,
-        '\n</文档规范>\n',
-      ] : []),
-      '\n## 允许使用的类库\n',
-      '\n---\n\n',
-      libraryDocsContent,
-    ].join('');
+  getEffectiveLibraries(): EffectiveLibrary[] {
+    return getEffectiveLibraries();
   }
 
   async exportResourceCode(): Promise<string> {

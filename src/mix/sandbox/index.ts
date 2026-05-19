@@ -100,8 +100,30 @@ function buildProject(comId: string) {
 
   return createProject({
     getFiles: () => aiComParams?.data?.files ?? [],
-    getThemesContent: () => "", // themesContent
-    getDesignerState: () => aiComParams?.data?._designerState,
+    getDesignerState: () => {
+      const canvasList = context.getCanvasList() as HTMLDivElement[]
+      const pages: Array<{ name: string; visible: boolean }> = []
+      const popups: Array<{ name: string; visible: boolean }> = []
+      canvasList.forEach((div: HTMLDivElement) => {
+        const widgetName = div.getAttribute('data-widget-name')
+        const zoneKind = div.getAttribute('data-zone-kind')
+        if (zoneKind === 'page') {
+          pages.push({ name: widgetName || "页面", visible: true })
+        } else if (zoneKind === 'popup') {
+          // 检查弹窗的所有子元素是否可见：若全部不可见，则认为弹窗未展示
+          const children = Array.from(div.children) as Element[]
+          const visible = children.length > 0 && children.some((child) => {
+            return checkVisibility(child)
+          })
+          popups.push({ name: widgetName || '弹窗', visible })
+        }
+      })
+
+      return {
+        pages,
+        popups
+      }
+    },
     getFileSystem: () => {
       // 获取文件状态，vibing状态下，有部分文件可能还没编写完成
       return context.fileSystemMap[comId]
@@ -312,12 +334,6 @@ export async function registerSandbox(comId: string): Promise<void> {
   const projectRef = getProjectRef(comId);
   const { history } = connectToAI(comId, {
     designer: {
-      async exportToMessage(): Promise<string> {
-        const project = projectRef.current;
-        if (!project) return '';
-        return project.exportToMessage();
-      },
-
       // ── 文件系统 ──────────────────────────────────────────────────────────
 
       async getFiles() {
@@ -365,6 +381,12 @@ export async function registerSandbox(comId: string): Promise<void> {
         const project = projectRef.current;
         if (!project) return '';
         return project.exportResourceCode();
+      },
+
+      getEffectiveLibraries() {
+        const project = projectRef.current;
+        if (!project) return [];
+        return project.getEffectiveLibraries();
       },
 
       // ── 设计器状态 ────────────────────────────────────────────────────────
