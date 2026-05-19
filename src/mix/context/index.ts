@@ -305,8 +305,6 @@ class Context {
               return pre
             }, {})
             const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
-            console.log('[transformJsDoc]', transformJsDoc)
-            console.log('[转换]', notifyChangedValue)
             aiCom?.actions?.notifyChanged?.(fileName, 'update', notifyChangedValue);
             updateFileContent({
               fileName,
