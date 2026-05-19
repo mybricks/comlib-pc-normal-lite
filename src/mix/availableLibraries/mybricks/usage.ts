@@ -36,7 +36,7 @@ ${useStore ? '  1. 该浮层类组件是一个响应式浮层类组件，浮层�
 在代码中使用浮层类组件时必须使用环境变量，这样设计者才能选中浮层内部的元素进行编辑
   - 使用提供的环境变量 \`process.env.POPUP_VISIBLE\` 将浮层默认设置为打开状态
   - 使用提供的环境变量 \`process.env.POPUP_NODE\` 将浮层渲染到指定的容器内
-\`\`\`jsx
+\`\`\`tsx
 import { popupRef } from 'mybricks'
 import store from './store';
 import { Modal } from 'lib'
@@ -62,7 +62,7 @@ const ConfirmModal = popupRef(() => {
 2. 对于未提供接口信息的，思考哪些应该属于接口信息，用静态数据来return返回，为以后开发留下坑位，保障运行态也能看见数据；
 
 
-\`\`\`js DataSource 说明
+\`\`\`ts DataSource 说明
 // DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
 class DataSource {
   constructor() { /* 对所有方法自动 Proxy 包装 */ }
@@ -70,7 +70,7 @@ class DataSource {
 \`\`\`
 
 dataSource.ts 文件示例：
-\`\`\`js
+\`\`\`ts
 import { DataSource } from 'mybricks'
 
 class MyDatasource extends DataSource {
@@ -105,7 +105,7 @@ export default new MyDatasource()
 1. getConfig 返回的是静态数据，设计态可以展示，无需spy；
 2. getUserById 在设计态无法请求真实接口，所以需要mock一个接口返回，保证设计态渲染；
 
-\`\`\`js
+\`\`\`ts
 import { describe, spyOn } from 'mybricks/testing'
 import dataSource from './dataSource'
 
@@ -144,7 +144,7 @@ describe('无权限测试', () => {
 ### 路由使用
 对于路由，我们提供 \`Routes\`、\`Route\`、\`useNavigate\`、\`useLocation\`、\`useParams\` 实现。
 
-\`\`\`jsx
+\`\`\`tsx
 import { comRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
 import { Button } from 'xy-ui';
 import store from './store';
@@ -206,17 +206,17 @@ export default appRef(() => {
 | \`logger.error(msg, ...args)\` | 错误日志 | 异常和错误信息 |
 
 #### 使用示例
-\`\`\`js
+\`\`\`ts
 import { logger } from 'mybricks';
 logger.info('这是一条日志');
 \`\`\`
 
 ${useStore ? `### 数据响应式
-基于 store.js 的响应式编程，我们提供了 \`makeAutoObservable\` 状态管理工具。
+基于 store.ts 的响应式编程，我们提供了 \`makeAutoObservable\` 状态管理工具。
 
 #### 使用示例
 构造函数 constructor 内部必须调用 makeAutoObservable 方法，并传入 this 作为参数，自动绑定当前实例的所有属性为可观察状态，所有方法为动作方法，严格遵循状态管理规范，保证响应式逻辑生效；
-\`\`\`js
+\`\`\`ts
 import { logger, makeAutoObservable } from 'mybricks';
 
 class Store {
