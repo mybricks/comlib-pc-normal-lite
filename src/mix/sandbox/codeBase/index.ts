@@ -102,12 +102,30 @@ export class Project {
       canvasStatus = '当前代码暂无页面或弹窗组件，画布尚无可展示内容。';
     } else {
       const allZones = [
-        ...pageRefNames.map((name) => ({ name, kind: '页面' })),
-        ...popupRefNames.map((name) => ({ name, kind: '弹窗/浮层' })),
+        ...pageRefNames.map(({ name, visible }) => ({ name, kind: '页面', visible })),
+        ...popupRefNames.map(({ name, visible }) => ({
+          name,
+          kind: '弹窗/浮层',
+          visible,
+        })),
       ];
-      const zonesList = allZones.map((z, i) => `  ${i + 1}. ${z.name}（${z.kind}）`).join('\n');
+      let unvisibleCount = 0
+      const zonesList = allZones.map((z, i) => {
+        if (z.kind === '弹窗/浮层') {
+          if (!z.visible) {
+            unvisibleCount = unvisibleCount + 1
+          }
+          const visibilityNote = z.visible
+            ? '当前已展示（可见）'
+            : '当前未展示（不可见，弹窗/浮层可能尚未被触发或已关闭）';
+          return `  ${i + 1}. ${z.name}（${z.kind}，${visibilityNote}）`;
+        }
+        return `  ${i + 1}. ${z.name}（${z.kind}）`;
+      }).join('\n');
       canvasStatus = `画布从左到右共渲染了 ${allZones.length} 个画布（页面 ${pageRefNames.length} 个，弹窗/浮层 ${popupRefNames.length} 个），依次为：
-${zonesList}`;
+${zonesList}${unvisibleCount ? `
+当前有 ${unvisibleCount} 个弹窗/浮层不可见，需要检查代码并修复
+  ` : ''}`;
     }
 
     const curStatus = `

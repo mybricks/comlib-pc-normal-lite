@@ -376,6 +376,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 const firstWidget = containerRef.current.querySelector('[data-widget-name]');
                 widgetName = firstWidget?.getAttribute('data-widget-name');
               }
+              // 将 widgetName 直接写到区域容器上，这样 MutationObserver 无需再深入子树找 data-widget-name
+              if (widgetName) {
+                containerRef.current.setAttribute("data-widget-name", widgetName);
+              }
               if (mdCompiled) {
                 const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
                 const title = docs?.title;
@@ -799,6 +803,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             data-zone-kind="popup"
             data-desn-page={"/"}
             data-zone-title='弹窗'
+            data-widget-name={params.widgetName}
             style={{
               ...style,
               display: 'inline-block',
