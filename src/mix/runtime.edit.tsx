@@ -33,8 +33,8 @@ const dataCompatible = (props) => {
       }
     }
 
-    if (!data.version || data.version < 5) {
-      data.version = 5
+    if (!data.version || data.version < 6) {
+      data.version = 6
       const readme = data.files.find((file) => file.fileName === "README.md")
       if (readme?.source) {
         context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
