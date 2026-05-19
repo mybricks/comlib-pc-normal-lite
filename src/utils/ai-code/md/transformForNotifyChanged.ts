@@ -108,8 +108,8 @@ export type NewSummaryItem = {
   title: string
   summary: string
   type: string
-  /** store: classname → { storeFilePath → { fieldName → { desc } } } */
-  store?: Record<string, Record<string, Record<string, { desc?: string }>>>
+  /** state: classname → { fieldName → { desc } } */
+  state?: Record<string, Record<string, { desc?: string }>>
   /** events: classname → { eventName → { title, mermaid } } */
   events?: Record<string, Record<string, { title?: string; mermaid?: string; relations?: Record<string, any> }>>
   /** datasource: classname → { apiName → { desc } } */
@@ -124,7 +124,7 @@ export type NewSummaryData = Record<string, NewSummaryItem>
  *
  * 与旧版的差异：
  * - 新版数据为扁平结构，无页面节点/children 概念
- * - store 结构改为 classname → storeFilePath → fieldName → { desc }
+ * - store 已变更为 state，结构改为 classname → fieldName → { desc }（去除了 storeFilePath 层级）
  * - events 结构改为 classname → eventName → { title, mermaid }（不再是 handler 数组）
  * - 通过传入文件名 (filename) 构建 refSelector 前缀，确保全局唯一定位
  *
@@ -137,7 +137,7 @@ const transformNewFormatForNotifyChanged = (
 ) => {
   const events: any[] = []
   const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }> = []
-  const store: Array<{ refSelector: string; field: string; description: string }> = []
+  const state: Array<{ refSelector: string; field: string; description: string }> = []
   const docs: Array<{ refSelector: string; name: string; title: string; summary: string; type: string }> = []
 
   const fileSelector = `[data-zone-filename="${filename}"]`
@@ -189,21 +189,19 @@ const transformNewFormatForNotifyChanged = (
       })
     }
 
-    // store
-    if (info.store) {
-      Object.entries(info.store).forEach(([classname, storeFiles]) => {
+    // state
+    if (info.state) {
+      Object.entries(info.state).forEach(([classname, fields]) => {
         const classSelector = `[data-zone-classnames*="${classname}"]`
         const refSelector = classname === 'root'
           ? widgetSelector
           : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
 
-        Object.values(storeFiles).forEach((fields) => {
-          Object.entries(fields).forEach(([field, { desc }]) => {
-            store.push({
-              field,
-              refSelector,
-              description: desc || ''
-            })
+        Object.entries(fields).forEach(([field, { desc }]) => {
+          state.push({
+            field,
+            refSelector,
+            description: desc || ''
           })
         })
       })
@@ -224,7 +222,8 @@ const transformNewFormatForNotifyChanged = (
   return {
     events,
     services,
-    store,
+    state,
+    store: state,
     docs
   }
 }

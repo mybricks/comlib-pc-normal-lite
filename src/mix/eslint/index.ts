@@ -7,23 +7,23 @@
  *
  * 架构：
  * - Pass 1：扫描 JSX 文件，提取 comRef/popupRef/appRef 节点信息
+ * - Pass 1.5：基于 @mybricks JSDoc 注释校验（不依赖 README.md）
  * - Pass 2：按文件类型分别校验
  *   - JS/JSX 文件 → Babel AST 规则（no-console, no-window-location, require-datasource-async）
- *   - README.md → 格式校验 + 跨文件节点一致性校验（使用 context.ts 编译时产生的 ParsedSummary）
  *   - requirement.md → 文件存在性由 verify() 处理
- * - 文件存在性校验：检查 README.md / requirement.md 是否在文件列表中
+ * - 文件存在性校验：检查 requirement.md 是否在文件列表中
+ *
+ * 注意：所有 comRef/popupRef/appRef 节点均通过 @mybricks JSDoc 注释描述，不再依赖 README.md。
  */
 
 import type { LintMessage } from './types';
-import type { ParsedSummary } from '../../utils/ai-code/md';
 import { createNoConsoleRule, RULE_ID as NO_CONSOLE_RULE_ID } from './rules/no-console';
 import { createNoWindowLocationRule, RULE_ID as NO_WINDOW_LOC_RULE_ID } from './rules/no-window-location';
 import { createRequireDatasourceAsyncRule, RULE_ID as DS_ASYNC_RULE_ID } from './rules/require-datasource-async';
-import { createExtractComRefsRule, type ComRefInfo, StoreDatasourceMap } from './rules/extract-comrefs';
-import { checkReadme, RULE_ID as README_RULE_ID } from './rules/readme';
+import { createExtractComRefsRule, type ComRefInfo } from './rules/extract-comrefs';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
 import { checkJSDoc, RULE_ID as JSDOC_RULE_ID } from './rules/jsdoc';
-import { getLowcodeViewStoreDatasource, refreshLowcodeViewStoreDatasource } from './monaco-language-service';
+import { getLowcodeViewStoreDatasource } from './monaco-language-service';
 import type { MybricksJSDoc } from '../../utils/ai-code/plugins/utils/parseMybricksJSDoc';
 import collectJsDocPlugin from '../../utils/ai-code/plugins/collectJsDocPlugin';
 export { getLowcodeViewStoreDatasource };
@@ -35,7 +35,6 @@ export const RULE_IDS = {
   NO_CONSOLE: NO_CONSOLE_RULE_ID,
   NO_WINDOW_LOCATION: NO_WINDOW_LOC_RULE_ID,
   REQUIRE_DATASOURCE_ASYNC: DS_ASYNC_RULE_ID,
-  README_CHECK: README_RULE_ID,
   REQUIREMENT_CHECK: REQ_RULE_ID,
   JSDOC_CHECK: JSDOC_RULE_ID,
 } as const;
@@ -189,32 +188,6 @@ function extractJsDocs(code: string, fileName: string): Map<string, MybricksJSDo
   return jsdocMap;
 }
 
-function enrichDatasourceFromStoreCalls(comRefInfos: ComRefInfo[], storeDatasource: StoreDatasourceMap): ComRefInfo[] {
-  return comRefInfos.map(info => {
-    const datasourceSets = Object.entries(info.datasource).reduce<Record<string, Set<string>>>((acc, [className, apis]) => {
-      acc[className] = new Set(apis);
-      return acc;
-    }, {});
-
-    for (const [className, methods] of Object.entries(info.storeCalls)) {
-      for (const methodName of methods) {
-        for (const api of storeDatasource[methodName] ?? []) {
-          if (!datasourceSets[className]) datasourceSets[className] = new Set<string>();
-          datasourceSets[className].add(api);
-        }
-      }
-    }
-
-    return {
-      ...info,
-      datasource: Object.entries(datasourceSets).reduce<Record<string, string[]>>((acc, [k, v]) => {
-        acc[k] = Array.from(v);
-        return acc;
-      }, {}),
-    };
-  });
-}
-
 /**
  * 判断文件名是否为 JSX/JS 文件。
  */
@@ -231,7 +204,6 @@ function isJsxFile(fileName: string): boolean {
  * - 文件存在性校验：README.md / requirement.md 必须存在
  *
  * @param files 文件数组，每项包含 fileName、source（encodeURIComponent 编码）以及可选的 compiled
- *              对于 README.md，compiled 为 context.ts 写入时 parsemd() 产生的 ParsedSummary
  * @returns     所有文件的 LintMessage[] 聚合，按文件顺序排列
  */
 export async function verify(
@@ -261,19 +233,6 @@ export async function verify(
   const fileNames = new Set(decodedFiles.map(f => f.fileName));
 
   // ─── 文件存在性校验 ───
-  const readmeSeverity = getRuleSeverity(rules, README_RULE_ID, 2);
-  if (readmeSeverity !== -1 && !fileNames.has('README.md')) {
-    results.push({
-      ruleId: README_RULE_ID,
-      severity: readmeSeverity,
-      message: `[文档校验] 项目缺少 README.md 文件，必须包含此文件。`,
-      line: 1,
-      column: 0,
-      fileName: 'README.md',
-      nodeType: 'document',
-    });
-  }
-
   const reqSeverity = getRuleSeverity(rules, REQ_RULE_ID, 2);
   if (reqSeverity !== -1 && !fileNames.has('requirement.md')) {
     results.push({
@@ -290,7 +249,7 @@ export async function verify(
   // ─── Pass 1：提取 comRef/popupRef/appRef 节点信息 ───
   const jsxFiles = decodedFiles.filter(f => isJsxFile(f.fileName));
 
-  // 同时采集 JSDoc（与 comRef 共用一轮 Babel transform，避免重复解析）
+  // 采集 JSDoc 注释（所有 comRef/popupRef/appRef 节点均必须包含 @mybricks JSDoc）
   const jsdocSeverity = getRuleSeverity(rules, JSDOC_RULE_ID, 2);
   const jsdocMapByFile = new Map<string, Map<string, MybricksJSDoc>>();
 
@@ -308,15 +267,16 @@ export async function verify(
   }
 
   let allComRefInfos: ComRefInfo[] = Array.from(perFileComRefInfos.values()).flat();
-  const storeDatasource = await refreshLowcodeViewStoreDatasource();
-  allComRefInfos = enrichDatasourceFromStoreCalls(allComRefInfos, storeDatasource);
 
   // ─── Pass 1.5：JSDoc 校验（基于组件侧注释，不依赖 README.md）───
+  // 所有 comRef/popupRef/appRef 节点均必须包含 @mybricks JSDoc 注释
   if (jsdocSeverity !== -1) {
-    for (const [fileName, jsdocMap] of jsdocMapByFile) {
-      // 使用 Pass 1 已解析好的 comRefInfos（含 storeDatasource 补全）
+    for (const [fileName, comRefInfos] of perFileComRefInfos) {
+      if (!comRefInfos.length) continue;
+      // 取该文件的 jsdocMap（若文件没有任何 JSDoc，传入空 Map，由 checkJSDoc 反向校验报错）
+      const jsdocMap = jsdocMapByFile.get(fileName) ?? new Map<string, MybricksJSDoc>();
       const fileComRefInfos = allComRefInfos.filter(
-        info => perFileComRefInfos.get(fileName)?.some(r => r.name === info.name) ?? false,
+        info => comRefInfos.some(r => r.name === info.name),
       );
       const msgs = checkJSDoc(jsdocMap, fileComRefInfos, fileName)
         .map(msg => ({ ...msg, severity: jsdocSeverity }));
@@ -326,26 +286,11 @@ export async function verify(
 
   // ─── Pass 2：按文件类型分别校验 ───
   for (const file of decodedFiles) {
-    const { fileName, code, compiled } = file;
+    const { fileName, code } = file;
 
     // JS/JSX 文件 → Babel AST 规则
     if (isJsxFile(fileName)) {
       results.push(...verifyFile(code, fileName));
-      continue;
-    }
-
-    // README.md → 格式校验 + 跨文件节点一致性校验
-    if (fileName === 'README.md') {
-      if (readmeSeverity === -1) continue;
-      let parsedReadme: ParsedSummary | null = null;
-      if (compiled && typeof compiled === 'object' && !Array.isArray(compiled)) {
-        parsedReadme = compiled as ParsedSummary;
-      }
-      if (parsedReadme) {
-        const msgs = checkReadme(parsedReadme, fileName, allComRefInfos)
-          .map(msg => ({ ...msg, severity: readmeSeverity }));
-        results.push(...msgs);
-      }
       continue;
     }
 

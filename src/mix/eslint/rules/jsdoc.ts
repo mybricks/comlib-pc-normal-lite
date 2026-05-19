@@ -4,6 +4,8 @@ import type { MybricksJSDoc } from '../../../utils/ai-code/plugins/utils/parseMy
 
 export const RULE_ID = 'jsdoc-check';
 
+const ENABLE_LOG = false
+
 function createMessage(message: string, nodeType = 'list'): LintMessage {
   return {
     ruleId: RULE_ID,
@@ -39,6 +41,11 @@ function checkEvents(
 ): void {
   const jsdocEvents = jsdoc.events ?? {};
 
+  // ── [DEBUG] 打印原始输入 ──────────────────────────────────────────────────
+  ENABLE_LOG && console.log(`\n[checkEvents] ▶ 开始校验组件: ${componentName}`);
+  ENABLE_LOG && console.log(`[checkEvents][JSDoc来源] jsdoc.events 原始结构:`, JSON.stringify(jsdocEvents, null, 2));
+  ENABLE_LOG && console.log(`[checkEvents][AST来源]  comRefInfo.events 原始结构:`, JSON.stringify(comRefInfo.events, null, 2));
+
   // 收集 JSDoc 中已声明的所有事件 handler（不区分 className）
   const documentedHandlers = new Set<string>();
   for (const handlers of Object.values(jsdocEvents)) {
@@ -49,13 +56,27 @@ function checkEvents(
     }
   }
 
+  // ── [DEBUG] 打印展平后的 JSDoc handler 集合 ───────────────────────────────
+  ENABLE_LOG && console.log(`[checkEvents][JSDoc来源] 展平后已声明的 handlers（不区分 className）:`, Array.from(documentedHandlers));
+
   // 收集源码中实际使用的所有事件 handler（不区分 className），报告缺失项
   const missingEntries: { className: string; handlers: string[] }[] = [];
   for (const [className, handlers] of Object.entries(comRefInfo.events)) {
-    const missing = handlers.filter(h => !documentedHandlers.has(h));
+    // ── [DEBUG] 逐 className 对比 ─────────────────────────────────────────
+    ENABLE_LOG && console.log(`[checkEvents][对比] className="${className}" → AST中的handlers: [${handlers.join(', ')}]`);
+    const missing = handlers.filter(h => {
+      const inJSDoc = documentedHandlers.has(h);
+      ENABLE_LOG && console.log(`[checkEvents][对比]   handler="${h}" → JSDoc中${inJSDoc ? '已声明 ✓' : '缺失 ✗'}`);
+      return !inJSDoc;
+    });
     if (missing.length > 0) {
+      ENABLE_LOG && console.log(`[checkEvents][结果] className="${className}" 缺失handlers: [${missing.join(', ')}]`);
       missingEntries.push({ className, handlers: missing });
     }
+  }
+
+  if (missingEntries.length === 0) {
+    ENABLE_LOG && console.log(`[checkEvents][结果] 组件 ${componentName} events 校验通过，无缺失项 ✓`);
   }
 
   if (missingEntries.length > 0) {
@@ -120,77 +141,58 @@ function checkDatasource(
   }
 }
 
-// ─── store 校验 ───────────────────────────────────────────────────────────────
+// ─── state 校验 ───────────────────────────────────────────────────────────────
 
 /**
- * 校验 JSDoc store 与源码中实际消费的 store 字段是否一致。
+ * 校验 JSDoc state 与源码中实际使用的 React state 变量是否一致。
  *
- * JSDoc store 格式（来自 MybricksJSDoc）：
- *   store:
- *     userNameInput:
- *       /store.js:
- *         userName:
- *           desc: 用户名输入值
+ * JSDoc state 格式（来自 MybricksJSDoc）：
+ *   state:
+ *     usernameInput:
+ *       username:
+ *         desc: 用户名输入值
  *
- * ComRefInfo store 格式（来自源码 AST 分析）：
- *   { userNameInput: ['store.userName', ...], ... }
+ * ComRefInfo state 格式（来自源码 AST 分析，extract-comrefs）：
+ *   { usernameInput: ['username', 'password'], ... }
  *
- * 校验方向：源码中消费了但 JSDoc 未声明的字段 → 报错。
+ * state 变量来源：源码中通过 useState / useReducer 声明的解构变量。
+ * 关联方式：state 变量在 JSX 表达式容器中被引用时，关联到最近的父级 className。
+ *
+ * 校验方向：源码中使用了但 JSDoc 未声明的 state 变量 → 报错。
  */
-function checkStore(
+function checkState(
   componentName: string,
   jsdoc: MybricksJSDoc,
   comRefInfo: ComRefInfo,
   messages: LintMessage[],
 ): void {
-  const jsdocStore = jsdoc.store ?? {};
+  const jsdocState = jsdoc.state ?? {};
 
-  // 收集 JSDoc 中已声明的所有 store 字段（展平所有层级中的叶子 key，不含 /store.js 这层中间 key）
-  const documentedFields = new Set<string>();
-
-  function collectLeafKeys(obj: Record<string, any>, depth = 0): void {
-    for (const [key, value] of Object.entries(obj)) {
-      if (value && typeof value === 'object' && Object.keys(value).length > 0) {
-        if (depth === 0) {
-          // 第 0 层：className（如 userNameInput）
-          collectLeafKeys(value, depth + 1);
-        } else if (depth === 1) {
-          // 第 1 层：store 文件路径（如 /store.js），继续展开
-          collectLeafKeys(value, depth + 1);
-        } else {
-          // 第 2 层：字段名（如 userName）
-          documentedFields.add(key);
-          collectLeafKeys(value, depth + 1);
-        }
-      } else if (depth >= 2) {
-        documentedFields.add(key);
+  // 收集 JSDoc 中已声明的所有 state 变量名（不区分 className）
+  const documentedStateVars = new Set<string>();
+  for (const stateVars of Object.values(jsdocState)) {
+    if (stateVars && typeof stateVars === 'object') {
+      for (const varName of Object.keys(stateVars)) {
+        documentedStateVars.add(varName);
       }
     }
   }
 
-  collectLeafKeys(jsdocStore);
-
-  // 收集源码中实际消费的所有 store 字段（不区分 className）
-  const expectedFields = new Set<string>();
-  for (const fields of Object.values(comRefInfo.store)) {
-    for (const field of fields) {
-      // field 可能是 "store.userName"，取最后一段
-      const parts = field.split('.');
-      const leaf = parts[parts.length - 1];
-      if (leaf) expectedFields.add(leaf);
-      expectedFields.add(field);
+  // 收集源码中实际使用的所有 state 变量（不区分 className），报告缺失项
+  const missingEntries: { className: string; vars: string[] }[] = [];
+  for (const [className, vars] of Object.entries(comRefInfo.state)) {
+    const missing = vars.filter(v => !documentedStateVars.has(v));
+    if (missing.length > 0) {
+      missingEntries.push({ className, vars: missing });
     }
   }
 
-  const missingFields = Array.from(expectedFields).filter(
-    f => !documentedFields.has(f),
-  );
-
-  if (missingFields.length > 0) {
+  if (missingEntries.length > 0) {
+    const details = missingEntries
+      .map(({ className, vars }) => `.${className} 节点使用了 ${vars.join(', ')}`)
+      .join('；');
     messages.push(
-      createMessage(
-        `组件 ${componentName} 源码中对 store 的 ${missingFields.join(', ')} 字段进行了消费，未在 JSDoc 的 store 中声明。`,
-      ),
+      createMessage(`组件 ${componentName} 源码在 ${details}（来自 useState/useReducer），未在 JSDoc 的 state 中声明。`),
     );
   }
 }
@@ -222,11 +224,11 @@ function checkRequiredFields(
  * JSDoc 规范校验规则。
  *
  * 不依赖 README.md，直接通过组件侧注释（@mybricks JSDoc）与 AST 分析结果对比，
- * 校验 events / datasource / store 声明是否完整。
+ * 校验 events / datasource / state 声明是否完整。
  *
  * 涵盖两个层面：
  * 1. 格式校验：JSDoc 必填字段（title / summary / type）
- * 2. 跨文件节点一致性校验：JSDoc 中的 events/datasource/store 与源码实际使用对比
+ * 2. 跨文件节点一致性校验：JSDoc 中的 events/datasource/state 与源码实际使用对比
  *
  * @param jsdocMap    由 collectJsDocPlugin 采集的 JSDoc Map，key 为组件变量名
  * @param comRefInfos 从 JSX 文件提取的节点信息列表（来自 extract-comrefs）
@@ -240,9 +242,6 @@ export function checkJSDoc(
 ): LintMessage[] {
   const messages: LintMessage[] = [];
 
-  // 如果没有任何 JSDoc，直接跳过（不强制要求所有组件都写 JSDoc）
-  if (!jsdocMap.size) return messages;
-
   // 建立 comRefInfo 的快速查找表：name → ComRefInfo
   const comRefMap = new Map<string, ComRefInfo>();
   for (const info of comRefInfos) {
@@ -254,13 +253,13 @@ export function checkJSDoc(
     // 必填字段校验
     checkRequiredFields(componentName, jsdoc, messages);
 
-    // 只有当源码中存在对应组件时，才做 events/datasource/store 的一致性校验
+    // 只有当源码中存在对应组件时，才做 events/datasource/state 的一致性校验
     const comRefInfo = comRefMap.get(componentName);
     if (!comRefInfo) continue;
 
     checkEvents(componentName, jsdoc, comRefInfo, messages);
     checkDatasource(componentName, jsdoc, comRefInfo, messages);
-    checkStore(componentName, jsdoc, comRefInfo, messages);
+    checkState(componentName, jsdoc, comRefInfo, messages);
   }
 
   // 反向校验：源码中有组件，但没有对应 JSDoc
@@ -276,8 +275,8 @@ export function checkJSDoc(
     }
   }
 
-  console.log("[checkJSDoc:messages]", messages)
-  console.log('[checkJSDoc:filename]', fileName)
+  ENABLE_LOG && console.log("[checkJSDoc:messages]", messages)
+  ENABLE_LOG && console.log('[checkJSDoc:filename]', fileName)
 
   return messages.map(msg => ({ ...msg, fileName }));
 }

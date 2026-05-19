@@ -31,15 +31,11 @@ export type ComRefInfo = {
   events: Record<string, string[]>;
   /** 组件内 datasource 调用：className/root -> api 名 */
   datasource: Record<string, string[]>;
-  /** 组件内 JSX 消费 store 数据：className/root -> 字段路径 */
-  store: Record<string, string[]>;
-  /** 组件内触发的 store 方法：className/root -> 方法名 */
-  storeCalls: Record<string, string[]>;
+  /** 组件内 React state 使用：className/root -> state 变量名（来自 useState/useReducer） */
+  state: Record<string, string[]>;
 };
 
-export type StoreDatasourceMap = Record<string, string[]>;
-
-type ReadmeSignals = Pick<ComRefInfo, 'classNames' | 'events' | 'datasource' | 'store' | 'storeCalls'>;
+type ReadmeSignals = Pick<ComRefInfo, 'classNames' | 'events' | 'datasource' | 'state'>;
 
 function addToRecord(record: Record<string, Set<string>>, key: string, value: string) {
   if (!key || !value) return;
@@ -135,20 +131,67 @@ function createEmptySignals(): {
   classNames: Set<string>;
   events: Record<string, Set<string>>;
   datasource: Record<string, Set<string>>;
-  store: Record<string, Set<string>>;
-  storeCalls: Record<string, Set<string>>;
+  state: Record<string, Set<string>>;
 } {
   return {
     classNames: new Set<string>(),
     events: {},
     datasource: {},
-    store: {},
-    storeCalls: {},
+    state: {},
   };
+}
+
+/**
+ * 从 useState/useReducer 调用中提取 state 变量名集合。
+ * 支持以下模式：
+ *   const [value, setValue] = useState(...);
+ *   const [state, dispatch] = useReducer(...);
+ */
+function collectStateVariableNames(rootPath: any): Set<string> {
+  const stateVarNames = new Set<string>();
+
+  rootPath.traverse({
+    VariableDeclarator(path: any) {
+      const init = path.node?.init;
+      if (!init) return;
+
+      // 识别 useState(...) 或 useReducer(...) 调用
+      const isHookCall = (
+        (init.type === 'CallExpression' &&
+          init.callee?.type === 'Identifier' &&
+          /^use(State|Reducer)$/.test(init.callee.name)) ||
+        // 支持 React.useState(...) 形式
+        (init.type === 'CallExpression' &&
+          init.callee?.type === 'MemberExpression' &&
+          init.callee.object?.name === 'React' &&
+          /^use(State|Reducer)$/.test(init.callee.property?.name ?? ''))
+      );
+
+      if (!isHookCall) return;
+
+      // 模式：const [value, setValue] = useState(...)
+      if (path.node.id?.type === 'ArrayPattern') {
+        const elements = path.node.id.elements ?? [];
+        if (elements[0]?.type === 'Identifier') {
+          stateVarNames.add(elements[0].name);
+        }
+      }
+
+      // 模式：const state = useState(...)（少见，但兼容）
+      if (path.node.id?.type === 'Identifier') {
+        stateVarNames.add(path.node.id.name);
+      }
+    },
+  });
+
+  return stateVarNames;
 }
 
 function collectReadmeSignals(rootPath: any): ReadmeSignals {
   const signals = createEmptySignals();
+
+  // 先收集所有 state 变量名（来自 useState/useReducer）
+  const stateVarNames = collectStateVariableNames(rootPath);
 
   rootPath.traverse({
     JSXElement(path: any) {
@@ -180,30 +223,30 @@ function collectReadmeSignals(rootPath: any): ReadmeSignals {
       if (/datasource/i.test(root)) {
         addToRecord(signals.datasource, className, api);
       }
-      if (root === 'store') {
-        addToRecord(signals.storeCalls, className, api);
-      }
     },
 
-    MemberExpression(path: any) {
-      if (isNestedMemberPrefix(path)) return;
-      if (isCalleeMember(path)) return;
-      if (isInsideEventAttribute(path)) return;
-
-      const { root, path: memberPath } = getMemberChain(path.node);
-      if (root !== 'store' || memberPath.length === 0) return;
-
+    // 识别 JSX 属性值或 JSX 子表达式中对 state 变量的引用
+    JSXExpressionContainer(path: any) {
+      if (stateVarNames.size === 0) return;
       const className = getFirstClassNameForPath(path) ?? 'root';
-      addToRecord(signals.store, className, memberPath.join('.'));
+
+      // 收集该表达式容器内所有 Identifier 引用
+      path.traverse({
+        Identifier(innerPath: any) {
+          if (stateVarNames.has(innerPath.node.name)) {
+            addToRecord(signals.state, className, innerPath.node.name);
+          }
+        },
+      });
     },
+
   });
 
   return {
     classNames: Array.from(signals.classNames),
     events: toArrayRecord(signals.events),
     datasource: toArrayRecord(signals.datasource),
-    store: toArrayRecord(signals.store),
-    storeCalls: toArrayRecord(signals.storeCalls),
+    state: toArrayRecord(signals.state),
   };
 }
 

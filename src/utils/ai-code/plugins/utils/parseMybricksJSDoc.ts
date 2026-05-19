@@ -7,17 +7,16 @@
  *  * @mybricks
  *  * name: LoginForm
  *  * title: 登录表单区块
- *  * summary: 右侧登录表单区
+ *  * summary: 包含用户名、密码输入框及登录按鈕
  *  * type: com
- *  * store:
- *  *   userNameInput:
- *  *     /store.js:
- *  *       userName:
- *  *         desc: 用户名输入值
  *  * datasource:
  *  *   loginBtn:
  *  *     login:
  *  *       desc: 调用登录接口
+ *  * state:
+ *  *   usernameInput:
+ *  *     username:
+ *  *       desc: 用户名输入值
  *  * events:
  *  *   userNameInput:
  *  *     onChange:
@@ -36,8 +35,8 @@ export interface MybricksJSDoc {
   summary?: string;
   /** 类型标识，如 "com" / "page" / "popup" */
   type?: string;
-  /** store 绑定关系，嵌套 YAML 对象 */
-  store?: Record<string, any>;
+  /** state 绑定关系，嵌套 YAML 对象（className -> 字段名 -> 元信息） */
+  state?: Record<string, any>;
   /** datasource 绑定关系，嵌套 YAML 对象 */
   datasource?: Record<string, any>;
   /** 事件描述，嵌套 YAML 对象 */

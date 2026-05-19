@@ -159,50 +159,6 @@ function checkDatasource(
   }
 }
 
-function checkStore(
-  entry: ReadmeBlockEntry,
-  expected: ComRefInfo | undefined,
-  messages: LintMessage[],
-) {
-  const { block } = entry;
-  const store = block.store;
-
-  for (const [className, items] of Object.entries(store ?? {})) {
-    if (!className) {
-      messages.push(createMessage(`README 的 ${entry.path} -> store 存在空 className/root 标识。`));
-      continue;
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      messages.push(createMessage(`README 的 ${entry.path} -> store.${className} 缺少字段项。`));
-      continue;
-    }
-  }
-
-  if (!expected) return;
-
-  // 收集 README 中所有已声明的 store 字段（不区分 selector）
-  const documentedFields = new Set<string>();
-  for (const items of Object.values(store ?? {})) {
-    for (const item of items ?? []) {
-      if (item.field) documentedFields.add(item.field);
-    }
-  }
-
-  // 收集代码中实际消费的所有 store 字段（不区分 selector）
-  const expectedFields = new Set<string>();
-  for (const fields of Object.values(expected.store)) {
-    for (const field of fields) {
-      expectedFields.add(field);
-    }
-  }
-
-  const missingFields = Array.from(expectedFields).filter(field => !documentedFields.has(field));
-  if (missingFields.length > 0) {
-    messages.push(createMessage(`${getSourceLabel(expected, entry.name)} 源码中对 store 的 ${missingFields.join(',')} 字段进行了消费，未在 README 的 ${entry.path} -> store 中声明。`));
-  }
-}
-
 /**
  * README.md 文档规范校验规则。
  *
@@ -279,7 +235,6 @@ export function checkReadme(
     if (expected) matchedEntries.push(entry);
     checkEvents(entry, expected, messages);
     checkDatasource(entry, expected, messages);
-    // checkStore(entry, expected, messages);
   }
 
   // ─── 3. 跨文件节点一致性校验 ───
