@@ -136,7 +136,7 @@ const transformNewFormatForNotifyChanged = (
   filename: string,
 ) => {
   const events: any[] = []
-  const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }> = []
+  const services: Array<{ title: string; refSelector: string; description: string; type: 'up'; refType: string }> = []
   const state: Array<{ refSelector: string; field: string; description: string }> = []
   const docs: Array<{ refSelector: string; name: string; title: string; summary: string; type: string }> = []
 
@@ -157,7 +157,8 @@ const transformNewFormatForNotifyChanged = (
             refSelector: classname === 'root'
               ? widgetSelector
               : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
-            description: desc || ''
+            description: desc || '',
+            refType: type
           })
         })
       })
