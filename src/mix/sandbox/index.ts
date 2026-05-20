@@ -575,4 +575,6 @@ export async function registerSandbox(comId: string): Promise<void> {
 
   (context as any).setRollback(comId, rollbackToVersion);
   (context as any).setHistory(comId, history);
+
+  context.events.emit('ready', true);
 }

@@ -52,6 +52,8 @@ class Context {
     'vibing': boolean
   }>> = {};
 
+  events = new Events<{ 'ready': boolean }>();
+
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
   versionStateEvents: Record<string, Events<{ 'change': VersionRecord }>> = {};
 
