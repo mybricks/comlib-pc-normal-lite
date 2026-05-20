@@ -269,7 +269,8 @@ export function genResizer() {
     value: {
       get() {},
       set(params: any, value: any, status: any) {
-        if (status.state === 'start') {
+        const { state } = status
+        if (state === 'start') {
           if (!params.selector) return;
           const comId = params.id;
           const loc = params.focusArea?.dataset.loc;
@@ -291,14 +292,14 @@ export function genResizer() {
           if (!cssObj[cssObjKey]) {
             cssObj[cssObjKey] = {};
           }
-        } else if (status.state === 'ing') {
+        } else if (state === 'ing') {
           if (!cssObjKey || !cssObj[cssObjKey]) return;
           Object.entries(value).forEach(([key, val]) => {
             cssObj[cssObjKey][key] = `${val}px`;
           });
-
           const cssStr = stringifyLess(cssObj);
           context.updateFile(params.id, { fileName: lessPath, content: cssStr, type: undefined });
+        } else if (state === 'finish') {
           context.saveManualVersion(params.id, [lessPath]);
         }
       },
