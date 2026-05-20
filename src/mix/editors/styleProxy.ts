@@ -162,7 +162,7 @@ export function genStyleValue(params: { comId: string }) {
     (lessPath: string) => {
       context.saveManualVersion(comId, [lessPath]);
     },
-    300
+    500
   );
 
   return {

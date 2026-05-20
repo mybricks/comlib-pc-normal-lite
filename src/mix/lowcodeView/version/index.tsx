@@ -223,7 +223,7 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
     loadMore,
     refresh,
   } = useVersions({
-    pageSize: 5,
+    pageSize: 20,
     history,
     version,
     componentId
