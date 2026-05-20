@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
+import { Spin } from "antd";
 import context from "../../context";
 import type { VersionRecord } from "../../context";
+import { Version } from "../../context";
 import * as lazyCss from "./index.lazy.less";
 import { getLazyCss } from "../utils/css";
 import { randomUUID } from "../../utils/uuid"
+import InfiniteScroll from '../infinite-scroll'
 
 const css = getLazyCss(lazyCss)
+
+const PAGE_SIZE = 3;
 
 interface VersionPanelProps {
   componentId: string;
@@ -188,46 +193,199 @@ function VersionItem({
   );
 }
 
-export default function VersionPanel({ componentId }: VersionPanelProps) {
-  const [versions, setVersions] = useState<VersionRecord[]>([]);
+export default function ({ componentId, render }) {
+  const [show, setShow] = useState(false)
 
   useEffect(() => {
-    if (!componentId) return;
-
-    // 从 context 获取 history（由 sandbox 注册）
-    const history = (context as any).getHistory?.(componentId);
-
-    // 初始化加载
-    if (history) {
-      history.listVersions().then(async (list: VersionRecord[]) => {
-        // 没有历史记录，默认加一下初始化
-        if (!list.length) {
-          const data = context.getAiComParams(componentId)?.data;
-          const files = (data?.files ?? [])
-            .filter((f: any) => f.source)
-            .map((f: any) => ({
-              path: f.fileName,
-              content: decodeURIComponent(f.source),
-            }));
-          const record = {
-            id: randomUUID(),
-            turnId: '',
-            label: `V${0}`,
-            type: 'init' as const,
-            createdAt: Date.now(),
-          };
-          await history.addVersion(record, files);
-          return setVersions([record])
-        }
-
-        return setVersions([...list].reverse())
-      });
+    if (render) {
+      setShow(true)
     }
+  }, [render])
+
+  return show && <VersionPanel2 componentId={componentId}/>
+}
+
+function VersionPanel2({ componentId }: VersionPanelProps) {
+  const panelContainer = useRef<HTMLDivElement>(null);
+  const [{ history, version }] = useState(() => {
+    return {
+      history: context.getHistory(componentId),
+      version: context.versionsMap[componentId]
+    }
+  })
+
+  const {
+    loading,
+    versions,
+    total,
+    hasMore,
+    fetchMaterials,
+    loadMore,
+    refresh,
+  } = useVersions({
+    pageSize: 5,
+    history,
+    version,
+    componentId
+  })
+
+  const handleRollback = useCallback((version: VersionRecord) => {
+    const rollback = (context as any).getRollback?.(componentId);
+    rollback?.(version.id);
+  }, [componentId]);
+
+  return (
+    <div className={css.list} id="com-material-list" ref={panelContainer}>
+      <InfiniteScroll
+        loading={loading}
+        scrollableTarget={'com-material-list'}
+        dataLength={versions.length}
+        hasMore={hasMore}
+        loader={
+          <p className={css.loading}>
+            <Spin />
+          </p>
+        }
+        style={{ paddingTop: 12 }}
+        endMessage={<p className={css.noMore}>- 没有更多了 -</p>}
+        next={loadMore}
+      >
+        {versions.map((version, index) => {
+          const isCurrent = index === 0;
+          const itemCls = [
+            css['version-item'],
+            isCurrent ? css['version-item-current'] : '',
+          ].filter(Boolean).join(' ');
+
+          const dotCls = [
+            css['version-dot'],
+            css[`version-dot-${version.type}`]
+          ].filter(Boolean).join(' ');
+
+          const tagCls = [
+            css['version-type-tag'],
+            css[`version-type-tag-${version.type}`],
+          ].join(' ');
+          return (
+            <VersionItem
+              key={version.id}
+              version={version}
+              isCurrent={isCurrent}
+              itemCls={itemCls}
+              dotCls={dotCls}
+              tagCls={tagCls}
+              onRollback={handleRollback}
+              parentElement={panelContainer.current!}
+            />
+          )
+        })}
+      </InfiniteScroll>
+    </div>
+  )
+}
+
+
+interface UseVersionsOptions {
+  pageSize: number
+  history: {
+    listVersions: (params: { pageSize: number, pageNum: number }) => Promise<{ total: number; list: VersionRecord[] }>
+  }
+  version: Version
+  componentId: string
+}
+export function useVersions(options: UseVersionsOptions) {
+  const { 
+    pageSize,
+    history,
+    version,
+    componentId
+  } = options;
+  
+  const [loading, setLoading] = useState(false);
+  const [versions, setVersions] = useState<VersionRecord[]>([]);
+  const [total, setTotal] = useState(version.total);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // 使用 useRef 存储查询参数
+  const queryRef = useRef<Record<string, any>>({});
+
+  // 获取物料列表
+  const fetchMaterials = useCallback(async (params: any = {}, reset: boolean = true) => {
+    setLoading(true);
+    try {
+      // 如果是重置，则清空现有数据
+      if (reset) {
+        setVersions([]);
+        setCurrentPage(1);
+        queryRef.current = params;
+      }
+
+      const requestParams = {
+        ...(queryRef.current ?? {}),
+        pageNum: reset ? 1 : currentPage,
+        pageSize,
+        ...params,
+      };
+
+      console.log("[requestParams]", requestParams)
+
+      const response = await history.listVersions(requestParams);
+      const newVersions = response.list ?? []
+
+      setVersions(prev => {
+        const versions = reset ? newVersions : [...prev, ...newVersions]
+        version.list = versions
+        return versions
+      });
+      // setTotal(response.total);
+      setHasMore(newVersions.length === pageSize);
+      
+
+      if (!reset) {
+        setCurrentPage(prev => {
+          return prev + 1
+        });
+      }
+      
+      return response;
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, pageSize]);
+
+  // 加载更多
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loading) return;
+    await fetchMaterials({ pageNum: currentPage + 1 }, false);
+  }, [fetchMaterials, hasMore, loading, currentPage]);
+
+  // 重置并重新加载
+  const refresh = useCallback((params = {}) => {
+    return fetchMaterials({ ...(queryRef.current ?? {}), ...params }, true);
+  }, [fetchMaterials]);
+
+  useEffect(() => {
+    fetchMaterials()
 
     const off = context.getVersionStateEvents(componentId).on(
       'change',
-      (list) => {
-        setVersions([...list].reverse());
+      (newVersion) => {
+        console.log('[newVersion]', newVersion)
+        setTotal(version.total)
+        setVersions(prev => {
+          const index = prev.findIndex((version) => version.id === newVersion.id)
+          if (index === -1) {
+            return [newVersion, ...prev]
+          }
+
+          prev[index] = {
+            ...prev[index],
+            ...newVersion
+          }
+
+          return [...prev]
+        });
       },
       false
     );
@@ -235,53 +393,16 @@ export default function VersionPanel({ componentId }: VersionPanelProps) {
     return () => {
       off();
     };
-  }, [componentId]);
 
-  const handleRollback = useCallback((version: VersionRecord) => {
-    const rollback = (context as any).getRollback?.(componentId);
-    rollback?.(version.id);
-  }, [componentId]);
+  }, [])
 
-  const panelContainer = useRef<HTMLDivElement>(null)
-
-  return (
-    <div ref={panelContainer} className={css['version-panel']}>
-      {versions.length === 0 ? (
-        <div className={css['version-empty']}>暂无版本记录</div>
-      ) : (
-        <div className={css['version-list']}>
-          {versions.map((version, index) => {
-            const isCurrent = index === 0;
-            const itemCls = [
-              css['version-item'],
-              isCurrent ? css['version-item-current'] : '',
-            ].filter(Boolean).join(' ');
-
-            const dotCls = [
-              css['version-dot'],
-              css[`version-dot-${version.type}`]
-            ].filter(Boolean).join(' ');
-
-            const tagCls = [
-              css['version-type-tag'],
-              css[`version-type-tag-${version.type}`],
-            ].join(' ');
-
-            return (
-              <VersionItem
-                key={version.id}
-                version={version}
-                isCurrent={isCurrent}
-                itemCls={itemCls}
-                dotCls={dotCls}
-                tagCls={tagCls}
-                onRollback={handleRollback}
-                parentElement={panelContainer.current!}
-              />
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+  return {
+    loading,
+    versions,
+    total,
+    hasMore,
+    fetchMaterials,
+    loadMore,
+    refresh,
+  };
 }

@@ -522,9 +522,9 @@ export default function LowcodeView(params: Params) {
         </div>
       )}
       {/* 版本面板 */}
-      {bottomTab === 'version' && componentId && (
-        <div className={css['lowcode-view']}>
-          <VersionPanel componentId={componentId} />
+      {componentId && (
+        <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
+          <VersionPanel render={bottomTab === 'version'} componentId={componentId} />
         </div>
       )}
     </div>

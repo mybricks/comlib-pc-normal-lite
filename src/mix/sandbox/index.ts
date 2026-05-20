@@ -10,7 +10,7 @@
  * - Designer 方法通过 projectRef.current 访问当前快照的 project 实例。
  */
 
-import context from '../context';
+import context, { Version } from '../context';
 import { debugLogs } from '../context/debugLogs';
 import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
@@ -170,9 +170,12 @@ interface VersionRecord {
 }
 
 type SandboxHistory = {
-  listVersions: () => Promise<VersionRecord[]>;
+  listVersions: (params: { pageSize: number, pageNum: number }) => Promise<{ list: VersionRecord[], total: number }>;
   addVersion: (record: VersionRecord, files: VersionFile[]) => Promise<void>;
 };
+
+// turn.id 到 version.id 的映射
+const TURNID_TO_RECORD = {}
 
 /**
  * turn 结束后：若源码相对 beforeTurn 快照有变化，则追加一条 AI 版本（含幂等）。
@@ -194,22 +197,27 @@ async function persistAiVersionAfterTurn(
       content: decodeURIComponent(f.source),
     }));
 
-  const existingVersions = await history.listVersions();
-
-  if (turn?.id && existingVersions.some((v: VersionRecord) => v.turnId === turn.id)) return;
+  const version = context.versionsMap[comId]
+  const total = version.total
+  // 版本号 +1
+  version.total = total + 1
 
   const record: VersionRecord = {
     id: randomUUID(),
     turnId: turn?.id ?? '',
-    label: `V${existingVersions.length}`,
+    label: `V${total}`,
     type: 'ai',
     createdAt: Date.now(),
   };
 
-  await history.addVersion(record, files);
+  version.addPromiseTask(async () => {
+    console.log('[AI保存]', 1, record)
+    await history.addVersion(record, files);
+    console.log('[AI保存]', 2)
+  })
 
-  const updated = await history.listVersions();
-  context.notifyVersionsChange(comId, updated);
+  TURNID_TO_RECORD[record.turnId] = record;
+  context.notifyVersionsChange(comId, record);
 }
 
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
@@ -449,17 +457,29 @@ export async function registerSandbox(comId: string): Promise<void> {
         context.getAiComEvents(comId).emit('vibing', false);
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
+        console.log('[afterTurnSummary]', {
+          history,
+          turn,
+          summary
+        })
         if (!history || !turn?.id) return;
 
-        const versions = await history.listVersions();
-        const target = versions.find((v: VersionRecord) => v.turnId === turn.id);
+        const target = TURNID_TO_RECORD[turn.id]
+
+        console.log("[target]", target)
+
         if (!target) return;
+
+        console.log("[AI更新summary]", 1, summary)
 
         await history.updateVersion(target.id, { summary });
 
+        console.log("[AI更新summary]", 2)
+
+        target.summary = summary
+
         // 通知 UI
-        const updated = await history.listVersions();
-        context.notifyVersionsChange(comId, updated);
+        context.notifyVersionsChange(comId, target);
       },
     },
   }) ?? {};
@@ -496,44 +516,61 @@ export async function registerSandbox(comId: string): Promise<void> {
     }
 
     // 3. 新增一条 rollback 类型版本记录
-    const existingVersions = await history.listVersions();
+    const version = context.versionsMap[comId]
+    const total = version.total
+    // 版本号 +1
+    version.total = total + 1
+
     const rollbackRecord: VersionRecord = {
       id: randomUUID(),
       turnId: targetMeta.turnId,
-      label: `V${existingVersions.length}`,
+      label: `V${total}`,
       type: 'rollback',
       createdAt: Date.now(),
       summary: `回滚自 ${targetMeta.label}`,
     };
-    await history.addVersion(rollbackRecord, files);
+
+    console.log('[回滚]')
+
+    version.addPromiseTask(async () => {
+      await history.addVersion(rollbackRecord, files);
+      // 5. 触发保存（保持与原逻辑一致）
+      (window as any)._mybricksOnEdit_?.({ autoSave: true });
+    })
 
     // 4. 通知 UI
-    const updated = await history.listVersions();
-    context.notifyVersionsChange(comId, updated);
-
-    // 5. 触发保存（保持与原逻辑一致）
-    (window as any)._mybricksOnEdit_?.({ autoSave: true });
+    context.notifyVersionsChange(comId, rollbackRecord);
   }
-  
-  // 初始化加载
-  const list = await history.listVersions()
-  // 没有历史记录，默认加一下初始化
+
+  const data = context.getAiComParams(comId)?.data;
+  const files = (data?.files ?? [])
+    .filter((f: any) => f.source)
+    .map((f: any) => ({
+      path: f.fileName,
+      content: decodeURIComponent(f.source),
+    }));
+
+  // 初始化版本
+  const { list } = await history.listVersions({ pageSize: 1, pageNum: 1 })
   if (!list.length) {
-    const data = context.getAiComParams(comId)?.data;
-    const files = (data?.files ?? [])
-      .filter((f: any) => f.source)
-      .map((f: any) => ({
-        path: f.fileName,
-        content: decodeURIComponent(f.source),
-      }));
-    const record = {
-      id: randomUUID(),
-      turnId: '',
-      label: `V${0}`,
-      type: 'init' as const,
-      createdAt: Date.now(),
-    };
-    await history.addVersion(record, files);
+    // 没有版本
+    if (files.length) {
+      // 有内容，写一条默认版本
+      const record = {
+        id: randomUUID(),
+        turnId: '',
+        label: `V${0}`,
+        type: 'init' as const,
+        createdAt: Date.now(),
+      };
+      await history.addVersion(record, files);
+      context.versionsMap[comId] = new Version(1)
+    } else {
+      context.versionsMap[comId] = new Version(0)
+    }
+  } else {
+    // 有版本，解析版本total
+    context.versionsMap[comId] = new Version(parseInt(list[0].label.slice(1)) + 1)
   }
 
   (context as any).setRollback(comId, rollbackToVersion);

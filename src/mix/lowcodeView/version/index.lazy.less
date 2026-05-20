@@ -24,6 +24,32 @@
   padding: 4px 0 12px;
 }
 
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 12px;
+}
+
+.noMore {
+  width: 100%;
+  height: 54px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 14px;
+  color: #8c8c8c;
+  font-weight: 400;
+}
+
+.loading {
+  width: 100%;
+  height: 54px;
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .version-item {
   display: flex;
   // align-items: center;
@@ -299,4 +325,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.version-load-more {
+  text-align: center;
+  font-size: 11px;
+  color: var(--mybricks-text-color-disabled, #bbb);
+  padding: 8px 0;
+}
+
+.version-no-more {
+  text-align: center;
+  font-size: 11px;
+  color: var(--mybricks-text-color-disabled, #bbb);
+  padding: 8px 0 4px;
 }

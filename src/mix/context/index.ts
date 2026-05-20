@@ -53,9 +53,9 @@ class Context {
   }>> = {};
 
   // ─── 版本管理 ───────────────────────────────────────────────────────────────
-  versionStateEvents: Record<string, Events<{ 'change': VersionRecord[] }>> = {};
+  versionStateEvents: Record<string, Events<{ 'change': VersionRecord }>> = {};
 
-  getVersionStateEvents(id: string): Events<{ 'change': VersionRecord[] }> {
+  getVersionStateEvents(id: string): Events<{ 'change': VersionRecord }> {
     if (!this.versionStateEvents[id]) {
       this.versionStateEvents[id] = new Events();
     }
@@ -66,8 +66,8 @@ class Context {
    * 通知 UI 版本列表变更（统一入口，避免每处都写 emit）。
    * sandbox 在 addVersion / rollback 等操作完成后调用此方法。
    */
-  notifyVersionsChange(comId: string, versions: VersionRecord[]): void {
-    this.getVersionStateEvents(comId).emit('change', versions);
+  notifyVersionsChange(comId: string, version: VersionRecord): void {
+    this.getVersionStateEvents(comId).emit('change', version);
   }
 
   private rollbackMap: Record<string, (versionId: string) => Promise<void>> = {};
@@ -531,33 +531,82 @@ class Context {
         content: decodeURIComponent(f.source),
       }));
 
-    const existingVersions = await history.listVersions();
+    const version = this.versionsMap[comId]
+    const total = version.total
+    // 版本号 +1
+    version.total = total + 1
 
     // 新增版本记录
     const record = {
       id: randomUUID(),
       turnId: '',
-      label: `V${existingVersions.length}`,
+      label: `V${total}`,
       type: 'manual' as const,
       createdAt: Date.now(),
     };
 
-    await history.addVersion(record, files);
-    await history.updateVersion(record.id, {
-      summary: '更新文件:' + 
-       updateFiles.reduce((pre, filename) => {
+    const summary = '更新文件:' + 
+      updateFiles.reduce((pre, filename) => {
         return pre + `\n- ${filename}`
-       }, '')
+      }, '')
+
+    version.addPromiseTask(async () => {
+      console.log("手动保存", {
+        ...record,
+        summary
+      }, 1)
+      await history.addVersion(record, files);
+      await history.updateVersion(record.id, {
+        summary
+      })
+      console.log("手动保存", {
+        ...record,
+        summary
+      }, 2)
     })
 
-    const updated = await history.listVersions();
-    this.notifyVersionsChange(comId, updated);
+    this.notifyVersionsChange(comId, {
+      ...record,
+      summary
+    });
   }
 
   getCanvasList() {
     const shadowRoot = document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot
     if (!shadowRoot) return []
     return shadowRoot.querySelectorAll('[data-desn-page]')
+  }
+
+  versionsMap: Record<string, Version> = {}
+}
+
+export class Version {
+  total: number
+  promiseStack: Array<() => Promise<any>> = []
+  running: boolean = false
+  list: VersionRecord[] = [];
+  constructor(total) {
+    this.total = total
+  }
+
+  async runStack() {
+    if (this.running) {
+      return
+    }
+    this.running = true
+
+    while (this.promiseStack.length) {
+      // 取出最先加入的任务
+      const task = this.promiseStack.shift()
+      await task?.()
+    }
+
+    this.running = false
+  }
+
+  addPromiseTask(fn: () => Promise<void>) {
+    this.promiseStack.push(fn)
+    this.runStack()
   }
 }
 

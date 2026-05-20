@@ -189,36 +189,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       }
     }, [])
 
-
-    // 设计态：通过 DOM dataset 收集页面/弹窗组件名写入 _designerState
-    useEffect(() => {
-      if (env.runtime) return;
-      const el = containerRef.current;
-      if (!el || !data) return;
-
-      const collect = () => {
-        const zones = el.querySelectorAll('[data-zone-type="page"]');
-        const pages: string[] = [];
-        const popups: string[] = [];
-        zones.forEach((zone) => {
-          const kind = (zone as HTMLElement).dataset.zoneKind;
-          const widgetEl = zone.querySelector('[data-widget-name]');
-          const name = (widgetEl as HTMLElement)?.dataset?.widgetName ?? 'Unknown';
-          if (kind === 'popup') popups.push(name);
-          else pages.push(name);
-        });
-        if (!data._designerState) data._designerState = { pages: [], popups: [] };
-        data._designerState.pages = pages;
-        data._designerState.popups = popups;
-      };
-
-      collect();
-
-      const observer = new MutationObserver(collect);
-      observer.observe(el, { childList: true, subtree: true });
-      return () => observer.disconnect();
-    }, []);
-
     // 计算 runtimeMode：唯一标识当前运行模式（设计态 / runtime_mock / runtime_prod）
     const runtimeMode = env.edit ? `${id}_edit` : `${id}_runtime_${activeEnv}`;
 
