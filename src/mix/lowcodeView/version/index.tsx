@@ -334,12 +334,22 @@ export function useVersions(options: UseVersionsOptions) {
       const newVersions = response.list ?? []
 
       setVersions(prev => {
-        const versions = reset ? newVersions : [...prev, ...newVersions]
+        const merged = reset ? newVersions : [...prev, ...newVersions]
+        // 按 id 去重，保留第一次出现的条目
+        const seen = new Set<string>()
+        const versions = merged.filter(v => {
+          if (seen.has(v.id)) return false
+          seen.add(v.id)
+          return true
+        })
         version.list = versions
+
+        setHasMore(version.list.length < version.total)
+
         return versions
       });
       // setTotal(response.total);
-      setHasMore(newVersions.length === pageSize);
+      // setHasMore(newVersions.length === pageSize);
       
 
       if (!reset) {
