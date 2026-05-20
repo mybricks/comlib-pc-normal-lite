@@ -34,8 +34,8 @@ const dataCompatible = (props) => {
     }
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 8) {
-      data.version = 8
+    if (!data.version || data.version < 9) {
+      data.version = 9
       console.log('[com:update]', data)
       const readme = data.files.find((file) => file.fileName === "README.md")
       if (readme?.source) {
@@ -68,6 +68,12 @@ const dataCompatible = (props) => {
           decoded = decoded.replace(
             /(from\s+['"](?:[^'"]*?))\.js(['"])/g,
             '$1$2'
+          )
+          // 将裸 import .less 语句（无 from）转换为 .module.less
+          // e.g. import "./index.less" → import "./index.module.less"
+          decoded = decoded.replace(
+            /^(import\s+['"](?:[^'"]*?)(?<!\.module))(\.less)(['"];?)$/gm,
+            '$1.module.less$3'
           )
           file.source = encodeURIComponent(decoded)
         }
