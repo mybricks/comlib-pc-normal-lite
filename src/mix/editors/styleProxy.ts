@@ -1,5 +1,6 @@
 import context from '../context';
 import { parseLess, stringifyLess } from '../utils/transform/less';
+import { debounce } from '../../utils/debounce'
 
 // ── CSS shorthand 映射 ────────────────────────────────────────────────────────
 
@@ -156,6 +157,14 @@ function extractDataZoneSelector(selector: string): string {
 
 export function genStyleValue(params: { comId: string }) {
   const { comId } = params;
+
+  const debouncedUpdateFile = debounce(
+    (lessPath: string) => {
+      context.saveManualVersion(comId, [lessPath]);
+    },
+    300
+  );
+
   return {
     set(params: any, value: any) {
       const loc = params.focusArea?.dataset.loc;
@@ -201,7 +210,7 @@ export function genStyleValue(params: { comId: string }) {
 
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined });
-      context.saveManualVersion(comId, [lessPath]);
+      debouncedUpdateFile(lessPath);
     },
   };
 }
