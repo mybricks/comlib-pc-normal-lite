@@ -177,6 +177,33 @@ type SandboxHistory = {
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
 
+// 记录 turn.id 对应的操作记录
+class TurnLogs {
+  logs: Record<string, any[]> = {}
+
+  turnID?: string
+
+  constructor() {
+    window['_mybricks_ai_com_turn_logs_'] = () => {
+      return this.logs
+    }
+  }
+
+  setLog(log) {
+    const turnID = this.turnID
+    if (!turnID) {
+      return
+    }
+    if (!this.logs[turnID]) {
+      this.logs[turnID] = [log]
+    } else {
+      this.logs[turnID].push(log)
+    }
+  }
+}
+
+const turnLogs = new TurnLogs()
+
 /**
  * turn 结束后：若源码相对 beforeTurn 快照有变化，则追加一条 AI 版本（含幂等）。
  * 内部可提前 return，不影响调用方后续逻辑。
@@ -188,7 +215,10 @@ async function persistAiVersionAfterTurn(
   turn?: { id?: string }
 ): Promise<void> {
   const previousSnapshot = requestSourceSnapshotMap.get(data);
-  if (!hasSourceChanged(data.files ?? [], previousSnapshot)) return;
+  if (!hasSourceChanged(data.files ?? [], previousSnapshot)) {
+    turnLogs.setLog({ message: '[版本/跳过] 源码无变更 — 不记录版本' })
+    return
+  };
 
   const files: VersionFile[] = (data.files ?? [])
     .filter((f: any) => f.source)
@@ -210,8 +240,21 @@ async function persistAiVersionAfterTurn(
     createdAt: Date.now(),
   };
 
+  turnLogs.setLog({
+    message: '[版本/检测] 源码有变更 — 准备写入版本记录',
+    record
+  })
+
   version.addPromiseTask(async () => {
+    turnLogs.setLog({
+      message: '[版本/写入] 开始写入版本至历史存储',
+      record
+    })
     await history.addVersion(record, files);
+    turnLogs.setLog({
+      message: '[版本/写入] 版本已成功持久化至历史存储',
+      record
+    })
   })
 
   TURNID_TO_RECORD[record.turnId] = record;
@@ -262,7 +305,11 @@ export function createDesignerLoading(
 
   // 当前生效的锁模式：progress = onProgress 整页；component = actions.lock 组件锁；null = 未上锁
   let currentMode: 'progress' | 'component' | null = null;
-  let releaseLock: (() => void) | null = null;
+  let releaseLock: (() => void) | null = () => {
+    turnLogs.setLog({
+      message: '[锁/释放] 空操作释放 — 锁从未被申请',
+    });
+  };
 
   const resolveMode = (): 'progress' | 'component' =>
     !focusArea || compileError || runtimeError || hasErrorOccurred ? 'progress' : 'component';
@@ -272,17 +319,39 @@ export function createDesignerLoading(
       options?.onProgress?.('start');
       releaseLock = () => {
         options?.onProgress?.('complete');
+        turnLogs.setLog({
+          message: '[锁/释放] 进度模式锁已释放 — 已调用 onProgress(complete)',
+          onProgress: typeof options?.onProgress
+        });
       };
     } else {
       const lockResult = actions.lock(lockId, focusArea);
-      releaseLock = typeof lockResult === 'function'
-        ? lockResult
-        : () => actions.unlock(lockId, focusArea);
+      releaseLock = () => {
+        turnLogs.setLog({
+          message: '[锁/释放] 组件模式锁释放中 — 检查 lockResult 类型',
+          lockResult: typeof lockResult
+        });
+        if (typeof lockResult === 'function') {
+          turnLogs.setLog({
+            message: '[锁/释放] 组件模式锁已释放 — 通过 lockResult 回调解锁',
+          });
+          lockResult()
+        } else {
+          turnLogs.setLog({
+            message: '[锁/释放] 组件模式锁已释放 — 通过 actions.unlock() 解锁',
+          });
+          actions.unlock(lockId, focusArea);
+        }
+      }
     }
     currentMode = mode;
   };
 
   const releaseCurrent = () => {
+    turnLogs.setLog({
+      message: '[锁/releaseCurrent] 调用当前锁的释放处理器',
+      releaseLock: typeof releaseLock
+    });
     if (releaseLock) {
       releaseLock();
       releaseLock = null;
@@ -308,6 +377,9 @@ export function createDesignerLoading(
   };
 
   const dispose = () => {
+    turnLogs.setLog({
+      message: '[加载/销毁] 设计器 loading 实例已销毁 — 释放锁并移除错误监听器',
+    });
     releaseCurrent();
     offCompileError();
     offRuntimeError();
@@ -442,37 +514,57 @@ export async function registerSandbox(comId: string): Promise<void> {
         }
       },
       async afterTurn(turn: { id?: string }) {
+        turnLogs.turnID = turn.id
+        turnLogs.setLog({
+          message: '[轮次/afterTurn] 本轮结束 — 开始执行轮后处理',
+        })
         const data = context.getAiComParams(comId)?.data;
         if (history && data && typeof data === 'object') {
           await persistAiVersionAfterTurn(comId, history, data, turn);
         }
 
+        turnLogs.setLog({
+          message: '[轮次/afterTurn] 版本已持久化 — 通知 UI 并销毁设计器 loading',
+          dispose: typeof loadingRef.current?.dispose
+        });
+
         (window as any).__vibeCodingCallbacks__?.onComplete?.();
 
-        loadingRef.current?.dispose();
+        loadingRef.current?.dispose(turn);
         loadingRef.current = null;
 
         context.getAiComEvents(comId).emit('vibing', false);
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
-        console.log('[afterTurnSummary]', {
-          history,
-          turn,
+        turnLogs.setLog({
+          message: '[轮次/afterTurnSummary] 收到 summary 回调 — 开始更新版本摘要',
           summary
-        })
-        if (!history || !turn?.id) return;
+        });
+        if (!history || !turn?.id) {
+          turnLogs.setLog({
+            message: '[轮次/afterTurnSummary] 已中止 — history 存储或 turn.id 不可用',
+          });
+          return
+        };
 
         const target = TURNID_TO_RECORD[turn.id]
 
-        console.log("[target]", target)
+        if (!target) {
+          turnLogs.setLog({
+            message: '[轮次/afterTurnSummary] 已中止 — 未找到 turn.id 对应的版本记录',
+          });
+          return
+        };
 
-        if (!target) return;
-
-        console.log("[AI更新summary]", 1, summary)
+        turnLogs.setLog({
+          message: '[轮次/afterTurnSummary] 正在更新历史存储中的版本摘要',
+        });
 
         await history.updateVersion(target.id, { summary });
 
-        console.log("[AI更新summary]", 2)
+        turnLogs.setLog({
+          message: '[轮次/afterTurnSummary] 版本摘要更新成功 — 通知 UI',
+        });
 
         target.summary = summary
 
@@ -527,8 +619,6 @@ export async function registerSandbox(comId: string): Promise<void> {
       createdAt: Date.now(),
       summary: `回滚自 ${targetMeta.label}`,
     };
-
-    console.log('[回滚]')
 
     version.addPromiseTask(async () => {
       await history.addVersion(rollbackRecord, files);
