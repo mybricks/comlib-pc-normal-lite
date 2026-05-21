@@ -202,13 +202,20 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               }
 
               const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
+
+              // [观察下三方库的样式编辑问题]
+              if (cnList.length > 0) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+              } else {
+                pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
+              }
   
               if (source === "html") {
-                if (cnList.length > 0) {
-                  pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
-                } else {
-                  pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
-                }
+                // if (cnList.length > 0) {
+                //   pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+                // } else {
+                //   pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
+                // }
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-library-source", source);
                 // 提取静态 JSX props，供 dom-to-figma 的变体库匹配使用。

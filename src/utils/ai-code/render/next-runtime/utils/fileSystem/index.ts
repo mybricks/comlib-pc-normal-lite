@@ -346,7 +346,8 @@ class FileSystem {
         file: {
           filename: '临时文件',
           compiled: '',
-          source: ''
+          source: '',
+          jsDocMap: ''
         },
         module,
         dependencies: new Set<string>(),

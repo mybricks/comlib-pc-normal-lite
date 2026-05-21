@@ -17,6 +17,8 @@ export type Files = {
   compiled: string
   /** 经过encodeURIComponent处理的源代码 */
   source: string
+  /** 经过encodeURIComponent处理的jsDoc注释 */
+  jsDocMap: string
 }[]
 
 export type Css = {

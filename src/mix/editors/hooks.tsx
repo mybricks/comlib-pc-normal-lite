@@ -80,49 +80,50 @@ export function buildHooks(props: Props) {
     },
 
     '@getDocs'(params: any) {
-      let result: any = {};
+      return {}
+      // let result: any = {};
 
-      try {
-        const themesData = params?.data?.themes;
-        if (themesData) {
-          const activeTheme = themesData.themes?.find((t: any) => t.id === themesData.activeThemeId) || themesData.themes?.[0];
-          if (activeTheme?.vars) {
-            (window as any).MYBRICKS_AICOM_THEME_VARIABLES = activeTheme.vars;
-          }
-        }
-      } catch (e) {
-        // console.error('[@getDocs syncTheme error]', e);
-      }
+      // try {
+      //   const themesData = params?.data?.themes;
+      //   if (themesData) {
+      //     const activeTheme = themesData.themes?.find((t: any) => t.id === themesData.activeThemeId) || themesData.themes?.[0];
+      //     if (activeTheme?.vars) {
+      //       (window as any).MYBRICKS_AICOM_THEME_VARIABLES = activeTheme.vars;
+      //     }
+      //   }
+      // } catch (e) {
+      //   // console.error('[@getDocs syncTheme error]', e);
+      // }
 
-      try {
-        const mdCompiled = params.data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
-        if (mdCompiled) {
-          const focusElement = params.focusArea.ele;
-          const parentElement = focusElement.closest('[data-widget-name]');
-          if (parentElement) {
-            const widgetName = parentElement.getAttribute('data-widget-name');
-            const docs = mdCompiled[widgetName];
-            if (docs) {
-              result['title'] = docs.title;
-              result['summary'] = docs.summary;
-              result['type'] = focusElement.getAttribute('data-zone-type');
-              const events = focusElement.getAttribute('data-zone-events');
-              if (events) {
-                const eventsArray = JSON.parse(events);
-                result['events'] = eventsArray.reduce((acc: any[], eventId: string) => {
-                  const found = docs.events?.find((event: any) => event.id === eventId);
-                  if (found) acc.push(found);
-                  return acc;
-                }, []);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // console.error('[@getDocs error]', e);
-      }
+      // try {
+      //   const mdCompiled = params.data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
+      //   if (mdCompiled) {
+      //     const focusElement = params.focusArea.ele;
+      //     const parentElement = focusElement.closest('[data-widget-name]');
+      //     if (parentElement) {
+      //       const widgetName = parentElement.getAttribute('data-widget-name');
+      //       const docs = mdCompiled[widgetName];
+      //       if (docs) {
+      //         result['title'] = docs.title;
+      //         result['summary'] = docs.summary;
+      //         result['type'] = focusElement.getAttribute('data-zone-type');
+      //         const events = focusElement.getAttribute('data-zone-events');
+      //         if (events) {
+      //           const eventsArray = JSON.parse(events);
+      //           result['events'] = eventsArray.reduce((acc: any[], eventId: string) => {
+      //             const found = docs.events?.find((event: any) => event.id === eventId);
+      //             if (found) acc.push(found);
+      //             return acc;
+      //           }, []);
+      //         }
+      //       }
+      //     }
+      //   }
+      // } catch (e) {
+      //   // console.error('[@getDocs error]', e);
+      // }
 
-      return result;
+      // return result;
     },
 
     '@getThemes'(_params: any) {

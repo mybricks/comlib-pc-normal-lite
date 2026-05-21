@@ -208,14 +208,15 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const { width: canvasWidth = 1440, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
   
   const { comId, runtimeMode, env, data, logger } = props;
-  let mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
-  if (mdCompiled) {
-    mdCompiled = Object.entries(mdCompiled).reduce((pre, [key, value]) => {
-      pre[key] = value
-      pre[key.toLowerCase()] = value
-      return pre;
-    }, {})
-  }
+
+  // let mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
+  // if (mdCompiled) {
+  //   mdCompiled = Object.entries(mdCompiled).reduce((pre, [key, value]) => {
+  //     pre[key] = value
+  //     pre[key.toLowerCase()] = value
+  //     return pre;
+  //   }, {})
+  // }
   const _env = {
     mode: (env.runtime ? 'runtime' : 'design') as 'design' | 'runtime',
   };
@@ -380,13 +381,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               if (widgetName) {
                 containerRef.current.setAttribute("data-widget-name", widgetName);
               }
-              if (mdCompiled) {
-                const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
-                const title = docs?.title;
-                if (title) {
-                  containerRef.current.setAttribute("data-zone-title", title);
-                }
-              }
+              // if (mdCompiled) {
+              //   const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
+              //   const title = docs?.title;
+              //   if (title) {
+              //     containerRef.current.setAttribute("data-zone-title", title);
+              //   }
+              // }
 
               const container = containerRef.current.querySelector(`[data-widget-name="${widgetName}"]`)
               let dataLoc = container?.getAttribute('data-loc') || container?.querySelector('[data-loc]')?.getAttribute('data-loc')
@@ -430,6 +431,18 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   }
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+                }
+
+                if (files?.jsx && widgetName) {
+                  const fileSystem = mixContext.fileSystemMap[comId]
+                  const jsDocMap = fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
+                  if (jsDocMap) {
+                    const jsDoc = JSON.parse(decodeURIComponent(jsDocMap))
+                    const title = jsDoc?.[widgetName]?.title
+                    if (title) {
+                      containerRef.current.setAttribute("data-zone-title", title);
+                    }
+                  }
                 }
               }
             }
@@ -743,13 +756,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
                 widgetName = firstWidget?.getAttribute('data-widget-name');
               }
-              if (mdCompiled) {
-                const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
-                const title = docs?.title;
-                if (title) {
-                  containerRef.current!.setAttribute("data-zone-title", title);
-                }
-              }
+              // if (mdCompiled) {
+              //   const docs = widgetName && (mdCompiled[widgetName] || mdCompiled[widgetName.toLowerCase()]);
+              //   const title = docs?.title;
+              //   if (title) {
+              //     containerRef.current!.setAttribute("data-zone-title", title);
+              //   }
+              // }
 
               const container = containerRef.current?.querySelector(`[data-widget-name="${widgetName}"]`)
               let dataLoc = container?.getAttribute('data-loc') || container?.querySelector('[data-loc]')?.getAttribute('data-loc')
@@ -788,6 +801,18 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   }
                 } else {
                   // console.error('[@动态解析] 请重新编译jsx，支持files', containerRef.current);
+                }
+
+                if (files?.jsx && widgetName) {
+                  const fileSystem = mixContext.fileSystemMap[comId]
+                  const jsDocMap = fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
+                  if (jsDocMap) {
+                    const jsDoc = JSON.parse(decodeURIComponent(jsDocMap))
+                    const title = jsDoc?.[widgetName]?.title
+                    if (title) {
+                      containerRef.current.setAttribute("data-zone-title", title);
+                    }
+                  }
                 }
               }
             }
