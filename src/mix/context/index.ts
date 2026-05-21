@@ -553,18 +553,10 @@ class Context {
       }, '')
 
     version.addPromiseTask(async () => {
-      console.log("手动保存", {
-        ...record,
-        summary
-      }, 1)
       await history.addVersion(record, files);
       await history.updateVersion(record.id, {
         summary
       })
-      console.log("手动保存", {
-        ...record,
-        summary
-      }, 2)
     })
 
     this.notifyVersionsChange(comId, {

@@ -34,8 +34,8 @@ const dataCompatible = (props) => {
     }
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 9) {
-      data.version = 9
+    if (!data.version || data.version < 10) {
+      data.version = 10
       console.log('[com:update]', data)
       const readme = data.files.find((file) => file.fileName === "README.md")
       if (readme?.source) {
@@ -63,10 +63,11 @@ const dataCompatible = (props) => {
         if (file.source && (file.fileName.endsWith('.tsx') || file.fileName.endsWith('.ts') || file.fileName.endsWith('.jsx') || file.fileName.endsWith('.js'))) {
           let decoded = decodeURIComponent(file.source)
           decoded = decoded.replace(/(?<=from\s+['"][^'"]*?)(?<!\.module)(\.less)(?=['"])/g, '.module.less')
-          // 移除 import 语句中依赖路径末尾的 .js 扩展名
+          // 移除 import 语句中依赖路径末尾的 .js / .jsx 扩展名
           // e.g. import store from "./store.js" → import store from "./store"
+          // e.g. import Comp from "./Comp.jsx" → import Comp from "./Comp"
           decoded = decoded.replace(
-            /(from\s+['"](?:[^'"]*?))\.js(['"])/g,
+            /(from\s+['"](?:[^'"]*?))\.jsx?(['"])/g,
             '$1$2'
           )
           // 将裸 import .less 语句（无 from）转换为 .module.less

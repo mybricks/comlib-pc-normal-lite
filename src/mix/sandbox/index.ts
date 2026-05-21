@@ -211,9 +211,7 @@ async function persistAiVersionAfterTurn(
   };
 
   version.addPromiseTask(async () => {
-    console.log('[AI保存]', 1, record)
     await history.addVersion(record, files);
-    console.log('[AI保存]', 2)
   })
 
   TURNID_TO_RECORD[record.turnId] = record;
