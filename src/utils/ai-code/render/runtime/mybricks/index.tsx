@@ -414,8 +414,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                         }
                         const { width, height } = parseFrameSize(lessCode);
                         if (width) {
-                          const numberWidth = parseInt(width)
-                          style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                          // const numberWidth = parseInt(width)
+                          // style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                          style.width = width
                         }
                         if (height) {
                           style.minHeight = height
