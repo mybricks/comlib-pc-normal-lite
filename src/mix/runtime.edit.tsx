@@ -34,9 +34,15 @@ const dataCompatible = (props) => {
     }
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 10) {
-      data.version = 10
+    if (!data.version || data.version < 11) {
+      data.version = 11
       console.log('[com:update]', data)
+      // 去除重复文件（以 fileName 为唯一键，保留最后出现的条目）
+      const fileMap = new Map<string, any>();
+      data.files.forEach((file) => {
+        fileMap.set(file.fileName, file);
+      });
+      data.files = Array.from(fileMap.values());
       const readme = data.files.find((file) => file.fileName === "README.md")
       if (readme?.source) {
         context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
