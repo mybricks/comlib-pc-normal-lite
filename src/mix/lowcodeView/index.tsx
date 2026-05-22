@@ -432,9 +432,17 @@ function LowcodeView(params: Params) {
       }
     })
 
+    const onCopy = (e: ClipboardEvent) => {
+      const codeContent = e.clipboardData?.getData('text/plain')
+      window._sandbox_.config.componentRuntime?.workspace?.onCodeEditorCopy({ filename: selectFile?.fileName, code: codeContent })
+    }
+
+    editor.getDomNode()?.addEventListener('copy', onCopy)
+
     mountRef.current = () => {
       onMouseMove.dispose()
       onMouseDown.dispose()
+      editor.getDomNode()?.removeEventListener('copy', onCopy)
     }
   }
 
