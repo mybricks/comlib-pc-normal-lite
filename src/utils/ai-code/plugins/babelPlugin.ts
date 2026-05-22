@@ -391,7 +391,13 @@ function extractFigmaProps(node: any, tagName: string): { component: string; pro
     // addonBefore/addonAfter 存字符串值，供 Input 外置前/后置区域变体匹配；
     // showCount 存布尔值，供 Input 字数计数变体匹配；
     // enterButton 存字符串值（如 "搜索"）或 true，供 Input.Search 文字按钮维度匹配。
-    const SCALAR_PROPS = ['type', 'size', 'danger', 'ghost', 'loading', 'disabled', 'shape', 'prefix', 'suffix', 'showCount', 'addonBefore', 'addonAfter', 'enterButton'];
+    const SCALAR_PROPS = [
+      'type', 'size', 'color', 'danger', 'ghost', 'loading', 'disabled', 'shape',
+      'prefix', 'suffix', 'showCount', 'addonBefore', 'addonAfter', 'enterButton',
+      'message', 'description', 'title',
+      'showIcon', 'closable', 'banner', 'bordered', 'readonly', 'allowClear',
+      'checked', 'defaultChecked', 'open', 'defaultOpen', 'block',
+    ];
   const props: Record<string, any> = {};
 
   try {
@@ -402,18 +408,22 @@ function extractFigmaProps(node: any, tagName: string): { component: string; pro
         const propName: string = typeof attr.name.name === 'string' ? attr.name.name : '';
         if (!propName) continue;
 
+        // JSX 布尔简写：<Alert showIcon closable /> 等价于 showIcon={true} closable={true}
+        if (!attr.value) {
+          if (propName === 'icon') {
+            props.hasIcon = true;
+          } else {
+            props[propName] = true;
+          }
+          continue;
+        }
+
         if (propName === 'icon') {
           props.hasIcon = true;
           continue;
         }
 
         if (!SCALAR_PROPS.includes(propName)) continue;
-
-        if (!attr.value) {
-          // <Button disabled> 形式——布尔属性无值，等价于 true
-          props[propName] = true;
-          continue;
-        }
 
         if (attr.value.type === 'StringLiteral') {
           props[propName] = attr.value.value;
@@ -427,6 +437,21 @@ function extractFigmaProps(node: any, tagName: string): { component: string; pro
             props[propName] = true;
           }
           // 其他动态表达式（标识符、三元等）无法静态求值，跳过
+        }
+      }
+    }
+
+    // 标签内静态文案（如 <Checkbox>这是一段描述</Checkbox>）供变体库 children 族消歧
+    const children = node.children;
+    if (Array.isArray(children)) {
+      for (const child of children) {
+        if (child.type === 'JSXText') {
+          const trimmed = (child.value || '').replace(/\s+/g, ' ').trim();
+          if (trimmed) {
+            props.hasChildrenText = true;
+            props.childrenText = trimmed;
+            break;
+          }
         }
       }
     }
