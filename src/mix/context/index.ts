@@ -605,3 +605,61 @@ export class Version {
 }
 
 export default new Context();
+
+interface FileModules {
+  /** 基于babel的自定义插件 */
+  babelPlugins?: ((params: { filename: string }) => ((params: any) => any))[]
+  /** 获取依赖信息 */
+  getDependencies?: (params: any) => Record<string, any>
+  /** 入口文件 */
+  entryFile: string
+}
+
+interface FrontendFileModules extends FileModules {
+  /** 模块类型 */
+  type: 'frontend'
+  /** 画布 */
+  canvas?: {
+    width?: number
+    height?: number
+  },
+}
+
+interface BackendFileModules extends FileModules {
+  /** 模块类型 */
+  type: 'backend'
+}
+
+interface SandBoxConfig {
+  componentRuntime?: {
+    modules: Record<string, FrontendFileModules | BackendFileModules>
+    /** 开发、调试 工作区 */
+    workspace?: {
+      /** 代码编辑器内复制回调 */
+      onCodeEditorCopy: () => { filename: string; code: string; }
+    }
+  }
+}
+
+class ComponentRuntime {
+  /** 目前只有一个前端入口 */
+  getFrontendModule() {
+    let frontendModule = (window._sandbox_.config as SandBoxConfig).componentRuntime
+
+    if (frontendModule?.modules) {
+      Object.entries(frontendModule?.modules).find(([key, value]: any) => {
+        if (value.type === 'frontend') {
+          frontendModule = value
+          return true
+        }
+        return false
+      })
+    }
+
+    // @ts-ignore 兼容逻辑
+    return frontendModule as FrontendFileModules;
+  }
+}
+
+const componentRuntime = new ComponentRuntime()
+export { componentRuntime }

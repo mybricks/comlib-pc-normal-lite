@@ -8,7 +8,7 @@ import dayjs from "dayjs";
 import {copyToClipboard} from './../index'
 
 import css from './runtime-card.less'
-import context from '../../../mix/context';
+import context, { componentRuntime } from '../../../mix/context';
 import NextRuntime from './next-runtime'
 import { DataSource } from './runtime/mybricks/data-source'
 import { replaceToUnderline } from './runtime/utils'
@@ -412,7 +412,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             ErrorView={({ error }) => {
               return <ErrorView error={error} comId={id} />
             }}
-            entryFile={window._sandbox_.config.componentRuntime?.entryFile || 'index'}
+            entryFile={componentRuntime.getFrontendModule()?.entryFile || 'index'}
             onFileChange={({ filename, type }) => {
               if (filename.startsWith('setup.') && type === 'update') {
                 // [TODO]

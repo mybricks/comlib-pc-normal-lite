@@ -6,10 +6,6 @@ import type { LibraryValidator, ValidateContext } from '../types';
 const BUILTIN_LIBRARIES: readonly string[] = [
   'mybricks',
   'mybricks/testing',
-  'style.less',
-  './style.less',
-  'service',
-  './service'
 ];
 
 /** react/react-dom 始终允许，与具体注册的三方库无关 */
