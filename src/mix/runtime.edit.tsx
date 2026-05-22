@@ -33,6 +33,12 @@ const dataCompatible = (props) => {
       }
     }
 
+    const readme = data.files.find((file) => file.fileName === "README.md")
+    if (readme) {
+      // 从 data.files 中移除 README.md（已同步到 context，无需保留在文件列表中）
+      data.files = data.files.filter((file) => file.fileName !== "README.md");
+    }
+
     // console.log('[com:version]', data.version)
     if (!data.version || data.version < 11) {
       data.version = 11
@@ -43,10 +49,10 @@ const dataCompatible = (props) => {
         fileMap.set(file.fileName, file);
       });
       data.files = Array.from(fileMap.values());
-      const readme = data.files.find((file) => file.fileName === "README.md")
-      if (readme?.source) {
-        context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
-      }
+      // const readme = data.files.find((file) => file.fileName === "README.md")
+      // if (readme?.source) {
+      //   context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
+      // }
 
       data.files.forEach((file) => {
         if (/(?<!\.module)\.less$/.test(file.fileName)) {
