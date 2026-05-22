@@ -424,7 +424,12 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               'process.env.POPUP_VISIBLE': JSON.stringify(env.runtime ? false : true),
               'process.env.POPUP_NODE': '_mybricks_props.popupNode',
               'process.env.MODE': JSON.stringify(env.runtime ? 'runtime' : 'design'),
-              'process.env.DEBUG_TARGET': JSON.stringify(env._debugTarget ?? {})
+              'process.env.DEBUG_TARGET': JSON.stringify(env._debugTarget ?? {}),
+              'process.env.db.user': JSON.stringify(''),
+              'process.env.db.password': JSON.stringify(''),
+              'process.env.db.host': JSON.stringify(''),
+              'process.env.db.port': JSON.stringify(''),
+              'process.env.db.database': JSON.stringify('')
             }}
           />
         )
