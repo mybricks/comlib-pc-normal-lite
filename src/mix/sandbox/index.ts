@@ -151,7 +151,7 @@ function buildProject(comId: string) {
       const files: any[] = aiComParams?.data?.files ?? [];
       const eslint = window._sandbox_?.config?.componentRuntime?.eslint
 
-      if (eslint.rules) {
+      if (eslint?.rules) {
         Object.assign(VERIFY_CONFIG.rules, eslint.rules)
       }
       return eslintVerify(files, VERIFY_CONFIG);
