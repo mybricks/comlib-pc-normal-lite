@@ -63,9 +63,9 @@ const ConfirmModal = popupRef(() => {
 
 
 \`\`\`ts DataSource 说明
-// DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
+// DataSource 基类：mybricks 提供，提供了axios对象注入，
 class DataSource {
-  constructor() { /* 对所有方法自动 Proxy 包装 */ }
+  constructor() {}
 }
 \`\`\`
 
@@ -83,6 +83,7 @@ class MyDatasource extends DataSource {
   // this.axios 是 DataSource 基类内置的独立 axios 实例，与其他组件隔离
   async getUserById({ id }) {
     return this.axios.get('/getUserById', { params: { id } })
+      .then(res => res.status == 200 ? res.data : null)
   }
 
   async createUser(data) {
