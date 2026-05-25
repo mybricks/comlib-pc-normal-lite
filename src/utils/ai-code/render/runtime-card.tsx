@@ -429,7 +429,9 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               'process.env.db.password': JSON.stringify(''),
               'process.env.db.host': JSON.stringify(''),
               'process.env.db.port': JSON.stringify(''),
-              'process.env.db.database': JSON.stringify('')
+              'process.env.db.database': JSON.stringify(''),
+              'process.env.db': '({})',
+              'process.env': '({})'
             }}
           />
         )
