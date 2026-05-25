@@ -846,8 +846,13 @@ class FileSystem {
     Object.entries(module).forEach(([key, value]) => {
       if (skippedKeys.has(key)) return
 
-      if (typeof value === 'function') {
-        // 函数类型：视为 React 组件，使用热更新包装
+      // 仅当导出名以大写字母开头时，才视为 React 组件并使用热更新包装。
+      // 小写开头的函数（如工具函数 renderFeatureIcon）直接透传，避免被错误包装为 HotComponent
+      // 导致调用时报 "is not a function" 的错误。
+      const isReactComponent = typeof value === 'function' && /^[A-Z]/.test(key)
+
+      if (isReactComponent) {
+        // React 组件（大写命名函数）：使用热更新包装
         const existing = entry.namedEntries![key]
         if (existing) {
           // 已有热更新条目：更新 currentImpl 并触发重渲染
@@ -889,7 +894,7 @@ class FileSystem {
           entry.module[key] = HotNamedComponent
         }
       } else {
-        // 非函数类型（变量、对象等）：直接更新，并记录 key
+        // 非 React 组件（小写函数、变量、对象等）：直接更新，并记录 key
         entry.module[key] = value
         entry.namedVariableKeys!.add(key)
       }
