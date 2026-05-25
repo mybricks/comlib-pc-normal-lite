@@ -10,8 +10,8 @@ import {copyToClipboard} from './../index'
 import css from './runtime-card.less'
 import context from '../../../mix/context';
 import NextRuntime from './next-runtime'
-import { DataSource } from './runtime/mybricks/data-source'
-import { replaceToUnderline } from './runtime/utils'
+import { DataSource } from './mybricks/data-source'
+import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
