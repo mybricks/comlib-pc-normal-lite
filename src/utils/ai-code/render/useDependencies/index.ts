@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { createMyBricksTesting } from './mybricks-testing'
 import type { MyBricksTesting } from './mybricks-testing'
-import { createMyBricks } from '../runtime/mybricks'
+import { createMyBricks } from '../mybricks'
 
 class EmptyDataSource {}
 

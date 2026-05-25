@@ -9,10 +9,10 @@ import React, {
   useCallback,
   useEffect
 } from 'react';
-import { parseFrameSize } from "../utils";
+import { parseFrameSize } from "./utils";
 import css from './index.less';
-import { debugLogs } from '../../../../../mix/context/debugLogs';
-import mixContext from '../../../../../mix/context';
+import { debugLogs } from '../../../../mix/context/debugLogs';
+import mixContext from '../../../../mix/context';
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。

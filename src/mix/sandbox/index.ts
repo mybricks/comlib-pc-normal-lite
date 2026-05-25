@@ -17,7 +17,7 @@ import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
 import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
-import { checkVisibility } from '../../utils/ai-code/render/runtime/mybricks/checkVisibility-polyfill';
+import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
 
 const VERIFY_CONFIG = {
   rules: {

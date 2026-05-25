@@ -1,4 +1,4 @@
-import { deepCopy } from '../../../../../utils'
+import { deepCopy } from '../../../../utils'
 
 /**
  * DataSource 基类
