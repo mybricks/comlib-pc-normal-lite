@@ -1,6 +1,7 @@
 import context from '../../context';
 import { syncStylesFromFigmaJson } from '../figma-to-dom/sync';
-import type { Props, FigmaImportItem } from '../types';
+import { syncComponentPropsFromFigmaJson } from '../figma-to-dom/sync-props';
+import type { Props, FigmaComponentPatch, FigmaImportItem } from '../types';
 
 export function buildPagePanel(props: Props) {
   const comId = props.model?.runtime?.id || props.id;
@@ -20,8 +21,15 @@ export function buildPagePanel(props: Props) {
                 get() {
                   return {
                     getCanvasList: () => context.getCanvasList(props.id),
-                    onSync: (items: FigmaImportItem[], rootEl?: Element | null) =>
-                      syncStylesFromFigmaJson(comId, items, { rootEl: rootEl ?? null }),
+                    onSync: (
+                      items: FigmaImportItem[],
+                      componentPatches?: FigmaComponentPatch[],
+                      rootEl?: Element | null
+                    ) => {
+                      const styleChanged = syncStylesFromFigmaJson(comId, items, { rootEl: rootEl ?? null });
+                      const propsChanged = syncComponentPropsFromFigmaJson(comId, componentPatches || []);
+                      return styleChanged + propsChanged;
+                    },
                   };
                 },
                 set() {

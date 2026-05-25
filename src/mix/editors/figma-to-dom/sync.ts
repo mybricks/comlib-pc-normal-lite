@@ -956,7 +956,10 @@ export function syncStylesFromFigmaJson(
   options?: { rootEl?: Element | null }
 ): number {
   const aiComParams = context.getAiComParams(comId);
-  if (!aiComParams?.data) return 0;
+  if (!aiComParams?.data) {
+    console.warn('[figma-sync][style] abort-no-aiComParams', { comId });
+    return 0;
+  }
   const files: Array<{ fileName: string; source: string }> = aiComParams.data.files || [];
   // 同步时实时采样当前 less + DOM computed 作为参考快照，不再使用持久化快照
   const liveBaseline = buildLiveBaseline(files, options?.rootEl ?? null);
