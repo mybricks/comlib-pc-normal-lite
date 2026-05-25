@@ -219,6 +219,18 @@ interface FileSystemParams {
   definitions: Definitions
 }
 
+/** 命名导出组件的热更新子条目 */
+interface NamedExportEntry {
+  /** 所有挂载实例的 forcer 集合 */
+  forceUpdateSet: Set<() => void>
+  /** 当前组件实现 */
+  currentImpl: (props: unknown) => ReactElement | null
+  /** 错误信息 */
+  errors: {
+    runtime: Error | null
+  }
+}
+
 type FilesMap = Record<string, {
   file: Files[0]
   module: {
@@ -242,6 +254,10 @@ type FilesMap = Record<string, {
     /** 运行时错误 */
     runtime: Error | null
   }
+  /** 命名导出组件的热更新子条目，key 为导出名 */
+  namedEntries?: Record<string, NamedExportEntry>
+  /** 命名导出中非函数类型（变量、对象等）的 key 集合，用于检测删除 */
+  namedVariableKeys?: Set<string>
 }>
 
 class FileSystem {
@@ -577,8 +593,15 @@ class FileSystem {
         })
         entry.file = file
         entry.module!.__default = module.default
-        entry.currentImpl = module.default || (() => null)
+        // default 导出被删除时，渲染一个会抛出错误的组件，让 ErrorBoundary 展示错误
+        entry.currentImpl = module.default
+          ? module.default
+          : () => { throw new Error(`[${filename}] 默认导出（export default）已被删除或为空`) }
         entry.forceUpdateSet.forEach(fn => fn())
+        // 更新命名导出，并触发命名导出中组件的热更新
+        this.syncNamedExports(entry, module, filename)
+        // 触发依赖该文件的上游模块重新渲染（处理导入该文件变量的情况）
+        this.refreshDependents(filename)
       } else {
         const tempModule: any = {
           default: hackProxy(),
@@ -608,8 +631,13 @@ class FileSystem {
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
         })
+        // 初始化命名导出（包括组件热更新包装）
+        this.syncNamedExports(tempEntry, module, filename)
         tempEntry.module!.__default = module.default
-        tempEntry.currentImpl = module.default || (() => null)
+        // default 导出为空时同样报错
+        tempEntry.currentImpl = module.default
+          ? module.default
+          : () => { throw new Error(`[${filename}] 默认导出（export default）已被删除或为空`) }
       }
     } else if (isJsModule(filename)) {
       if (entry) {
@@ -757,7 +785,12 @@ class FileSystem {
         })
         
         dependentEntry.module!.__default = reloadedModule.default
-        dependentEntry.currentImpl = reloadedModule.default || (() => null)
+        // default 导出被删除时同样报错
+        dependentEntry.currentImpl = reloadedModule.default
+          ? reloadedModule.default
+          : () => { throw new Error(`[${dependentFilename}] 默认导出（export default）已被删除或为空`) }
+        // 同步命名导出到 dependentEntry.module（如 export const Test = ...）
+        this.syncNamedExports(dependentEntry, reloadedModule, dependentFilename)
         dependentEntry.forceUpdateSet.forEach(fn => fn())
       } else if (isJsModule(dependentFilename)) {
         // 被 JS 依赖，递归刷新依赖链
@@ -791,6 +824,103 @@ class FileSystem {
       ...params,
       definitions: this.params.definitions,
       ErrorView: this.params.ErrorView
+    })
+  }
+
+  /**
+   * 同步命名导出到 entry.module，并为函数类型的命名导出（React 组件）创建热更新包装。
+   * - 函数类型：创建/更新 NamedExportEntry，更新 currentImpl，触发 forceUpdate，
+   *             在 entry.module[key] 上存放 HotComponent 包装（仅首次创建时）。
+   * - 非函数类型（变量、对象等）：直接更新 entry.module[key]。
+   */
+  private syncNamedExports(entry: FilesMap[string], module: ModuleExports, filename: string) {
+    if (!entry.namedEntries) {
+      entry.namedEntries = {}
+    }
+    if (!entry.namedVariableKeys) {
+      entry.namedVariableKeys = new Set()
+    }
+
+    const skippedKeys = new Set(['default', '__default', '__esModule'])
+
+    Object.entries(module).forEach(([key, value]) => {
+      if (skippedKeys.has(key)) return
+
+      // 仅当导出名以大写字母开头时，才视为 React 组件并使用热更新包装。
+      // 小写开头的函数（如工具函数 renderFeatureIcon）直接透传，避免被错误包装为 HotComponent
+      // 导致调用时报 "is not a function" 的错误。
+      const isReactComponent = typeof value === 'function' && /^[A-Z]/.test(key)
+
+      if (isReactComponent) {
+        // React 组件（大写命名函数）：使用热更新包装
+        const existing = entry.namedEntries![key]
+        if (existing) {
+          // 已有热更新条目：更新 currentImpl 并触发重渲染
+          existing.currentImpl = value
+          existing.forceUpdateSet.forEach(fn => fn())
+        } else {
+          // 首次创建：建立子热更新条目并包装成 HotComponent
+          const namedEntry: NamedExportEntry = {
+            forceUpdateSet: new Set(),
+            currentImpl: value,
+            errors: { runtime: null }
+          }
+          entry.namedEntries![key] = namedEntry
+
+          // 创建一个与 NamedExportEntry 兼容的 FilesMap 条目代理，
+          // 以便复用 createHotComponent（它需要完整的 entry 类型）
+          const pseudoEntry = {
+            file: entry.file,
+            module: entry.module,
+            dependencies: entry.dependencies,
+            dependedBy: entry.dependedBy,
+            forceUpdateSet: namedEntry.forceUpdateSet,
+            errors: namedEntry.errors,
+            get currentImpl() { return namedEntry.currentImpl },
+            set currentImpl(v) { namedEntry.currentImpl = v }
+          } as unknown as FilesMap[string]
+
+          const HotNamedComponent = createHotComponent({
+            entry: pseudoEntry,
+            LoadingView: this.params.LoadingView,
+            ErrorView: this.params.ErrorView,
+            getVibing: () => this.vibing,
+            onRuntimeError: (error: Error) => {
+              namedEntry.errors.runtime = error
+              this.params.onRuntimeError(error, entry.file)
+            }
+          })
+
+          entry.module[key] = HotNamedComponent
+        }
+      } else {
+        // 非 React 组件（小写函数、变量、对象等）：直接更新，并记录 key
+        entry.module[key] = value
+        entry.namedVariableKeys!.add(key)
+      }
+    })
+
+    const newModuleKeys = new Set(Object.keys(module))
+
+    // 检查已有命名组件导出中哪些在新模块里被删除了，
+    // 将其 currentImpl 替换为抛错函数，ErrorBoundary 会展示错误
+    Object.keys(entry.namedEntries!).forEach((key) => {
+      if (!newModuleKeys.has(key)) {
+        const removedEntry = entry.namedEntries![key]
+        const capturedKey = key
+        removedEntry.currentImpl = () => {
+          throw new Error(`[${filename}] 命名导出 "${capturedKey}" 已被删除`)
+        }
+        removedEntry.forceUpdateSet.forEach(fn => fn())
+      }
+    })
+
+    // 检查已有非函数命名导出中哪些被删除了，直接从 module 上移除
+    entry.namedVariableKeys!.forEach((key) => {
+      if (!newModuleKeys.has(key)) {
+        Reflect.deleteProperty(entry.module, key)
+        entry.namedVariableKeys!.delete(key)
+      }
     })
   }
 
