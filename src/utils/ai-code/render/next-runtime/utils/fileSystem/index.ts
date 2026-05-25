@@ -318,7 +318,63 @@ class FileSystem {
 
   /** 初始化 */
   init(files: Files) {
-    files.forEach(file => {
+    let sorted = files;
+
+    try {
+      function extractDeps(compiled: string, currentFile: string): string[] {
+        const deps: string[] = []
+        // 匹配以下几种形式：
+        // require("./xxx")
+        // import("./xxx")
+        // import xxx from "./xxx"
+        // import { xxx } from "./xxx"
+        // import "./xxx"
+        const requireOrDynamicImport = /(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)/g
+        const staticImport = /import\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g
+        let match
+        while ((match = requireOrDynamicImport.exec(compiled)) !== null) {
+          if (match[1].startsWith('.')) deps.push(match[1])
+        }
+        while ((match = staticImport.exec(compiled)) !== null) {
+          if (match[1].startsWith('.')) deps.push(match[1])
+        }
+        return deps
+      }
+      function topoSort(files: Files): Files {
+        const visited = new Set<string>()
+        const result: Files = []
+        const fileMap = Object.fromEntries(files.map(f => [f.filename, f]))
+
+        const visit = (file: Files[0]) => {
+          if (visited.has(file.filename)) return
+          visited.add(file.filename)
+          // 先处理依赖
+          const deps = extractDeps(decodeURIComponent(file.compiled), file.filename)
+          for (const dep of deps) {
+            // 将相对路径解析为真实文件名
+            let currentPath = file.filename.split('/')
+            currentPath = currentPath.slice(0, currentPath.length - 1)
+            dep.split('/').forEach((seg) => {
+              if (seg === '..') currentPath.pop()
+              else if (seg !== '.') currentPath.push(seg)
+            })
+            const resolvedPath = currentPath.join('/')
+            // 尝试精确匹配或加后缀匹配
+            const resolvedFile = fileMap[resolvedPath] ?? RESOLVE_EXTENSIONS.reduce<Files[0] | undefined>((found, ext) => {
+              return found ?? fileMap[resolvedPath + ext] ?? fileMap[resolvedPath + '/index' + ext]
+            }, undefined)
+            if (resolvedFile) visit(resolvedFile)
+          }
+          result.push(file)
+        }
+
+        files.forEach(visit)
+        return result
+      }
+      sorted = topoSort(files)
+    } catch {}
+
+    sorted.forEach(file => {
       this.update(file.filename, file)
     })
   }
