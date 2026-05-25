@@ -21,7 +21,8 @@ import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibi
 
 const VERIFY_CONFIG = {
   rules: {
-    [RULE_IDS.README_CHECK]: 'off' as const,
+    // [RULE_IDS.README_CHECK]: 'off' as const,
+    [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
   },
 };
 
@@ -148,6 +149,11 @@ function buildProject(comId: string) {
     getDesignRules: () => context.projectConfig.designRules ?? '',
     getLintResults: async () => {
       const files: any[] = aiComParams?.data?.files ?? [];
+      const eslint = window._sandbox_?.config?.componentRuntime?.eslint
+
+      if (eslint.rules) {
+        Object.assign(VERIFY_CONFIG.rules, eslint.rules)
+      }
       return eslintVerify(files, VERIFY_CONFIG);
     },
   });
