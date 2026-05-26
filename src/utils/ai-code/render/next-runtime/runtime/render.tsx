@@ -16,6 +16,10 @@ import type {
   OnRuntimeError,
 } from '../types'
 
+const IS_STRANGE_ENV = () => {
+  return window['__IS_AICODE__'] || (typeof window !== 'undefined' ? (window as any).webViewMessageApi : undefined)
+}
+
 interface RenderProps {
   dependencies: Dependencies
   css: Css
@@ -65,6 +69,9 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
         } else if (type === 'update') {
           setError(null)
         }
+      }
+      if (IS_STRANGE_ENV()) {
+        setError(null)
       }
       props.onFileChange({ filename, type })
     })
@@ -149,7 +156,7 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
     <Entry
       // _onError_={null}
       // [TEMP] 特殊处理、判断环境
-      _onError_={window['__IS_AICODE__'] ? (error) => {
+      _onError_={IS_STRANGE_ENV() ? (error) => {
         props.onRuntimeError(error)
         if (vibingEnded) {
           setError(error)
