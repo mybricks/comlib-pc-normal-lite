@@ -144,19 +144,25 @@ const transformNewFormatForNotifyChanged = (
 
   Object.entries(data).forEach(([componentName, info]) => {
     const { name, summary, title, type } = info
-    const widgetSelector = `${fileSelector} [data-widget-name="${componentName}"]`
+    const widgetSelector = `[data-widget-name="${componentName}"]`
 
     // 接口
     if (info.datasource) {
       Object.entries(info.datasource).forEach(([classname, apis]) => {
         Object.entries(apis).forEach(([apiName, { desc }]) => {
           const classSelector = `[data-zone-classnames*="${classname}"]`
+
+          const refSelector = classname === 'root' ? 
+            `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
+            `${fileSelector}${widgetSelector}${classSelector}` +
+            `, ${fileSelector}${widgetSelector} ${classSelector}` + 
+            `, ${fileSelector} ${widgetSelector}${classSelector}` + 
+            `, ${fileSelector} ${widgetSelector} ${classSelector}`
+
           services.push({
             title: apiName,
             type: 'up',
-            refSelector: classname === 'root'
-              ? widgetSelector
-              : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
+            refSelector,
             description: desc || '',
             refType: type
           })
@@ -168,7 +174,22 @@ const transformNewFormatForNotifyChanged = (
     if (info.events) {
       Object.entries(info.events).forEach(([classname, handlers]) => {
         const classSelector = `[data-zone-classnames*="${classname}"]`
-        const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
+        /**
+         * 1. dom fileSelector widgetSelector classSelector 同时满足
+         * 
+         * 2. dom fileSelector widgetSelector
+         *      dom classSelector
+         * 3. dom fileSelector
+         *      dom widgetSelector classSelector
+         * 4. dom fileSelector
+         *      dom widgetSelector
+         *        dom  classSelector
+         */
+
+        const refSelector = `${fileSelector}${widgetSelector}${classSelector}` +
+          `, ${fileSelector}${widgetSelector} ${classSelector}` + 
+          `, ${fileSelector} ${widgetSelector}${classSelector}` + 
+          `, ${fileSelector} ${widgetSelector} ${classSelector}`
 
         Object.entries(handlers).forEach(([eventName, { title, mermaid, relations }]) => {
           const result: any = {
@@ -194,9 +215,12 @@ const transformNewFormatForNotifyChanged = (
     if (info.state) {
       Object.entries(info.state).forEach(([classname, fields]) => {
         const classSelector = `[data-zone-classnames*="${classname}"]`
-        const refSelector = classname === 'root'
-          ? widgetSelector
-          : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
+        const refSelector = classname === 'root' ? 
+          `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
+          `${fileSelector}${widgetSelector}${classSelector}` +
+          `, ${fileSelector}${widgetSelector} ${classSelector}` + 
+          `, ${fileSelector} ${widgetSelector}${classSelector}` + 
+          `, ${fileSelector} ${widgetSelector} ${classSelector}`
 
         Object.entries(fields).forEach(([field, { desc }]) => {
           state.push({
@@ -211,7 +235,7 @@ const transformNewFormatForNotifyChanged = (
     if (type !== 'app') {
       // 当前仅处理组件
       docs.push({
-        refSelector: widgetSelector,
+        refSelector: `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}`,
         name,
         title,
         summary,

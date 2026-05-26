@@ -883,6 +883,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         useEffect(() => {
           try {
             if (containerRef.current && container) {
+              containerRef.current.setAttribute('data-zone-filename', params.filename)
               let widgetName = params?.widgetName
               if (!widgetName) {
                 const firstWidget = containerRef.current?.querySelector('[data-widget-name]');
