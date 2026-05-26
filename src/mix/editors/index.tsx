@@ -67,5 +67,13 @@ export default function (props: Props, actions: Actions) {
       ]
     },
     ...getDataZoneTextEditable(),
+    /** 撤销 */
+    '@undo'(params) {
+      console.log('[@undo]', params);
+    },
+    /** 重做 */
+    '@redo'(params) {
+      console.log('[@redo]', params);
+    }
   };
 }
