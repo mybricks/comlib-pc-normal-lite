@@ -342,7 +342,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
    * antd.Drawer 关闭后会设置transformX(100%)
    */
   const pageStyle = isDesign() ? {} : {
-    overflow: 'hidden'
+    // overflow: 'hidden' // 绝对定位元素不渲染
   }
 
   const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
