@@ -237,40 +237,125 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   const transformPath = ({ index, path }) => {
-    return index ? '/' : (path.startsWith("/") ? path : `/${path}`)
+    return index ? '/' : (path?.startsWith("/") ? path : `/${path || ''}`)
+  }
+
+  const isWildcardPath = (path?: string) => {
+    return path?.split('/').includes('*') ?? false
+  }
+
+  const joinRoutePaths = (base: string, path: string) => {
+    if (!path) return base
+    if (!base) return path
+    if (path === '/') return base
+    return `${base.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
+  }
+
+  const getWildcardRouteBase = (path?: string) => {
+    if (!isWildcardPath(path)) return null
+
+    const segments = transformPath({ index: null, path }).split('/').filter(Boolean)
+    const wildcardIndex = segments.indexOf('*')
+    const baseSegments = wildcardIndex >= 0 ? segments.slice(0, wildcardIndex) : segments
+
+    return baseSegments.length > 0 ? `/${baseSegments.join('/')}` : ''
+  }
+
+  const stripRouteBase = (path: string, routeBase: string) => {
+    if (!routeBase || routeBase === '/') return path
+    if (path === routeBase) return '/'
+    if (path.startsWith(`${routeBase}/`)) return path.slice(routeBase.length) || '/'
+    return path
+  }
+
+  const getMatchedWildcardBase = (currentPath: string, splat?: string) => {
+    if (splat === undefined) return null
+    if (!splat) return currentPath === '/' ? '' : currentPath.replace(/\/$/, '')
+
+    const suffix = `/${splat}`
+    return currentPath.endsWith(suffix) ? currentPath.slice(0, -suffix.length) : currentPath
+  }
+
+  const escapeRegExp = (value: string) => {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
 
   /**
-   * 将路由 pattern 与实际 pathname 做匹配，支持动态参数路由（:param）
+   * 将路由 pattern 与实际 pathname 做匹配，支持动态参数（:param）和通配符（*）
    * 返回 null 表示不匹配，否则返回 { params } 对象
    */
   const matchPath = (pattern: string, pathname: string): { params: Record<string, string> } | null => {
     const keys: string[] = []
-    const regexStr = pattern
-      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')  // 转义正则特殊字符（除 * 和 :param）
-      .replace(/:([^/]+)/g, (_, key) => {
-        keys.push(key)
-        return '([^/]+)'
-      })
-      .replace(/\*/g, '.*')
-    const regex = new RegExp(`^${regexStr}$`)
+    const segments = pattern.split('/').filter(Boolean)
+
+    const regexStr = segments.reduce((regex, segment, index) => {
+      if (segment === '*') {
+        keys.push('*')
+        return index === 0 ? `${regex}/?(.*)` : `${regex}(?:/(.*))?`
+      }
+
+      const segmentRegex = segment
+        .replace(/:([^/]+)/g, (_, key) => {
+          keys.push(key)
+          return `__MYBRICKS_ROUTE_PARAM_${keys.length - 1}__`
+        })
+        .split(/(__MYBRICKS_ROUTE_PARAM_\d+__)/g)
+        .map((part) => {
+          const matched = part.match(/^__MYBRICKS_ROUTE_PARAM_(\d+)__$/)
+          return matched ? '([^/]+)' : escapeRegExp(part)
+        })
+        .join('')
+
+      return `${regex}/${segmentRegex}`
+    }, '')
+
+    const regex = new RegExp(`^${regexStr || '/'}$`)
     const match = pathname.match(regex)
     if (!match) return null
     const designMode = isDesign()
     const params = Object.fromEntries(keys.map((k, i) => {
-      const value = match[i + 1]
-      return [k, designMode ? (`:${k}` === value ? undefined : value) : value as any]
+      const value = match[i + 1] ?? ''
+      return [k, designMode ? (`:${k}` === value || (k === '*' && value === '*') ? undefined : value) : value as any]
     }))
     return { params }
+  }
+
+  const getRouteScore = (pattern: string, index?: number | boolean) => {
+    const segments = pattern.split('/').filter(Boolean)
+    return segments.reduce((score, segment) => {
+      if (segment === '*') return score - 2
+      if (segment.startsWith(':')) return score + 3
+      return score + 10
+    }, segments.length + (index ? 2 : 0))
+  }
+
+  const getRouteMatch = (
+    route: { index?: number | boolean; path?: string },
+    currentPathWithSearch: string,
+    routeBase = ''
+  ) => {
+    const { index, path } = route
+    if (!index && !path) return null
+
+    const searchIndex = currentPathWithSearch.indexOf('?')
+    const pathOnly = searchIndex >= 0 ? currentPathWithSearch.slice(0, searchIndex) : currentPathWithSearch
+    const currentPath = transformPath({ index: null, path: stripRouteBase(pathOnly, routeBase) })
+    const propPath = transformPath({ index, path })
+    const matched = matchPath(propPath, currentPath)
+    const score = getRouteScore(propPath, index) + (isDesign() && propPath === currentPath ? 1000 : 0)
+
+    return matched ? { matched, score, currentPath } : null
   }
 
   interface AppContextValue {
     state: 'collect_routes' | 'runtime'
     registerRoute: (route: string) => void
+    routeBase: string
   }
   const AppContext = createContext<AppContextValue>({
     state: 'runtime',
-    registerRoute: () => {}
+    registerRoute: () => {},
+    routeBase: ''
   });
 
   type NavigateOptions = {
@@ -284,13 +369,15 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     params: Record<string, string>
     navigate: NavigateFn
     locationState: unknown
+    routeBase: string
   }
   const RouterContext = createContext<RouterContextValue>({
     currentPath: '/',
     search: '',
     navigate: () => {},
     locationState: undefined,
-    params: {}
+    params: {},
+    routeBase: ''
   });
 
   const CollectingRoute = (params: { _route: string, _Component: React.FC<any> }) => {
@@ -302,7 +389,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           search: '',
           navigate: () => {},
           locationState: undefined,
-          params: {}
+          params: {},
+          routeBase: ''
         }}
       >
         <Component {...params}/>
@@ -512,7 +600,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const locationState = currentEntry.state
 
     const contextValue = useMemo<RouterContextValue>(
-      () => ({ currentPath, search: currentSearch, params: {}, navigate, locationState }),
+      () => ({ currentPath, search: currentSearch, params: {}, navigate, locationState, routeBase: '' }),
       [currentPath, currentSearch, navigate, locationState]
     )
 
@@ -530,6 +618,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const Routes = (params: React.PropsWithChildren) => {
     const { children } = params;
     const appCtx = useContext(AppContext);
+    const routerContext = useContext(RouterContext)
     if (appCtx.state === 'collect_routes') {
       React.Children.forEach(children, (child) => {
         if (React.isValidElement(child) && (child.type as any).__type === ROUTE_TYPE) {
@@ -537,17 +626,35 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           if (element && element.type && element.type.__type !== DESIGNPOPUP_TYPE) {
             /**
              * 1. 如果element渲染弹窗，忽略
+             * 2. 通配符路由通常作为布局/兜底承载具体子路由，自身不作为独立页面收集
              */
-            appCtx.registerRoute(transformPath({ index, path }));
+            if (!isWildcardPath(path)) {
+              appCtx.registerRoute(joinRoutePaths(appCtx.routeBase, transformPath({ index, path })));
+            }
           }
         }
       });
+
+      return children;
     }
 
-    return children;
+    let matchedChild: React.ReactNode = null
+    let matchedScore = -Infinity
+
+    React.Children.forEach(children, (child) => {
+      if (!React.isValidElement(child) || (child.type as any).__type !== ROUTE_TYPE) return
+
+      const routeMatch = getRouteMatch(child.props, routerContext.currentPath, routerContext.routeBase)
+      if (routeMatch && routeMatch.score > matchedScore) {
+        matchedChild = child
+        matchedScore = routeMatch.score
+      }
+    });
+
+    return matchedChild;
   }
 
-  const Route = (params: { index?: number; path: string; element: React.ReactElement}) => {
+  const Route = (params: { index?: number | boolean; path?: string; element: React.ReactElement}) => {
     const { index, path, element } = params;
     const appContext = useContext(AppContext)
     const routerContext = useContext(RouterContext)
@@ -557,24 +664,43 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     }
 
     if (appContext.state === 'collect_routes') {
-      return element.props['data-loc'] ? element : React.cloneElement(element, { ['data-loc']: '1' })
-    } else if (index || path) {
-      // Strip query string from currentPath before matching (query params don't affect route matching)
-      const rawCurrentPath = routerContext.currentPath
-      const searchIndex = rawCurrentPath.indexOf('?')
-      const pathOnly = searchIndex >= 0 ? rawCurrentPath.slice(0, searchIndex) : rawCurrentPath
-      const currentPath = transformPath({ index: null, path: pathOnly })
-      const propPath = transformPath({ index, path })
+      const nextElement = element.props['data-loc'] ? element : React.cloneElement(element, { ['data-loc']: '1' })
+      const wildcardBase = getWildcardRouteBase(path)
 
-      const matched = matchPath(propPath, currentPath)
-      if (matched) {
+      if (wildcardBase !== null) {
+        return (
+          <AppContext.Provider
+            value={{
+              ...appContext,
+              routeBase: joinRoutePaths(appContext.routeBase, wildcardBase)
+            }}
+          >
+            {nextElement}
+          </AppContext.Provider>
+        )
+      }
+
+      return nextElement
+    } else if (index || path) {
+      const routeMatch = getRouteMatch({ index, path }, routerContext.currentPath, routerContext.routeBase)
+      if (routeMatch) {
         const nextElement = React.cloneElement(element, {
           ['data-loc']: element.props['data-loc'] || '1',
           ['_mybricks_page']: true
         })
 
-        const mergedContext = { ...routerContext, params: matched.params }
-        if (Object.keys(matched.params).length > 0 || routerContext.search) {
+        const wildcardBase = getMatchedWildcardBase(routeMatch.currentPath, routeMatch.matched.params['*'])
+        const mergedContext = {
+          ...routerContext,
+          params: { ...routerContext.params, ...routeMatch.matched.params },
+          routeBase: wildcardBase !== null ? joinRoutePaths(routerContext.routeBase, wildcardBase) : routerContext.routeBase
+        }
+
+        if (
+          Object.keys(routeMatch.matched.params).length > 0 ||
+          routerContext.search ||
+          wildcardBase !== null
+        ) {
           return (
             <RouterContext.Provider value={mergedContext}>
               {nextElement}
@@ -630,9 +756,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           registerRoute: (path: string) => {
             collectingRoutes.current.push(path);
           },
+          routeBase: ''
         })
 
         useLayoutEffect(() => {
+          // @ts-ignore
+          window.__mybricksai_collectingRoutes__ = () => {
+            return collectingRoutes;
+          }
           setApp((app) => {
             return {
               ...app,
