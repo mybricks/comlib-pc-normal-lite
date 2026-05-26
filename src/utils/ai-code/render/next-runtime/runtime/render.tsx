@@ -148,7 +148,8 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
   return (
     <Entry
       // _onError_={null}
-      _onError_={(location.pathname.startsWith('/design') || location.pathname.startsWith('/vibe-design')) ? (error) => {
+      // [TEMP] 特殊处理、判断环境
+      _onError_={window['__IS_AICODE__'] ? (error) => {
         props.onRuntimeError(error)
         if (vibingEnded) {
           setError(error)
