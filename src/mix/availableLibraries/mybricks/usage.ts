@@ -1,9 +1,4 @@
-interface GetMybricksUsageProps {
-  useStore: boolean
-}
-
-export function getMybricksUsage(props: GetMybricksUsageProps) {
-  const { useStore } = props
+export function getMybricksUsage() {
   return `# mybricks
 - 内置的核心类库，对于页面、浮层（弹窗/抽屉等）、APP声明、数据源、接口以及页面路由相关功能必须使用此库
 
@@ -20,15 +15,13 @@ export function getMybricksUsage(props: GetMybricksUsageProps) {
 项目必须export default 一个由 appRef 包裹的实现
 
 ### 组件声明
-组件必须通过 comRef 包裹实现${useStore ? '，comRef包裹的组件事一个响应式组件，当组件内使用 store 数据时，数据变更会自动刷新页面' : ''}
+组件必须通过 comRef 包裹实现
 
 ### 页面声明
 页面同样需要通过 comRef 包裹实现，但是需要被 Route 注册为页面
-${useStore ? '  1. 该页面是一个响应式页面，页面内使用store中的数据时，数据变更会自动刷新页面；' : ''}
 
 ### 浮层类组件声明
 浮层类组件（弹窗、抽屉等）必须通过 popupRef 包裹实现，popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
-${useStore ? '  1. 该浮层类组件是一个响应式浮层类组件，浮层类组件内使用store中的数据时，数据变更会自动刷新浮层类组件；' : ''}
 
 > 浮层类组件不是路由页面，禁止将其注册为 \`Route\`；浮层必须使用 \`popupRef\` 包裹，作为普通子组件挂载在所属页面或组件内；
 
@@ -211,33 +204,5 @@ export default appRef(() => {
 import { logger } from 'mybricks';
 logger.info('这是一条日志');
 \`\`\`
-
-${useStore ? `### 数据响应式
-基于 store.ts 的响应式编程，我们提供了 \`makeAutoObservable\` 状态管理工具。
-
-#### 使用示例
-构造函数 constructor 内部必须调用 makeAutoObservable 方法，并传入 this 作为参数，自动绑定当前实例的所有属性为可观察状态，所有方法为动作方法，严格遵循状态管理规范，保证响应式逻辑生效；
-\`\`\`ts
-import { logger, makeAutoObservable } from 'mybricks';
-
-class Store {
-  loading = false;
-
-  constructor() {
-    makeAutoObservable(this);
-  }
-
-  click() {
-    logger.info('[Store/click] 按钮点击');
-  }
-  
-  setLoading(loading) {
-    logger.info('[Store/setLoading] 设置loading状态', loading);
-    this.loading = loading;
-  }
-}
-
-export default new Store();
-\`\`\`` : ''}
 `
 }

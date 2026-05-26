@@ -5,6 +5,7 @@ import { parsemd, parseRequirement, SummaryBlock } from "../../utils/ai-code/md"
 import { transformForNotifyChanged, transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 import { randomUUID } from '../utils/uuid'
+import config from './config'
 
 export interface LogMessage {
   method: 'log' | 'info' | 'warn' | 'error';
@@ -214,7 +215,7 @@ class Context {
     return this.aiComParamsMap[id]?.aiComParams;
   }
 
-  projectConfig: { availableLibraries?: any[]; themes?: any[]; codeRules?: string; designRules?: string } = {};
+  projectConfig: { themes?: any[]; codeRules?: string; designRules?: string } = {};
 
   /**
    * 解析组件实际应使用的主题。
@@ -605,3 +606,5 @@ export class Version {
 }
 
 export default new Context();
+
+export { config }

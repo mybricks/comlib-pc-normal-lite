@@ -148,13 +148,34 @@ function buildProject(comId: string) {
     getCodeRules: () => context.projectConfig.codeRules ?? '',
     getDesignRules: () => context.projectConfig.designRules ?? '',
     getLintResults: async () => {
+      const messages: any[] = [];
       const files: any[] = aiComParams?.data?.files ?? [];
-      const eslint = window._sandbox_?.config?.componentRuntime?.eslint
+      const componentRuntime = window._sandbox_?.config?.componentRuntime
 
-      if (eslint?.rules) {
-        Object.assign(VERIFY_CONFIG.rules, eslint.rules)
+      if (componentRuntime) {
+        const { eslint, modules } = componentRuntime
+        if (eslint) {
+          const { rules, verify } = eslint
+          if (rules) {
+            Object.assign(VERIFY_CONFIG.rules, eslint.rules)
+          }
+          if (verify) {
+            messages.push(...await verify(files))
+          }
+        }
+        if (modules) {
+          await Promise.all(Object.entries(modules).map(async ([key, value]: any) => {
+            const eslintVerify = value.eslint.verify
+            if (eslintVerify) {
+              messages.push(...await eslintVerify(files))
+            }
+          }))
+        }
       }
-      return eslintVerify(files, VERIFY_CONFIG);
+
+      messages.push(...await eslintVerify(files, VERIFY_CONFIG))
+
+      return messages;
     },
   });
 }

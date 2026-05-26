@@ -1,3 +1,4 @@
+import context from '../../context'
 import type { LibraryValidator, ValidateContext } from '../types';
 
 /**
@@ -6,10 +7,6 @@ import type { LibraryValidator, ValidateContext } from '../types';
 const BUILTIN_LIBRARIES: readonly string[] = [
   'mybricks',
   'mybricks/testing',
-  'style.less',
-  './style.less',
-  'service',
-  './service'
 ];
 
 /** react/react-dom 始终允许，与具体注册的三方库无关 */
@@ -27,7 +24,7 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
     ...thirdPartyLibNames,
   ];
 
-  function isAllowed(source: string): boolean {
+  function isAllowed(source: string, fileName: string): boolean {
     return ALLOWED_LIBRARIES.some((lib) => source === lib) || source.startsWith(".");
   }
 
@@ -36,8 +33,8 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
 
     validatePlugin(ctx: ValidateContext) {
       const fileName = ctx.fileName ?? '';
-      const isSetupJs = fileName === 'setup.js';
-      const isDataSourceJs = fileName === 'dataSource.js';
+      const isSetupJs = fileName === 'setup.ts';
+      const isDataSourceJs = fileName === 'dataSource.ts';
 
       return function publicDepsValidatorPlugin(_babel: any) {
         return {
@@ -53,7 +50,7 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                 );
               }
 
-              if (isAllowed(source)) return;
+              if (isAllowed(source, fileName)) return;
 
               throw path.buildCodeFrameError(
                 `[依赖校验] 使用了不允许的依赖：'${source}'\n` +

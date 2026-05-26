@@ -34,17 +34,6 @@ export default function (props: Props, actions: Actions) {
     context.projectConfig = (window as any)._getProjectConfig_();
   }
 
-  const dependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks: {} }) || {}
-  if (!context.projectConfig.availableLibraries) {
-    context.projectConfig.availableLibraries = []
-  }
-  context.projectConfig.availableLibraries.push(...Object.entries(dependencies).map(([key, value]: any) => {
-    return {
-      name: key,
-      ...value
-    }
-  }))
-
   return {
     ...focusAreaConfigs,
     ...buildHooks(props),

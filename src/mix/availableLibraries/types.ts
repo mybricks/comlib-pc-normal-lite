@@ -118,7 +118,7 @@ export interface LibraryMeta {
    * 未填写时表示库已通过 npm 打包到 bundle 中，无需额外加载。
    */
   resources?: LibraryResource[];
-  /** 可选的代码校验器，由 availableLibraries/index.ts 统一收集 */
+  /** 可选的代码校验器 */
   validator?: LibraryValidator;
 }
 

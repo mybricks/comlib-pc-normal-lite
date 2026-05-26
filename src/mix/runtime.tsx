@@ -5,7 +5,7 @@ import echartsForReact from './../utils/echarts-for-react'
 import {StyleProvider} from '@ant-design/cssinjs'
 import {ConfigProvider} from "antd";
 import zhCN from 'antd/locale/zh_CN'
-import context from './context'
+import context, { config } from './context'
 
 const SUPPORTED_LOGS = {
   log: true,
@@ -23,32 +23,7 @@ export default genAIRuntime({
     '实现一个企业通讯录页面，左侧是部门组织架构树，右侧是该部门下的员工详情列表，右上角提供添加员工按钮',
   ],
   getDependencies: () => {
-    const base = {
-      antd,
-      'echarts-for-react': echartsForReact,
-      'antd/locale/zh_CN': zhCN,
-      // '@dnd-kit/core': dndCore,
-      // '@dnd-kit/modifiers': dndModifiers,
-      // '@dnd-kit/sortable': dndSortable,
-      // '@dnd-kit/utilities': dndUtilities
-    };
-
-    // projectConfig.availableLibraries 中的库通过 library 全局变量名从 window 获取
-    const projectConfig = (window as any)._getProjectConfig_?.();
-    const projectLibs = projectConfig?.availableLibraries ?? [];
-    const projectDefs: PropertyDescriptorMap = {};
-    for (const lib of projectLibs) {
-      if (lib.name && lib.library && !(lib.name in base)) {
-        const globalVar = lib.library;
-        projectDefs[lib.name] = {
-          get() { return (window as any)[globalVar] },
-          enumerable: true,
-          configurable: true,
-        };
-      }
-    }
-
-    return Object.defineProperties(base, { ...projectDefs });
+    return config.getAllDependencies()
   },
   wrapper: ({ children, env, canvasContainer }) => {
     // const container = useRef(
