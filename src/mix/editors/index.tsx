@@ -11,6 +11,7 @@ import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
 import undoRedo from './undoRedo';
 import { verify as eslintVerify } from '../eslint';
+import styles from './styleProxy';
 
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
@@ -67,6 +68,7 @@ export default function (props: Props, actions: Actions) {
       ]
     },
     ...getDataZoneTextEditable(),
-    ...undoRedo()
+    ...undoRedo(),
+    ...styles()
   };
 }

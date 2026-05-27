@@ -378,3 +378,14 @@ export function genResizer() {
     },
   };
 }
+
+export default function () {
+  return {
+    /** 画布上各种可视化调整 */
+    '@setStyle'(ctx, params) {
+      console.log('[@setStyle:state]', params.state)
+      // console.log('[ctx]', ctx)
+      // console.log('[params]', params)
+    }
+  }
+}
