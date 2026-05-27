@@ -211,20 +211,21 @@ function IconItem({ icon, params, onClose }: { icon: { name: string; svg: string
 
 // ─── IconLibraryPicker ────────────────────────────────────────────────────────
 
+function calcPickerPos(triggerEl: HTMLElement, panelWidth: number) {
+  const rect = triggerEl.getBoundingClientRect();
+  let left = rect.left;
+  if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
+  return { top: rect.bottom + 10, left };
+}
+
 function IconLibraryPicker({ params, triggerEl, onClose }: { params: any; triggerEl: HTMLElement; onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const icons = scanIconsFromDOM();
   const PANEL_WIDTH = 260;
+  const [pos, setPos] = useState(() => calcPickerPos(triggerEl, PANEL_WIDTH));
+  const icons = scanIconsFromDOM();
 
   useEffect(() => {
-    const reposition = () => {
-      const rect = triggerEl.getBoundingClientRect();
-      let left = rect.left;
-      if (left + PANEL_WIDTH > window.innerWidth - 8) left = window.innerWidth - PANEL_WIDTH - 8;
-      setPos({ top: rect.bottom + 10, left });
-    };
-    reposition();
+    const reposition = () => setPos(calcPickerPos(triggerEl, PANEL_WIDTH));
     window.addEventListener('scroll', reposition, true);
     return () => window.removeEventListener('scroll', reposition, true);
   }, [triggerEl]);
