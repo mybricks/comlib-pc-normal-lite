@@ -182,6 +182,10 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               if (!tagName) {
                 return;
               }
+
+              if (tagName === 'svg') {
+                pushDataAttr(node.openingElement.attributes, 'data-zone-svg', 'true');
+              }
               const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
 
               const pageRef = getPageRefForJSXPath(path, pageRefCache, fallbackName);

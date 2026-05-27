@@ -1,11 +1,15 @@
 import './resourceLoader';
 import '../../utils/antd';
+import React from 'react';
 import context from '../context';
 import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
 import { genStyleValue, genResizer, genImgSrcReplacer } from './styleProxy';
+import { buildSvgEditorItems } from './configs/svgEditor';
+import { aiSvgIcon } from './icons/aiSvgIcon';
+import { AiSvgPanel } from './components/AiSvgPanel';
 import type { Props, Actions } from './types';
 import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
@@ -66,6 +70,16 @@ export default function (props: Props, actions: Actions) {
           value: genImgSrcReplacer(),
         }
       ]
+    },
+    '[data-zone-svg]': {
+      '@ai': {
+        title: aiSvgIcon,
+        desc: '通过AI创作图标',
+        render(_data, {close}) {
+          return <AiSvgPanel close={close} />;
+        }
+      },
+      items: buildSvgEditorItems(comId),
     },
     ...getDataZoneTextEditable(),
     ...undoRedo(),

@@ -317,6 +317,318 @@ export function genImgSrcReplacer() {
   };
 }
 
+/** SVG 属性名 → JSX 属性名的特殊映射表 */
+const SVG_ATTR_MAP: Record<string, string> = {
+  class: 'className',
+  'clip-path': 'clipPath',
+  'clip-rule': 'clipRule',
+  'color-interpolation': 'colorInterpolation',
+  'color-interpolation-filters': 'colorInterpolationFilters',
+  'color-rendering': 'colorRendering',
+  'dominant-baseline': 'dominantBaseline',
+  'fill-opacity': 'fillOpacity',
+  'fill-rule': 'fillRule',
+  'flood-color': 'floodColor',
+  'flood-opacity': 'floodOpacity',
+  'font-family': 'fontFamily',
+  'font-size': 'fontSize',
+  'font-size-adjust': 'fontSizeAdjust',
+  'font-stretch': 'fontStretch',
+  'font-style': 'fontStyle',
+  'font-variant': 'fontVariant',
+  'font-weight': 'fontWeight',
+  'glyph-orientation-horizontal': 'glyphOrientationHorizontal',
+  'glyph-orientation-vertical': 'glyphOrientationVertical',
+  'image-rendering': 'imageRendering',
+  'letter-spacing': 'letterSpacing',
+  'lighting-color': 'lightingColor',
+  'marker-end': 'markerEnd',
+  'marker-mid': 'markerMid',
+  'marker-start': 'markerStart',
+  'overline-position': 'overlinePosition',
+  'overline-thickness': 'overlineThickness',
+  'paint-order': 'paintOrder',
+  'pointer-events': 'pointerEvents',
+  'shape-rendering': 'shapeRendering',
+  'stop-color': 'stopColor',
+  'stop-opacity': 'stopOpacity',
+  'strikethrough-position': 'strikethroughPosition',
+  'strikethrough-thickness': 'strikethroughThickness',
+  'stroke-dasharray': 'strokeDasharray',
+  'stroke-dashoffset': 'strokeDashoffset',
+  'stroke-linecap': 'strokeLinecap',
+  'stroke-linejoin': 'strokeLinejoin',
+  'stroke-miterlimit': 'strokeMiterlimit',
+  'stroke-opacity': 'strokeOpacity',
+  'stroke-width': 'strokeWidth',
+  'text-anchor': 'textAnchor',
+  'text-decoration': 'textDecoration',
+  'text-rendering': 'textRendering',
+  'underline-position': 'underlinePosition',
+  'underline-thickness': 'underlineThickness',
+  'unicode-bidi': 'unicodeBidi',
+  'vector-effect': 'vectorEffect',
+  'word-spacing': 'wordSpacing',
+  'writing-mode': 'writingMode',
+  // xlink 命名空间
+  'xlink:href': 'href',
+  'xlink:title': 'xlinkTitle',
+  'xlink:show': 'xlinkShow',
+  'xlink:actuate': 'xlinkActuate',
+};
+
+/**
+ * 将原始 SVG 字符串转换为 JSX 兼容的字符串。
+ * 使用 DOMParser 解析后再序列化，精确处理：
+ * - xmlns:xxx 命名空间声明属性（删除）
+ * - xlink:href → href
+ * - 连字符属性 → 驼峰（如 fill-rule → fillRule）
+ * - class → className
+ */
+function svgToJsx(rawSvg: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(rawSvg, 'image/svg+xml');
+  const svgEl = doc.querySelector('svg');
+  if (!svgEl) return rawSvg;
+
+  function serializeNode(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent ?? '';
+    }
+    if (node.nodeType === Node.COMMENT_NODE) {
+      return `{/*${(node as Comment).data}*/}`;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+    const el = node as Element;
+    const tagName = el.tagName.toLowerCase();
+    const attrs: string[] = [];
+
+    for (let i = 0; i < el.attributes.length; i++) {
+      const { name, value } = el.attributes[i];
+      // 删除 xmlns:xxx 命名空间声明（xmlns 本身保留）
+      if (/^xmlns:[a-zA-Z]/.test(name)) continue;
+      const jsxName = SVG_ATTR_MAP[name] ?? name;
+      // React JSX 的 style 必须是对象，将 CSS 字符串转换为 JSX 对象字面量
+      if (name === 'style') {
+        const styleObj = value
+          .split(';')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map(decl => {
+            const colonIdx = decl.indexOf(':');
+            const prop = decl.slice(0, colonIdx).trim();
+            const val = decl.slice(colonIdx + 1).trim();
+            const camelProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+            return `${camelProp}: '${val.replace(/'/g, "\\'")}'`;
+          })
+          .join(', ');
+        attrs.push(`style={{${styleObj}}}`);
+        continue;
+      }
+      attrs.push(`${jsxName}="${value.replace(/"/g, '&quot;')}"`);
+    }
+
+    const attrStr = attrs.length ? ' ' + attrs.join(' ') : '';
+    const children = Array.from(el.childNodes).map(serializeNode).join('');
+
+    if (!children) {
+      return `<${tagName}${attrStr} />`;
+    }
+    return `<${tagName}${attrStr}>${children}</${tagName}>`;
+  }
+
+  // 确保根 svg 始终带有 height:auto，保证在容器内自适应高度
+  const existingStyle = svgEl.getAttribute('style') ?? '';
+  const styleWithoutHeight = existingStyle.replace(/height\s*:[^;]*(;|$)/g, '').replace(/;+$/, '').trim();
+  svgEl.setAttribute('style', styleWithoutHeight ? `${styleWithoutHeight};height:auto` : 'height:auto');
+
+  return serializeNode(svgEl);
+}
+
+/**
+ * 将 rawSvg 字符串写入 params 聚焦的 SVG 对应的 JSX 源码位置。
+ * 供上传文件和从图标库选取两条路径复用。
+ */
+/**
+ * 在 source 中定位目标 SVG 的实际范围。
+ * data-loc 在第一次替换后可能因源码长度变化而失效，
+ * 此时以 hintStart 为中心向前搜索最近的 <svg，再向后匹配对应的 </svg>。
+ */
+/**
+ * 在 source 中定位目标 SVG 的实际 [start, end) 范围。
+ *
+ * 安全原则：end 永远只通过深度计数求得，绝不信任 hintEnd。
+ * 只要找不到完整的 <svg>...</svg> 结构，返回 null（调用方放弃替换）。
+ *
+ * @param hintStart  data-loc 或上次记录的起始位置，作为搜索锚点
+ * @param hintEnd    仅用于限制向后搜索的窗口，不作为 end 输出
+ */
+function findActualSvgRange(
+  source: string,
+  hintStart: number,
+  hintEnd: number,
+): { start: number; end: number } | null {
+  // Step 1: 以 hintStart 为锚点，向前搜索最近的合法 <svg 开始标签。
+  // 合法：<svg 后接空白、> 或 / (即不是 <svgFoo 之类的自定义标签)
+  const isSvgTag = (pos: number) => /[\s>/]/.test(source[pos + 4] ?? '');
+
+  let svgStart = -1;
+  // 先尝试 hintStart 自身或紧邻（偏差 ≤ 10 字符）
+  const nearIdx = source.indexOf('<svg', Math.max(0, hintStart - 2));
+  if (nearIdx !== -1 && nearIdx <= hintStart + 10 && isSvgTag(nearIdx)) {
+    svgStart = nearIdx;
+  }
+  // 找不到则向前扫描（最多回溯 500 字符）
+  if (svgStart === -1) {
+    for (let p = hintStart; p >= Math.max(0, hintStart - 500); p--) {
+      if (source.startsWith('<svg', p) && isSvgTag(p)) { svgStart = p; break; }
+    }
+  }
+  // 仍找不到，或锚点偏差过大（500 字符外），放弃——宁愿不替换
+  if (svgStart === -1 || Math.abs(svgStart - hintStart) > 500) return null;
+
+  // Step 2: 从 svgStart 开始深度计数，找到配对的 </svg>。
+  // end 完全由此计算，不依赖 hintEnd。
+  let depth = 0;
+  let pos = svgStart;
+  while (pos < source.length) {
+    if (source.startsWith('<svg', pos) && isSvgTag(pos)) {
+      depth++;
+      pos += 4;
+    } else if (source.startsWith('</svg>', pos)) {
+      depth--;
+      if (depth === 0) return { start: svgStart, end: pos + 6 };
+      pos += 6;
+    } else {
+      pos++;
+    }
+  }
+  // 未找到配对的 </svg>，放弃
+  return null;
+}
+
+let _svgAppliedCallback: ((rawSvg: string) => void) | null = null;
+
+/** SvgPreview 组件注册回调，替换成功后立即更新预览 */
+export function registerSvgAppliedCallback(cb: ((rawSvg: string) => void) | null): void {
+  _svgAppliedCallback = cb;
+}
+
+/**
+ * 记录上一次替换后 SVG 在新源码中的精确位置。
+ * syntheticParams.focusArea 在 render(editConfig) 调用后就固定不变，
+ * 多次替换同一个 SVG 时 data-loc 提示会因源码长度变化而失效。
+ * 通过 dataLocStart 区分「同一 SVG 的再次替换」和「切换到其他 SVG」。
+ */
+let _lastSvgState: {
+  comId: string;
+  jsxPath: string;
+  dataLocStart: number; // 原始 data-loc.jsx.start，用于判断是否同一目标 SVG
+  start: number;        // 上次替换后 SVG 在新源码中的实际起始位置
+  end: number;          // 上次替换后 SVG 在新源码中的实际结束位置
+} | null = null;
+
+export function applyRawSvg(params: any, rawSvg: string): void {
+  const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
+  const jsxPath = loc.files?.jsx;
+  if (!jsxPath) return;
+
+  const comId = params.id;
+  const aiComParams = context.getAiComParams(comId);
+  const jsxFile = aiComParams?.data?.files?.find(
+    (f: { fileName: string; source: string }) => f.fileName === jsxPath
+  );
+  if (!jsxFile) return;
+  const source = decodeURIComponent(jsxFile.source);
+
+  // 若本次目标与上次一致（同 comId + jsxPath + dataLocStart），
+  // 且上次记录的位置处确实还是 <svg，则直接用精确记录的 range，
+  // 避免 data-loc 因源码长度变化失效导致截断位置出错。
+  let hintStart: number = loc.jsx?.start;
+  let hintEnd: number = loc.jsx?.end;
+  if (
+    _lastSvgState &&
+    _lastSvgState.comId === comId &&
+    _lastSvgState.jsxPath === jsxPath &&
+    _lastSvgState.dataLocStart === loc.jsx?.start &&
+    source.slice(_lastSvgState.start, _lastSvgState.start + 4) === '<svg'
+  ) {
+    hintStart = _lastSvgState.start;
+    hintEnd = _lastSvgState.end;
+  }
+
+  const range = findActualSvgRange(source, hintStart, hintEnd);
+  if (!range) return;
+
+  // 最终安全断言：被替换的 slice 必须是完整的 <svg>…</svg>，否则放弃
+  const candidate = source.slice(range.start, range.end);
+  if (!candidate.startsWith('<svg') || !candidate.trimEnd().endsWith('</svg>')) return;
+
+  const jsxSvg = svgToJsx(rawSvg);
+  const newSource = source.slice(0, range.start) + jsxSvg + source.slice(range.end);
+
+  // 记录本次替换的精确范围，供下次替换复用
+  _lastSvgState = {
+    comId,
+    jsxPath,
+    dataLocStart: loc.jsx?.start,
+    start: range.start,
+    end: range.start + jsxSvg.length,
+  };
+
+  context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
+  context.saveManualVersion(comId, [jsxPath]);
+  _svgAppliedCallback?.(rawSvg);
+}
+
+/**
+ * 递归移除元素及其所有后代上的 data-* 属性。
+ * DOM 扫描到的 SVG 带有平台注入的 data-loc / data-zone-* 等属性，
+ * 它们的值是含双引号的 JSON 字符串，经 svgToJsx 序列化后会破坏 JSX 属性语法。
+ */
+function stripDataAttrs(el: Element): void {
+  Array.from(el.attributes)
+    .filter(a => a.name.startsWith('data-'))
+    .forEach(a => el.removeAttribute(a.name));
+  Array.from(el.children).forEach(child => stripDataAttrs(child));
+}
+
+/**
+ * 扫描 MyBricks 画布 Shadow DOM，收集所有带 data-source-icon 属性的 SVG 图标。
+ * 与 AISvgEditEditor 中的同名函数逻辑一致，在组件库侧独立实现以避免跨包依赖。
+ */
+export function scanIconsFromDOM(): Array<{ name: string; svg: string }> {
+  const shadowRoot = document.querySelector('#_mybricks-geo-webview_')?.shadowRoot;
+  const scope: Document | ShadowRoot = shadowRoot ?? document;
+  return Array.from(scope.querySelectorAll<SVGElement>('svg[data-source-icon]'))
+    .map(node => {
+      const name = node.getAttribute('data-source-icon') ?? '';
+      // 克隆后清除所有 data-* 属性，避免平台属性污染目标 JSX
+      const clone = node.cloneNode(true) as SVGElement;
+      stripDataAttrs(clone);
+      return { name, svg: clone.outerHTML };
+    })
+    .filter(icon => icon.name && icon.svg);
+}
+
+export function genSvgReplacer() {
+  return {
+    set(params: any) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.svg,image/svg+xml';
+      input.onchange = async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const rawSvg = await file.text();
+        applyRawSvg(params, rawSvg);
+      };
+      input.click();
+    },
+  };
+}
+
 export function genResizer() {
   let cssObj: Record<string, any> = {};
   let cssObjKey = '';
