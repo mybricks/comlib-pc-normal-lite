@@ -459,12 +459,10 @@ export default function() {
   return {
     /** 撤销 */
     '@undo'(params: { id: string }) {
-      console.log('undo')
       undoRedoManager.undo()
     },
     /** 重做 */
     '@redo'(params: { id: string }) {
-      console.log('redo')
       undoRedoManager.redo()
     }
   }
