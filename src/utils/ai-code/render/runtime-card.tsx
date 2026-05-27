@@ -378,28 +378,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             vibing={vibing}
             onMount={({ fileSystem }) => {
               context.fileSystemMap[id] = fileSystem
-              // [TODO] 样式文件提前，这个要内置
-              const files = [...data.files].sort((a, b) => {
-                const isLessA = a.fileName?.endsWith('.less') ? -1 : 0
-                const isLessB = b.fileName?.endsWith('.less') ? -1 : 0
-                return isLessA - isLessB
-              })
-
-              // [TODO] 加载优化，手动调整优先加载这两个文件
-              const setupIndex = files.findIndex((file) => file.fileName.startsWith("setup.") || file.fileName.startsWith("/setup."))
-              if (setupIndex !== -1) {
-                const setupFile = files[setupIndex]
-                files.splice(setupIndex, 1)
-                files.unshift(setupFile)
-              }
-              const dataSourceIndex = files.findIndex((file) => file.fileName.startsWith("dataSource.") || file.fileName.startsWith("/dataSource."))
-              if (dataSourceIndex !== -1) {
-                const dataSourceFile = files[dataSourceIndex]
-                files.splice(dataSourceIndex, 1)
-                files.unshift(dataSourceFile)
-              }
-
-              fileSystem.init(files.map((file) => {
+              fileSystem.init(data.files.map((file) => {
                 return {
                   ...file,
                   filename: file.fileName

@@ -381,7 +381,6 @@ export function useVersions(options: UseVersionsOptions) {
     const off = context.getVersionStateEvents(componentId).on(
       'change',
       (newVersion) => {
-        console.log('[newVersion]', newVersion)
         setTotal(version.total)
         setVersions(prev => {
           const index = prev.findIndex((version) => version.id === newVersion.id)
