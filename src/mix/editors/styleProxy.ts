@@ -2,6 +2,7 @@ import context from '../context';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
+import { convertCamelToHyphen } from '../../utils/string'
 
 // ── CSS shorthand 映射 ────────────────────────────────────────────────────────
 
@@ -379,37 +380,43 @@ export function genResizer() {
   };
 }
 
+function styleToCss(style: Record<string, string | number>): string {
+  return Object.entries(style)
+    .map(([key, value]) => {
+      // [TODO] 目前支持的都是需要px单位的样式
+      return `${convertCamelToHyphen(key)}: ${value}px;`
+    })
+    .join(' ')
+}
+
+const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
+
 export default function () {
-  let currentStyle = {}
+  let className = ''
   return {
     /** 画布上各种可视化调整 */
     '@setStyle'(ctx, params) {
-      const { state, style, selector } = params
-      if (state === 'ing') {
-        currentStyle = style
+      const { ele, state, style } = params
+
+      if (state === 'start') {
+        className = ele.className
+      } else if (state === 'ing') {
+        ctx.css.set(SETSTYLE_CSS_ID, `.${className} {${styleToCss(style)}}`)
       } else if (state === 'finish') {
-        if (selector !== ':root') {
-          console.log("[@setStyle:TODO]", selector)
+        const loc = ele.dataset.loc
+        const cn = loc ? JSON.parse(loc) : {}
+        const lessPath = cn.files?.less
+        if (!lessPath) {
           return
         }
         const comId = ctx.id
-        const ele = ctx.focusArea?.ele
-        if (!ele) {
-          return
-        }
-        const loc = ele.dataset.loc;
-        const cn = loc ? JSON.parse(loc) : {};
-        const lessPath = cn.files?.less ?? '';
         const aiComParams = context.getAiComParams(comId);
-        const lessFile = lessPath
-          ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
-          : undefined;
-        const rawLess = lessFile?.source ?? '';
-        const previousLess = decodeURIComponent(rawLess)
-        const cssObj = rawLess ? parseLess(previousLess) : {};
+        const lessFile = aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
+        const previousLess = decodeURIComponent(lessFile.source)
+        const cssObj = parseLess(previousLess)
         const zoneSelector = JSON.parse(ele.dataset.zoneSelector)[0]
-        const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
-        const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList });
+        const eleClassList = Array.from(ele.classList) as string[] 
+        const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList })
 
         if (!cssObjKey) {
           return
@@ -419,7 +426,8 @@ export default function () {
           cssObj[cssObjKey] = {};
         }
 
-        Object.entries(currentStyle).forEach(([key, val]) => {
+        Object.entries(style).forEach(([key, val]) => {
+          // [TODO] 目前给到的style一定数字且需要px单位
           cssObj[cssObjKey][key] = `${val}px`;
         });
         const cssStr = stringifyLess(cssObj);
@@ -435,7 +443,62 @@ export default function () {
             context.saveManualVersion(comId, [lessPath]);
           },
         })
+        ctx.css.remove(SETSTYLE_CSS_ID)
       }
-    }
+    },
+    // '@setStyle2'(ctx, params) {
+    //   const { state, style, selector } = params
+    //   if (state === 'ing') {
+    //     currentStyle = style
+    //   } else if (state === 'finish') {
+    //     if (selector !== ':root') {
+    //       console.log("[@setStyle:TODO]", selector)
+    //       return
+    //     }
+    //     const comId = ctx.id
+    //     const ele = ctx.focusArea?.ele
+    //     if (!ele) {
+    //       return
+    //     }
+    //     const loc = ele.dataset.loc;
+    //     const cn = loc ? JSON.parse(loc) : {};
+    //     const lessPath = cn.files?.less ?? '';
+    //     const aiComParams = context.getAiComParams(comId);
+    //     const lessFile = lessPath
+    //       ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
+    //       : undefined;
+    //     const rawLess = lessFile?.source ?? '';
+    //     const previousLess = decodeURIComponent(rawLess)
+    //     const cssObj = rawLess ? parseLess(previousLess) : {};
+    //     const zoneSelector = JSON.parse(ele.dataset.zoneSelector)[0]
+    //     const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
+    //     const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList });
+
+    //     if (!cssObjKey) {
+    //       return
+    //     }
+
+    //     if (!cssObj[cssObjKey]) {
+    //       cssObj[cssObjKey] = {};
+    //     }
+
+    //     Object.entries(currentStyle).forEach(([key, val]) => {
+    //       cssObj[cssObjKey][key] = `${val}px`;
+    //     });
+    //     const cssStr = stringifyLess(cssObj);
+    //     const currentLess = cssStr
+
+    //     undoRedoManager.execute({
+    //       execute() {
+    //         context.updateFile(comId, { fileName: lessPath, content: currentLess, type: undefined });
+    //         context.saveManualVersion(comId, [lessPath]);
+    //       },
+    //       undo() {
+    //         context.updateFile(comId, { fileName: lessPath, content: previousLess, type: undefined });
+    //         context.saveManualVersion(comId, [lessPath]);
+    //       },
+    //     })
+    //   }
+    // }
   }
 }
