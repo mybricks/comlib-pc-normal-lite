@@ -12,6 +12,7 @@ export interface LogMessage {
   data: any[];
   timestamp: string;
   id: string;
+  _?: any
 }
 
 export interface ComDebugState {
@@ -137,6 +138,7 @@ class Context {
         timestamp: getTimestamp(),
         data: ['开始调试'],
         method: 'log',
+        _: {}
       }];
     } else {
       // 取消调试：清空日志，切回源代码

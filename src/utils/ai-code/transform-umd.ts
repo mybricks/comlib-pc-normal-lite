@@ -3,6 +3,7 @@ import babelPlugin from './plugins/babelPlugin'
 import { getValidatorPlugins } from '../../mix/availableLibraries'
 import functionPropsPlugin from './plugins/functionPropsPlugin'
 import collectJsDocPlugin from './plugins/collectJsDocPlugin'
+import loggerPlugin from './plugins/loggerPlugin'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
@@ -40,7 +41,8 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         babelPlugin({ constituency, fileName: ctx?.fileName }),
         ...validatorPlugins,
         functionPropsPlugin(),
-        [collectJsDocPlugin, { result: jsDocMap, fileName }]
+        [collectJsDocPlugin, { result: jsDocMap, fileName }],
+        loggerPlugin({ fileName })
       ],
       retainLines: true,
     }
