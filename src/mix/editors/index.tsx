@@ -9,7 +9,7 @@ import { genStyleValue, genResizer, genImgSrcReplacer } from './styleProxy';
 import type { Props, Actions } from './types';
 import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
-
+import undoRedo from './undoRedo';
 import { verify as eslintVerify } from '../eslint';
 
 export default function (props: Props, actions: Actions) {
@@ -67,13 +67,6 @@ export default function (props: Props, actions: Actions) {
       ]
     },
     ...getDataZoneTextEditable(),
-    /** 撤销 */
-    '@undo'(params) {
-      console.log('[@undo]', params);
-    },
-    /** 重做 */
-    '@redo'(params) {
-      console.log('[@redo]', params);
-    }
+    ...undoRedo()
   };
 }

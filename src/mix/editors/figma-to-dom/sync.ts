@@ -2,6 +2,7 @@ import context from '../../context';
 import { parseLess, stringifyLess } from '../../utils/transform/less';
 import { convertHyphenToCamel } from '../../../utils/string';
 import type { FigmaImportItem } from '../types';
+import { undoRedoManager } from '../undoRedo';
 const MB_TAG_RE = /\[mb:([^\]]+)\]/i;
 const FIGMA_SYNC_DIMENSION_DEBUG_FLAG = '__MB_FIGMA_SYNC_DIMENSION_DEBUG__';
 /** 开启后在控制台输出 [figma-sync][antd]：DOM 快照、择一、antd 守卫跳过原因（排查背景色等） */
@@ -1041,6 +1042,14 @@ export function syncStylesFromFigmaJson(
   const hasExplicitFileGroup = Array.from(fileGroups.keys()).some((k) => k !== null);
   const updateFiles = new Set<string>()
 
+  type Files = {
+    fileName: string
+    source: string
+  }[]
+
+  const current: Files = []
+  const previous: Files = []
+
   fileGroups.forEach((items, groupFileName) => {
     // 多文件模式下，跳过 null 回退分组，避免后续覆盖明确分组结果
     if (hasExplicitFileGroup && groupFileName === null) {
@@ -1328,14 +1337,44 @@ export function syncStylesFromFigmaJson(
 
     if (hasChange) {
       const cssStr = stringifyLess(cssObj);
-      context.updateFile(comId, { fileName: targetFileName, content: cssStr, type: undefined });
+      previous.push({
+        fileName: targetFileName,
+        source: sourceContent,
+      })
+      current.push({
+        fileName: targetFileName,
+        source: cssStr
+      })
+      // context.updateFile(comId, { fileName: targetFileName, content: cssStr, type: undefined });
       anyChange = true;
       updateFiles.add(targetFileName)
     }
   });
 
   if (anyChange) {
-    context.saveManualVersion(comId, Array.from(updateFiles));
+    undoRedoManager.execute({
+      execute() {
+        current.forEach(({ fileName, source }) => {
+          context.updateFile(comId, {
+            fileName,
+            content: source,
+            type: undefined,
+          });
+        })
+        context.saveManualVersion(comId, Array.from(updateFiles));
+      },
+      undo() {
+        previous.forEach(({ fileName, source }) => {
+          context.updateFile(comId, {
+            fileName,
+            content: source,
+            type: undefined,
+          });
+        })
+        context.saveManualVersion(comId, Array.from(updateFiles));
+      }
+    })
+    // context.saveManualVersion(comId, Array.from(updateFiles));
   }
   return actualChangedCount;
 }

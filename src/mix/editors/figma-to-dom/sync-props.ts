@@ -1,5 +1,6 @@
 import context from '../../context';
 import type { FigmaComponentPatch } from '../types';
+import { undoRedoManager } from '../undoRedo';
 
 const DEBUG_SYNC_ID_HINT = '';
 
@@ -464,6 +465,14 @@ export function syncComponentPropsFromFigmaJson(
   let changedCount = 0;
   const updatedFiles = new Set<string>();
 
+  type Files = {
+    fileName: string
+    source: string
+  }[]
+
+  const current: Files = []
+  const previous: Files = []
+
   for (const file of jsxFiles) {
     let source = decodeSource(file.source);
     let fileChanged = false;
@@ -476,24 +485,54 @@ export function syncComponentPropsFromFigmaJson(
     for (const patch of sortedPatches) {
       const out = applyPatchToSource(source, patch, file.fileName);
       if (out.changed) {
+        previous.push({
+          fileName: file.fileName,
+          source,
+        })
+        current.push({
+          fileName: file.fileName,
+          source: out.nextSource
+        })
         source = out.nextSource;
         fileChanged = true;
         changedCount += 1;
       }
     }
     if (fileChanged) {
-      context.updateFile(comId, {
-        fileName: file.fileName,
-        content: source,
-        type: undefined,
-      });
+      // context.updateFile(comId, {
+      //   fileName: file.fileName,
+      //   content: source,
+      //   type: undefined,
+      // });
       updatedFiles.add(file.fileName);
-      file.source = encodeSource(source);
+      // file.source = encodeSource(source);
     }
   }
 
   if (updatedFiles.size > 0) {
-    context.saveManualVersion(comId, Array.from(updatedFiles));
+    undoRedoManager.execute({
+      execute() {
+        current.forEach(({ fileName, source }) => {
+          context.updateFile(comId, {
+            fileName,
+            content: source,
+            type: undefined,
+          });
+        })
+        context.saveManualVersion(comId, Array.from(updatedFiles));
+      },
+      undo() {
+        previous.forEach(({ fileName, source }) => {
+          context.updateFile(comId, {
+            fileName,
+            content: source,
+            type: undefined,
+          });
+        })
+        context.saveManualVersion(comId, Array.from(updatedFiles));
+      }
+    })
+    // context.saveManualVersion(comId, Array.from(updatedFiles));
   }
 
   return changedCount;

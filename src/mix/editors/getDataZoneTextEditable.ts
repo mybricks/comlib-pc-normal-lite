@@ -1,4 +1,5 @@
 import context from '../context'
+import { undoRedoManager } from './undoRedo'
 
 const item = {
   type: 'textarea',
@@ -42,8 +43,19 @@ const item = {
         const before = source.slice(loc.jsx.start, loc.jsx.end)
         const after = source.slice(loc.jsx.start, loc.tag.end) + source.slice(loc.tag.end, loc.jsx.end).replace(source.slice(textloc.jsx.start, textloc.jsx.end).trim(), nextValue)
         const newCode = source.replace(before, after)
-        context.updateFile(id, {fileName, content: newCode, type: ''})
-        context.saveManualVersion(id, [fileName])
+
+        undoRedoManager.execute({
+          execute() {
+            context.updateFile(id, {fileName, content: newCode, type: ''})
+            context.saveManualVersion(id, [fileName])
+          },
+          undo() {
+            context.updateFile(id, {fileName, content: source, type: ''})
+            context.saveManualVersion(id, [fileName])
+          },
+        })
+        // context.updateFile(id, {fileName, content: newCode, type: ''})
+        // context.saveManualVersion(id, [fileName])
       } catch (e) {
         // console.error('[data-zone-text-editable]: set', e)
       }

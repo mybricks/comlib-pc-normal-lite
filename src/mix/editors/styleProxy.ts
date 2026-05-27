@@ -1,6 +1,7 @@
 import context from '../context';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
+import { undoRedoManager } from './undoRedo'
 
 // ── CSS shorthand 映射 ────────────────────────────────────────────────────────
 
@@ -159,11 +160,37 @@ export function genStyleValue(params: { comId: string }) {
   const { comId } = params;
 
   const debouncedUpdateFile = debounce(
-    (lessPath: string) => {
-      context.saveManualVersion(comId, [lessPath]);
+    (params: {
+      path: string,
+      current: string,
+      previous: string,
+      callback: () => void
+    }) => {
+      const { 
+        path,
+        current,
+        previous,
+        callback
+      } = params
+
+      undoRedoManager.execute({
+        execute() {
+          context.updateFile(comId, { fileName: path, content: current, type: undefined });
+          context.saveManualVersion(comId, [path]);
+        },
+        undo() {
+          context.updateFile(comId, { fileName: path, content: previous, type: undefined });
+          context.saveManualVersion(comId, [path]);
+        },
+      })
+
+      callback()
+      // context.saveManualVersion(comId, [path]);
     },
     500
   );
+
+  let previousLess: string | null = null
 
   return {
     set(params: any, value: any) {
@@ -177,6 +204,9 @@ export function genStyleValue(params: { comId: string }) {
         ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
         : undefined;
       const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
+      if (!previousLess) {
+        previousLess = rawLess ? decodeURIComponent(rawLess) : ''
+      }
       const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
 
       const fullSelector = params.selector;
@@ -210,7 +240,14 @@ export function genStyleValue(params: { comId: string }) {
 
       const cssStr = stringifyLess(cssObj);
       context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined });
-      debouncedUpdateFile(lessPath);
+      debouncedUpdateFile({
+        path: lessPath,
+        current: cssStr,
+        previous: previousLess,
+        callback: () => {
+          previousLess = null
+        }
+      });
     },
   };
 }
@@ -260,8 +297,19 @@ export function genImgSrcReplacer() {
         );
         const newSource = source.slice(0, loc.jsx.start) + newSnippet + source.slice(loc.jsx.end);
 
-        context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
-        context.saveManualVersion(comId, [jsxPath]);
+        undoRedoManager.execute({
+          execute() {
+            context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
+            context.saveManualVersion(comId, [jsxPath]);
+          },
+          undo() {
+            context.updateFile(comId, { fileName: jsxPath, content: source, type: undefined });
+            context.saveManualVersion(comId, [jsxPath]);
+          },
+        })
+
+        // context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
+        // context.saveManualVersion(comId, [jsxPath]);
       };
       input.click();
     }
@@ -272,6 +320,8 @@ export function genResizer() {
   let cssObj: Record<string, any> = {};
   let cssObjKey = '';
   let lessPath = 'style.less';
+  let previousLess = ''
+  let currentLess = ''
 
   return {
     type: '_resizer',
@@ -291,7 +341,8 @@ export function genResizer() {
             ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
             : undefined;
           const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
-          cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
+          previousLess = decodeURIComponent(rawLess)
+          cssObj = rawLess ? parseLess(previousLess) : {};
 
           const selector = extractDataZoneSelector(params.selector);
           const ele: Element | null = params.focusArea?.ele ?? null;
@@ -307,9 +358,21 @@ export function genResizer() {
             cssObj[cssObjKey][key] = `${val}px`;
           });
           const cssStr = stringifyLess(cssObj);
+          currentLess = cssStr
           context.updateFile(params.id, { fileName: lessPath, content: cssStr, type: undefined });
         } else if (state === 'finish') {
-          context.saveManualVersion(params.id, [lessPath]);
+          // context.saveManualVersion(params.id, [lessPath]);
+
+          undoRedoManager.execute({
+            execute() {
+              context.updateFile(params.id, { fileName: lessPath, content: currentLess, type: undefined });
+              context.saveManualVersion(params.id, [lessPath]);
+            },
+            undo() {
+              context.updateFile(params.id, { fileName: lessPath, content: previousLess, type: undefined });
+              context.saveManualVersion(params.id, [lessPath]);
+            },
+          })
         }
       },
     },

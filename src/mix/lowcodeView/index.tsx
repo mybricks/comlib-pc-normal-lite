@@ -11,6 +11,7 @@ import { filesJsonToTree } from "./filesToTree";
 import type { FileTreeNode } from "./filesToTree";
 import { getLazyCss } from './utils/css';
 import { registerLowcodeViewMonacoContext } from '../eslint/monaco-language-service';
+import { undoRedoManager } from "../editors/undoRedo";
 
 const css = getLazyCss(lazyCss)
 
@@ -288,19 +289,33 @@ function LowcodeView(params: Params) {
       return
     }
 
-    const { fileName } = selectFile;
+    const { fileName, source } = selectFile;
 
     if (fileName in modifiedContent) {
       const comId = params.model.runtime.id;
-      context.updateFile(comId, { fileName, content: modifiedContent[fileName], type: "update" });
+      // context.updateFile(comId, { fileName, content: modifiedContent[fileName], type: "update" });
       setModifiedContent((prev) => {
         const next = { ...prev };
         delete next[fileName];
         return next;
       });
 
+      const currentSource = modifiedContent[fileName]
+      const previousSource = source;
+
+      undoRedoManager.execute({
+        execute() {
+          context.updateFile(comId, { fileName, content: currentSource, type: "update" });
+          context.saveManualVersion(comId, [fileName]);
+        },
+        undo() {
+          context.updateFile(comId, { fileName, content: previousSource, type: "update" });
+          context.saveManualVersion(comId, [fileName]);
+        },
+      })
+
       // 手动编辑保存后，添加 manual 类型版本记录
-      await context.saveManualVersion(comId, [fileName]);
+      // await context.saveManualVersion(comId, [fileName]);
     }
   }, [selectFile, modifiedContent, params.model]);
 
