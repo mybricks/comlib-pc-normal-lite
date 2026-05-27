@@ -380,12 +380,62 @@ export function genResizer() {
 }
 
 export default function () {
+  let currentStyle = {}
   return {
     /** 画布上各种可视化调整 */
     '@setStyle'(ctx, params) {
-      console.log('[@setStyle:state]', params.state)
-      // console.log('[ctx]', ctx)
-      // console.log('[params]', params)
+      const { state, style, selector } = params
+      if (state === 'ing') {
+        currentStyle = style
+      } else if (state === 'finish') {
+        if (selector !== ':root') {
+          console.log("[@setStyle:TODO]", selector)
+          return
+        }
+        const comId = ctx.id
+        const ele = ctx.focusArea?.ele
+        if (!ele) {
+          return
+        }
+        const loc = ele.dataset.loc;
+        const cn = loc ? JSON.parse(loc) : {};
+        const lessPath = cn.files?.less ?? '';
+        const aiComParams = context.getAiComParams(comId);
+        const lessFile = lessPath
+          ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
+          : undefined;
+        const rawLess = lessFile?.source ?? '';
+        const previousLess = decodeURIComponent(rawLess)
+        const cssObj = rawLess ? parseLess(previousLess) : {};
+        const zoneSelector = JSON.parse(ele.dataset.zoneSelector)[0]
+        const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
+        const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList });
+
+        if (!cssObjKey) {
+          return
+        }
+
+        if (!cssObj[cssObjKey]) {
+          cssObj[cssObjKey] = {};
+        }
+
+        Object.entries(currentStyle).forEach(([key, val]) => {
+          cssObj[cssObjKey][key] = `${val}px`;
+        });
+        const cssStr = stringifyLess(cssObj);
+        const currentLess = cssStr
+
+        undoRedoManager.execute({
+          execute() {
+            context.updateFile(comId, { fileName: lessPath, content: currentLess, type: undefined });
+            context.saveManualVersion(comId, [lessPath]);
+          },
+          undo() {
+            context.updateFile(comId, { fileName: lessPath, content: previousLess, type: undefined });
+            context.saveManualVersion(comId, [lessPath]);
+          },
+        })
+      }
     }
   }
 }
