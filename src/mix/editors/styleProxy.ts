@@ -642,10 +642,10 @@ export function genResizer() {
         const ctx = params
         const ele = ctx.focusArea.ele
         if (state === 'start') {
-          className = ele.className
+          className = `.${ele.className.split(' ').join('.')}`
         } else if (state === 'ing') {
           style = value
-          ctx.css.set(SETSTYLE_CSS_ID, `.${className} {${styleToCss(style)}}`)
+          ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
         } else if (state === 'finish') {
           const loc = ele.dataset.loc
           const cn = loc ? JSON.parse(loc) : {}
@@ -699,6 +699,7 @@ function styleToCss(style: Record<string, string | number>): string {
       // [TODO] 目前支持的都是需要px单位的样式
       return `${convertCamelToHyphen(key)}: ${value}px;`
     })
+    .concat(`transition: none;`) // 拖拽过程中 transition: all 体感上会有卡顿的感觉
     .join(' ')
 }
 
@@ -716,9 +717,9 @@ export default function () {
         ignoreFirst
       } = params
       if (state === 'start') {
-        className = ele.className
+        className = `.${ele.className.split(' ').join('.')}${ignoreFirst ? ':not(:first-child)' : ''}`
       } else if (state === 'ing') {
-        ctx.css.set(SETSTYLE_CSS_ID, `.${className}${ignoreFirst ? ':not(:first-child)' : ''} {${styleToCss(style)}}`)
+        ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
       } else if (state === 'finish') {
         const loc = ele.dataset.loc
         const cn = loc ? JSON.parse(loc) : {}
