@@ -178,7 +178,7 @@ function LowcodeView(params: Params) {
     }
 
     return selectFile.source
-  }, [selectFile])
+  }, [selectFile, modifiedContent])
 
   const codeIns = useRef<HandlerType>(null);
 
@@ -319,8 +319,56 @@ function LowcodeView(params: Params) {
     }
   }, [selectFile, modifiedContent, params.model]);
 
-  // 仅当当前聚焦的文件有未保存修改时，保存按钮可用
-  const hasUnsavedChanges = selectFile && (selectFile.fileName in modifiedContent);
+  // 保存所有有未保存修改的文件
+  const handleSaveAll = useCallback(async () => {
+    const dirtyFileNames = Object.keys(modifiedContent);
+    if (dirtyFileNames.length === 0) return;
+
+    const comId = params.model.runtime.id;
+    const filesMap = files.reduce((acc, f) => { acc[f.fileName] = f; return acc; }, {} as Record<string, typeof files[0]>);
+
+    // 快照当前所有未保存内容，避免异步过程中被覆盖
+    const snapshot = { ...modifiedContent };
+
+    setModifiedContent((prev) => {
+      const next = { ...prev };
+      dirtyFileNames.forEach(name => delete next[name]);
+      return next;
+    });
+
+    const currentFiles: any = []
+    const previousFiles: any = []
+
+    dirtyFileNames.forEach((fileName) => {
+      currentFiles.push({
+        fileName,
+        content: snapshot[fileName]
+      })
+
+      previousFiles.push({
+        fileName,
+        content: decodeURIComponent(filesMap[fileName].source)
+      })
+    });
+
+    undoRedoManager.execute({
+      execute() {
+        currentFiles.forEach(({ fileName, content }) => {
+          context.updateFile(comId, { fileName, content, type: "update" });
+        })
+        context.saveManualVersion(comId, currentFiles.map((f) => f.fileName));
+      },
+      undo() {
+        previousFiles.forEach(({ fileName, content }) => {
+          context.updateFile(comId, { fileName, content, type: "update" });
+        })
+        context.saveManualVersion(comId, previousFiles.map((f) => f.fileName));
+      },
+    });
+  }, [modifiedContent, params.model, files]);
+
+  // 当存在任意未保存文件时，保存按钮可用
+  const hasUnsavedChanges = Object.keys(modifiedContent).length > 0;
 
   const editorOptions = useMemo(() => ({
     fontSize: 12,
@@ -347,6 +395,24 @@ function LowcodeView(params: Params) {
   // }, []);
 
   const mountRef = useRef<any>(null)
+  // 保存各文件的滚动位置，key 为 fileName
+  const scrollPositionsRef = useRef<Record<string, { scrollTop: number; scrollLeft: number }>>({});
+
+  // 从 model URI 中提取 fileName（如 file:///componentId/path/to/file.tsx → path/to/file.tsx）
+  const getFileNameFromModel = (editor: StandaloneCodeEditor): string | null => {
+    const uri = editor.getModel()?.uri;
+    if (!uri) return null;
+    // uri.path 形如 /componentId/fileName，去掉开头的 /componentId/
+    const parts = uri.path.split('/');
+    // 去掉第一个空串和 componentId
+    return parts.slice(2).join('/') || null;
+  };
+
+  // 用 ref 保持 handleSaveAll 的最新引用，避免 addCommand 闭包过期
+  const handleSaveRef = useRef(handleSaveAll);
+  useEffect(() => {
+    handleSaveRef.current = handleSaveAll;
+  }, [handleSaveAll]);
 
   const handleEditorMount = (editor: StandaloneCodeEditor, monaco: Monaco) => {
     if (componentId) {
@@ -362,6 +428,15 @@ function LowcodeView(params: Params) {
       mountRef.current();
       mountRef.current = null;
     }
+
+    // 监听 Ctrl+S / Cmd+S，触发保存操作
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      handleSaveRef.current();
+    });
+    // 在 macOS 上额外监听 Control+S（与 Cmd+S 区别）
+    editor.addCommand(monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyS, () => {
+      handleSaveRef.current();
+    });
     const model = editor.getModel();
     const decorationsCollection = editor.createDecorationsCollection([]);
     let relativePath = "";
@@ -454,9 +529,36 @@ function LowcodeView(params: Params) {
 
     editor.getDomNode()?.addEventListener('copy', onCopy)
 
+    // 实时保存当前文件的滚动位置
+    const onScroll = editor.onDidScrollChange(() => {
+      const fileName = getFileNameFromModel(editor);
+      if (fileName) {
+        scrollPositionsRef.current[fileName] = {
+          scrollTop: editor.getScrollTop(),
+          scrollLeft: editor.getScrollLeft(),
+        };
+      }
+    });
+
+    // model 切换完成后恢复对应文件的滚动位置（时机最准确）
+    const onModelChange = editor.onDidChangeModel(() => {
+      const fileName = getFileNameFromModel(editor);
+      if (!fileName) return;
+      const saved = scrollPositionsRef.current[fileName];
+      if (saved) {
+        editor.setScrollTop(saved.scrollTop);
+        editor.setScrollLeft(saved.scrollLeft);
+      } else {
+        editor.setScrollTop(0);
+        editor.setScrollLeft(0);
+      }
+    });
+
     mountRef.current = () => {
       onMouseMove.dispose()
       onMouseDown.dispose()
+      onScroll.dispose()
+      onModelChange.dispose()
       editor.getDomNode()?.removeEventListener('copy', onCopy)
     }
   }
@@ -496,7 +598,7 @@ function LowcodeView(params: Params) {
         <button
           type="button"
           className={`${css['lowcode-view-toolbar-button']} ${hasUnsavedChanges ? css['lowcode-view-toolbar-button-nosave'] : css['lowcode-view-toolbar-button-disabled']}`}
-          onClick={handleSave}
+          onClick={handleSaveAll}
           disabled={!hasUnsavedChanges}
         >
           保存
@@ -525,7 +627,6 @@ function LowcodeView(params: Params) {
             <div className={css['code-container']}>
               <Editor
                 ref={codeIns}
-                key={coderOptions.path}
                 value={code}
                 {...coderOptions}
                 options={editorOptions}

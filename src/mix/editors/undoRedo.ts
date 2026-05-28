@@ -78,10 +78,12 @@ export default function() {
   return {
     /** 撤销 */
     '@undo'() {
+      console.log('@undo')
       undoRedoManager.undo()
     },
     /** 重做 */
     '@redo'() {
+      console.log('@redo')
       undoRedoManager.redo()
     }
   }
