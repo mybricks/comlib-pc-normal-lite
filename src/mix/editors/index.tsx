@@ -8,8 +8,9 @@ import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
 import { genStyleValue, genResizer, genImgSrcReplacer } from './styleProxy';
 import { buildSvgEditorItems } from './configs/svgEditor';
-import { aiSvgIcon } from './icons/aiSvgIcon';
-import { AiSvgPanel } from './components/AiSvgPanel';
+import { aiSvgIcon } from './icons/ai-svg';
+import { aiImgIcon } from './icons/ai-img';
+import { AiEditPanel } from './components/AiEditPanel';
 import type { Props, Actions } from './types';
 import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
@@ -63,6 +64,13 @@ export default function (props: Props, actions: Actions) {
     '[data-library-source]': {},
     '[class]': {},
     'img': {
+      '@ai': {
+        title: aiImgIcon,
+        desc: '通过AI创作图片',
+        render(_data, {close}) {
+          return <AiEditPanel close={close} mode="IMG" />;
+        }
+      },
       items: [
         {
           type: 'button',
@@ -76,7 +84,7 @@ export default function (props: Props, actions: Actions) {
         title: aiSvgIcon,
         desc: '通过AI创作图标',
         render(_data, {close}) {
-          return <AiSvgPanel close={close} />;
+          return <AiEditPanel close={close} mode="SVG" />;
         }
       },
       items: buildSvgEditorItems(comId),
