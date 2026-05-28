@@ -699,7 +699,7 @@ function styleToCss(style: Record<string, string | number>): string {
       // [TODO] 目前支持的都是需要px单位的样式
       return `${convertCamelToHyphen(key)}: ${value}px;`
     })
-    .concat(`transition: none;`) // 拖拽过程中 transition: all 体感上会有卡顿的感觉
+    .concat(`transition: none!important;`) // 拖拽过程中 transition: all 体感上会有卡顿的感觉
     .join(' ')
 }
 
