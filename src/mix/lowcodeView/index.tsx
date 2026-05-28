@@ -182,6 +182,12 @@ function LowcodeView(params: Params) {
 
   const codeIns = useRef<HandlerType>(null);
 
+  // 用 ref 保持 selectFile 和 files 的最新引用，避免 handleEditorMount 闭包过期
+  const selectFileRef = useRef(selectFile);
+  useEffect(() => { selectFileRef.current = selectFile; }, [selectFile]);
+  const filesRef = useRef(files);
+  useEffect(() => { filesRef.current = files; }, [files]);
+
   useEffect(() => {
     let decorationsCollection;
     let lastEditor;
@@ -437,7 +443,6 @@ function LowcodeView(params: Params) {
     editor.addCommand(monaco.KeyMod.WinCtrl | monaco.KeyCode.KeyS, () => {
       handleSaveRef.current();
     });
-    const model = editor.getModel();
     const decorationsCollection = editor.createDecorationsCollection([]);
     let relativePath = "";
 
@@ -451,7 +456,9 @@ function LowcodeView(params: Params) {
       const position = target?.position;
       if (!position) return;
 
-      const result = getRelativeImportAtPosition({ column: position.column, lineContent: model!.getLineContent(position.lineNumber)});
+      const currentModel = editor.getModel();
+      if (!currentModel) return;
+      const result = getRelativeImportAtPosition({ column: position.column, lineContent: currentModel.getLineContent(position.lineNumber)});
       if (!result) {
         decorationsCollection.clear();
         relativePath = "";
@@ -477,15 +484,18 @@ function LowcodeView(params: Params) {
       }
 
       const position = target?.position;
+      const currentModel = editor.getModel();
       // 点击时如果 move 没有设置 relativePath，则重新计算
-      if (!relativePath && position) {
-        const result = getRelativeImportAtPosition({ column: position.column, lineContent: model!.getLineContent(position.lineNumber)});
+      if (!relativePath && position && currentModel) {
+        const result = getRelativeImportAtPosition({ column: position.column, lineContent: currentModel.getLineContent(position.lineNumber)});
         if (result) {
           relativePath = result.importPath;
         }
       }
 
-      const { fileName } = selectFile!;
+      const currentSelectFile = selectFileRef.current;
+      if (!currentSelectFile) return;
+      const { fileName } = currentSelectFile;
 
       let currentPath = fileName.split('/');
       currentPath = currentPath.slice(0, currentPath.length - 1)
@@ -501,10 +511,11 @@ function LowcodeView(params: Params) {
       })
 
       const selectFileName = currentPath.join('/')
-      const filesMap = files.reduce((pre, cur) => {
+      const currentFiles = filesRef.current;
+      const filesMap = currentFiles.reduce((pre, cur) => {
         pre[cur.fileName] = cur
         return pre;
-      }, {})
+      }, {} as Record<string, typeof currentFiles[0]>)
 
       const extensions = ['jsx', 'js', 'tsx', 'ts'];
       const candidates = [
@@ -524,7 +535,7 @@ function LowcodeView(params: Params) {
 
     const onCopy = (e: ClipboardEvent) => {
       const codeContent = e.clipboardData?.getData('text/plain')
-      window._sandbox_.config.componentRuntime?.workspace?.onCodeEditorCopy({ filename: selectFile?.fileName, code: codeContent })
+      window._sandbox_.config.componentRuntime?.workspace?.onCodeEditorCopy({ filename: selectFileRef.current?.fileName, code: codeContent })
     }
 
     editor.getDomNode()?.addEventListener('copy', onCopy)

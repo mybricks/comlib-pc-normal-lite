@@ -10,8 +10,6 @@ export interface ProjectConfig {
   getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number; mode?: string }> | undefined;
   snapshotRuntimeMode?: string;
   getFocusInfo?: string;
-  getCodeRules?: () => string;
-  getDesignRules?: () => string;
   getFileSystem?: () => FileSystem;
   getLintResults?: () => Promise<LintMessage[]>;
 }

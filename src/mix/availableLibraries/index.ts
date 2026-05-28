@@ -148,7 +148,7 @@ export function getAllLibraryResources(): Array<{ name: string; resources: impor
 }
 
 
-// ── projectConfig 组件库信息 ────────────────────────────────────────────────────
+// ── 组件库信息 ────────────────────────────────────────────────────
 
 /**
  * readme → usage，其余字段对齐。

@@ -72,26 +72,6 @@ function hasSourceChanged(files: any[], previousSnapshot?: Map<string, string>):
 function buildProject(comId: string) {
   const aiComParams = context.getAiComParams(comId);
 
-  // const themesContent = (() => {
-  //   try {
-  //     const theme = context.resolveActiveTheme(aiComParams?.data);
-  //     return (
-  //       '- 设计风格：' +
-  //       (theme?.vars?.length
-  //         ? '\n  ui设计参考以下主题变量，css变量已经自动注入页面，直接使用变量即可，禁止重复定义。' +
-  //           theme.vars.reduce((pre: string, cur: any) => {
-  //             return (
-  //               pre +
-  //               `\n  - ${cur.title}： ${cur.propertyName}: ${cur.value}${cur.desc ? ` [${cur.desc}]` : ''}`
-  //             );
-  //           }, '')
-  //         : '\n  当前项目没有定义主题变量，禁止创造变量，风格根据需求自由发挥即可')
-  //     );
-  //   } catch {
-  //     return '';
-  //   }
-  // })();
-
   let runtimeError: any = null
   const events = context.getAiComEvents(comId);
   events.on('runtimeError', (error) => {
@@ -145,8 +125,6 @@ function buildProject(comId: string) {
     },
     getLogs: () => debugLogs.get(comId),
     snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
-    getCodeRules: () => context.projectConfig.codeRules ?? '',
-    getDesignRules: () => context.projectConfig.designRules ?? '',
     getLintResults: async () => {
       const messages: any[] = [];
       const files: any[] = aiComParams?.data?.files ?? [];
