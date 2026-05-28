@@ -19,11 +19,10 @@ import { verify as eslintVerify } from '../eslint';
 import styles from './styleProxy';
 
 export default function (props: Props, actions: Actions) {
-  if (!props?.data || !props?.id) return {};
 
   registerResourcesCode(props.id, props.name)
 
-  const comId = props.model?.runtime?.id || props.id;
+  const comId = props.id;
   const focusAreaConfigs = buildFocusAreaConfigs(props.data, comId);
   const exportCodeConfig = buildExportCodeConfig(props);
 

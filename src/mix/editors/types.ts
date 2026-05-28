@@ -5,6 +5,8 @@ export interface Props {
   isLowCodeMode: boolean;
   /** 组件 id */
   id: string;
+  /** name - 复制不变 */
+  name: string;
   model?: any;
   /** 选区 */
   focusArea: any;
