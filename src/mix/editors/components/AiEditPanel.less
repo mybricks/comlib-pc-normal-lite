@@ -1,65 +1,120 @@
+:global([class*='aiPopWrap-']) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  top:0px !important;
+  padding:0px !important;
+}
+
 .panel {
-  width: 300px;
-  padding: 8px 3px;
+  width: 320px;
+  padding: 8px 4px;
 }
 
 .inputWrap {
-  padding: 12px;
-  border: 1px solid #e5e7ef;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 15px;
+  border: 1px solid rgba(205, 214, 230, 0.55);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(140%) blur(2px);
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.06),
+    0 8px 18px rgba(16, 24, 40, 0.08);
 }
 
 .textarea {
-  width: 100%;
-  padding: 0;
+  flex: 1;
+  width: 1px;
+  padding: 10px 0;
   min-height: 40px;
+  max-height: 128px;
   border: none;
   outline: none;
   resize: none;
   color: #1f2430;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 20px;
   background: transparent;
   font-family: inherit;
   box-sizing: border-box;
+  overflow-y: auto;
+  margin: 0;
+  display: block;
 }
 
 .presetWrap {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 12px;
+  padding: 0 2px;
+  position: relative;
+  z-index: 2;
 }
 
 .presetButton {
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid #e5e7ef;
-  border-radius: 6px;
-  background: #fafbff;
-  color: #3f4656;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(205, 214, 230, 0.5);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #535b6f;
   font-size: 12px;
-  line-height: 24px;
+  line-height: 22px;
   cursor: pointer;
+  box-shadow:
+    0 1px 1px rgba(16, 24, 40, 0.03),
+    0 6px 16px rgba(16, 24, 40, 0.08);
+
+  &:hover {
+    border-color: rgba(204, 214, 235, 0.7);
+    background: var(--mybricks-color-primary);
+    color: #fff;
+  }
 }
 
-.submitWrap {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-
-.submitButton {
-  height: 26px;
-  min-width: 48px;
-  padding: 0 12px;
+.sendButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 27px;
+  height: 27px;
   border: none;
-  border-radius: 6px;
+  border-radius: 50%;
   background: var(--mybricks-color-primary);
   color: #fff;
-  font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
+  box-shadow: 0 10px 20px rgba(107, 114, 247, 0.24);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px rgba(107, 114, 247, 0.28);
+  }
+
+  &:disabled {
+    background: #eff1f4;
+    color: #bec5cf;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  &:disabled:hover {
+    box-shadow: none;
+    transform: none;
+  }
+}
+
+.sendButton :global(.ai-send-icon-svg) {
+  width: 19px;
+  height: 19px;
+  display: block;
 }
