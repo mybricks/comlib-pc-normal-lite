@@ -17,9 +17,11 @@ import { getDataZoneTextEditable } from './getDataZoneTextEditable'
 import undoRedo from './undoRedo';
 import { verify as eslintVerify } from '../eslint';
 import styles from './styleProxy';
+import { shouldShowAiEntry } from './utils/url';
 
 export default function (props: Props, actions: Actions) {
   if (!props?.data || !props?.id) return {};
+  const showAiEntry = shouldShowAiEntry();
 
   registerResourcesCode(props.id, props.name)
 
@@ -64,13 +66,17 @@ export default function (props: Props, actions: Actions) {
     '[data-library-source]': {},
     '[class]': {},
     'img': {
-      '@ai': {
-        title: aiImgIcon,
-        desc: '通过AI创作图片',
-        render(_data, {close}) {
-          return <AiEditPanel close={close} mode="IMG" />;
-        }
-      },
+      ...(showAiEntry
+        ? {
+            '@ai': {
+              title: aiImgIcon,
+              desc: '通过AI创作图片',
+              render(_data, {close}) {
+                return <AiEditPanel close={close} mode="IMG" />;
+              }
+            },
+          }
+        : {}),
       items: [
         {
           type: 'button',
@@ -80,13 +86,17 @@ export default function (props: Props, actions: Actions) {
       ]
     },
     '[data-zone-svg]': {
-      '@ai': {
-        title: aiSvgIcon,
-        desc: '通过AI创作图标',
-        render(_data, {close}) {
-          return <AiEditPanel close={close} mode="SVG" />;
-        }
-      },
+      ...(showAiEntry
+        ? {
+            '@ai': {
+              title: aiSvgIcon,
+              desc: '通过AI创作图标',
+              render(_data, {close}) {
+                return <AiEditPanel close={close} mode="SVG" />;
+              }
+            },
+          }
+        : {}),
       items: buildSvgEditorItems(comId),
     },
     ...getDataZoneTextEditable(),
