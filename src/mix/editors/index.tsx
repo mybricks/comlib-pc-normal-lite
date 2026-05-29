@@ -1,7 +1,7 @@
 import './resourceLoader';
 import '../../utils/antd';
 import React from 'react';
-import context from '../context';
+import context, { nextContext } from '../context';
 import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
@@ -31,6 +31,8 @@ export default function (props: Props, actions: Actions) {
   } else {
     focusAreaConfigs[':root'].items.push(...exportCodeConfig);
   }
+
+  nextContext.setComponent({ params: props, actions })
 
   context.setAiCom(props.id, {params: props, actions});
   (window as any).__mybricksEslintVerify = () => eslintVerify(props.data.files);

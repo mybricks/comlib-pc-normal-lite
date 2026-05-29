@@ -610,3 +610,4 @@ export class Version {
 export default new Context();
 
 export { config }
+export { default as nextContext } from './next'

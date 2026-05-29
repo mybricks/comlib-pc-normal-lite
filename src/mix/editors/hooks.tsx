@@ -18,24 +18,8 @@ const errorSet = new Set();
 export function buildHooks(props: Props) {
   return {
     '@error': (err: Error) => {
-      // console.log("[@error - message]", err.message)
-      // console.log("[@error - stack]", err.stack)
-      // console.log("@error:请保留现场并联系开发者")
-
       const events = context.getAiComEvents(props.id);
       events.emit('runtimeError', err)
-
-      
-      // const aiComParams = context.getAiComParams(props.id);
-      // if (aiComParams?.data) {
-      //   const data = aiComParams.data;
-      //   if (!data._errors) data._errors = [];
-      //   data._errors = [
-      //     ...data._errors.filter((e: any) => e.file),
-      //     {message: err.message, type: 'runtime'},
-      //   ];
-      //   context.getAiCom(props.id)?.actions?.notifyChanged?.();
-      // }
     },
 
     '@lowcode': {

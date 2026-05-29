@@ -629,70 +629,6 @@ export function genSvgReplacer() {
   };
 }
 
-export function genResizer() {
-  let className = ''
-  let style = {}
-
-  return {
-    type: '_resizer',
-    value: {
-      get() {},
-      set(params: any, value: any, status: any) {
-        const { state } = status
-        const ctx = params
-        const ele = ctx.focusArea.ele
-        if (state === 'start') {
-          className = `.${ele.className.split(' ').join('.')}`
-        } else if (state === 'ing') {
-          style = value
-          ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
-        } else if (state === 'finish') {
-          const loc = ele.dataset.loc
-          const cn = loc ? JSON.parse(loc) : {}
-          const lessPath = cn.files?.less
-          if (!lessPath) {
-            return
-          }
-          const comId = ctx.id
-          const aiComParams = context.getAiComParams(comId);
-          const lessFile = aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
-          const previousLess = decodeURIComponent(lessFile.source)
-          const cssObj = parseLess(previousLess)
-          const zoneSelector = JSON.parse(ele.dataset.zoneSelector)[0]
-          const eleClassList = Array.from(ele.classList) as string[] 
-          const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList })
-
-          if (!cssObjKey) {
-            return
-          }
-
-          if (!cssObj[cssObjKey]) {
-            cssObj[cssObjKey] = {};
-          }
-
-          Object.entries(style).forEach(([key, val]) => {
-            // [TODO] 目前给到的style一定数字且需要px单位
-            cssObj[cssObjKey][key] = `${val}px`;
-          });
-          const cssStr = stringifyLess(cssObj);
-
-          undoRedoManager.execute({
-            execute() {
-              context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined });
-              context.saveManualVersion(comId, [lessPath]);
-            },
-            undo() {
-              context.updateFile(comId, { fileName: lessPath, content: previousLess, type: undefined });
-              context.saveManualVersion(comId, [lessPath]);
-            },
-          })
-          ctx.css.remove(SETSTYLE_CSS_ID)
-        }
-      },
-    },
-  };
-}
-
 function styleToCss(style: Record<string, string | number>): string {
   return Object.entries(style)
     .map(([key, value]) => {
@@ -705,66 +641,139 @@ function styleToCss(style: Record<string, string | number>): string {
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
-export default function () {
+/**
+ * 将 style 写入目标元素对应的 LESS 文件，并推入撤销栈。
+ * 完成后移除临时预览 CSS。
+ *
+ * @param ctx         编辑器上下文（含 ctx.id / ctx.css）
+ * @param ele         目标 DOM 元素
+ * @param style       要写入的样式键值对（值为数字，写入时追加 px）
+ * @param ignoreFirst 若为 true，在解析出的选择器后追加 :not(:first-child)
+ */
+function applyStyleToLessFile(
+  ctx: any,
+  ele: HTMLElement,
+  style: Record<string, number>,
+  ignoreFirst: boolean,
+): void {
+  const loc = ele.dataset.loc
+  const cn = loc ? JSON.parse(loc) : {}
+  const lessPath = cn.files?.less
+  if (!lessPath) {
+    return
+  }
+
+  const comId = ctx.id
+  const aiComParams = context.getAiComParams(comId)
+  const lessFile = aiComParams.data.files?.find(
+    (f: { fileName: string; source: string }) => f.fileName === lessPath
+  )
+  const previousLess = decodeURIComponent(lessFile!.source as string)
+  const cssObj = parseLess(previousLess as string)
+  const zoneSelector = JSON.parse(ele.dataset.zoneSelector!)[0]
+  const eleClassList = Array.from(ele.classList) as string[]
+  const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList })
+
+  if (!cssObjKey) {
+    return
+  }
+
+  // 如果有 data-render-key，需要在选择器上追加属性选择器；如果有 ignoreFirst，再追加 :not(:first-child)
+  const renderKey = ele.dataset.renderKey
+  const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
+  const finalCssObjKey = `${cssObjKey}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
+
+  if (!cssObj[finalCssObjKey]) {
+    cssObj[finalCssObjKey] = {}
+  }
+
+  Object.entries(style).forEach(([key, val]) => {
+    // [TODO] 目前给到的style一定数字且需要px单位
+    cssObj[finalCssObjKey][key] = `${val}px`
+  })
+  const cssStr = stringifyLess(cssObj)
+
+  undoRedoManager.execute({
+    execute() {
+      context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined })
+      context.saveManualVersion(comId, [lessPath])
+    },
+    undo() {
+      context.updateFile(comId, { fileName: lessPath, content: previousLess, type: undefined })
+      context.saveManualVersion(comId, [lessPath])
+    },
+  })
+  ctx.css.remove(SETSTYLE_CSS_ID)
+}
+
+/**
+ * 构造一个处理 start / ing / finish 三态的样式拖拽处理器。
+ *
+ * @param getEle       从调用参数中提取目标 DOM 元素
+ * @param getStyle     从调用参数中提取当前样式对象
+ * @param getIgnoreFirst 从调用参数中提取 ignoreFirst 标志（默认 false）
+ */
+function createSetStyleHandler(
+  getEle: (ctx: any, params: any) => HTMLElement,
+  getStyle: (ctx: any, params: any) => Record<string, number>,
+  getIgnoreFirst: (ctx: any, params: any) => boolean = () => false,
+) {
   let className = ''
+
+  return function handler(ctx: any, params: any) {
+    const { state } = params
+
+    if (state === 'start') {
+      const ele = getEle(ctx, params)
+      const ignoreFirst = getIgnoreFirst(ctx, params)
+
+      const renderKey = ele.dataset.renderKey
+      const classSelector = `.${ele.className.split(' ').join('.')}`
+      const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
+      className = `${classSelector}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
+    } else if (state === 'ing') {
+      const style = getStyle(ctx, params)
+      ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
+    } else if (state === 'finish') {
+      const ele = getEle(ctx, params)
+      const style = getStyle(ctx, params)
+      const ignoreFirst = getIgnoreFirst(ctx, params)
+      applyStyleToLessFile(ctx, ele, style, ignoreFirst)
+    }
+  }
+}
+
+export function genResizer() {
+  let style: Record<string, number> = {}
+
+  const handler = createSetStyleHandler(
+    (ctx) => ctx.focusArea.ele,
+    () => style,
+  )
+
+  return {
+    type: '_resizer',
+    value: {
+      get() {},
+      set(params: any, value: any, status: any) {
+        const { state } = status
+        const ctx = params
+        if (state === 'ing') {
+          style = value
+        }
+        handler(ctx, { state })
+      },
+    },
+  }
+}
+
+export default function () {
   return {
     /** 画布上各种可视化调整 */
-    '@setStyle'(ctx, params) {
-      const {
-        ele,
-        state,
-        style,
-        ignoreFirst
-      } = params
-      if (state === 'start') {
-        className = `.${ele.className.split(' ').join('.')}${ignoreFirst ? ':not(:first-child)' : ''}`
-      } else if (state === 'ing') {
-        ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
-      } else if (state === 'finish') {
-        const loc = ele.dataset.loc
-        const cn = loc ? JSON.parse(loc) : {}
-        const lessPath = cn.files?.less
-        if (!lessPath) {
-          return
-        }
-        const comId = ctx.id
-        const aiComParams = context.getAiComParams(comId);
-        const lessFile = aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
-        const previousLess = decodeURIComponent(lessFile.source)
-        const cssObj = parseLess(previousLess)
-        const zoneSelector = JSON.parse(ele.dataset.zoneSelector)[0]
-        const eleClassList = Array.from(ele.classList) as string[] 
-        const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList })
-
-        if (!cssObjKey) {
-          return
-        }
-
-        // 如果有 ignoreFirst，需要在选择器上追加 :not(:first-child)
-        const finalCssObjKey = ignoreFirst ? `${cssObjKey}:not(:first-child)` : cssObjKey;
-
-        if (!cssObj[finalCssObjKey]) {
-          cssObj[finalCssObjKey] = {};
-        }
-
-        Object.entries(style).forEach(([key, val]) => {
-          // [TODO] 目前给到的style一定数字且需要px单位
-          cssObj[finalCssObjKey][key] = `${val}px`;
-        });
-        const cssStr = stringifyLess(cssObj);
-
-        undoRedoManager.execute({
-          execute() {
-            context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined });
-            context.saveManualVersion(comId, [lessPath]);
-          },
-          undo() {
-            context.updateFile(comId, { fileName: lessPath, content: previousLess, type: undefined });
-            context.saveManualVersion(comId, [lessPath]);
-          },
-        })
-        ctx.css.remove(SETSTYLE_CSS_ID)
-      }
-    },
+    '@setStyle': createSetStyleHandler(
+      (_ctx, params) => params.ele,
+      (_ctx, params) => params.style,
+      (_ctx, params) => !!params.ignoreFirst,
+    ),
   }
 }

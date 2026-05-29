@@ -6,7 +6,9 @@ class Context {
     /** 数据源、各类api */
     params: any
     /** 通知引擎更新doc、上下锁 */
-    actions: any
+    actions: {
+      notifyChanged: (...params: any) => void
+    }
     /** 事件 */
     events: Events<{
       /** 调试相关数据 */
@@ -39,6 +41,15 @@ class Context {
         this.component.params = params
         this.component.actions = actions
       }
+    }
+  }
+
+  /** 通知引擎文档相关更新 */
+  notifyChanged(filename?: string, changeType?: 'delete' | 'update', value?: any) {
+    if (!filename) {
+      this.component?.actions?.notifyChanged?.();
+    } else {
+      this.component?.actions?.notifyChanged?.(filename, changeType, value);
     }
   }
 }
