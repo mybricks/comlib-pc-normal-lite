@@ -577,8 +577,19 @@ export function applyRawSvg(params: any, rawSvg: string): void {
     end: range.start + jsxSvg.length,
   };
 
-  context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
-  context.saveManualVersion(comId, [jsxPath]);
+  undoRedoManager.execute({
+    execute() {
+      context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
+      context.saveManualVersion(comId, [jsxPath]);
+    },
+    undo() {
+      context.updateFile(comId, { fileName: jsxPath, content: source, type: undefined });
+      context.saveManualVersion(comId, [jsxPath]);
+    },
+  })
+
+  // context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
+  // context.saveManualVersion(comId, [jsxPath]);
   _svgAppliedCallback?.(rawSvg);
 }
 
