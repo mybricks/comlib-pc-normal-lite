@@ -22,6 +22,7 @@ export default function IconLibraryModal({
   const [iconPanel, setIconPanel] = useState<IconPanel>('overview');
   const [activeLibraryId, setActiveLibraryId] = useState<string | null>(null);
   const [iconLibraries, setIconLibraries] = useState<DumpIconsLibrary[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -63,8 +64,13 @@ export default function IconLibraryModal({
 
   const handleDeleteLibrary = async (e: React.MouseEvent, libraryId: string) => {
     e.stopPropagation();
-    await deleteIconLibrary(libraryId);
-    setIconLibraries(prev => prev.filter(lib => lib.id !== libraryId));
+    setDeletingId(libraryId);
+    try {
+      await deleteIconLibrary(libraryId);
+      setIconLibraries(prev => prev.filter(lib => lib.id !== libraryId));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleGenerateIcon = (content: string) => {
@@ -115,13 +121,20 @@ export default function IconLibraryModal({
                     >
                       <button
                         type="button"
-                        className={styles.deleteBtn}
+                        className={`${styles.deleteBtn}${deletingId === library.id ? ` ${styles.deleteBtnLoading}` : ''}`}
                         onClick={e => handleDeleteLibrary(e, library.id)}
+                        disabled={deletingId !== null}
                         aria-label="删除图标库"
                       >
-                        <svg viewBox="0 0 16 16" width={12} height={12} fill="currentColor">
-                          <path d="M2.293 2.293a1 1 0 0 1 1.414 0L8 6.586l4.293-4.293a1 1 0 1 1 1.414 1.414L9.414 8l4.293 4.293a1 1 0 0 1-1.414 1.414L8 9.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L6.586 8 2.293 3.707a1 1 0 0 1 0-1.414z" />
-                        </svg>
+                        {deletingId === library.id ? (
+                          <svg viewBox="0 0 16 16" width={12} height={12} fill="currentColor" className={styles.spinIcon}>
+                            <path d="M8 1.5a6.5 6.5 0 1 0 6.5 6.5A.75.75 0 0 0 13 8a5 5 0 1 1-5-5 .75.75 0 0 0 0-1.5z" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 16 16" width={12} height={12} fill="currentColor">
+                            <path d="M2.293 2.293a1 1 0 0 1 1.414 0L8 6.586l4.293-4.293a1 1 0 1 1 1.414 1.414L9.414 8l4.293 4.293a1 1 0 0 1-1.414 1.414L8 9.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L6.586 8 2.293 3.707a1 1 0 0 1 0-1.414z" />
+                          </svg>
+                        )}
                       </button>
                       <div className={styles.libraryName} title={library.name || '未命名图标库'}>
                         {library.name || '未命名图标库'}

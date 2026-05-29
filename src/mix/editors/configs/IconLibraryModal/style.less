@@ -60,10 +60,30 @@
   transition: opacity 0.15s, background 0.15s, color 0.15s;
   z-index: 1;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: #fff1f0;
     color: #f5222d;
   }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.deleteBtnLoading {
+  opacity: 1 !important;
+  cursor: not-allowed;
+  color: var(--mybricks-color-primary, #5f3fff);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinIcon {
+  animation: spin 0.7s linear infinite;
+  display: block;
 }
 
 .libraryName {
