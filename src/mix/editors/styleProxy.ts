@@ -749,23 +749,25 @@ function createSetStyleHandler(
   return function handler(ctx: any, params: any) {
     const { state } = params
 
-    if (state === 'start') {
-      const ele = getEle(ctx, params)
-      const ignoreFirst = getIgnoreFirst(ctx, params)
+    try {
+      if (state === 'start') {
+        const ele = getEle(ctx, params)
+        const ignoreFirst = getIgnoreFirst(ctx, params)
 
-      const renderKey = ele.dataset.renderKey
-      const classSelector = `.${ele.className.split(' ').join('.')}`
-      const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
-      className = `${classSelector}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
-    } else if (state === 'ing') {
-      const style = getStyle(ctx, params)
-      ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
-    } else if (state === 'finish') {
-      const ele = getEle(ctx, params)
-      const style = getStyle(ctx, params)
-      const ignoreFirst = getIgnoreFirst(ctx, params)
-      applyStyleToLessFile(ctx, ele, style, ignoreFirst)
-    }
+        const renderKey = ele.dataset.renderKey
+        const classSelector = `.${ele.className.split(' ').join('.')}`
+        const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
+        className = `${classSelector}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
+      } else if (state === 'ing') {
+        const style = getStyle(ctx, params)
+        ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
+      } else if (state === 'finish') {
+        const ele = getEle(ctx, params)
+        const style = getStyle(ctx, params)
+        const ignoreFirst = getIgnoreFirst(ctx, params)
+        applyStyleToLessFile(ctx, ele, style, ignoreFirst)
+      }
+    } catch {}
   }
 }
 
