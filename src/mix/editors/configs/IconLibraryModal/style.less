@@ -1,0 +1,373 @@
+// ─── Modal body ───────────────────────────────────────────────────────────────
+.modalBody {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  &.empty {
+    height: auto;
+  }
+}
+
+// ─── 总览 ───────────────────────────────────────────────────────────────────────
+.overviewGrid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-content: flex-start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.libraryCard {
+  position: relative;
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--mybricks-bg-color-main, #ffffff);
+  border: 1px solid rgba(205, 214, 230, 0.35);
+  cursor: pointer;
+  transition: box-shadow 0.2s, border-color 0.2s;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.1);
+    border: 1px solid rgba(205, 214, 230, 0.35);
+
+    .deleteBtn {
+      opacity: 1;
+    }
+  }
+}
+
+.deleteBtn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--mybricks-text-color-secondary, #86909c);
+  cursor: pointer;
+  opacity: 0;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.12);
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  z-index: 1;
+
+  &:hover {
+    background: #fff1f0;
+    color: #f5222d;
+  }
+}
+
+.libraryName {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--mybricks-text-color-main, #1d2129);
+  font-weight: 600;
+  margin-bottom: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.libraryCount {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--mybricks-text-color-secondary, #86909c);
+}
+
+.previewWrap {
+  position: relative;
+}
+
+.previewFade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    var(--mybricks-bg-color-main, #ffffff) 100%
+  );
+  pointer-events: none;
+  border-radius: 0 0 4px 4px;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.previewItem {
+  height: 56px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mybricks-bg-color-secondary, #f2f3f5);
+}
+
+.previewSvg {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  :global(svg) {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+// ─── 详情 ───────────────────────────────────────────────────────────────────────
+.detailWrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.backBtn {
+  font-size: 13px;
+  color: var(--mybricks-color-primary, #5f3fff);
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.detailTitle {
+  font-size: 14px;
+  color: var(--mybricks-text-color-main, #1d2129);
+  font-weight: 500;
+}
+
+.detailGrid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-content: flex-start;
+  padding-right: 4px;
+}
+
+.emptyTip {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--mybricks-text-color-secondary, #86909c);
+  font-size: 13px;
+  padding: 32px 0;
+}
+
+// ─── 底部 AI 输入区（有图标库时） ────────────────────────────────────────────────────
+.aiInputSection {
+  flex-shrink: 0;
+  margin-top: 4px;
+  padding: 12px 4px 4px;
+
+  .inputWrap {
+    margin-bottom: 10px;
+  }
+}
+
+// ─── IconItem ─────────────────────────────────────────────────────────────────
+.iconItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  background: var(--mybricks-bg-color-secondary, #f2f3f5);
+  // 始终预留 2px 边框，hover 时切换为主题色，避免尺寸跳动
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: var(--mybricks-color-primary, #5f3fff);
+  }
+}
+
+.iconItemSvg {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+
+  :global(svg) {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.iconItemName {
+  font-size: 10px;
+  color: var(--mybricks-font-color, #333);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ─── EmptyState ─────────────────────────────────────────────────────────────────
+.emptyState {
+  padding: 4px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.guideIcon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(107, 114, 247, 0.16), rgba(107, 114, 247, 0.06));
+  color: var(--mybricks-color-primary, #5f3fff);
+  box-shadow: 0 6px 16px rgba(107, 114, 247, 0.16);
+  margin-bottom: 14px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mybricks-text-color-main, #1d2129);
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--mybricks-text-color-secondary, #86909c);
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.inputWrap {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid rgba(205, 214, 230, 0.55);
+  border-radius: 14px;
+  background: var(--mybricks-bg-color-main, rgba(255, 255, 255, 0.92));
+  margin-bottom: 18px;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.06),
+    0 8px 18px rgba(16, 24, 40, 0.08);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  box-sizing: border-box;
+
+  &:focus-within {
+    border-color: rgba(107, 114, 247, 0.45);
+    box-shadow:
+      0 0 0 3px rgba(107, 114, 247, 0.08),
+      0 8px 18px rgba(16, 24, 40, 0.08);
+  }
+}
+
+.textarea {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: 100%;
+  padding: 4px 0;
+  min-height: 30px;
+  max-height: 128px;
+  height: auto;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--mybricks-text-color-main, #1f2430);
+  font-size: 13px;
+  line-height: 20px;
+  background: transparent;
+  font-family: inherit;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.sendButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: var(--mybricks-color-primary, #5f3fff);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(107, 114, 247, 0.24);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    background: #eff1f4;
+    color: #bec5cf;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+.presetWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.presetButton {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid rgba(205, 214, 230, 0.5);
+  border-radius: 999px;
+  background: var(--mybricks-bg-color-main, rgba(255, 255, 255, 0.94));
+  color: var(--mybricks-text-color-secondary, #535b6f);
+  font-size: 12px;
+  line-height: 24px;
+  cursor: pointer;
+  box-shadow:
+    0 1px 1px rgba(16, 24, 40, 0.03),
+    0 6px 16px rgba(16, 24, 40, 0.06);
+  transition: all 0.16s ease;
+
+  &:hover {
+    border-color: var(--mybricks-color-primary, #5f3fff);
+    background: var(--mybricks-color-primary, #5f3fff);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(107, 114, 247, 0.22);
+  }
+}

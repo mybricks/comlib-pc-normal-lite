@@ -13,9 +13,10 @@
 
 .inputWrap {
   display: flex;
-  align-items: center;
+  // 底部对齐：单行时与发送按钮同高居中，多行时 textarea 撑高、按钮随底边下移
+  align-items: flex-end;
   gap: 10px;
-  padding: 5px 15px;
+  padding: 6px 15px;
   border: 1px solid rgba(205, 214, 230, 0.55);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.92);
@@ -30,8 +31,9 @@
 .textarea {
   flex: 1;
   width: 1px;
-  padding: 10px 0;
-  min-height: 40px;
+  padding: 4px 0;
+  // 单行高度与发送按钮（27px）对齐，使初始态垂直居中
+  min-height: 28px;
   max-height: 128px;
   border: none;
   outline: none;

@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
 
-export function AiSendIcon({ disabled = false }: { disabled?: boolean }) {
+export function AiSendIcon({ disabled = false, size }: { disabled?: boolean; size?: number }) {
   const gradientId = useId();
 
   return (
@@ -9,6 +9,8 @@ export function AiSendIcon({ disabled = false }: { disabled?: boolean }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       className="ai-send-icon-svg"
+      width={size}
+      height={size}
     >
       {!disabled && (
         <defs>
