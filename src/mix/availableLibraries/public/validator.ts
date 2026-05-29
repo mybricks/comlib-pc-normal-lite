@@ -28,6 +28,40 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
     return ALLOWED_LIBRARIES.some((lib) => source === lib) || source.startsWith(".");
   }
 
+  /**
+   * 若 source 是 axios 且当前文件是 dataSource.ts，则抛出禁止引入 axios 的错误。
+   */
+  function assertNotAxiosInDataSource(
+    source: string,
+    isDataSourceJs: boolean,
+    path: any,
+  ): void {
+    if (isDataSourceJs && (source === 'axios' || source.startsWith('axios/'))) {
+      throw path.buildCodeFrameError(
+        `[dataSource.ts 校验] 禁止在 dataSource.ts 中直接引入 'axios'。\n` +
+        `修正建议：请使用 DataSource 基类内置的 this.axios 发起请求，无需单独安装或导入 axios。`
+      );
+    }
+  }
+
+  /**
+   * 若 source 不在白名单中，则抛出依赖校验错误。
+   * @param label 用于区分 "import" 和 "动态 import()" 的描述前缀
+   */
+  function assertAllowed(
+    source: string,
+    fileName: string,
+    path: any,
+    label = '使用了不允许的依赖',
+  ): void {
+    if (!isAllowed(source, fileName)) {
+      throw path.buildCodeFrameError(
+        `[依赖校验] ${label}：'${source}'\n` +
+        `修正建议：请仅使用允许的依赖库。${ALLOWED_LIBRARIES.join('、')}`
+      );
+    }
+  }
+
   return {
     libraryName: '__public__',
 
@@ -42,26 +76,32 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
             ImportDeclaration(path: any) {
               const source: string = path.node.source.value;
 
-              // ── dataSource.js：禁止直接引入 axios ───────────────────────
-              if (isDataSourceJs && (source === 'axios' || source.startsWith('axios/'))) {
-                throw path.buildCodeFrameError(
-                  `[dataSource.js 校验] 禁止在 dataSource.js 中直接引入 'axios'。\n` +
-                  `修正建议：请使用 DataSource 基类内置的 this.axios 发起请求，无需单独安装或导入 axios。`
-                );
-              }
-
-              if (isAllowed(source, fileName)) return;
-
-              throw path.buildCodeFrameError(
-                `[依赖校验] 使用了不允许的依赖：'${source}'\n` +
-                `修正建议：请仅使用允许的依赖库。${ALLOWED_LIBRARIES.join('、')}`
-              );
+              // ── dataSource.ts：禁止直接引入 axios ───────────────────────
+              assertNotAxiosInDataSource(source, isDataSourceJs, path);
+              assertAllowed(source, fileName, path, '使用了不允许的依赖');
             },
 
-            // ── setup.js：spyOn 只允许 .mockReturn 链式调用 ──────────────
+            // ── setup.ts：spyOn 只允许 .mockReturn 链式调用 ──────────────
             // console.xxx 和 window.location 规则已移至 mix/eslint/ 轻量校验层，不再阻塞编译
             CallExpression(path: any) {
               const callee = path.node.callee;
+
+              // ── 动态 import() 被 Babel 转换后的 require() 形式 ──────────
+              // Babel preset-env 的 transform-dynamic-import 会在 ImportExpression
+              // visitor 触发前将 import('xxx') 转换为 require('xxx')，
+              // 因此在 CallExpression 中拦截 require(StringLiteral) 来做等价校验。
+              if (
+                callee.type === 'Identifier' &&
+                callee.name === 'require' &&
+                path.node.arguments.length === 1 &&
+                path.node.arguments[0].type === 'StringLiteral'
+              ) {
+                const source: string = path.node.arguments[0].value;
+
+                // dataSource.ts：禁止 require('axios')
+                assertNotAxiosInDataSource(source, isDataSourceJs, path);
+                assertAllowed(source, fileName, path, '动态 import() 使用了不允许的依赖');
+              }
 
               if (isSetupJs) {
                 // 检测 spyOn(...).xxx() 中 xxx 不是 mockReturn 的情况
@@ -77,7 +117,7 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                     obj.callee.name === 'spyOn'
                   ) {
                     throw path.buildCodeFrameError(
-                      `[setup.js 校验] spyOn 只支持 .mockReturn() 方法，不允许使用 '.${callee.property.name}'。\n` +
+                      `[setup.ts 校验] spyOn 只支持 .mockReturn() 方法，不允许使用 '.${callee.property.name}'。\n` +
                       `修正建议：请使用 spyOn(dataSource, 'method').mockReturn(value) 形式。`
                     );
                   }
@@ -129,15 +169,15 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                   },
                 });
 
-                // ── dataSource.js：必须从 mybricks 引入 DataSource ───────────
+                // ── dataSource.ts：必须从 mybricks 引入 DataSource ───────────
                 if (isDataSourceJs && !hasDataSourceImport) {
                   throw programPath.buildCodeFrameError(
-                    `[dataSource.js 校验] 必须从 'mybricks' 中导入 DataSource 基类。\n` +
+                    `[dataSource.ts 校验] 必须从 'mybricks' 中导入 DataSource 基类。\n` +
                     `修正建议：import { DataSource } from 'mybricks'`
                   );
                 }
 
-                // ── dataSource.js：只能有一个 export default ─────────────────
+                // ── dataSource.ts：只能有一个 export default ─────────────────
                 if (isDataSourceJs) {
                   let exportDefaultCount = 0;
                   programPath.traverse({
@@ -145,12 +185,12 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                   });
                   if (exportDefaultCount === 0) {
                     throw programPath.buildCodeFrameError(
-                      `[dataSource.js 校验] 必须有且只有一个 export default 导出（应为 export default new MyDatasource()）。`
+                      `[dataSource.ts 校验] 必须有且只有一个 export default 导出（应为 export default new MyDatasource()）。`
                     );
                   }
                   if (exportDefaultCount > 1) {
                     throw programPath.buildCodeFrameError(
-                      `[dataSource.js 校验] 只能有一个 export default 导出，当前发现 ${exportDefaultCount} 个。`
+                      `[dataSource.ts 校验] 只能有一个 export default 导出，当前发现 ${exportDefaultCount} 个。`
                     );
                   }
                 }
@@ -181,12 +221,12 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                       );
                     }
 
-                    // setup.js：describe / spyOn 必须从 'mybricks/testing' 引入
+                    // setup.ts：describe / spyOn 必须从 'mybricks/testing' 引入
                     if (isSetupJs && (name === 'describe' || name === 'spyOn')) {
                       const binding = refPath.scope.getBinding(name);
                       if (binding && importedFromTesting.has(name)) return;
                       throw refPath.buildCodeFrameError(
-                        `[setup.js 校验] '${name}' 必须从 'mybricks/testing' 中导入后使用。\n` +
+                        `[setup.ts 校验] '${name}' 必须从 'mybricks/testing' 中导入后使用。\n` +
                         `修正建议：import { describe, spyOn } from 'mybricks/testing'`
                       );
                     }
