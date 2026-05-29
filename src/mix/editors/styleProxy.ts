@@ -385,7 +385,7 @@ const SVG_ATTR_MAP: Record<string, string> = {
  * - 连字符属性 → 驼峰（如 fill-rule → fillRule）
  * - class → className
  */
-function svgToJsx(rawSvg: string): string {
+function svgToJsx(rawSvg: string, sizeOverride?: { width?: string; height?: string }): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(rawSvg, 'image/svg+xml');
   const svgEl = doc.querySelector('svg');
@@ -436,6 +436,14 @@ function svgToJsx(rawSvg: string): string {
       return `<${tagName}${attrStr} />`;
     }
     return `<${tagName}${attrStr}>${children}</${tagName}>`;
+  }
+
+  // 沿用原始图标的 width/height 属性，保持替换前后尺寸一致
+  if (sizeOverride?.width != null) {
+    svgEl.setAttribute('width', sizeOverride.width);
+  }
+  if (sizeOverride?.height != null) {
+    svgEl.setAttribute('height', sizeOverride.height);
   }
 
   // 确保根 svg 始终带有 height:auto，保证在容器内自适应高度
@@ -565,7 +573,14 @@ export function applyRawSvg(params: any, rawSvg: string): void {
   const candidate = source.slice(range.start, range.end);
   if (!candidate.startsWith('<svg') || !candidate.trimEnd().endsWith('</svg>')) return;
 
-  const jsxSvg = svgToJsx(rawSvg);
+  // 提取原始 svg 的 width/height 属性，替换时保持图标尺寸不变
+  const sizeOverride: { width?: string; height?: string } = {};
+  const widthMatch = candidate.match(/\bwidth="([^"]+)"/);
+  const heightMatch = candidate.match(/\bheight="([^"]+)"/);
+  if (widthMatch) sizeOverride.width = widthMatch[1];
+  if (heightMatch) sizeOverride.height = heightMatch[1];
+
+  const jsxSvg = svgToJsx(rawSvg, sizeOverride);
   const newSource = source.slice(0, range.start) + jsxSvg + source.slice(range.end);
 
   // 记录本次替换的精确范围，供下次替换复用
