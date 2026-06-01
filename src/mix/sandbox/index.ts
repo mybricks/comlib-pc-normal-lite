@@ -18,6 +18,7 @@ import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
+import { undoRedoManager } from '../editors/undoRedo';
 
 const VERIFY_CONFIG = {
   rules: {
@@ -65,6 +66,45 @@ function hasSourceChanged(files: any[], previousSnapshot?: Map<string, string>):
   }
 
   return false;
+}
+
+// ─── 文件 diff 工具 ────────────────────────────────────────────────────────────
+
+/**
+ * 将一组目标文件 diff 应用到 comId 对应的组件，仅写入有变化的文件。
+ * - 目标中不存在的文件会被删除
+ * - 目标中新增或内容有变更的文件才会触发更新
+ */
+function applyFileDiff(
+  comId: string,
+  targetFiles: Array<{ path: string; content: string }>,
+) {
+  const updateFileNames: string[] = []
+  const currentData = context.getAiComParams(comId)?.data;
+  const currentMap = new Map<string, string>(
+    (currentData?.files ?? []).map((f: any) => [
+      f.fileName,
+      typeof f.source === 'string' ? decodeURIComponent(f.source) : '',
+    ])
+  );
+  const targetMap = new Map(targetFiles.map((f) => [f.path, f.content]));
+
+  // 删除目标中不存在的文件
+  for (const fileName of currentMap.keys()) {
+    if (!targetMap.has(fileName)) {
+      updateFileNames.push(fileName)
+      context.updateFile(comId, { fileName, type: 'delete' });
+    }
+  }
+  // 新增或变更的文件
+  for (const [fileName, content] of targetMap) {
+    if (currentMap.get(fileName) !== content) {
+      updateFileNames.push(fileName)
+      context.updateFile(comId, { fileName, content });
+    }
+  }
+
+  return updateFileNames
 }
 
 // ─── 构建 project 快照 ────────────────────────────────────────────────────────
@@ -269,6 +309,34 @@ async function persistAiVersionAfterTurn(
 
   TURNID_TO_RECORD[record.turnId] = record;
   context.notifyVersionsChange(comId, record);
+
+  // ── undo/redo 支持 ────────────────────────────────────────────────────────
+  // previousSnapshot: Map<fileName, encodedSource>（beforeTurn 快照，未解码）
+  // files: VersionFile[]（AI 产出的新内容，已解码）
+
+  // 将 previousSnapshot (Map<fileName, encodedSource>) 转换为 VersionFile[]
+  const prevFiles: Array<{ path: string; content: string }> = [];
+  if (previousSnapshot) {
+    for (const [fileName, encodedSource] of previousSnapshot) {
+      prevFiles.push({ path: fileName, content: decodeURIComponent(encodedSource) });
+    }
+  }
+
+  // files 已在外部声明（AI 产出），复制一份闭包内引用
+  const nextFiles = files;
+
+  undoRedoManager.record({
+    execute() {
+      // 重做：将文件恢复为 AI 修改后的状态
+      const updateFileNames = applyFileDiff(comId, nextFiles);
+      context.saveManualVersion(comId, updateFileNames);
+    },
+    undo() {
+      // 撤回：将文件恢复为 AI 修改前的状态
+      const updateFileNames = applyFileDiff(comId, prevFiles);
+      context.saveManualVersion(comId, updateFileNames);
+    },
+  });
 }
 
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
@@ -596,28 +664,8 @@ export async function registerSandbox(comId: string): Promise<void> {
     ]);
     if (!targetMeta || !files.length) return;
 
-    const aiCom = context.getAiComParams(comId);
-
-    // 1. 找出当前 data.files 中存在但目标版本中不存在的文件（需要删除）
-    // 2. diff 比对，按需更新文件（新增 / 变更 / 删除）
-    const currentFileMap = new Map<string, string>(
-      (aiCom?.data?.files ?? []).map((f: any) => [f.fileName, decodeURIComponent(f.source ?? '')])
-    );
-    const targetFileMap = new Map<string, string>(files.map(f => [f.path, f.content]));
-
-    // 删除目标版本中不存在的文件
-    for (const fileName of currentFileMap.keys()) {
-      if (!targetFileMap.has(fileName)) {
-        context.updateFile(comId, { fileName, type: "delete" });
-      }
-    }
-
-    // 新增或内容有变更的文件才触发更新
-    for (const [fileName, content] of targetFileMap) {
-      if (currentFileMap.get(fileName) !== content) {
-        context.updateFile(comId, { fileName, content });
-      }
-    }
+    // diff 比对，按需更新文件（新增 / 变更 / 删除）
+    applyFileDiff(comId, files);
 
     // 3. 新增一条 rollback 类型版本记录
     const version = context.versionsMap[comId]
