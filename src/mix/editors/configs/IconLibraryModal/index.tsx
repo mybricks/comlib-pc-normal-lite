@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from 'antd';
-import { scanIconsFromDOM } from '../../styleProxy';
 import { loadIconLibraries, deleteIconLibrary, type DumpIconsLibrary, type IconPanel } from './utils';
 import context from '../../../context';
 import AIInputBar from './AIInputBar';
@@ -28,16 +27,7 @@ export default function IconLibraryModal({
   const refreshLibraries = async () => {
     const libraries = await loadIconLibraries(comId);
     const sortedLibraries = [...libraries].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    if (sortedLibraries.length === 0) {
-      const scannedIcons = scanIconsFromDOM();
-      setIconLibraries(
-        scannedIcons.length > 0
-          ? [{ id: '__canvas_fallback__', name: '画布中图标', updatedAt: Date.now(), icons: scannedIcons }]
-          : [],
-      );
-    } else {
-      setIconLibraries(sortedLibraries);
-    }
+    setIconLibraries(sortedLibraries);
   };
 
   useEffect(() => {
