@@ -752,10 +752,14 @@ function createSetStyleHandler(
     try {
       if (state === 'start') {
         const ele = getEle(ctx, params)
-        const ignoreFirst = getIgnoreFirst(ctx, params)
+        const style = getStyle(ctx, params)
+        const hasGap = 'gap' in style
+        const ignoreFirst = hasGap ? false : getIgnoreFirst(ctx, params)
 
-        const renderKey = ele.dataset.renderKey
-        const classSelector = `.${ele.className.split(' ').join('.')}`
+        // 如果有 gap 属性，认为是对父节点的样式操作，获取父元素
+        const targetEle = hasGap ? (ele.parentElement as HTMLElement) : ele
+        const renderKey = targetEle.dataset.renderKey
+        const classSelector = `.${targetEle.className.split(' ').join('.')}`
         const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
         className = `${classSelector}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
       } else if (state === 'ing') {
@@ -764,8 +768,12 @@ function createSetStyleHandler(
       } else if (state === 'finish') {
         const ele = getEle(ctx, params)
         const style = getStyle(ctx, params)
-        const ignoreFirst = getIgnoreFirst(ctx, params)
-        applyStyleToLessFile(ctx, ele, style, ignoreFirst)
+        const hasGap = 'gap' in style
+        const ignoreFirst = hasGap ? false : getIgnoreFirst(ctx, params)
+        
+        // 如果有 gap 属性，对父元素应用样式
+        const targetEle = hasGap ? (ele.parentElement as HTMLElement) : ele
+        applyStyleToLessFile(ctx, targetEle, style, ignoreFirst)
       }
     } catch {}
   }
