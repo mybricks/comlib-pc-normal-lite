@@ -594,20 +594,24 @@ export async function registerSandbox(comId: string): Promise<void> {
     const aiCom = context.getAiComParams(comId);
 
     // 1. 找出当前 data.files 中存在但目标版本中不存在的文件（需要删除）
-    const targetFileNames = new Set(files.map(f => f.path));
-    const currentFiles = aiCom?.data?.files ?? [];
-    const filesToDelete = currentFiles
-      .filter(f => !targetFileNames.has(f.fileName))
-      .map(f => f.fileName);
+    // 2. diff 比对，按需更新文件（新增 / 变更 / 删除）
+    const currentFileMap = new Map<string, string>(
+      (aiCom?.data?.files ?? []).map((f: any) => [f.fileName, decodeURIComponent(f.source ?? '')])
+    );
+    const targetFileMap = new Map<string, string>(files.map(f => [f.path, f.content]));
 
-    // 删除多余文件
-    for (const fileName of filesToDelete) {
-      context.updateFile(comId, { fileName, type: "delete" });
+    // 删除目标版本中不存在的文件
+    for (const fileName of currentFileMap.keys()) {
+      if (!targetFileMap.has(fileName)) {
+        context.updateFile(comId, { fileName, type: "delete" });
+      }
     }
 
-    // 2. 恢复文件到当前 data（触发重新编译）
-    for (const file of files) {
-      context.updateFile(comId, { fileName: file.path, content: file.content });
+    // 新增或内容有变更的文件才触发更新
+    for (const [fileName, content] of targetFileMap) {
+      if (currentFileMap.get(fileName) !== content) {
+        context.updateFile(comId, { fileName, content });
+      }
     }
 
     // 3. 新增一条 rollback 类型版本记录
