@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from 'antd';
 import { loadIconLibraries, deleteIconLibrary, type DumpIconsLibrary, type IconPanel } from './utils';
+import { applyRawSvg } from '../../styleProxy';
 import context from '../../../context';
 import AIInputBar from './AIInputBar';
 import EmptyState from './EmptyState';
-import IconItem from './IconItem';
 import styles from './style.less';
 
 export default function IconLibraryModal({
   visible,
   params,
   comId,
+  mode = 'replace',
   onClose,
 }: {
   visible: boolean;
   params: any;
   comId: string;
+  /** replace: 点击选中后可替换 SVG 或 AI 修改（默认）；manage: 图标库设置入口，点击选中后只可 AI 修改 */
+  mode?: 'replace' | 'manage';
   onClose: () => void;
 }) {
   const [iconPanel, setIconPanel] = useState<IconPanel>('overview');
@@ -230,10 +233,20 @@ export default function IconLibraryModal({
                     className={`${styles.iconItem}${isActive ? ` ${styles.iconItemActive}` : ''}`}
                     onClick={() => handleSelectIcon(iconKey)}
                   >
-                    <div
-                      className={styles.iconItemSvg}
-                      dangerouslySetInnerHTML={{ __html: icon.svg }}
-                    />
+                    {mode === 'replace' && isActive && (
+                      <button
+                        type="button"
+                        className={styles.iconItemApplyBtn}
+                        onClick={e => {
+                          e.stopPropagation();
+                          applyRawSvg(params, icon.svg);
+                          onClose();
+                        }}
+                      >
+                        使用
+                      </button>
+                    )}
+                    <div className={styles.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
                     <span className={styles.iconItemName}>{icon.name}</span>
                   </button>
                 );

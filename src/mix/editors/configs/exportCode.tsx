@@ -43,6 +43,7 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
         visible={iconLibVisible}
         params={props}
         comId={comId}
+        mode="manage"
         onClose={() => setIconLibVisible(false)}
       />
     </div>
