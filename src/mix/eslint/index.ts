@@ -23,6 +23,12 @@ import { createRequireDatasourceAsyncRule, RULE_ID as DS_ASYNC_RULE_ID } from '.
 import { createExtractComRefsRule, type ComRefInfo } from './rules/extract-comrefs';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
 import { checkJSDoc, RULE_ID as JSDOC_RULE_ID } from './rules/jsdoc';
+import {
+  createDataRenderKeyCollector,
+  checkDataRenderKey,
+  RULE_ID as DATA_RENDER_KEY_RULE_ID,
+  type JsxUsageRecord,
+} from './rules/data-render-key';
 import { getLowcodeViewStoreDatasource } from './monaco-language-service';
 import type { MybricksJSDoc } from '../../utils/ai-code/plugins/utils/parseMybricksJSDoc';
 import collectJsDocPlugin from '../../utils/ai-code/plugins/collectJsDocPlugin';
@@ -37,6 +43,7 @@ export const RULE_IDS = {
   REQUIRE_DATASOURCE_ASYNC: DS_ASYNC_RULE_ID,
   REQUIREMENT_CHECK: REQ_RULE_ID,
   JSDOC_CHECK: JSDOC_RULE_ID,
+  DATA_RENDER_KEY: DATA_RENDER_KEY_RULE_ID,
 } as const;
 
 /**
@@ -73,11 +80,12 @@ function getRuleSeverity(rules: RulesConfig, ruleId: string, defaultSeverity: 1 
 /**
  * 对单文件代码执行所有轻量 Babel 规则扫描。
  *
- * @param code     文件源码字符串（解码后的原始代码）
- * @param fileName 文件名，用于填充 LintMessage.fileName
- * @returns        与 ESLint LintMessage[] 兼容的消息数组
+ * @param code         文件源码字符串（解码后的原始代码）
+ * @param fileName     文件名，用于填充 LintMessage.fileName
+ * @param extraPlugins 可选的额外 Babel 插件（如 data-render-key 采集插件），与内置规则共享同一次编译
+ * @returns            与 ESLint LintMessage[] 兼容的消息数组
  */
-export function verifyFile(code: string, fileName: string): LintMessage[] {
+export function verifyFile(code: string, fileName: string, extraPlugins: any[] = []): LintMessage[] {
   if (!code || !code.trim()) return [];
 
   const Babel = (window as any).Babel;
@@ -104,6 +112,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
         noConsole.plugin,
         noWindowLocation.plugin,
         ...(requireDatasourceAsync ? [requireDatasourceAsync.plugin] : []),
+        ...extraPlugins,
       ],
       retainLines: true,
     });
@@ -195,6 +204,7 @@ function isJsxFile(fileName: string): boolean {
   return /\.(jsx|js|tsx|ts)$/.test(fileName) && !fileName.endsWith('.d.ts');
 }
 
+
 /**
  * 对文件列表执行全量轻量规则扫描。
  *
@@ -253,6 +263,8 @@ export async function verify(
   const jsdocSeverity = getRuleSeverity(rules, JSDOC_RULE_ID, 2);
   const jsdocMapByFile = new Map<string, Map<string, MybricksJSDoc>>();
 
+  const dataRenderKeySeverity = getRuleSeverity(rules, DATA_RENDER_KEY_RULE_ID, 2);
+
   const perFileComRefInfos = new Map<string, ComRefInfo[]>();
   for (const file of jsxFiles) {
     const comRefInfos = extractComRefs(file.code, file.fileName);
@@ -266,7 +278,7 @@ export async function verify(
     }
   }
 
-  let allComRefInfos: ComRefInfo[] = Array.from(perFileComRefInfos.values()).flat();
+  const allComRefInfos: ComRefInfo[] = Array.from(perFileComRefInfos.values()).flat();
 
   // ─── Pass 1.5：JSDoc 校验（基于组件侧注释，不依赖 README.md）───
   // 所有 comRef/popupRef/appRef 节点均必须包含 @mybricks JSDoc 注释
@@ -284,13 +296,22 @@ export async function verify(
     }
   }
 
-  // ─── Pass 2：按文件类型分别校验 ───
+  // ─── Pass 2：按文件类型分别校验（data-render-key 采集器随同注入，共享一次编译）───
+  // data-render-key 采集器按文件保存，待全部文件遍历完成后统一进行跨文件汇总校验
+  const collectorsByFile = new Map<string, ReturnType<typeof createDataRenderKeyCollector>>();
+
   for (const file of decodedFiles) {
     const { fileName, code } = file;
 
-    // JS/JSX 文件 → Babel AST 规则
+    // JS/JSX 文件 → Babel AST 规则，同时注入 data-render-key 采集插件
     if (isJsxFile(fileName)) {
-      results.push(...verifyFile(code, fileName));
+      const extraPlugins: any[] = [];
+      if (dataRenderKeySeverity !== -1) {
+        const collector = createDataRenderKeyCollector(fileName);
+        collectorsByFile.set(fileName, collector);
+        extraPlugins.push(collector.plugin);
+      }
+      results.push(...verifyFile(code, fileName, extraPlugins));
       continue;
     }
 
@@ -301,6 +322,22 @@ export async function verify(
         .map(msg => ({ ...msg, severity: reqSeverity }));
       results.push(...msgs);
       continue;
+    }
+  }
+
+  // ─── Pass 2.5：data-render-key 跨文件汇总校验（全局遍历结束后执行）───
+  if (dataRenderKeySeverity !== -1 && collectorsByFile.size > 0) {
+    const allJsxUsageRecords: JsxUsageRecord[] = [];
+    for (const collector of collectorsByFile.values()) {
+      allJsxUsageRecords.push(...collector.getRecords());
+    }
+    if (allJsxUsageRecords.length > 0) {
+      // 只有通过 comRef/popupRef 声明的组件才按"名称多处使用"规则校验
+      const comRefNames = new Set(allComRefInfos.map(info => info.name));
+      const dataRenderKeyMessages = checkDataRenderKey(allJsxUsageRecords, comRefNames);
+      for (const msg of dataRenderKeyMessages) {
+        results.push({ ...msg, severity: dataRenderKeySeverity === 1 ? 1 : msg.severity });
+      }
     }
   }
 
