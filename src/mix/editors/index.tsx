@@ -8,7 +8,7 @@ import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
 import { genStyleValue, genResizer, genImgSrcReplacer } from './styleProxy';
 import { buildSvgEditorItems } from './configs/svgEditor';
-import { aiSvgIcon } from './icons/ai-svg';
+import { aiSvgIcon5 } from './icons/ai-svg-5';
 import { aiImgIcon } from './icons/ai-img';
 import { AiEditPanel } from './components/AiEditPanel';
 import type { Props, Actions } from './types';
@@ -82,7 +82,7 @@ export default function (props: Props, actions: Actions) {
     },
     '[data-zone-svg]': {
       '@ai': {
-        title: aiSvgIcon,
+        title: aiSvgIcon5,
         desc: '通过AI创作图标',
         render(_data, {close}) {
           return <AiEditPanel close={close} mode="SVG" />;

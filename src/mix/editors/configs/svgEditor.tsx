@@ -4,14 +4,45 @@ import IconLibraryModal from './IconLibraryModal';
 
 // ─── SvgPreview ──────────────────────────────────────────────────────────────
 
+/**
+ * 部分 SVG 自带 width="0" height="0" 或完全缺失尺寸属性，导致预览不可见。
+ * 统一移除原有 width/height，改为固定预览尺寸，同时保留 viewBox 以保证比例。
+ */
+function normalizeSvgSize(svgHtml: string, size = 48): string {
+  return svgHtml
+    .replace(/(<svg\b[^>]*?)\s+width="[^"]*"/i, '$1')
+    .replace(/(<svg\b[^>]*?)\s+height="[^"]*"/i, '$1')
+    .replace(/(<svg\b)/i, `$1 width="${size}" height="${size}"`);
+}
+
+/** 从 SVG DOM 元素上读取计算后的颜色，用于预览时还原 currentColor 继承链 */
+function getSvgComputedColor(el: Element | null): string | undefined {
+  if (!el) return undefined;
+  const style = window.getComputedStyle(el);
+  // 优先取 fill（SVG 专属），若是 none/auto 等无效值则退回 color
+  const fill = style.getPropertyValue('fill');
+  if (fill && fill !== 'none' && fill !== 'auto' && !fill.startsWith('url')) {
+    return fill;
+  }
+  const color = style.getPropertyValue('color');
+  return color || undefined;
+}
+
 function SvgPreview({ editConfig }: { editConfig: any }) {
   const svgEl: Element | null = editConfig.editConfig.ele ?? null;
   const [svgHtml, setSvgHtml] = useState(svgEl?.outerHTML ?? '');
+  // 初始颜色从 DOM 读取；替换图标后颜色由新 SVG 自身决定，重置为 undefined
+  const [svgColor] = useState<string | undefined>(() => getSvgComputedColor(svgEl));
+  const [previewColor, setPreviewColor] = useState<string | undefined>(svgColor);
 
   useEffect(() => {
     // 平台替换 SVG 后不会重新 render 编辑面板，editConfig.ele 始终是旧引用。
     // 通过 applyRawSvg 成功后触发的回调，把新 rawSvg 直接推给预览。
-    registerSvgAppliedCallback((rawSvg: string) => setSvgHtml(rawSvg));
+    registerSvgAppliedCallback((rawSvg: string) => {
+      setSvgHtml(rawSvg);
+      // 新上传/选择的 SVG 通常已含颜色信息，不再依赖外层 color 继承
+      setPreviewColor(undefined);
+    });
     return () => registerSvgAppliedCallback(null);
   }, []);
 
@@ -24,15 +55,15 @@ function SvgPreview({ editConfig }: { editConfig: any }) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '8px 0',
-        background: 'var(--mybricks-bg-2, #f5f5f5)',
+        background: 'repeating-conic-gradient(#e0e0e0 0% 25%, #f8f8f8 0% 50%) 0 0 / 12px 12px',
         borderRadius: 4,
         overflow: 'hidden',
         minHeight: 60,
       }}
     >
       <div
-        style={{ display: 'inline-flex', maxWidth: '100%', maxHeight: 80 }}
-        dangerouslySetInnerHTML={{ __html: svgHtml }}
+        style={{ display: 'inline-flex', maxWidth: '100%', maxHeight: 80, color: previewColor }}
+        dangerouslySetInnerHTML={{ __html: normalizeSvgSize(svgHtml) }}
       />
     </div>
   );

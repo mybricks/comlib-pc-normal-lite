@@ -1,7 +1,53 @@
-import React from 'react';
-import ExportCodePanel, { ViewRequirementBtn } from '../../../utils/code-export/render';
+import React, { useState, useEffect } from 'react';
+import { RequirementViewModal } from '../../../utils/requirement-view';
 import context from '../../context';
 import type { Props, FigmaImportItem } from '../types';
+import IconLibraryModal from './IconLibraryModal';
+import styles from './style.less';
+
+function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
+  const [prdVisible, setPrdVisible] = useState(false);
+  const [iconLibVisible, setIconLibVisible] = useState(false);
+
+  const compiled = React.useMemo(() => {
+    const files = context.getAiComParams(comId)?.data?.files;
+    if (!files) return null;
+    try {
+      return (files as any[]).find((f: any) => f.fileName === 'requirement.md')?.compiled ?? null;
+    } catch {
+      return null;
+    }
+  }, [comId]);
+
+  useEffect(() => {
+    const events = context.getAiComEvents(comId) as any;
+    const handler = () => setPrdVisible(true);
+    events.on('openDocs', handler, false);
+    return () => events.off('openDocs', handler);
+  }, [comId]);
+
+  return (
+    <div className={styles.actionsBar}>
+      {compiled && (
+        <button type="button" className={styles.actionBtn} onClick={() => setPrdVisible(true)}>
+          查看PRD文档
+        </button>
+      )}
+      <button type="button" className={styles.actionBtn} onClick={() => setIconLibVisible(true)}>
+        图标库设置
+      </button>
+      {prdVisible && compiled && (
+        <RequirementViewModal compiled={compiled} onClose={() => setPrdVisible(false)} />
+      )}
+      <IconLibraryModal
+        visible={iconLibVisible}
+        params={props}
+        comId={comId}
+        onClose={() => setIconLibVisible(false)}
+      />
+    </div>
+  );
+}
 
 export function buildExportCodeConfig(props: Props) {
 
@@ -9,12 +55,8 @@ export function buildExportCodeConfig(props: Props) {
     {
       title: '',
       type: 'editorRender',
-      ifVisible: () => {
-        const hasRequirement = (props.data?.files as any[])?.some((f: any) => f.fileName === 'requirement.md' && f.compiled);
-        return hasRequirement
-      },
       options: {
-        render: () => <ViewRequirementBtn comId={props.id} />,
+        render: () => <ProjectActionsBar comId={props.id} props={props} />,
       },
     },
     {
