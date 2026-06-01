@@ -121,6 +121,11 @@ function buildProject(comId: string) {
         errors.push(...fileSystem.getErrors())
       }
 
+      if (runtimeError && !errors.find((error) => error === runtimeError)) {
+        // 有运行时错误，写入errors列表
+        errors.push(runtimeError)
+      }
+
       return errors.concat(aiComParams?.data?._errors || [])
     },
     getLogs: () => debugLogs.get(comId),
