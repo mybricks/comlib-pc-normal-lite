@@ -749,15 +749,18 @@ function createSetStyleHandler(
   return function handler(ctx: any, params: any) {
     const { state } = params
 
+    const resolveTarget = (ele: HTMLElement, style: Record<string, number>) => {
+      const hasGap = 'rowGap' in style || 'columnGap' in style || 'gap' in style
+      const targetEle = hasGap ? (ele.parentElement as HTMLElement) : ele
+      const ignoreFirst = hasGap ? false : getIgnoreFirst(ctx, params)
+      return { targetEle, ignoreFirst }
+    }
+
     try {
       if (state === 'start') {
         const ele = getEle(ctx, params)
         const style = getStyle(ctx, params)
-        const hasGap = 'gap' in style
-        const ignoreFirst = hasGap ? false : getIgnoreFirst(ctx, params)
-
-        // 如果有 gap 属性，认为是对父节点的样式操作，获取父元素
-        const targetEle = hasGap ? (ele.parentElement as HTMLElement) : ele
+        const { targetEle, ignoreFirst } = resolveTarget(ele, style)
         const renderKey = targetEle.dataset.renderKey
         const classSelector = `.${targetEle.className.split(' ').join('.')}`
         const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
@@ -768,11 +771,7 @@ function createSetStyleHandler(
       } else if (state === 'finish') {
         const ele = getEle(ctx, params)
         const style = getStyle(ctx, params)
-        const hasGap = 'gap' in style
-        const ignoreFirst = hasGap ? false : getIgnoreFirst(ctx, params)
-        
-        // 如果有 gap 属性，对父元素应用样式
-        const targetEle = hasGap ? (ele.parentElement as HTMLElement) : ele
+        const { targetEle, ignoreFirst } = resolveTarget(ele, style)
         applyStyleToLessFile(ctx, targetEle, style, ignoreFirst)
       }
     } catch {}
