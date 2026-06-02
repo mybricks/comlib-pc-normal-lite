@@ -3,16 +3,14 @@ import { RequirementViewModal } from '../../../utils/requirement-view';
 import context from '../../context';
 import type { Props, FigmaImportItem } from '../types';
 import IconLibraryModal from './IconLibraryModal';
-import styles from './style.lazy.less';
+import * as styles from './style.lazy.less';
+import { getLazyCss } from "../../lowcodeView/utils/css";
+
+const css = getLazyCss(styles)
 
 function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   const [prdVisible, setPrdVisible] = useState(false);
   const [iconLibVisible, setIconLibVisible] = useState(false);
-
-  useEffect(() => {
-    styles.use();
-    return () => styles.unuse();
-  }, []);
 
   const compiled = React.useMemo(() => {
     const files = context.component?.params?.data?.files;
@@ -32,13 +30,13 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   }, [comId]);
 
   return (
-    <div className={styles.locals.actionsBar}>
+    <div className={css.actionsBar}>
       {compiled && (
-        <button type="button" className={styles.locals.actionBtn} onClick={() => setPrdVisible(true)}>
+        <button type="button" className={css.actionBtn} onClick={() => setPrdVisible(true)}>
           查看PRD文档
         </button>
       )}
-      <button type="button" className={styles.locals.actionBtn} onClick={() => setIconLibVisible(true)}>
+      <button type="button" className={css.actionBtn} onClick={() => setIconLibVisible(true)}>
         图标库设置
       </button>
       {prdVisible && compiled && (
