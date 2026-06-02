@@ -18,6 +18,7 @@ import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
+import { undoRedoManager } from '../editors/undoRedo';
 
 const VERIFY_CONFIG = {
   rules: {
@@ -67,13 +68,52 @@ function hasSourceChanged(files: any[], previousSnapshot?: Map<string, string>):
   return false;
 }
 
+// ─── 文件 diff 工具 ────────────────────────────────────────────────────────────
+
+/**
+ * 将一组目标文件 diff 应用到 comId 对应的组件，仅写入有变化的文件。
+ * - 目标中不存在的文件会被删除
+ * - 目标中新增或内容有变更的文件才会触发更新
+ */
+function applyFileDiff(
+  comId: string,
+  targetFiles: Array<{ path: string; content: string }>,
+) {
+  const updateFileNames: string[] = []
+  const currentData = context.component?.params?.data;
+  const currentMap = new Map<string, string>(
+    (currentData?.files ?? []).map((f: any) => [
+      f.fileName,
+      typeof f.source === 'string' ? decodeURIComponent(f.source) : '',
+    ])
+  );
+  const targetMap = new Map(targetFiles.map((f) => [f.path, f.content]));
+
+  // 删除目标中不存在的文件
+  for (const fileName of currentMap.keys()) {
+    if (!targetMap.has(fileName)) {
+      updateFileNames.push(fileName)
+      context.updateFile({ fileName, type: 'delete' });
+    }
+  }
+  // 新增或变更的文件
+  for (const [fileName, content] of targetMap) {
+    if (currentMap.get(fileName) !== content) {
+      updateFileNames.push(fileName)
+      context.updateFile({ fileName, content });
+    }
+  }
+
+  return updateFileNames
+}
+
 // ─── 构建 project 快照 ────────────────────────────────────────────────────────
 
 function buildProject(comId: string) {
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
 
   let runtimeError: any = null
-  const events = context.getAiComEvents(comId);
+  const events = context.component!.events
   events.on('runtimeError', (error) => {
     runtimeError = error
   })
@@ -108,17 +148,22 @@ function buildProject(comId: string) {
     },
     getFileSystem: () => {
       // 获取文件状态，vibing状态下，有部分文件可能还没编写完成
-      return context.fileSystemMap[comId]
+      return context.fileSystem!
     },
     getErrors: () => {
       if (!fileSystem) {
-        fileSystem = context.fileSystemMap[comId]
+        fileSystem = context.fileSystem
       }
 
       const errors: any[] = [];
 
       if (fileSystem) {
         errors.push(...fileSystem.getErrors())
+      }
+
+      if (runtimeError && !errors.find((error) => error === runtimeError)) {
+        // 有运行时错误，写入errors列表
+        errors.push(runtimeError)
       }
 
       return errors.concat(aiComParams?.data?._errors || [])
@@ -232,7 +277,7 @@ async function persistAiVersionAfterTurn(
       content: decodeURIComponent(f.source),
     }));
 
-  const version = context.versionsMap[comId]
+  const version = context.version
   const total = version.total
   // 版本号 +1
   version.total = total + 1
@@ -263,7 +308,35 @@ async function persistAiVersionAfterTurn(
   })
 
   TURNID_TO_RECORD[record.turnId] = record;
-  context.notifyVersionsChange(comId, record);
+  context.notifyVersionsChange(record);
+
+  // ── undo/redo 支持 ────────────────────────────────────────────────────────
+  // previousSnapshot: Map<fileName, encodedSource>（beforeTurn 快照，未解码）
+  // files: VersionFile[]（AI 产出的新内容，已解码）
+
+  // 将 previousSnapshot (Map<fileName, encodedSource>) 转换为 VersionFile[]
+  const prevFiles: Array<{ path: string; content: string }> = [];
+  if (previousSnapshot) {
+    for (const [fileName, encodedSource] of previousSnapshot) {
+      prevFiles.push({ path: fileName, content: decodeURIComponent(encodedSource) });
+    }
+  }
+
+  // files 已在外部声明（AI 产出），复制一份闭包内引用
+  const nextFiles = files;
+
+  undoRedoManager.record({
+    execute() {
+      // 重做：将文件恢复为 AI 修改后的状态
+      const updateFileNames = applyFileDiff(comId, nextFiles);
+      context.saveManualVersion(updateFileNames);
+    },
+    undo() {
+      // 撤回：将文件恢复为 AI 修改前的状态
+      const updateFileNames = applyFileDiff(comId, prevFiles);
+      context.saveManualVersion(updateFileNames);
+    },
+  });
 }
 
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
@@ -290,7 +363,7 @@ export function createDesignerLoading(
   // [TODO] 临时加一个字段，只要报错过就只能 progress 模式，目前报错后focusArea已经丢失
   let hasErrorOccurred: boolean = false;
 
-  const events = context.getAiComEvents(comId);
+  const events = context.component!.events
   const offCompileError = events.on('compileError', (error) => {
     compileError = error?.length ? error : null;
 
@@ -306,7 +379,7 @@ export function createDesignerLoading(
     }
   });
 
-  const { actions } = context.getAiCom(comId);
+  const { actions } = context.component!;
 
   // 当前生效的锁模式：progress = onProgress 整页；component = actions.lock 组件锁；null = 未上锁
   let currentMode: 'progress' | 'component' | null = null;
@@ -421,7 +494,7 @@ export async function registerSandbox(comId: string): Promise<void> {
       // ── 文件系统 ──────────────────────────────────────────────────────────
 
       async getFiles() {
-        const aiComParams = context.getAiComParams(comId);
+        const aiComParams = context.component?.params;
         const files: any[] = aiComParams?.data?.files ?? [];
         return files
           .filter((f) => f.source)
@@ -432,7 +505,7 @@ export async function registerSandbox(comId: string): Promise<void> {
       },
 
       async verify() {
-        const aiComParams = context.getAiComParams(comId);
+        const aiComParams = context.component?.params;
         const files: any[] = aiComParams?.data?.files ?? [];
         return await eslintVerify(files, VERIFY_CONFIG);
       },
@@ -488,7 +561,7 @@ export async function registerSandbox(comId: string): Promise<void> {
       },
 
       getRuntimeMode(): string | undefined {
-        return context.getAiComParams(comId)?.data?.runtimeMode;
+        return context.component?.params?.data?.runtimeMode;
       },
 
       // /**
@@ -505,7 +578,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         
         loadingRef.current?.setLock('lock');
 
-        context.getAiComEvents(comId).emit('vibing', true);
+        context.component?.events.emit('vibing', true);
       },
       async beforeTurn() {
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
@@ -513,7 +586,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
 
         projectRef.current = buildProject(comId);
-        const data = context.getAiComParams(comId)?.data;
+        const data = context.component?.params?.data;
         if (data && typeof data === 'object') {
           requestSourceSnapshotMap.set(data, createSourceSnapshot(data.files ?? []));
         }
@@ -523,7 +596,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         turnLogs.setLog({
           message: '[轮次/afterTurn] 本轮结束 — 开始执行轮后处理',
         })
-        const data = context.getAiComParams(comId)?.data;
+        const data = context.component?.params?.data;
         if (history && data && typeof data === 'object') {
           await persistAiVersionAfterTurn(comId, history, data, turn);
         }
@@ -538,7 +611,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         loadingRef.current?.dispose(turn);
         loadingRef.current = null;
 
-        context.getAiComEvents(comId).emit('vibing', false);
+        context.component?.events.emit('vibing', false);
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
         turnLogs.setLog({
@@ -574,7 +647,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         target.summary = summary
 
         // 通知 UI
-        context.notifyVersionsChange(comId, target);
+        context.notifyVersionsChange(target);
       },
     },
   }) ?? {};
@@ -591,27 +664,11 @@ export async function registerSandbox(comId: string): Promise<void> {
     ]);
     if (!targetMeta || !files.length) return;
 
-    const aiCom = context.getAiComParams(comId);
-
-    // 1. 找出当前 data.files 中存在但目标版本中不存在的文件（需要删除）
-    const targetFileNames = new Set(files.map(f => f.path));
-    const currentFiles = aiCom?.data?.files ?? [];
-    const filesToDelete = currentFiles
-      .filter(f => !targetFileNames.has(f.fileName))
-      .map(f => f.fileName);
-
-    // 删除多余文件
-    for (const fileName of filesToDelete) {
-      context.updateFile(comId, { fileName, type: "delete" });
-    }
-
-    // 2. 恢复文件到当前 data（触发重新编译）
-    for (const file of files) {
-      context.updateFile(comId, { fileName: file.path, content: file.content });
-    }
+    // diff 比对，按需更新文件（新增 / 变更 / 删除）
+    applyFileDiff(comId, files);
 
     // 3. 新增一条 rollback 类型版本记录
-    const version = context.versionsMap[comId]
+    const version = context.version
     const total = version.total
     // 版本号 +1
     version.total = total + 1
@@ -632,10 +689,10 @@ export async function registerSandbox(comId: string): Promise<void> {
     })
 
     // 4. 通知 UI
-    context.notifyVersionsChange(comId, rollbackRecord);
+    context.notifyVersionsChange(rollbackRecord);
   }
 
-  const data = context.getAiComParams(comId)?.data;
+  const data = context.component?.params?.data;
   const files = (data?.files ?? [])
     .filter((f: any) => f.source)
     .map((f: any) => ({
@@ -657,17 +714,20 @@ export async function registerSandbox(comId: string): Promise<void> {
         createdAt: Date.now(),
       };
       await history.addVersion(record, files);
-      context.versionsMap[comId] = new Version(1)
+      context.version = new Version(1)
     } else {
-      context.versionsMap[comId] = new Version(0)
+      context.version = new Version(0)
     }
   } else {
     // 有版本，解析版本total
-    context.versionsMap[comId] = new Version(parseInt(list[0].label.slice(1)) + 1)
+    context.version = new Version(parseInt(list[0].label.slice(1)) + 1)
   }
 
-  (context as any).setRollback(comId, rollbackToVersion);
-  (context as any).setHistory(comId, history);
+  // (context as any).setRollback(comId, rollbackToVersion);
+  // (context as any).setHistory(comId, history);
+
+  context.rollback = rollbackToVersion
+  context.history = history;
 
   context.events.emit('ready', true);
 }

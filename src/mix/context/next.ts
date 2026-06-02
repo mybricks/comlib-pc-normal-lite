@@ -1,4 +1,38 @@
 import { Events } from "../../utils/events";
+import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
+import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
+import { transformForNotifyChanged, transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
+import { parsemd, parseRequirement, SummaryBlock } from "../../utils/ai-code/md";
+import { randomUUID } from '../utils/uuid'
+import { getTimestamp } from "../../utils/time"
+
+const updateFileContent = ({ fileName, files, content }) => {
+  const file = files.find((f) => f.fileName === fileName);
+  if (file) {
+    // 更新
+    Object.entries(content).forEach(([key, value]) => {
+      file[key] = value;
+    });
+  } else {
+    // 新增
+    files.push({ fileName, ...content });
+  }
+}
+
+export interface LogMessage {
+  method: 'log' | 'info' | 'warn' | 'error';
+  data: any[];
+  timestamp: string;
+  id: string;
+  _?: any
+}
+
+export interface ComDebugState {
+  isDebugging: boolean;
+  bottomTab: 'source' | 'console' | 'version';
+  logs: LogMessage[];
+  logIdCounter: number;
+}
 
 class Context {
   /** 组件 */
@@ -7,6 +41,8 @@ class Context {
     params: any
     /** 通知引擎更新doc、上下锁 */
     actions: {
+      lock: (id: string, focus: any) => () => void
+      unlock: (id: string, focus: any) => void
       notifyChanged: (...params: any) => void
     }
     /** 事件 */
@@ -21,8 +57,13 @@ class Context {
       'compileError': any[]
       /** vibing状态 */
       'vibing': boolean
+      /** 打开dos面板 */
+      'openDocs': any
     }>;
   } | null = null
+
+  /** 全局事件 */
+  events = new Events<{ 'ready': boolean }>();
 
   /** 设置组件 */
   setComponent({ params, actions }) {
@@ -32,11 +73,19 @@ class Context {
      */
     if (Object.keys(actions).length) {
       if (!this.component) {
+        // @ts-ignore
+        const events = new Events<Context['component']['events']>()
         this.component = {
           params,
           actions,
-          events: new Events()
+          events
         }
+        events.on('debugTarget', (debugTarget: any) => {
+          this.setComDebugging(!!debugTarget);
+        }, false);
+        events.on('fileChange', () => {
+          events.emit('runtimeError', null);
+        }, false);
       } else {
         this.component.params = params
         this.component.actions = actions
@@ -47,13 +96,424 @@ class Context {
   /** 通知引擎文档相关更新 */
   notifyChanged(filename?: string, changeType?: 'delete' | 'update', value?: any) {
     if (!filename) {
-      this.component?.actions?.notifyChanged?.();
+      this.component?.actions?.notifyChanged?.()
     } else {
-      this.component?.actions?.notifyChanged?.(filename, changeType, value);
+      this.component?.actions?.notifyChanged?.(filename, changeType, value)
     }
+  }
+
+  /** 
+   * @lowcode render 注册的插件信息，来自plugin-ai
+   */
+  plugins?: any
+
+  /** 文件系统 */
+  fileSystem?: FileSystem
+
+  /** 临时的，目前只有themes需要用到 */
+  projectConfig: { themes?: any[]; } = {}
+
+  /**
+   * 解析组件实际应使用的主题。
+   * 若组件未手动修改过主题（data._themesModified 为假），且项目配置了主题，则取项目主题第一个；
+   * 否则取组件自身 data.themes 中 activeThemeId 对应的主题。
+   */
+  resolveActiveTheme() {
+    const data = this.component!.params.data
+    const projectThemes = this.projectConfig.themes;
+    if (!data?._themesModified && projectThemes && projectThemes.length > 0) {
+      return projectThemes[0];
+    }
+    const { activeThemeId, themes } = data?.themes ?? {};
+    return themes?.find((t: any) => t.id === activeThemeId);
+  }
+
+  /** 临时支持获取画布dom列表 */
+  getCanvasList() {
+    const shadowRoot = document?.querySelector('#_mybricks-geo-webview_')?.shadowRoot
+    if (!shadowRoot) return []
+    return shadowRoot.querySelectorAll('[data-desn-page]')
+  }
+
+  /** 更新文件 */
+  updateFile({ fileName, content, type }: any) {
+    // 现在只有 jsx、less、js 三种文件
+    const aiCom = this.component!
+
+    const aiComParams = aiCom.params;
+    const files = aiComParams.data.files;
+    const suffix = fileName.split('.').pop();
+
+    if (type === "delete") {
+      const deleteIndex = files.findIndex((f) => f.fileName === fileName);
+      const fileSystem = this.fileSystem
+      if (fileSystem) {
+        fileSystem.delete(files[deleteIndex].fileName)
+      }
+      if (deleteIndex !== -1) {
+        files.splice(deleteIndex, 1)
+      }
+      aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+      // this.actionsNotifyChanged(id, ['jsx', 'tsx', 'less'].includes(suffix) ? 'update' : 'empty')
+
+      if ( ['jsx', 'tsx'].includes(suffix)) {
+        aiCom?.actions?.notifyChanged?.(fileName, 'delete');
+      }
+      aiCom.events.emit('compileError', aiComParams.data._errors)
+    } else {
+      switch (suffix) {
+        case 'jsx':
+        case 'tsx':
+          try {
+            const { transformCode, constituency, jsDocMap } = transformTsx(content, { fileName });
+            const transformJsDoc = jsDocMap.entries().reduce((pre, [key, value]) => {
+              pre[key] = value
+              return pre
+            }, {})
+            const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
+            aiCom?.actions?.notifyChanged?.(fileName, 'update', notifyChangedValue);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+                compiled: encodeURIComponent(transformCode),
+                constituency,
+                jsDocMap: encodeURIComponent(JSON.stringify(jsDocMap.entries().reduce((pre, [key, value]) => {
+                  pre[key] = value
+                  return pre
+                }, {})))
+              }
+            })
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file);
+            
+            const fileSystem = this.fileSystem
+            if (fileSystem) {
+              const file = files.find((f) => f.fileName === fileName);
+              fileSystem.update(fileName, {...file, filename: fileName })
+            }
+          } catch (e: any) {
+            // console.error("[@transformTsx error]", e);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content)
+              }
+            })
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter(err => err.file !== fileName),
+              {
+                file: fileName,
+                message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+                type: 'compile'
+              }
+            ];
+          }
+
+          // this.actionsNotifyChanged(id, 'update')
+          break;
+        case 'less':
+          try {
+            const cssModule = transformLess(`.__mybricks_ai_module_id__ {${content}}`, fileName);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+                compiled: encodeURIComponent(JSON.stringify(cssModule))
+              }
+            });
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+
+            const fileSystem = this.fileSystem
+            if (fileSystem) {
+              const file = files.find((f) => f.fileName === fileName);
+              fileSystem.update(fileName, {...file, filename: fileName })
+            }
+          } catch (e: any) {
+            // console.error("[@transformLess error]", e);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+              }
+            });
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter(err => err.file !== fileName),
+              {
+                file: fileName,
+                message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+                type: 'compile'
+              }
+            ];
+          }
+          // this.actionsNotifyChanged(id, 'update')
+          break;
+        case 'js':
+        case 'ts':
+          try {
+            const { transformCode } = transformTsx(content, { fileName })
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+                compiled: encodeURIComponent(transformCode)
+              }
+            })
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+
+            const fileSystem = this.fileSystem
+            if (fileSystem) {
+              const file = files.find((f) => f.fileName === fileName);
+              fileSystem.update(fileName, {...file, filename: fileName })
+            }
+          } catch (e: any) {
+            // console.error("[@transformTsx error]", e);
+            updateFileContent({
+              fileName,
+              files,
+              content: {
+                source: encodeURIComponent(content),
+              }
+            })
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter(err => err.file !== fileName),
+              {
+                file: fileName,
+                message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? '未知错误'),
+                type: 'compile'
+              }
+            ];
+          }
+
+          aiCom?.actions?.notifyChanged?.();
+          break;
+        case 'yaml':
+        case 'yml':
+        case 'txt':
+        case 'json':
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+            }
+          });
+          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+          aiCom?.actions?.notifyChanged?.();
+          break;
+        default:
+          break;
+      }
+
+      if (fileName === "requirement.md") {
+        try {
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+              compiled: parseRequirement(content),
+            }
+          })
+        } catch (e) {
+          // console.error("[@parseRequirement error]", e);
+        }
+      }
+
+      aiCom.events.emit("compileError", aiComParams.data._errors)
+    }
+
+    aiCom.events?.emit('fileChange', null);
+    (window as any)._mybricksOnEdit_?.();
+    aiComParams?.notify?.edit();
+  }
+
+  /** 版本记录API */
+  history: any
+
+  /** 注册的回滚方法 */
+  rollback: any
+
+  /** 版本 */
+  version!: Version
+
+  /**
+   * 手动编辑保存后,添加 manual 类型版本记录
+   */
+  async saveManualVersion(updateFiles: string[]): Promise<void> {
+    const history = this.history
+    if (!history) return;
+
+    const data = this.component!.params?.data;
+    const files = (data?.files ?? [])
+      .filter((f: any) => f.source)
+      .map((f: any) => ({
+        path: f.fileName,
+        content: decodeURIComponent(f.source),
+      }));
+
+    const version = this.version
+    const total = version.total
+    // 版本号 +1
+    version.total = total + 1
+
+    // 新增版本记录
+    const record = {
+      id: randomUUID(),
+      turnId: '',
+      label: `V${total}`,
+      type: 'manual' as const,
+      createdAt: Date.now(),
+    };
+
+    const summary = '更新文件:' + 
+      updateFiles.reduce((pre, filename) => {
+        return pre + `\n- ${filename}`
+      }, '')
+
+    version.addPromiseTask(async () => {
+      await history.addVersion(record, files);
+      await history.updateVersion(record.id, {
+        summary
+      })
+    })
+
+    this.notifyVersionsChange({
+      ...record,
+      summary
+    });
+  }
+
+  /** 
+   * 版本管理
+   */
+  versionStateEvents: Events<{ 'change': VersionRecord }> = new Events();
+
+  /**
+   * 通知 UI 版本列表变更（统一入口，避免每处都写 emit）。
+   * sandbox 在 addVersion / rollback 等操作完成后调用此方法。
+   */
+  notifyVersionsChange(version: VersionRecord): void {
+    this.versionStateEvents.emit('change', version);
+  }
+  
+  /** 每次状态变更通知 LowcodeView 重新读取 */
+  comDebugStateEvents: Events<{ 'change': ComDebugState }> = new Events();
+
+  /** 每个组件的调试/日志状态，keyed by componentId */
+  comDebugStateMap: ComDebugState = {
+    isDebugging: false,
+    bottomTab: 'source',
+    logs: [],
+    logIdCounter: 0,
+  };
+
+  setComDebugging(isDebugging: boolean) {
+    const state = this.comDebugStateMap;
+    state.isDebugging = isDebugging;
+    if (isDebugging) {
+      // 启动调试：自动切到控制台
+      state.bottomTab = 'console';
+      state.logs = [{
+        id: 'start',
+        timestamp: getTimestamp(),
+        data: ['开始调试'],
+        method: 'log',
+        _: {}
+      }];
+    } else {
+      // 取消调试：清空日志，切回源代码
+      state.logs = [];
+      state.logIdCounter = 0;
+      state.bottomTab = 'source';
+    }
+    this.notifyComDebugState();
+  }
+
+  /** 清空日志 */
+  clearComLogs() {
+    const state = this.comDebugStateMap;
+    state.logs = [];
+    state.logIdCounter = 0;
+    this.notifyComDebugState();
+  }
+
+  /** 设置底部lowcodeview展示面板 */
+  setComBottomTab(tab: 'source' | 'console' | 'version') {
+    const state = this.comDebugStateMap;
+    state.bottomTab = tab;
+    this.notifyComDebugState();
+  }
+
+  /** 通知更新 */
+  private notifyComDebugState() {
+    this.comDebugStateEvents.emit('change', this.comDebugStateMap);
+  }
+
+
+  /** 日志事件 */
+  logEvents: Events<{
+    'log': LogMessage;
+  }> = new Events();
+
+  /** 推送logger打印的日志 */
+  pushLog(method: LogMessage['method'], data: any[]) {
+    const state = this.comDebugStateMap;
+    const msg: LogMessage = {
+      method,
+      timestamp: getTimestamp(),
+      data,
+      id: String(++state.logIdCounter),
+    };
+    state.logs = [...state.logs, msg];
+    this.logEvents.emit('log', msg);
+    this.notifyComDebugState();
   }
 }
 
 const nextContext = new Context()
 
 export default nextContext
+
+export interface VersionRecord {
+  id: string;
+  turnId: string;
+  label: string;
+  type: 'ai' | 'manual' | 'rollback' | 'init';
+  createdAt: number;
+  summary?: string;
+}
+export class Version {
+  total: number
+  promiseStack: Array<() => Promise<any>> = []
+  running: boolean = false
+  list: VersionRecord[] = [];
+  constructor(total) {
+    this.total = total
+  }
+
+  async runStack() {
+    if (this.running) {
+      return
+    }
+    this.running = true
+
+    while (this.promiseStack.length) {
+      // 取出最先加入的任务
+      const task = this.promiseStack.shift()
+      await task?.()
+    }
+
+    this.running = false
+  }
+
+  addPromiseTask(fn: () => Promise<void>) {
+    this.promiseStack.push(fn)
+    this.runStack()
+  }
+}

@@ -18,7 +18,7 @@ const errorSet = new Set();
 export function buildHooks(props: Props) {
   return {
     '@error': (err: Error) => {
-      const events = context.getAiComEvents(props.id);
+      const events = context.component!.events
       events.emit('runtimeError', err)
     },
 
@@ -125,7 +125,7 @@ export function buildHooks(props: Props) {
     },
 
     '@debug'(params: any, stop: any) {
-      const events = context.getAiComEvents(params.id);
+      const events = context.component!.events;
       if (stop) {
         events.emit('debugTarget', undefined);
         return;
@@ -146,7 +146,6 @@ export function buildHooks(props: Props) {
         const borderLeft = parseFloat(rootComputedStyle.borderLeftWidth || '0');
 
         const layoutWidth = rootEl.offsetWidth;
-
         events.emit('debugTarget', {
           type: 'page',
           pageIndex,
@@ -161,7 +160,7 @@ export function buildHooks(props: Props) {
         });
       }
 
-      const data = context.getAiComParams(params.id)?.data;
+      const data = context.component!.params?.data;
       const envNames: string[] = data?._debugEnvs ?? [];
       const debugEnvOptions: { label: string; value: string }[] = [{label: '正式环境', value: 'prod'}];
 
@@ -183,10 +182,10 @@ export function buildHooks(props: Props) {
     },
 
     '@setDebugEnv'(ctx: any, option: { label: string; value: string }) {
-      const aiComParams = context.getAiComParams(ctx.id);
+      const aiComParams = context.component!.params;
       if (!aiComParams?.data) return;
       aiComParams.data._activeDebugEnv = option?.value ?? 'prod';
-      context.getAiCom(ctx.id)?.actions?.notifyChanged?.();
+      context.component?.actions?.notifyChanged?.();
     },
 
     '@viewCode'(params: any) {
@@ -206,9 +205,9 @@ export function buildHooks(props: Props) {
     },
 
     '@openDocs'() {
-      const events = context.getAiComEvents(props.id);
+      const events = context.component!.events
       setTimeout(() => {
-        events.emit('openDocs');
+        events.emit('openDocs', () => {});
       }, 300)
     },
   };

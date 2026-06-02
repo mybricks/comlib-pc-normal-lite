@@ -8,10 +8,9 @@ import * as lazyCss from "./index.lazy.less";
 import { getLazyCss } from "../utils/css";
 import { randomUUID } from "../../utils/uuid"
 import InfiniteScroll from '../infinite-scroll'
+import { undoRedoManager } from '../../editors/undoRedo'
 
 const css = getLazyCss(lazyCss)
-
-const PAGE_SIZE = 3;
 
 interface VersionPanelProps {
   componentId: string;
@@ -209,8 +208,8 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
   const panelContainer = useRef<HTMLDivElement>(null);
   const [{ history, version }] = useState(() => {
     return {
-      history: context.getHistory(componentId),
-      version: context.versionsMap[componentId]
+      history: context.history,
+      version: context.version
     }
   })
 
@@ -229,9 +228,17 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
     componentId
   })
 
-  const handleRollback = useCallback((version: VersionRecord) => {
-    const rollback = (context as any).getRollback?.(componentId);
-    rollback?.(version.id);
+  const handleRollback = useCallback((version: VersionRecord, latestVersion: VersionRecord) => {
+    const rollback = context.rollback;
+
+    undoRedoManager.execute({
+      execute() {
+        rollback?.(version.id);
+      },
+      async undo() {
+        rollback?.(latestVersion.id);
+      },
+    })
   }, [componentId]);
 
   return (
@@ -274,7 +281,7 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
               itemCls={itemCls}
               dotCls={dotCls}
               tagCls={tagCls}
-              onRollback={handleRollback}
+              onRollback={(version) => handleRollback(version, versions[0])}
               parentElement={panelContainer.current!}
             />
           )
@@ -328,8 +335,6 @@ export function useVersions(options: UseVersionsOptions) {
         ...params,
       };
 
-      console.log("[requestParams]", requestParams)
-
       const response = await history.listVersions(requestParams);
       const newVersions = response.list ?? []
 
@@ -378,7 +383,7 @@ export function useVersions(options: UseVersionsOptions) {
   useEffect(() => {
     fetchMaterials()
 
-    const off = context.getVersionStateEvents(componentId).on(
+    const off = context.versionStateEvents.on(
       'change',
       (newVersion) => {
         setTotal(version.total)

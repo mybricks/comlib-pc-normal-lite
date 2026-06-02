@@ -451,7 +451,7 @@ export function syncComponentPropsFromFigmaJson(
     return 0;
   }
 
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
   if (!aiComParams?.data?.files) {
     console.warn('[figma-sync][props] abort-no-aiComParams', { comId });
     return 0;
@@ -513,23 +513,23 @@ export function syncComponentPropsFromFigmaJson(
     undoRedoManager.execute({
       execute() {
         current.forEach(({ fileName, source }) => {
-          context.updateFile(comId, {
+          context.updateFile({
             fileName,
             content: source,
             type: undefined,
           });
         })
-        context.saveManualVersion(comId, Array.from(updatedFiles));
+        context.saveManualVersion(Array.from(updatedFiles));
       },
       undo() {
         previous.forEach(({ fileName, source }) => {
-          context.updateFile(comId, {
+          context.updateFile({
             fileName,
             content: source,
             type: undefined,
           });
         })
-        context.saveManualVersion(comId, Array.from(updatedFiles));
+        context.saveManualVersion(Array.from(updatedFiles));
       }
     })
     // context.saveManualVersion(comId, Array.from(updatedFiles));

@@ -607,7 +607,10 @@ export class Version {
   }
 }
 
-export default new Context();
+// export default new Context();
 
 export { config }
-export { default as nextContext } from './next'
+import { default as nextContext } from './next'
+
+export default nextContext
+// export { default as nextContext } from './next'

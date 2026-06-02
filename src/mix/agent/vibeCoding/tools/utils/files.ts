@@ -86,7 +86,7 @@ function updateComponentFiles(
   comId: string,
   context: any
 ): UpdateComponentFilesResult {
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
   const fileResults: FileUpdateResult[] = [];
   /** 事务：先计算所有结果，仅当全部成功时才写入；有任一失败则不写任何文件 */
   const pendingWrites: Array<{ fileName: string; content: string }> = [];
@@ -172,10 +172,10 @@ function updateComponentFiles(
   const mergeSuccess = fileResults.every((r) => r.success);
   if (mergeSuccess) {
     pendingWrites.forEach(({ fileName, content }) =>
-      context.updateFile(comId, { fileName, content })
+      context.updateFile({ fileName, content })
     );
     deleteFileNames.forEach((fileName) => {
-      context.updateFile(comId, { fileName, type: "delete" });
+      context.updateFile({ fileName, type: "delete" });
     });
     aiComParams.data.document = '';
   }

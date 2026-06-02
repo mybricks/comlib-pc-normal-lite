@@ -7,9 +7,11 @@ const SVG_PRESETS = ['线条风格', '填充风格', '扁平设计', '单色图�
 export default function AIInputBar({
   onGenerate,
   placeholder = '描述你想要的图标库，如「简约风格的电商图标库」',
+  showPresets = true,
 }: {
   onGenerate: (content: string) => void;
   placeholder?: string;
+  showPresets?: boolean;
 }) {
   const [value, setValue] = useState('');
   const canSubmit = Boolean(value.trim());
@@ -65,18 +67,20 @@ export default function AIInputBar({
           <AiSendIcon disabled={!canSubmit} size={19} />
         </button>
       </div>
-      <div className={styles.presetWrap}>
-        {SVG_PRESETS.map(preset => (
-          <button
-            key={preset}
-            type="button"
-            className={styles.presetButton}
-            onClick={() => appendPreset(preset)}
-          >
-            {preset}
-          </button>
-        ))}
-      </div>
+      {showPresets && (
+        <div className={styles.presetWrap}>
+          {SVG_PRESETS.map(preset => (
+            <button
+              key={preset}
+              type="button"
+              className={styles.presetButton}
+              onClick={() => appendPreset(preset)}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }

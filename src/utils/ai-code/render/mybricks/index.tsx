@@ -435,7 +435,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
     const { path = '/', children } = params;
-    const theme = mixContext.resolveActiveTheme(data);
+    const theme = mixContext.resolveActiveTheme();
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue | null>(null);
     const [style, setStyle] = useState<React.CSSProperties>({      
@@ -856,7 +856,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       if (isDesign() && !props.__mybricks_show) {
         return null
       }
-      const theme = mixContext.resolveActiveTheme(data);
+      const theme = mixContext.resolveActiveTheme();
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1048,7 +1048,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   const useDesignToken = () => {
-    const theme = mixContext.resolveActiveTheme(data);
+    const theme = mixContext.resolveActiveTheme();
     return theme?.vars?.reduce((pre, cur) => {
       const key = cssVarToToken(cur.propertyName);
       pre[key] = cur.value;

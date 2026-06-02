@@ -11,8 +11,6 @@ class Command {
 /**
  * [TODO]
  * 1. 合并策略，目前样式编辑有防抖功能，用户修改后立即回滚可能看不到效果
- * 2. execute 支持配置默认不执行execute，在调用前已经执行过了（拖拽等连续快速修改场景）
- * 3. ai 修改是否需要撤回
  */
 class UndoRedoManager {
   private maxStackSize = 50
@@ -27,12 +25,20 @@ class UndoRedoManager {
   execute(command: Command) {
     command.execute()
 
+    this.record(command)
+  }
+
+  /**
+   * 记录一个已执行过的命令（不再重复调用 execute），仅将其压入撤回堆栈。
+   * 适用于命令在调用前已经执行完毕的场景（如 AI 修改、拖拽等连续快速修改）。
+   */
+  record(command: Command) {
     this.undoStack.push(command)
     this.redoStack = []
 
     // 限制栈大小
     if (this.undoStack.length > this.maxStackSize) {
-      this.undoStack.shift();
+      this.undoStack.shift()
     }
   }
 

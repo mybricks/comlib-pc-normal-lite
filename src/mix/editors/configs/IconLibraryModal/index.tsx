@@ -1,56 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from 'antd';
-import { scanIconsFromDOM } from '../../styleProxy';
 import { loadIconLibraries, deleteIconLibrary, type DumpIconsLibrary, type IconPanel } from './utils';
+import { applyRawSvg } from '../../styleProxy';
 import context from '../../../context';
 import AIInputBar from './AIInputBar';
 import EmptyState from './EmptyState';
-import IconItem from './IconItem';
 import styles from './style.less';
 
 export default function IconLibraryModal({
   visible,
   params,
   comId,
+  mode = 'replace',
   onClose,
 }: {
   visible: boolean;
   params: any;
   comId: string;
+  /** replace: 点击选中后可替换 SVG 或 AI 修改（默认）；manage: 图标库设置入口，点击选中后只可 AI 修改 */
+  mode?: 'replace' | 'manage';
   onClose: () => void;
 }) {
   const [iconPanel, setIconPanel] = useState<IconPanel>('overview');
   const [activeLibraryId, setActiveLibraryId] = useState<string | null>(null);
   const [iconLibraries, setIconLibraries] = useState<DumpIconsLibrary[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIconKey, setSelectedIconKey] = useState<string | null>(null);
+
+  const refreshLibraries = async () => {
+    const libraries = await loadIconLibraries(comId);
+    const sortedLibraries = [...libraries].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    setIconLibraries(sortedLibraries);
+  };
 
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
     setIconPanel('overview');
     setActiveLibraryId(null);
+    setSelectedIconKey(null);
     (async () => {
-      const libraries = await loadIconLibraries(comId);
       if (cancelled) return;
-      const sortedLibraries = [...libraries].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-      // 兼容旧数据：若图标库为空，回退到画布扫描结果，避免用户完全无入口。
-      if (sortedLibraries.length === 0) {
-        const scannedIcons = scanIconsFromDOM();
-        setIconLibraries(
-          scannedIcons.length > 0
-            ? [{ id: '__canvas_fallback__', name: '画布中图标', updatedAt: Date.now(), icons: scannedIcons }]
-            : [],
-        );
-      } else {
-        setIconLibraries(sortedLibraries);
-      }
+      await refreshLibraries();
     })();
     return () => {
       cancelled = true;
     };
   }, [visible, comId]);
 
-  const activeLibrary = iconLibraries.find(item => item.id === activeLibraryId);
+  // AI 修改/生成图标后自动刷新展示，不依赖弹窗重新打开
+  useEffect(() => {
+    const onIconsGenerated = () => {
+      if (!visible) return;
+      refreshLibraries();
+    };
+    window.addEventListener('vibe-icons-generated', onIconsGenerated);
+    return () => window.removeEventListener('vibe-icons-generated', onIconsGenerated);
+  }, [visible, comId]);
 
   const handleOpenLibraryDetail = (libraryId: string) => {
     setActiveLibraryId(libraryId);
@@ -60,6 +66,11 @@ export default function IconLibraryModal({
   const handleBackToOverview = () => {
     setIconPanel('overview');
     setActiveLibraryId(null);
+    setSelectedIconKey(null);
+  };
+
+  const handleSelectIcon = (iconKey: string) => {
+    setSelectedIconKey(prev => (prev === iconKey ? null : iconKey));
   };
 
   const handleDeleteLibrary = async (e: React.MouseEvent, libraryId: string) => {
@@ -90,6 +101,37 @@ export default function IconLibraryModal({
       }
     } catch (e) {
       console.error('[svgEditor] AI request threw:', e);
+    }
+    onClose();
+  };
+
+  const activeLibrary = iconLibraries.find(item => item.id === activeLibraryId);
+
+  const selectedIcon = (activeLibrary?.icons ?? []).find(
+    (icon, index) => `${icon.id ?? icon.name}-${index}` === selectedIconKey,
+  );
+
+  const handleEditIcon = (content: string) => {
+    const plugins = (context as any).plugins as any;
+    const aiService = plugins?.aiService;
+    plugins?.showAIDialog?.();
+    const iconType = (activeLibrary as any)?.style ?? '线性';
+    const prompt = [
+      `修改图标「${selectedIcon?.name ?? ''}」，用户需求：${content}`,
+      `调用 generate_icon 工具时必须满足：`,
+      `  libraryName="${activeLibrary?.name ?? ''}"（必须与原图标库名称完全一致）`,
+      `  iconType 根据用户需求决定（如"改成实心"则用"面性"，否则保持"${iconType}"）`,
+      `  图标 name 必须严格等于"${selectedIcon?.name ?? ''}"，禁止修改为其他名称`,
+      selectedIcon?.svg
+        ? `  referenceIconSvg 传入原始 SVG 作为参考：${selectedIcon.svg}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      aiService?.request({ message: prompt, attachments: [] });
+    } catch (e) {
+      console.error('[svgEditor] AI edit request threw:', e);
     }
     onClose();
   };
@@ -181,18 +223,47 @@ export default function IconLibraryModal({
               <span className={styles.detailTitle}>{activeLibrary?.name || '图标库'}</span>
             </div>
             <div className={styles.detailGrid}>
-              {(activeLibrary?.icons ?? []).map((icon, index) => (
-                <IconItem
-                  key={`${icon.id ?? icon.name}-${index}`}
-                  icon={icon}
-                  params={params}
-                  onClose={onClose}
-                />
-              ))}
+              {(activeLibrary?.icons ?? []).map((icon, index) => {
+                const iconKey = `${icon.id ?? icon.name}-${index}`;
+                const isActive = selectedIconKey === iconKey;
+                return (
+                  <button
+                    key={iconKey}
+                    type="button"
+                    className={`${styles.iconItem}${isActive ? ` ${styles.iconItemActive}` : ''}`}
+                    onClick={() => handleSelectIcon(iconKey)}
+                  >
+                    {mode === 'replace' && isActive && (
+                      <button
+                        type="button"
+                        className={styles.iconItemApplyBtn}
+                        onClick={e => {
+                          e.stopPropagation();
+                          applyRawSvg(params, icon.svg);
+                          onClose();
+                        }}
+                      >
+                        使用
+                      </button>
+                    )}
+                    <div className={styles.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
+                    <span className={styles.iconItemName}>{icon.name}</span>
+                  </button>
+                );
+              })}
               {(activeLibrary?.icons?.length ?? 0) === 0 && (
                 <div className={styles.emptyTip}>当前图标库暂无图标</div>
               )}
             </div>
+            {selectedIconKey && (
+              <div className={styles.detailAISection}>
+                <AIInputBar
+                  onGenerate={handleEditIcon}
+                  placeholder="告诉 AI 你想怎么改这个图标"
+                  showPresets={false}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,3 +1,8 @@
+// ─── 覆盖 antd Modal 关闭按钮尺寸（仅作用于图标库弹窗） ────────────────────────────
+:global(.ant-modal-close-icon) {
+    font-size: 16px !important;
+}
+
 // ─── Modal body ───────────────────────────────────────────────────────────────
 .modalBody {
   height: 100%;
@@ -212,8 +217,17 @@
   }
 }
 
+// ─── 详情底部 AI 编辑区 ────────────────────────────────────────────────────────
+.detailAISection {
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(205, 214, 230, 0.35);
+}
+
 // ─── IconItem ─────────────────────────────────────────────────────────────────
 .iconItem {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -229,6 +243,36 @@
 
   &:hover {
     border-color: var(--mybricks-color-primary, #5f3fff);
+  }
+
+  &.iconItemActive {
+    border-color: var(--mybricks-color-primary, #5f3fff);
+    background: color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 8%, transparent);
+  }
+}
+
+.iconItemApplyBtn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  height: 18px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: var(--mybricks-color-primary, #5f3fff);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  letter-spacing: 0.2px;
+  transition: opacity 0.15s;
+  z-index: 1;
+
+  &:hover {
+    opacity: 0.85;
   }
 }
 
@@ -270,9 +314,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(107, 114, 247, 0.16), rgba(107, 114, 247, 0.06));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 16%, transparent),
+    color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 6%, transparent)
+  );
   color: var(--mybricks-color-primary, #5f3fff);
-  box-shadow: 0 6px 16px rgba(107, 114, 247, 0.16);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 16%, transparent);
   margin-bottom: 14px;
 }
 
@@ -307,9 +355,9 @@
   box-sizing: border-box;
 
   &:focus-within {
-    border-color: rgba(107, 114, 247, 0.45);
+    border-color: color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 45%, transparent);
     box-shadow:
-      0 0 0 3px rgba(107, 114, 247, 0.08),
+      0 0 0 3px color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 8%, transparent),
       0 8px 18px rgba(16, 24, 40, 0.08);
   }
 }
@@ -346,7 +394,7 @@
   background: var(--mybricks-color-primary, #5f3fff);
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(107, 114, 247, 0.24);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 24%, transparent);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
 
   &:hover {
@@ -388,6 +436,6 @@
     border-color: var(--mybricks-color-primary, #5f3fff);
     background: var(--mybricks-color-primary, #5f3fff);
     color: #fff;
-    box-shadow: 0 6px 16px rgba(107, 114, 247, 0.22);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--mybricks-color-primary, #5f3fff) 22%, transparent);
   }
 }

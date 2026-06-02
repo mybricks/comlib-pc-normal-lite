@@ -49,7 +49,7 @@ export default genAIRuntime({
         get(_, prop: string) {
           return (...args) => {
             if (SUPPORTED_LOGS[prop]) {
-              context.pushLog(id, prop as any, args);
+              context.pushLog(prop as any, args);
             }
           }
         }

@@ -10,12 +10,12 @@ export function registerResourcesCode(comId: string, comName: string) {
     id: comId,
     name: comName,
     getFiles: (type: 'application' | 'component') => {
-      const aiComParams = context.getAiComParams(comId);
+      const aiComParams = context.component?.params
       if (!aiComParams?.data) return null;
       return generateCodeStructure(aiComParams.data, { type, previous: true });
     },
     getData: () => {
-      const aiComParams = context.getAiComParams(comId);
+      const aiComParams = context.component?.params
       const data = aiComParams?.data;
       if (!data) return data;
       const projectThemes = context.projectConfig?.themes;
