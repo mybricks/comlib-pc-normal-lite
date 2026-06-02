@@ -1,7 +1,7 @@
 import React from 'react';
 import context from '../../../context';
 import AIInputBar from './AIInputBar';
-import styles from './style.less';
+import styles from './style.lazy.less';
 
 export default function EmptyState({ onClose }: { onClose: () => void }) {
   const handleGenerate = (content: string) => {
@@ -26,8 +26,8 @@ export default function EmptyState({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className={styles.emptyState}>
-      <div className={styles.guideIcon}>
+    <div className={styles.locals.emptyState}>
+      <div className={styles.locals.guideIcon}>
         <svg viewBox="0 0 24 24" width={24} height={24}>
           <path
             d="M11 3l1.9 4.6L17.5 9.5l-4.6 1.9L11 16l-1.9-4.6L4.5 9.5l4.6-1.9L11 3z"
@@ -39,8 +39,8 @@ export default function EmptyState({ onClose }: { onClose: () => void }) {
           />
         </svg>
       </div>
-      <div className={styles.title}>还没有图标库</div>
-      <div className={styles.subtitle}>描述你想要的风格，让 AI 帮你生成</div>
+      <div className={styles.locals.title}>还没有图标库</div>
+      <div className={styles.locals.subtitle}>描述你想要的风格，让 AI 帮你生成</div>
       <AIInputBar onGenerate={handleGenerate} />
     </div>
   );

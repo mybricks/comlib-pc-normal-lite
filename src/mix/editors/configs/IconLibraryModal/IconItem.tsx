@@ -1,6 +1,6 @@
 import React from 'react';
 import { applyRawSvg } from '../../styleProxy';
-import styles from './style.less';
+import styles from './style.lazy.less';
 import type { DumpIconItem } from './utils';
 
 export default function IconItem({
@@ -15,15 +15,15 @@ export default function IconItem({
   return (
     <button
       type="button"
-      className={styles.iconItem}
+      className={styles.locals.iconItem}
       title={icon.name}
       onClick={() => {
         applyRawSvg(params, icon.svg);
         onClose();
       }}
     >
-      <div className={styles.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
-      <span className={styles.iconItemName}>{icon.name}</span>
+      <div className={styles.locals.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
+      <span className={styles.locals.iconItemName}>{icon.name}</span>
     </button>
   );
 }

@@ -41,6 +41,7 @@ class Context {
     params: any
     /** 通知引擎更新doc、上下锁 */
     actions: {
+      loaded: () => void;
       lock: (id: string, focus: any) => () => void
       unlock: (id: string, focus: any) => void
       notifyChanged: (...params: any) => void

@@ -1,6 +1,13 @@
-// ─── 覆盖 antd Modal 关闭按钮尺寸（仅作用于图标库弹窗） ────────────────────────────
+// ─── 覆盖 antd Modal 样式（仅作用于图标库弹窗） ────────────────────────────────────
 :global(.ant-modal-close-icon) {
     font-size: 16px !important;
+}
+
+.iconLibModal {
+  :global(.ant-modal-content) {
+    border-radius: 12px;
+    overflow: hidden;
+  }
 }
 
 // ─── Modal body ───────────────────────────────────────────────────────────────
