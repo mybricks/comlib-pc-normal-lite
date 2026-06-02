@@ -489,7 +489,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 const { files } = loc;
                 if (files?.less) {
                   if (files.less !== lessRef.current.filename) {
-                    const fileSystem = mixContext.fileSystemMap[comId]
+                    const fileSystem = mixContext.fileSystem
                     lessRef.current.off()
                     lessRef.current.filename = files.less
                     lessRef.current.off = fileSystem.fileWatcher.watch(files.less, (event) => {
@@ -523,7 +523,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 }
 
                 if (files?.jsx && widgetName) {
-                  const fileSystem = mixContext.fileSystemMap[comId]
+                  const fileSystem = mixContext.fileSystem
                   const jsDocMap = fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
                   if (jsDocMap) {
                     const jsDoc = JSON.parse(decodeURIComponent(jsDocMap))
@@ -909,7 +909,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 const { files } = loc;
                 if (files?.less) {
                   if (files.less !== lessRef.current.filename) {
-                    const fileSystem = mixContext.fileSystemMap[comId]
+                    const fileSystem = mixContext.fileSystem
                     lessRef.current.off()
                     lessRef.current.filename = files.less
                     lessRef.current.off = fileSystem.fileWatcher.watch(files.less, (event) => {
@@ -937,7 +937,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 }
 
                 if (files?.jsx && widgetName) {
-                  const fileSystem = mixContext.fileSystemMap[comId]
+                  const fileSystem = mixContext.fileSystem
                   const jsDocMap = fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
                   if (jsDocMap) {
                     const jsDoc = JSON.parse(decodeURIComponent(jsDocMap))
