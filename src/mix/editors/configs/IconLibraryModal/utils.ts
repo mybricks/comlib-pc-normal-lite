@@ -60,6 +60,6 @@ export async function loadIconLibraries(comId: string): Promise<DumpIconsLibrary
       console.error('[svgEditor] componentRuntime.getIconsLibraries failed:', e);
     }
   }
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
   return normalizeLibraries(aiComParams?.data?.iconsState?.libraries);
 }

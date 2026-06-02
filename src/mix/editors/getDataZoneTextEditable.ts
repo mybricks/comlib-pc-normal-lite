@@ -46,12 +46,12 @@ const item = {
 
         undoRedoManager.execute({
           execute() {
-            context.updateFile(id, {fileName, content: newCode, type: ''})
-            context.saveManualVersion(id, [fileName])
+            context.updateFile({fileName, content: newCode, type: ''})
+            context.saveManualVersion([fileName])
           },
           undo() {
-            context.updateFile(id, {fileName, content: source, type: ''})
-            context.saveManualVersion(id, [fileName])
+            context.updateFile({fileName, content: source, type: ''})
+            context.saveManualVersion([fileName])
           },
         })
         // context.updateFile(id, {fileName, content: newCode, type: ''})

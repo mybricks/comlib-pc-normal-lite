@@ -10,7 +10,7 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   const [iconLibVisible, setIconLibVisible] = useState(false);
 
   const compiled = React.useMemo(() => {
-    const files = context.getAiComParams(comId)?.data?.files;
+    const files = context.component?.params?.data?.files;
     if (!files) return null;
     try {
       return (files as any[]).find((f: any) => f.fileName === 'requirement.md')?.compiled ?? null;
@@ -20,7 +20,7 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   }, [comId]);
 
   useEffect(() => {
-    const events = context.getAiComEvents(comId) as any;
+    const events = context.component?.events as any;
     const handler = () => setPrdVisible(true);
     events.on('openDocs', handler, false);
     return () => events.off('openDocs', handler);

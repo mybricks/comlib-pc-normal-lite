@@ -33,7 +33,7 @@ const transformData = (data: any[]) => {
 
 export default function ConsoleLogPanel({ componentId, logs }: ConsoleLogPanelProps) {
   const handleClear = useCallback(() => {
-    if (componentId) context.clearComLogs(componentId);
+    if (componentId) context.clearComLogs();
   }, [componentId]);
 
   const isDark = useDarkMode();

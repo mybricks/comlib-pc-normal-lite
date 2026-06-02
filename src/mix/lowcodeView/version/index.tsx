@@ -208,8 +208,8 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
   const panelContainer = useRef<HTMLDivElement>(null);
   const [{ history, version }] = useState(() => {
     return {
-      history: context.getHistory(componentId),
-      version: context.versionsMap[componentId]
+      history: context.history,
+      version: context.version
     }
   })
 
@@ -229,7 +229,7 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
   })
 
   const handleRollback = useCallback((version: VersionRecord, latestVersion: VersionRecord) => {
-    const rollback = (context as any).getRollback?.(componentId);
+    const rollback = context.rollback;
 
     undoRedoManager.execute({
       execute() {
@@ -383,7 +383,7 @@ export function useVersions(options: UseVersionsOptions) {
   useEffect(() => {
     fetchMaterials()
 
-    const off = context.getVersionStateEvents(componentId).on(
+    const off = context.versionStateEvents.on(
       'change',
       (newVersion) => {
         setTotal(version.total)

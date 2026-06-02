@@ -91,7 +91,7 @@ const dataCompatible = (props) => {
           file.source = encodeURIComponent(decoded)
         }
 
-        context.updateFile(id, { fileName: file.fileName, content: decodeURIComponent(file.source) })
+        context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
       })
     }
   } catch (e) {
@@ -109,7 +109,7 @@ export default (props: any) => {
   const [render, setRender] = useState(false)
 
   useLayoutEffect(() => {
-    const events = context.getAiComEvents(props.id);
+    const events = context.component!.events
     const cancelListenDebugTarget = events.on('debugTarget', setDebugTarget);
     // [TODO] 这类文件监听后续整理下
     const cancelListenFileChange = events.on('fileChange', (params) => {

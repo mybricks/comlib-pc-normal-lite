@@ -73,11 +73,19 @@ class Context {
      */
     if (Object.keys(actions).length) {
       if (!this.component) {
+        // @ts-ignore
+        const events = new Events<Context['component']['events']>()
         this.component = {
           params,
           actions,
-          events: new Events()
+          events
         }
+        events.on('debugTarget', (debugTarget: any) => {
+          this.setComDebugging(!!debugTarget);
+        }, false);
+        events.on('fileChange', () => {
+          events.emit('runtimeError', null);
+        }, false);
       } else {
         this.component.params = params
         this.component.actions = actions
@@ -404,6 +412,28 @@ class Context {
     logs: [],
     logIdCounter: 0,
   };
+
+  setComDebugging(isDebugging: boolean) {
+    const state = this.comDebugStateMap;
+    state.isDebugging = isDebugging;
+    if (isDebugging) {
+      // 启动调试：自动切到控制台
+      state.bottomTab = 'console';
+      state.logs = [{
+        id: 'start',
+        timestamp: getTimestamp(),
+        data: ['开始调试'],
+        method: 'log',
+        _: {}
+      }];
+    } else {
+      // 取消调试：清空日志，切回源代码
+      state.logs = [];
+      state.logIdCounter = 0;
+      state.bottomTab = 'source';
+    }
+    this.notifyComDebugState();
+  }
 
   /** 清空日志 */
   clearComLogs() {

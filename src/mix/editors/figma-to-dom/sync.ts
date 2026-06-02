@@ -956,7 +956,7 @@ export function syncStylesFromFigmaJson(
   figmaItems: FigmaImportItem[],
   options?: { rootEl?: Element | null }
 ): number {
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
   if (!aiComParams?.data) {
     console.warn('[figma-sync][style] abort-no-aiComParams', { comId });
     return 0;
@@ -1355,23 +1355,23 @@ export function syncStylesFromFigmaJson(
     undoRedoManager.execute({
       execute() {
         current.forEach(({ fileName, source }) => {
-          context.updateFile(comId, {
+          context.updateFile({
             fileName,
             content: source,
             type: undefined,
           });
         })
-        context.saveManualVersion(comId, Array.from(updateFiles));
+        context.saveManualVersion(Array.from(updateFiles));
       },
       undo() {
         previous.forEach(({ fileName, source }) => {
-          context.updateFile(comId, {
+          context.updateFile({
             fileName,
             content: source,
             type: undefined,
           });
         })
-        context.saveManualVersion(comId, Array.from(updateFiles));
+        context.saveManualVersion(Array.from(updateFiles));
       }
     })
     // context.saveManualVersion(comId, Array.from(updateFiles));

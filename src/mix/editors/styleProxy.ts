@@ -176,12 +176,12 @@ export function genStyleValue(params: { comId: string }) {
 
       undoRedoManager.execute({
         execute() {
-          context.updateFile(comId, { fileName: path, content: current, type: undefined });
-          context.saveManualVersion(comId, [path]);
+          context.updateFile({ fileName: path, content: current, type: undefined });
+          context.saveManualVersion([path]);
         },
         undo() {
-          context.updateFile(comId, { fileName: path, content: previous, type: undefined });
-          context.saveManualVersion(comId, [path]);
+          context.updateFile({ fileName: path, content: previous, type: undefined });
+          context.saveManualVersion([path]);
         },
       })
 
@@ -200,7 +200,7 @@ export function genStyleValue(params: { comId: string }) {
       const lessPath = cn.files?.less ?? 'style.less';
 
       const deletions: string[] | null = (window as any).__mybricks_style_deletions;
-      const aiComParams = context.getAiComParams(comId);
+      const aiComParams = context.component?.params;
       const lessFile = lessPath
         ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
         : undefined;
@@ -240,7 +240,7 @@ export function genStyleValue(params: { comId: string }) {
       }
 
       const cssStr = stringifyLess(cssObj);
-      context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined });
+      context.updateFile({ fileName: lessPath, content: cssStr, type: undefined });
       debouncedUpdateFile({
         path: lessPath,
         current: cssStr,
@@ -264,7 +264,7 @@ export function genImgSrcReplacer() {
       if (!jsxPath) return;
 
       const comId = params.id;
-      const aiComParams = context.getAiComParams(comId);
+      const aiComParams = context.component?.params;
       const jsxFile = aiComParams?.data?.files?.find(
         (f: { fileName: string; source: string }) => f.fileName === jsxPath
       );
@@ -300,12 +300,12 @@ export function genImgSrcReplacer() {
 
         undoRedoManager.execute({
           execute() {
-            context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
-            context.saveManualVersion(comId, [jsxPath]);
+            context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
+            context.saveManualVersion([jsxPath]);
           },
           undo() {
-            context.updateFile(comId, { fileName: jsxPath, content: source, type: undefined });
-            context.saveManualVersion(comId, [jsxPath]);
+            context.updateFile({ fileName: jsxPath, content: source, type: undefined });
+            context.saveManualVersion([jsxPath]);
           },
         })
 
@@ -543,7 +543,7 @@ export function applyRawSvg(params: any, rawSvg: string): void {
   if (!jsxPath) return;
 
   const comId = params.id;
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
   const jsxFile = aiComParams?.data?.files?.find(
     (f: { fileName: string; source: string }) => f.fileName === jsxPath
   );
@@ -594,12 +594,12 @@ export function applyRawSvg(params: any, rawSvg: string): void {
 
   undoRedoManager.execute({
     execute() {
-      context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
-      context.saveManualVersion(comId, [jsxPath]);
+      context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
+      context.saveManualVersion([jsxPath]);
     },
     undo() {
-      context.updateFile(comId, { fileName: jsxPath, content: source, type: undefined });
-      context.saveManualVersion(comId, [jsxPath]);
+      context.updateFile({ fileName: jsxPath, content: source, type: undefined });
+      context.saveManualVersion([jsxPath]);
     },
   })
 
@@ -690,7 +690,7 @@ function applyStyleToLessFile(
   }
 
   const comId = ctx.id
-  const aiComParams = context.getAiComParams(comId)
+  const aiComParams = context.component?.params;
   const lessFile = aiComParams.data.files?.find(
     (f: { fileName: string; source: string }) => f.fileName === lessPath
   )
@@ -721,12 +721,12 @@ function applyStyleToLessFile(
 
   undoRedoManager.execute({
     execute() {
-      context.updateFile(comId, { fileName: lessPath, content: cssStr, type: undefined })
-      context.saveManualVersion(comId, [lessPath])
+      context.updateFile({ fileName: lessPath, content: cssStr, type: undefined })
+      context.saveManualVersion([lessPath])
     },
     undo() {
-      context.updateFile(comId, { fileName: lessPath, content: previousLess, type: undefined })
-      context.saveManualVersion(comId, [lessPath])
+      context.updateFile({ fileName: lessPath, content: previousLess, type: undefined })
+      context.saveManualVersion([lessPath])
     },
   })
   ctx.css.remove(SETSTYLE_CSS_ID)

@@ -39,7 +39,7 @@ export function ViewDocsBtn({ comId }: ViewDocsBtnProps) {
 
   const readmeContent = React.useMemo(() => {
     try {
-      const aiComParams = context.getAiComParams(comId);
+      const aiComParams = context.component?.params;
       const files = aiComParams?.data?.files as any[] | undefined;
       if (!files) return '';
       const readmeFile = files.find(
@@ -77,7 +77,7 @@ export function ViewDocsBtn({ comId }: ViewDocsBtnProps) {
 export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
   const [visible, setVisible] = useState(false);
 
-  const aiComParams = context.getAiComParams(comId);
+  const aiComParams = context.component?.params;
 
   const compiled = React.useMemo(() => {
     const files = aiComParams?.data?.files;
@@ -91,7 +91,7 @@ export function ViewRequirementBtn({ comId }: ViewDocsBtnProps) {
   }, [comId, aiComParams?.data?.files]);
 
   useEffect(() => {
-    const events = context.getAiComEvents(comId);
+    const events = context.component!.events;
     const handleOpenDocs = () => {
       setVisible(true);
     };
@@ -137,10 +137,10 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
     try {
       const newDir: string = await selectFolderPath();
       if (newDir) {
-        const aiComParams = context.getAiComParams(comId);
+        const aiComParams = context.component?.params;
         if (aiComParams?.data) {
           aiComParams.data.exportOutputDir = newDir;
-          context.getAiCom(comId)?.actions?.notifyChanged?.();
+          context.component?.actions?.notifyChanged?.();
         }
       }
     } catch (error) {
@@ -153,7 +153,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
   const handleExport = useCallback(async (type: 'application' | 'component') => {
     if (!comId) return;
 
-    const aiComParams = context.getAiComParams(comId);
+    const aiComParams = context.component?.params;
     if (!aiComParams?.data) {
       // console.error('[导出为代码] 组件数据不存在');
       return;
@@ -182,7 +182,7 @@ export default function Render({ comId, data }: ExportCodePanelProps) {
       // VSCode 环境下记录路径
       if (isVSCode && usedDir && usedDir !== outputDir) {
         aiComParams.data.exportOutputDir = usedDir;
-        context.getAiCom(comId)?.actions?.notifyChanged?.();
+        context.component?.actions?.notifyChanged?.();
       }
 
       const successMsg = isVSCode && usedDir ? `导出代码成功！路径：${usedDir}` : '导出代码成功！';

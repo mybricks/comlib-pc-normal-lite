@@ -72,7 +72,7 @@ function LowcodeView(params: Params) {
   // 订阅当前组件的调试/日志状态变更，并初始化选中文件
   useEffect(() => {
     if (!componentId) return;
-    const off = context.getComDebugStateEvents(componentId).on('change', () => forceUpdate(), false);
+    const off = context.comDebugStateEvents.on('change', () => forceUpdate(), false);
     const fallback = findFallbackFile(files);
     if (fallback) {
       setSelectFile({
@@ -116,13 +116,13 @@ function LowcodeView(params: Params) {
     });
   }, [filesKey]);
 
-  const debugState = componentId ? context.getComDebugState(componentId) : null;
+  const debugState = componentId ? context.comDebugStateMap : null;
   const isDebugging = debugState?.isDebugging ?? false;
   const bottomTab = debugState?.bottomTab ?? 'source';
   const consoleLogs = debugState?.logs ?? [];
 
   const setBottomTab = useCallback((tab: 'source' | 'console' | 'version') => {
-    if (componentId) context.setComBottomTab(componentId, tab);
+    if (componentId) context.setComBottomTab(tab);
   }, [componentId]);
 
   const coderOptions = useMemo(() => {
@@ -311,12 +311,12 @@ function LowcodeView(params: Params) {
 
       undoRedoManager.execute({
         execute() {
-          context.updateFile(comId, { fileName, content: currentSource, type: "update" });
-          context.saveManualVersion(comId, [fileName]);
+          context.updateFile({ fileName, content: currentSource, type: "update" });
+          context.saveManualVersion([fileName]);
         },
         undo() {
-          context.updateFile(comId, { fileName, content: previousSource, type: "update" });
-          context.saveManualVersion(comId, [fileName]);
+          context.updateFile({ fileName, content: previousSource, type: "update" });
+          context.saveManualVersion([fileName]);
         },
       })
 
@@ -360,15 +360,15 @@ function LowcodeView(params: Params) {
     undoRedoManager.execute({
       execute() {
         currentFiles.forEach(({ fileName, content }) => {
-          context.updateFile(comId, { fileName, content, type: "update" });
+          context.updateFile({ fileName, content, type: "update" });
         })
-        context.saveManualVersion(comId, currentFiles.map((f) => f.fileName));
+        context.saveManualVersion(currentFiles.map((f) => f.fileName));
       },
       undo() {
         previousFiles.forEach(({ fileName, content }) => {
-          context.updateFile(comId, { fileName, content, type: "update" });
+          context.updateFile({ fileName, content, type: "update" });
         })
-        context.saveManualVersion(comId, previousFiles.map((f) => f.fileName));
+        context.saveManualVersion(previousFiles.map((f) => f.fileName));
       },
     });
   }, [modifiedContent, params.model, files]);

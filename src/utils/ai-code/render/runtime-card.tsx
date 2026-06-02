@@ -181,7 +181,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const [vibing, setVibing] = useState(false);
 
     useLayoutEffect(() => {
-      const events = context.getAiComEvents(id);
+      const events = context.component!.events;
       const cancelListenVibing = events.on('vibing', setVibing);
 
       return () => {
@@ -377,7 +377,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             }}
             vibing={vibing}
             onMount={({ fileSystem }) => {
-              context.fileSystemMap[id] = fileSystem
+              context.fileSystem = fileSystem
               fileSystem.init(data.files.map((file) => {
                 return {
                   ...file,
@@ -386,7 +386,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               }))
             }}
             onRuntimeError={(error) => {
-              context.getAiComEvents(id).emit('runtimeError', error)
+              context.component!.events.emit('runtimeError', error)
             }}
             ErrorView={({ error }) => {
               return <ErrorView error={error} comId={id} />
