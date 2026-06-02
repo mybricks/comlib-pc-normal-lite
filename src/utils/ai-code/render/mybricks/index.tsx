@@ -433,8 +433,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     // overflow: 'hidden' // 绝对定位元素不渲染
   }
 
-  const Page = (params: React.PropsWithChildren<{ path?: string }>) => {
-    const { path = '/', children } = params;
+  const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void }>) => {
+    const { path = '/', onMount, children } = params;
     const theme = mixContext.resolveActiveTheme();
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue | null>(null);
@@ -538,6 +538,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           } catch (e) {
             // console.error(`[@动态解析]`, e)
           }
+          onMount?.(params)
         }
       })
     }, [])
@@ -759,6 +760,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           routeBase: ''
         })
 
+        const mountRef = useRef(0)
+
         useLayoutEffect(() => {
           // @ts-ignore
           window.__mybricksai_collectingRoutes__ = () => {
@@ -772,11 +775,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           })
         }, [])
 
-        useEffect(() => {
-          if (app.state === 'runtime') {
-            mixContext.component!.actions.loaded?.()
+        const onMount = useCallback((params) => {
+          mountRef.current = mountRef.current + 1
+          const dialogRootsCount = Object.values(popupRefRegistry).reduce((sum, arr) => sum + arr.length, 0)
+          const totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
+          if (mountRef.current >= totalMountCount) {
+            mixContext.component?.actions.loaded?.()
           }
-        }, [app])
+        }, [])
 
         return (
           <AppContext.Provider value={app}>
@@ -786,7 +792,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             {app.state === 'runtime' && (
               collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
                 return (
-                  <Page path={route}>
+                  <Page
+                    path={route}
+                    onMount={onMount}
+                  >
                     <CollectingRoute
                       {...props}
                       _env={_env}
@@ -796,7 +805,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   </Page>
                 )
               }) : (
-                <Page path={'/'}>
+                <Page
+                  path={'/'}
+                  onMount={onMount}
+                >
                   <Route
                     path='/'
                     element={(
@@ -810,7 +822,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               Object.entries(popupRefRegistry).map(([filename, DialogRoots]) => {
                 return DialogRoots.map((DialogRoot) => {
                   // @ts-ignore
-                  return <DialogRoot key={filename} __mybricks_show/>
+                  return <DialogRoot key={filename} onMount={onMount} __mybricks_show/>
                 })
               })
             )}
@@ -954,6 +966,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   }
                 }
               }
+
+              props.onMount?.(params)
             }
           } catch (e) {
             // console.error(`[@动态解析]`, e)
