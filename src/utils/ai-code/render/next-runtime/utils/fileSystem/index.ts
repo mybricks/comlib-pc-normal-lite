@@ -22,6 +22,7 @@ interface LoadModuleParams {
   dependencies: Dependencies
   definitions: Definitions
   ErrorView: ErrorView
+  onRuntimeError: OnRuntimeError
 }
 interface ModuleExports {
   default: any
@@ -82,7 +83,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     return dependencies[packageName]
   })
   } catch (e: any) {
-    // console.error('[loadModule]', e)
+    // console.log('[params]', params)
     // [TODO] 复制的代码，关注下错误信息收集是否准确
     // 构造带有文件位置信息的运行时错误
     const fileLabel = filename ? `[${filename}] ` : ''
@@ -101,7 +102,8 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     const enrichedError: any = new Error(`${fileLabel}${originalMessage}${lineInfo}`)
     enrichedError.originalError = e
     enrichedError.fileName = filename
-    throw enrichedError
+    // throw enrichedError
+    params.onRuntimeError(enrichedError)
   }
 
   return exports
@@ -488,6 +490,10 @@ class FileSystem {
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
         dependencies: this.proxyDependencies(resolvedFilename),
+        onRuntimeError: (error: Error) => {
+          entry.errors.runtime = error
+          this.params.onRuntimeError(error, entry.file)
+        }
       })
 
       module.__default = module.default
@@ -501,6 +507,10 @@ class FileSystem {
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
         dependencies: this.proxyDependencies(resolvedFilename),
+        onRuntimeError: (error: Error) => {
+          entry.errors.runtime = error
+          this.params.onRuntimeError(error, entry.file)
+        }
       })
 
       entry.module = module
@@ -590,6 +600,10 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
+          onRuntimeError: (error: Error) => {
+            entry.errors.runtime = error
+            this.params.onRuntimeError(error, entry.file)
+          }
         })
         entry.file = file
         entry.module!.__default = module.default
@@ -630,6 +644,11 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
+          onRuntimeError: (error: Error) => {
+            // @ts-ignore
+            tempEntry.errors.runtime = error
+            this.params.onRuntimeError(error, tempEntry.file)
+          }
         })
         // 初始化命名导出（包括组件热更新包装）
         this.syncNamedExports(tempEntry, module, filename)
@@ -645,6 +664,10 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
+          onRuntimeError: (error: Error) => {
+            entry.errors.runtime = error
+            this.params.onRuntimeError(error, entry.file)
+          }
         })
         entry.file = file
         entry.module = module
@@ -670,6 +693,10 @@ class FileSystem {
           filename,
           compiled: decodeURIComponent(file.compiled),
           dependencies: this.proxyDependencies(filename),
+          onRuntimeError: (error: Error) => {
+            this.filesMap[filename].errors.runtime = error
+            this.params.onRuntimeError(error, this.filesMap[filename].file)
+          }
         })
         this.filesMap[filename].module = module
       }
@@ -775,6 +802,11 @@ class FileSystem {
       const dependentEntry = this.filesMap[dependentFilename]
       if (!dependentEntry) return
 
+      // 清除错误信息，重新加载
+      dependentEntry.errors = {
+        runtime: null
+      }
+
       if (isJsxModule(dependentFilename)) {
         // 如果依赖者是 JSX 组件,触发其 forceUpdate
         // 重新加载该组件模块(清除缓存)
@@ -782,6 +814,10 @@ class FileSystem {
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
           dependencies: this.proxyDependencies(dependentFilename),
+          onRuntimeError: (error: Error) => {
+            dependentEntry.errors.runtime = error
+            this.params.onRuntimeError(error, dependentEntry.file)
+          }
         })
         
         dependentEntry.module!.__default = reloadedModule.default
@@ -799,6 +835,10 @@ class FileSystem {
           filename: dependentFilename,
           compiled: decodeURIComponent(dependentEntry.file.compiled),
           dependencies: this.proxyDependencies(dependentFilename),
+          onRuntimeError: (error: Error) => {
+            dependentEntry.errors.runtime = error
+            this.params.onRuntimeError(error, dependentEntry.file)
+          }
         })
         
         dependentEntry.module = reloadedModule
