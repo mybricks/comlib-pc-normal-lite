@@ -524,7 +524,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
                 if (files?.jsx && widgetName) {
                   const fileSystem = mixContext.fileSystem
-                  const jsDocMap = fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
+                  const jsDocMap = fileSystem?.filesMap?.[params.filename]?.file?.jsDocMap || fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
                   if (jsDocMap) {
                     const jsDoc = JSON.parse(decodeURIComponent(jsDocMap))
                     const title = jsDoc?.[widgetName]?.title
@@ -772,6 +772,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           })
         }, [])
 
+        useEffect(() => {
+          if (app.state === 'runtime') {
+            mixContext.component!.actions.loaded?.()
+          }
+        }, [app])
+
         return (
           <AppContext.Provider value={app}>
             {app.state === "collect_routes" && (
@@ -938,7 +944,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
                 if (files?.jsx && widgetName) {
                   const fileSystem = mixContext.fileSystem
-                  const jsDocMap = fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
+                  const jsDocMap = fileSystem?.filesMap?.[params.filename]?.file?.jsDocMap || fileSystem?.filesMap?.[files.jsx]?.file?.jsDocMap
                   if (jsDocMap) {
                     const jsDoc = JSON.parse(decodeURIComponent(jsDocMap))
                     const title = jsDoc?.[widgetName]?.title
