@@ -4,11 +4,16 @@ import lowcodeViewCss from '../lowcodeView/index.lazy.less';
 import consoleViewCss from '../lowcodeView/console/index.lazy.less';
 import versionViewCss from '../lowcodeView/version/index.lazy.less';
 import treeViewCss from '../lowcodeView/tree/index.lazy.less';
+import exportCodeCss from './configs/style.lazy.less';
+import iconLibraryModalCss from './configs/IconLibraryModal/style.lazy.less';
 
 import * as lowcodeViewCssNS from '../lowcodeView/index.lazy.less';
 import * as consoleViewCssNS from '../lowcodeView/console/index.lazy.less';
 import * as versionViewCssNS from '../lowcodeView/version/index.lazy.less';
 import * as treeViewCssNS from '../lowcodeView/tree/index.lazy.less';
+import * as exportCodeCssNS from './configs/style.lazy.less';
+import * as iconLibraryModalCssNS from './configs/IconLibraryModal/style.lazy.less';
+
 
 import context from '../context';
 import type {Props} from './types';
@@ -59,6 +64,14 @@ export function buildHooks(props: Props) {
             css: transform(treeViewCssNS),
             use: genUse(treeViewCss)
           },
+          {
+            css: transform(exportCodeCssNS),
+            use: genUse(exportCodeCss)
+          },
+          {
+            css: transform(iconLibraryModalCssNS),
+            use: genUse(iconLibraryModalCss)
+          }
         ]
       },
     },
