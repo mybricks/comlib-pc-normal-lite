@@ -249,7 +249,9 @@ export function createDataRenderKeyCollector(fileName: string): {
  *    三方组件和原生 HTML 标签仅通过 className 是否在同一文件中多处使用来判断
  * 3. 多写：若某 JSX 元素有 data-render-key，但对应的组件/className 只使用一次，则报错（多余 → error）
  *    → 将同一文件内所有"多余"位置收敛为一条消息，附带行号列表
- * 4. 重复值：若多个 JSX 元素使用了相同的 data-render-key 值，则报错（重复 → error）
+ * 4. 静态值：data-render-key 的值必须是静态字符串字面量，禁止使用变量、模板字符串、表达式或动态拼接（动态值 → error）
+ *    → 将同一文件内所有动态值位置收敛为一条消息
+ * 5. 重复值：若多个 JSX 元素使用了相同的 data-render-key 值，则报错（重复 → error）
  *    → 每组重复值收敛为一条消息
  *
  * @param allRecords      所有文件的 JsxUsageRecord 聚合
@@ -406,7 +408,42 @@ export function checkDataRenderKey(
     });
   }
 
-  // ── 6. 重复的 data-render-key 值错误（同一值被多个元素使用）──
+  // ── 6. data-render-key 值必须是静态字符串字面量（动态值 → error）──
+  // 禁止使用变量、模板字符串、表达式或动态拼接作为 data-render-key 的值。
+  // getDataRenderKey 已将所有非静态值标记为 '(dynamic)'，此处统一报错。
+  const dynamicKeyGroups = new Map<string, JsxUsageRecord[]>();
+  for (const record of allRecords) {
+    if (!record.hasRenderKey) continue;
+    if (record.renderKeyValue !== '(dynamic)') continue;
+    const existing = dynamicKeyGroups.get(record.fileName) ?? [];
+    existing.push(record);
+    dynamicKeyGroups.set(record.fileName, existing);
+  }
+
+  for (const [fileName, records] of dynamicKeyGroups) {
+    const sortedRecords = [...records].sort(
+      (a, b) => a.loc.start.line - b.loc.start.line || a.loc.start.column - b.loc.start.column,
+    );
+    const lineList = sortedRecords.map(r => `第 ${r.loc.start.line} 行`).join('、');
+    const firstRecord = sortedRecords[0];
+
+    messages.push({
+      ruleId: RULE_ID,
+      severity: 2,
+      message:
+        records.length === 1
+          ? `[data-render-key] data-render-key 的值必须是静态字符串字面量，禁止使用变量、模板字符串、表达式或动态拼接。正确示例：data-render-key="submit-btn"；错误示例：data-render-key={\`btn-\${index}\`}、data-render-key={key}、data-render-key={"btn-" + id}。`
+          : `[data-render-key] data-render-key 的值必须是静态字符串字面量（共 ${records.length} 处）。涉及位置：${lineList}。禁止使用变量、模板字符串、表达式或动态拼接。正确示例：data-render-key="submit-btn"。`,
+      line: firstRecord.loc.start.line,
+      column: firstRecord.loc.start.column,
+      endLine: sortedRecords[sortedRecords.length - 1].loc.end.line,
+      endColumn: sortedRecords[sortedRecords.length - 1].loc.end.column,
+      nodeType: 'JSXElement',
+      fileName,
+    });
+  }
+
+  // ── 7. 重复的 data-render-key 值错误（同一值被多个元素使用）──
   // 每个 data-render-key 的值在所有文件中必须唯一（动态值跳过校验）。
   const renderKeyValueUsages = new Map<string, JsxUsageRecord[]>();
   for (const record of allRecords) {
