@@ -5,7 +5,7 @@ import { applyRawSvg } from '../../styleProxy';
 import context from '../../../context';
 import AIInputBar from './AIInputBar';
 import EmptyState from './EmptyState';
-import styles from './style.less';
+import styles from './style.lazy.less';
 
 export default function IconLibraryModal({
   visible,
@@ -26,6 +26,11 @@ export default function IconLibraryModal({
   const [iconLibraries, setIconLibraries] = useState<DumpIconsLibrary[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIconKey, setSelectedIconKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    styles.use();
+    return () => styles.unuse();
+  }, []);
 
   const refreshLibraries = async () => {
     const libraries = await loadIconLibraries(comId);
@@ -148,28 +153,29 @@ export default function IconLibraryModal({
       footer={null}
       width={560}
       destroyOnClose
+      className={styles.locals.iconLibModal}
     >
-      <div className={isEmptyOverview ? `${styles.modalBody} ${styles.empty}` : styles.modalBody}>
+      <div className={isEmptyOverview ? `${styles.locals.modalBody} ${styles.locals.empty}` : styles.locals.modalBody}>
         {iconPanel === 'overview' && (
           <>
             {iconLibraries.length > 0 ? (
               <>
-                <div className={styles.overviewGrid}>
+                <div className={styles.locals.overviewGrid}>
                   {iconLibraries.map(library => (
                     <div
                       key={library.id}
-                      className={styles.libraryCard}
+                      className={styles.locals.libraryCard}
                       onClick={() => handleOpenLibraryDetail(library.id)}
                     >
                       <button
                         type="button"
-                        className={`${styles.deleteBtn}${deletingId === library.id ? ` ${styles.deleteBtnLoading}` : ''}`}
+                        className={`${styles.locals.deleteBtn}${deletingId === library.id ? ` ${styles.locals.deleteBtnLoading}` : ''}`}
                         onClick={e => handleDeleteLibrary(e, library.id)}
                         disabled={deletingId !== null}
                         aria-label="删除图标库"
                       >
                         {deletingId === library.id ? (
-                          <svg viewBox="0 0 16 16" width={12} height={12} fill="currentColor" className={styles.spinIcon}>
+                          <svg viewBox="0 0 16 16" width={12} height={12} fill="currentColor" className={styles.locals.spinIcon}>
                             <path d="M8 1.5a6.5 6.5 0 1 0 6.5 6.5A.75.75 0 0 0 13 8a5 5 0 1 1-5-5 .75.75 0 0 0 0-1.5z" />
                           </svg>
                         ) : (
@@ -178,31 +184,31 @@ export default function IconLibraryModal({
                           </svg>
                         )}
                       </button>
-                      <div className={styles.libraryName} title={library.name || '未命名图标库'}>
+                      <div className={styles.locals.libraryName} title={library.name || '未命名图标库'}>
                         {library.name || '未命名图标库'}
                       </div>
-                      <div className={styles.previewWrap}>
-                        <div className={styles.previewGrid}>
+                      <div className={styles.locals.previewWrap}>
+                        <div className={styles.locals.previewGrid}>
                           {library.icons.slice(0, 9).map((icon, index) => (
-                            <div key={`${icon.id ?? icon.name}-${index}`} className={styles.previewItem}>
+                            <div key={`${icon.id ?? icon.name}-${index}`} className={styles.locals.previewItem}>
                               <div
-                                className={styles.previewSvg}
+                                className={styles.locals.previewSvg}
                                 dangerouslySetInnerHTML={{ __html: icon.svg }}
                               />
                             </div>
                           ))}
                         </div>
                         {library.icons.length > 9 && (
-                          <div className={styles.previewFade} />
+                          <div className={styles.locals.previewFade} />
                         )}
                       </div>
-                      <div className={styles.libraryCount}>
+                      <div className={styles.locals.libraryCount}>
                         共 {library.icons.length} 个图标
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className={styles.aiInputSection}>
+                <div className={styles.locals.aiInputSection}>
                   <AIInputBar
                     onGenerate={handleGenerateIcon}
                     placeholder="告诉 AI 你还需要什么图标库…"
@@ -215,14 +221,14 @@ export default function IconLibraryModal({
           </>
         )}
         {iconPanel === 'detail' && (
-          <div className={styles.detailWrap}>
-            <div className={styles.detailHeader}>
-              <span className={styles.backBtn} onClick={handleBackToOverview}>
+          <div className={styles.locals.detailWrap}>
+            <div className={styles.locals.detailHeader}>
+              <span className={styles.locals.backBtn} onClick={handleBackToOverview}>
                 ← 返回
               </span>
-              <span className={styles.detailTitle}>{activeLibrary?.name || '图标库'}</span>
+              <span className={styles.locals.detailTitle}>{activeLibrary?.name || '图标库'}</span>
             </div>
-            <div className={styles.detailGrid}>
+            <div className={styles.locals.detailGrid}>
               {(activeLibrary?.icons ?? []).map((icon, index) => {
                 const iconKey = `${icon.id ?? icon.name}-${index}`;
                 const isActive = selectedIconKey === iconKey;
@@ -230,13 +236,13 @@ export default function IconLibraryModal({
                   <button
                     key={iconKey}
                     type="button"
-                    className={`${styles.iconItem}${isActive ? ` ${styles.iconItemActive}` : ''}`}
+                    className={`${styles.locals.iconItem}${isActive ? ` ${styles.locals.iconItemActive}` : ''}`}
                     onClick={() => handleSelectIcon(iconKey)}
                   >
                     {mode === 'replace' && isActive && (
                       <button
                         type="button"
-                        className={styles.iconItemApplyBtn}
+                        className={styles.locals.iconItemApplyBtn}
                         onClick={e => {
                           e.stopPropagation();
                           applyRawSvg(params, icon.svg);
@@ -246,17 +252,17 @@ export default function IconLibraryModal({
                         使用
                       </button>
                     )}
-                    <div className={styles.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
-                    <span className={styles.iconItemName}>{icon.name}</span>
+                    <div className={styles.locals.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
+                    <span className={styles.locals.iconItemName}>{icon.name}</span>
                   </button>
                 );
               })}
               {(activeLibrary?.icons?.length ?? 0) === 0 && (
-                <div className={styles.emptyTip}>当前图标库暂无图标</div>
+                <div className={styles.locals.emptyTip}>当前图标库暂无图标</div>
               )}
             </div>
             {selectedIconKey && (
-              <div className={styles.detailAISection}>
+              <div className={styles.locals.detailAISection}>
                 <AIInputBar
                   onGenerate={handleEditIcon}
                   placeholder="告诉 AI 你想怎么改这个图标"

@@ -3,6 +3,16 @@ declare module '*.less' {
   export default resource;
 }
 
+declare module '*.lazy.less' {
+  interface LazyCSSModule {
+    use(): void;
+    unuse(): void;
+    locals: { [key: string]: string };
+  }
+  const resource: LazyCSSModule;
+  export default resource;
+}
+
 declare module '*.md' {
   const content: string;
   export default content;
