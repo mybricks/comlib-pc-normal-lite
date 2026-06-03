@@ -982,6 +982,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             data-desn-page={"/"}
             data-zone-title='弹窗'
             data-widget-name={params.widgetName}
+            className={css.popupContainer}
             style={{
               ...style,
               display: 'inline-block',

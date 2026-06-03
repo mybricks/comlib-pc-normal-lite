@@ -210,7 +210,7 @@ export function buildHooks(props: Props) {
       const aiComParams = context.component!.params;
       if (!aiComParams?.data) return;
       aiComParams.data._activeDebugEnv = option?.value ?? 'prod';
-      context.component?.actions?.notifyChanged?.();
+      context.notifyChanged();
     },
 
     '@viewCode'(params: any) {
