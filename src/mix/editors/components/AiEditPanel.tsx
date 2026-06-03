@@ -1,6 +1,9 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import context from '../../context';
-import styles from './AiEditPanel.less';
+import * as styles from './AiEditPanel.lazy.less';
+import { getLazyCss } from '../../lowcodeView/utils/css';
+
+const css = getLazyCss(styles);
 import { AiSendIcon } from './AiSendIcon';
 
 type EditMode = 'IMG' | 'SVG';
@@ -74,8 +77,8 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
   };
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.inputWrap}>
+    <div className={css.panel}>
+      <div className={css.inputWrap}>
         <textarea
           ref={textareaRef}
           value={value}
@@ -83,25 +86,25 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
           rows={1}
           onChange={e => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          className={styles.textarea}
+          className={css.textarea}
         />
         <button
           type="button"
           onClick={handleSubmit}
-          className={styles.sendButton}
+          className={css.sendButton}
           aria-label="发送"
           disabled={!canSubmit}
         >
           <AiSendIcon disabled={!canSubmit} />
         </button>
       </div>
-      <div className={styles.presetWrap}>
+      <div className={css.presetWrap}>
         {modeConfig.presets.map(preset => (
           <button
             key={preset}
             type="button"
             onClick={() => appendPreset(preset)}
-            className={styles.presetButton}
+            className={css.presetButton}
           >
             {preset}
           </button>
