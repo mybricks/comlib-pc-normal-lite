@@ -96,11 +96,13 @@ class Context {
 
   /** 通知引擎文档相关更新 */
   notifyChanged(filename?: string, changeType?: 'delete' | 'update', value?: any) {
-    if (!filename) {
-      this.component?.actions?.notifyChanged?.()
-    } else {
-      this.component?.actions?.notifyChanged?.(filename, changeType, value)
-    }
+    try {
+      if (!filename) {
+        this.component?.actions?.notifyChanged?.()
+      } else {
+        this.component?.actions?.notifyChanged?.(filename, changeType, value)
+      }
+    } catch {}
   }
 
   /** 
@@ -155,10 +157,9 @@ class Context {
         files.splice(deleteIndex, 1)
       }
       aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-      // this.actionsNotifyChanged(id, ['jsx', 'tsx', 'less'].includes(suffix) ? 'update' : 'empty')
 
       if ( ['jsx', 'tsx'].includes(suffix)) {
-        aiCom?.actions?.notifyChanged?.(fileName, 'delete');
+        this.notifyChanged(fileName, 'delete')
       }
       aiCom.events.emit('compileError', aiComParams.data._errors)
     } else {
@@ -172,7 +173,7 @@ class Context {
               return pre
             }, {})
             const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
-            aiCom?.actions?.notifyChanged?.(fileName, 'update', notifyChangedValue);
+            this.notifyChanged(fileName, 'update', notifyChangedValue);
             updateFileContent({
               fileName,
               files,
@@ -212,8 +213,6 @@ class Context {
               }
             ];
           }
-
-          // this.actionsNotifyChanged(id, 'update')
           break;
         case 'less':
           try {
@@ -251,7 +250,6 @@ class Context {
               }
             ];
           }
-          // this.actionsNotifyChanged(id, 'update')
           break;
         case 'js':
         case 'ts':
@@ -291,7 +289,7 @@ class Context {
             ];
           }
 
-          aiCom?.actions?.notifyChanged?.();
+          this.notifyChanged();
           break;
         case 'yaml':
         case 'yml':
@@ -305,7 +303,7 @@ class Context {
             }
           });
           aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
-          aiCom?.actions?.notifyChanged?.();
+          this.notifyChanged();
           break;
         default:
           break;
