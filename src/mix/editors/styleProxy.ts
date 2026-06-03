@@ -291,23 +291,31 @@ export function genImgSrcReplacer() {
           });
         }
 
+        const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
         const snippet = source.slice(loc.jsx.start, loc.jsx.end);
-        const newSnippet = snippet.replace(
-          /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/,
-          `src="${newSrc}"`
-        );
-        const newSource = source.slice(0, loc.jsx.start) + newSnippet + source.slice(loc.jsx.end);
 
-        undoRedoManager.execute({
-          execute() {
-            context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
-            context.saveManualVersion([jsxPath]);
-          },
-          undo() {
-            context.updateFile({ fileName: jsxPath, content: source, type: undefined });
-            context.saveManualVersion([jsxPath]);
-          },
-        })
+        if (STATIC_SRC_RE.test(snippet)) {
+          const newSnippet = snippet.replace(STATIC_SRC_RE, `src="${newSrc}"`);
+          const newSource = source.slice(0, loc.jsx.start) + newSnippet + source.slice(loc.jsx.end);
+
+          undoRedoManager.execute({
+            execute() {
+              context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
+              context.saveManualVersion([jsxPath]);
+            },
+            undo() {
+              context.updateFile({ fileName: jsxPath, content: source, type: undefined });
+              context.saveManualVersion([jsxPath]);
+            },
+          });
+        } else {
+          const plugins = context.plugins as any;
+          plugins?.showAIDialog?.();
+          plugins?.aiService?.request({
+            message: '请将页面中当前这张图片的地址替换为用户上传的图片链接',
+            attachments: [{ url: newSrc }],
+          });
+        }
 
         // context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
         // context.saveManualVersion(comId, [jsxPath]);
