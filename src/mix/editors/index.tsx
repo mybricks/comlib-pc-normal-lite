@@ -6,7 +6,8 @@ import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
-import { genStyleValue, genResizer, genImgSrcReplacer } from './styleProxy';
+import { genStyleValue, genResizer } from './styleProxy';
+import { buildImgEditorItems } from './configs/imgEditor';
 import { buildSvgEditorItems } from './configs/svgEditor';
 import { aiSvgIcon5 } from './icons/ai-svg-5';
 import { aiImgIcon } from './icons/ai-img';
@@ -71,13 +72,7 @@ export default function (props: Props, actions: Actions) {
           return <AiEditPanel close={close} mode="IMG" />;
         }
       },
-      items: [
-        {
-          type: 'button',
-          title: '更改图片',
-          value: genImgSrcReplacer(),
-        }
-      ]
+      items: buildImgEditorItems(comId),
     },
     '[data-zone-svg]': {
       '@ai': {

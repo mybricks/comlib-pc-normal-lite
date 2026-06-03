@@ -4,6 +4,8 @@ import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 
+export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
+
 // ── CSS shorthand 映射 ────────────────────────────────────────────────────────
 
 const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
@@ -291,7 +293,6 @@ export function genImgSrcReplacer() {
           });
         }
 
-        const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
         const snippet = source.slice(loc.jsx.start, loc.jsx.end);
 
         if (STATIC_SRC_RE.test(snippet)) {
