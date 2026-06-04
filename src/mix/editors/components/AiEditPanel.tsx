@@ -72,6 +72,7 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    if (event.shiftKey) return;
     event.preventDefault();
     handleSubmit();
   };
