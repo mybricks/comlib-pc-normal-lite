@@ -4,6 +4,8 @@ import { getValidatorPlugins } from '../../mix/availableLibraries'
 import functionPropsPlugin from './plugins/functionPropsPlugin'
 import collectJsDocPlugin from './plugins/collectJsDocPlugin'
 import loggerPlugin from './plugins/loggerPlugin'
+import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
+import zoneIndexPlugin from './plugins/zoneIndexPlugin'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
@@ -42,7 +44,9 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         ...validatorPlugins,
         functionPropsPlugin(),
         [collectJsDocPlugin, { result: jsDocMap, fileName }],
-        loggerPlugin({ fileName })
+        loggerPlugin({ fileName }),
+        styleAnalysisPlugin(),
+        zoneIndexPlugin({ fileName })
       ],
       retainLines: true,
     }

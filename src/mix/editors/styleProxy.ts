@@ -668,7 +668,7 @@ function styleToCss(style: Record<string, string | number>): string {
   return Object.entries(style)
     .map(([key, value]) => {
       // [TODO] 目前支持的都是需要px单位的样式
-      return `${convertCamelToHyphen(key)}: ${value}px;`
+      return `${convertCamelToHyphen(key)}: ${value}px!important;;`
     })
     .concat(`transition: none!important;`) // 拖拽过程中 transition: all 体感上会有卡顿的感觉
     .join(' ')
@@ -677,8 +677,40 @@ function styleToCss(style: Record<string, string | number>): string {
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
 /**
- * 将 style 写入目标元素对应的 LESS 文件，并推入撤销栈。
+ * 将一组静态 style 键值直接替换到 JSX/TSX 源码中。
+ * 利用 data-style-info 中记录的 valueStart/valueEnd 字符偏移，
+ * 从后向前替换，避免偏移量因前面内容长度变化而失效。
+ *
+ * @returns 替换后的新源码字符串，若无法定位则返回 null
+ */
+function patchStyleInTsx(
+  source: string,
+  styleEntries: Array<{ key: string; val: number; valueStart: number; valueEnd: number }>,
+): string | null {
+  if (styleEntries.length === 0) return null
+
+  // 按 valueStart 从大到小排序，从后向前替换，保证偏移量不受前面替换影响
+  const sorted = [...styleEntries].sort((a, b) => b.valueStart - a.valueStart)
+
+  let result = source
+  for (const { val, valueStart, valueEnd } of sorted) {
+    if (valueStart < 0 || valueEnd > result.length || valueStart >= valueEnd) return null
+    const newVal = `${val}`
+    result = result.slice(0, valueStart) + newVal + result.slice(valueEnd)
+  }
+  return result
+}
+
+/**
+ * 将 style 写入目标元素对应的文件（TSX 或 LESS），并推入撤销栈。
  * 完成后移除临时预览 CSS。
+ *
+ * 判断逻辑：
+ * 1. 没有 data-style-info 信息 → 全部改 less 文件
+ * 2. 有 data-style-info，且对应修改的 key 为 static → 直接改 tsx style
+ * 3. 其它情况（dynamic 或 static 但缺偏移信息）→ 改 less 文件
+ *
+ * 同时改多个属性时，可能出现既改 tsx 又改 less 的混合情况。
  *
  * @param ctx         编辑器上下文（含 ctx.id / ctx.css）
  * @param ele         目标 DOM 元素
@@ -693,49 +725,128 @@ function applyStyleToLessFile(
 ): void {
   const loc = ele.dataset.loc
   const cn = loc ? JSON.parse(loc) : {}
-  const lessPath = cn.files?.less
-  if (!lessPath) {
-    return
-  }
 
-  const comId = ctx.id
-  const aiComParams = context.component?.params;
-  const lessFile = aiComParams.data.files?.find(
-    (f: { fileName: string; source: string }) => f.fileName === lessPath
-  )
-  const previousLess = decodeURIComponent(lessFile!.source as string)
-  const cssObj = parseLess(previousLess as string)
-  const zoneSelector = JSON.parse(ele.dataset.zoneSelector!)[0]
-  const eleClassList = Array.from(ele.classList) as string[]
-  const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList })
+  // ── 解析 data-style-info，按 key 分流 ──────────────────────────────────────
+  type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number }
+  const styleInfoRaw = ele.dataset.styleInfo
+  const styleInfo: Record<string, StyleKeyInfo> | null = styleInfoRaw
+    ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
+    : null
 
-  if (!cssObjKey) {
-    return
-  }
-
-  // 如果有 data-render-key，需要在选择器上追加属性选择器；如果有 ignoreFirst，再追加 :not(:first-child)
-  const renderKey = ele.dataset.renderKey
-  const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
-  const finalCssObjKey = `${cssObjKey}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
-
-  if (!cssObj[finalCssObjKey]) {
-    cssObj[finalCssObjKey] = {}
-  }
+  // 将 style 中每个 key 分流：tsxEntries → 改 tsx；lessStyle → 改 less
+  const tsxEntries: Array<{ key: string; val: number; valueStart: number; valueEnd: number }> = []
+  const lessStyle: Record<string, number> = {}
 
   Object.entries(style).forEach(([key, val]) => {
-    // [TODO] 目前给到的style一定数字且需要px单位
-    cssObj[finalCssObjKey][key] = `${val}px`
+    const info = styleInfo?.[key]
+    if (
+      info &&
+      info.kind === 'static' &&
+      typeof info.valueStart === 'number' &&
+      typeof info.valueEnd === 'number'
+    ) {
+      tsxEntries.push({ key, val, valueStart: info.valueStart, valueEnd: info.valueEnd })
+    } else {
+      lessStyle[key] = val
+    }
   })
-  const cssStr = stringifyLess(cssObj)
 
+  // ── 准备 TSX 更新 ────────────────────────────────────────────────────────────
+  const jsxPath = cn.files?.jsx
+  const aiComParams = context.component?.params
+
+  let previousTsx: string | null = null
+  let newTsx: string | null = null
+
+  if (tsxEntries.length > 0 && jsxPath) {
+    const jsxFile = aiComParams?.data?.files?.find(
+      (f: { fileName: string; source: string }) => f.fileName === jsxPath
+    )
+    if (jsxFile) {
+      previousTsx = decodeURIComponent(jsxFile.source as string)
+      newTsx = patchStyleInTsx(previousTsx, tsxEntries)
+      // 若替换失败，回退到改 less
+      if (!newTsx) {
+        Object.entries(style).forEach(([key, val]) => { lessStyle[key] = val })
+        tsxEntries.length = 0
+      }
+    } else {
+      // 找不到文件，全部改 less
+      Object.entries(style).forEach(([key, val]) => { lessStyle[key] = val })
+      tsxEntries.length = 0
+    }
+  } else if (tsxEntries.length > 0) {
+    // 有 static key 但找不到 jsxPath，回退到 less
+    Object.entries(style).forEach(([key, val]) => { lessStyle[key] = val })
+    tsxEntries.length = 0
+  }
+
+  // ── 准备 LESS 更新 ──────────────────────────────────────────────────────────
+  const lessPath = cn.files?.less
+  let previousLess: string | null = null
+  let newLessStr: string | null = null
+
+  if (Object.keys(lessStyle).length > 0 && lessPath) {
+    const lessFile = aiComParams?.data?.files?.find(
+      (f: { fileName: string; source: string }) => f.fileName === lessPath
+    )
+    previousLess = decodeURIComponent(lessFile.source as string)
+    const cssObj = parseLess(previousLess)
+    const zoneSelector = JSON.parse(ele.dataset.zoneSelector!)[0]
+    const eleClassList = Array.from(ele.classList) as string[]
+    const cssObjKey = resolveTargetKey({ cssObj, fullSelector: zoneSelector, eleClassList })
+
+    if (!cssObjKey) {
+      ctx.css.remove(SETSTYLE_CSS_ID)
+      return
+    }
+
+    // 如果有 data-render-key，需要在选择器上追加属性选择器；如果有 ignoreFirst，再追加 :not(:first-child)
+    const renderKey = ele.dataset.renderKey
+    const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
+    const finalCssObjKey = `${cssObjKey}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
+
+    if (!cssObj[finalCssObjKey]) {
+      cssObj[finalCssObjKey] = {}
+    }
+
+    Object.entries(lessStyle).forEach(([key, val]) => {
+      // [TODO] 目前给到的style一定数字且需要px单位
+      cssObj[finalCssObjKey][key] = `${val}px`
+    })
+    newLessStr = stringifyLess(cssObj)
+  }
+
+  // ── 若两侧都没有变更，直接返回 ─────────────────────────────────────────────
+  if (!newTsx && !newLessStr) {
+    ctx.css.remove(SETSTYLE_CSS_ID)
+    return
+  }
+
+  const paths: string[] = []
+  const executeFiles: any[] = []
+  const undoFiles: any[] = []
+
+  if (newTsx) {
+    paths.push(jsxPath)
+    executeFiles.push({ fileName: jsxPath, content: newTsx, type: undefined })
+    undoFiles.push({ fileName: jsxPath, content: previousTsx, type: undefined })
+  }
+  if (newLessStr) {
+    paths.push(lessPath)
+    executeFiles.push({ fileName: lessPath, content: newLessStr, type: undefined })
+    undoFiles.push({ fileName: lessPath, content: previousLess, type: undefined })
+  }
+
+  // ── 推入统一的撤销栈 ────────────────────────────────────────────────────────
   undoRedoManager.execute({
     execute() {
-      context.updateFile({ fileName: lessPath, content: cssStr, type: undefined })
-      context.saveManualVersion([lessPath])
+      executeFiles.forEach(context.updateFile.bind(context))
+      context.saveManualVersion(paths)
     },
     undo() {
-      context.updateFile({ fileName: lessPath, content: previousLess, type: undefined })
-      context.saveManualVersion([lessPath])
+      undoFiles.forEach(context.updateFile.bind(context))
+      context.saveManualVersion(paths)
     },
   })
   ctx.css.remove(SETSTYLE_CSS_ID)
