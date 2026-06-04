@@ -18,6 +18,7 @@ import { getDataZoneTextEditable } from './getDataZoneTextEditable'
 import undoRedo from './undoRedo';
 import { verify as eslintVerify } from '../eslint';
 import styles from './styleProxy';
+import setSegment from './setSegment';
 
 export default function (props: Props, actions: Actions) {
 
@@ -86,6 +87,7 @@ export default function (props: Props, actions: Actions) {
     },
     ...getDataZoneTextEditable(),
     ...undoRedo(),
-    ...styles()
+    ...styles(),
+    ...setSegment()
   };
 }
