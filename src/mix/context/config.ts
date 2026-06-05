@@ -162,6 +162,10 @@ class Config {
             }
           }
         })
+      } else {
+        if (names.length) {
+          names.push('react', 'react-dom')
+        }
       }
     }
 
@@ -171,10 +175,16 @@ class Config {
       availableLibraries.forEach(({ name }) => {
         names.push(name)
       })
+
+      if (names.length) {
+        names.push('react', 'react-dom')
+      }
     }
 
     if (!names.length) {
       return [
+        'react',
+        'react-dom',
         'antd',
         'echarts-for-react',
         '@ant-design/icons',
