@@ -174,7 +174,8 @@ export function getAddonLibraryNames({ fileName }): string[] {
  * 分层逻辑见 getAddonLibraryNames。
  */
 export function getAllLibraryNames({ fileName }): string[] {
-  const baseNames = BASE_LIBS.map((l) => l.name)
-  const addonNames = getAddonLibraryNames({ fileName }).filter((n) => !baseNames.includes(n))
-  return [...baseNames, ...addonNames]
+  return getAddonLibraryNames({ fileName })
+  // const baseNames = BASE_LIBS.map((l) => l.name)
+  // const addonNames = getAddonLibraryNames({ fileName }).filter((n) => !baseNames.includes(n))
+  // return [...baseNames, ...addonNames]
 }

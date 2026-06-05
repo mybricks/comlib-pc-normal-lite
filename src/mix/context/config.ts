@@ -137,12 +137,6 @@ class Config {
   /** 获取插件库名称 */
   getAddonLibraryNames({ fileName }: { fileName: string}) {
     const names: string[] = []
-    const availableLibraries = this.getCompatibleAvailableLibraries()
-
-    availableLibraries.forEach(({ name }) => {
-      names.push(name)
-    })
-
     const componentRuntime = window._sandbox_.config.componentRuntime
 
     if (componentRuntime) {
@@ -158,13 +152,25 @@ class Config {
       if (modules) {
         Object.entries(modules).forEach(([key, module]: any) => {
           if (fileName.startsWith(key)) {
-            const { getDependencies } = module
+            const { getDependencies, type } = module
             if (typeof getDependencies === 'function') {
               transformDependencies(getDependencies())
+            }
+            if (type === MODULE_FRONTEND_TYPE) {
+              // 前端默认注入 react、react-dom
+              names.push('react', 'react-dom')
             }
           }
         })
       }
+    }
+
+    if (!names.length) {
+      const availableLibraries = this.getCompatibleAvailableLibraries()
+
+      availableLibraries.forEach(({ name }) => {
+        names.push(name)
+      })
     }
 
     if (!names.length) {

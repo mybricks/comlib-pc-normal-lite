@@ -10,7 +10,7 @@ const BUILTIN_LIBRARIES: readonly string[] = [
 ];
 
 /** react/react-dom 始终允许，与具体注册的三方库无关 */
-const ALWAYS_ALLOWED: readonly string[] = ['react', 'react-dom'];
+// const ALWAYS_ALLOWED: readonly string[] = ['react', 'react-dom'];
 
 
 /**
@@ -20,7 +20,7 @@ const ALWAYS_ALLOWED: readonly string[] = ['react', 'react-dom'];
 export function createPublicValidator(thirdPartyLibNames: string[]): LibraryValidator {
   const ALLOWED_LIBRARIES: readonly string[] = [
     ...BUILTIN_LIBRARIES,
-    ...ALWAYS_ALLOWED,
+    // ...ALWAYS_ALLOWED,
     ...thirdPartyLibNames,
   ];
 
