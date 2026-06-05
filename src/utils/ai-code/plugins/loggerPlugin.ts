@@ -14,11 +14,41 @@
 
 const MYBRICKS_SOURCE = 'mybricks';
 const LOGGER_MARKER = '__logger__';
+const LOG_METHODS = new Set(['log', 'info', 'warn', 'error']);
 
 export default function loggerPlugin({ fileName }: { fileName?: string } = {}) {
   return function ({ types: t }: { types: any }) {
     /** 收集当前文件中所有代表 mybricks logger 的本地名称 */
     const loggerLocalNames = new Set<string>();
+
+    const getMemberPropertyName = (member: any) => {
+      const property = member?.property;
+
+      if (!member?.computed && property?.name) return property.name;
+      if (member?.computed && property?.value) return property.value;
+
+      return '';
+    };
+
+    const isLoggerChildCall = (node: any): boolean => {
+      if (!node || node.type !== 'CallExpression') return false;
+
+      const callee = node.callee;
+      if (!callee || callee.type !== 'MemberExpression') return false;
+      if (getMemberPropertyName(callee) !== 'child') return false;
+
+      return isLoggerExpression(callee.object);
+    };
+
+    const isLoggerExpression = (node: any): boolean => {
+      if (!node) return false;
+
+      if (node.type === 'Identifier') {
+        return loggerLocalNames.has(node.name);
+      }
+
+      return isLoggerChildCall(node);
+    };
 
     return {
       visitor: {
@@ -41,6 +71,18 @@ export default function loggerPlugin({ fileName }: { fileName?: string } = {}) {
           } catch { /* 静默处理解析错误 */ }
         },
 
+        // const log = logger.child(...)
+        // const scopedLog = log.child(...)
+        VariableDeclarator(path: any) {
+          try {
+            const { node } = path;
+            if (node.id?.type !== 'Identifier') return;
+            if (!isLoggerChildCall(node.init)) return;
+
+            loggerLocalNames.add(node.id.name);
+          } catch { /* 静默处理解析错误 */ }
+        },
+
         // ─── 2. 对 logger.xxx(...) 的 CallExpression 追加两个参数 ───
         CallExpression(path: any) {
           try {
@@ -49,12 +91,13 @@ export default function loggerPlugin({ fileName }: { fileName?: string } = {}) {
 
             // 只处理 logger.xxx() 形式的成员调用
             if (!t.isMemberExpression(callee)) return;
+            const methodName = getMemberPropertyName(callee);
+            if (!LOG_METHODS.has(methodName)) return;
 
             const object = callee.object;
-            if (!t.isIdentifier(object)) return;
 
-            // 确认调用对象是已知 logger 本地名称
-            if (!loggerLocalNames.has(object.name)) return;
+            // 确认调用对象是已知 logger，或 logger.child(...).info(...) 链式调用
+            if (!isLoggerExpression(object)) return;
 
             // 防止重复注入（幂等保护）：末尾已有 '__logger__' 字符串则跳过
             const args: any[] = node.arguments;

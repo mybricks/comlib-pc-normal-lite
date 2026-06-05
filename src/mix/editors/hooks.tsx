@@ -24,6 +24,38 @@ import type {Props} from './types';
 
 const errorSet = new Set();
 
+function getDisallowedDebugEnvs() {
+  const disallowedDebugEnvs = (window as any)._sandbox_?.config?.disallowedDebugEnvs;
+
+  return Array.isArray(disallowedDebugEnvs) ? disallowedDebugEnvs : [];
+}
+
+function getDebugEnvOptions(data: any) {
+  const envNames: string[] = data?._debugEnvs ?? [];
+  const disallowedDebugEnvs = new Set(getDisallowedDebugEnvs());
+  const debugEnvOptions: { label: string; value: string }[] = [];
+
+  if (!disallowedDebugEnvs.has('prod')) {
+    debugEnvOptions.push({label: '正式环境', value: 'prod'});
+  }
+
+  if (envNames.includes('mock') && !disallowedDebugEnvs.has('mock')) {
+    debugEnvOptions.unshift({label: '测试环境', value: 'mock'});
+  }
+
+  envNames.forEach(name => {
+    if (name !== 'mock' && name !== 'prod' && !disallowedDebugEnvs.has(name)) {
+      debugEnvOptions.push({label: name, value: name});
+    }
+  });
+
+  return debugEnvOptions;
+}
+
+function getDefaultDebugEnv(data: any) {
+  return getDebugEnvOptions(data)[0]?.value ?? 'prod';
+}
+
 export function buildHooks(props: Props) {
   return {
     '@error': (err: Error) => {
@@ -186,22 +218,11 @@ export function buildHooks(props: Props) {
       }
 
       const data = context.component!.params?.data;
-      const envNames: string[] = data?._debugEnvs ?? [];
-      const debugEnvOptions: { label: string; value: string }[] = [{label: '正式环境', value: 'prod'}];
-
-      let defaultEnv = 'prod'
-
-      if (envNames.includes('mock')) {
-        debugEnvOptions.unshift({label: '测试环境', value: 'mock'})
-        defaultEnv = 'mock'
+      const debugEnvOptions = getDebugEnvOptions(data);
+      // 默认使用第一个可用环境
+      if (data) {
+        data._activeDebugEnv = getDefaultDebugEnv(data)
       }
-      envNames.forEach(name => {
-        if (name !== 'mock' && name !== 'prod') {
-          debugEnvOptions.push({label: name, value: name});
-        }
-      });
-      // 默认prod模式
-      data._activeDebugEnv = defaultEnv
 
       return debugEnvOptions;
     },
@@ -209,7 +230,11 @@ export function buildHooks(props: Props) {
     '@setDebugEnv'(ctx: any, option: { label: string; value: string }) {
       const aiComParams = context.component!.params;
       if (!aiComParams?.data) return;
-      aiComParams.data._activeDebugEnv = option?.value ?? 'prod';
+      const debugEnvOptions = getDebugEnvOptions(aiComParams.data);
+      const fallbackEnv = getDefaultDebugEnv(aiComParams.data);
+      const nextEnv = debugEnvOptions.some(({value}) => value === option?.value) ? option.value : fallbackEnv;
+
+      aiComParams.data._activeDebugEnv = nextEnv;
       context.notifyChanged();
     },
 

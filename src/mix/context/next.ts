@@ -24,6 +24,9 @@ export interface LogMessage {
   data: any[];
   timestamp: string;
   id: string;
+  meta?: {
+    bindings?: Record<string, any>;
+  };
   _?: any
 }
 
@@ -461,13 +464,14 @@ class Context {
   }> = new Events();
 
   /** 推送logger打印的日志 */
-  pushLog(method: LogMessage['method'], data: any[]) {
+  pushLog(method: LogMessage['method'], data: any[], meta?: LogMessage['meta']) {
     const state = this.comDebugStateMap;
     const msg: LogMessage = {
       method,
       timestamp: getTimestamp(),
       data,
       id: String(++state.logIdCounter),
+      meta,
     };
     state.logs = [...state.logs, msg];
     this.logEvents.emit('log', msg);

@@ -13,6 +13,11 @@ import { parseFrameSize } from "./utils";
 import css from './index.less';
 import { debugLogs } from '../../../../mix/context/debugLogs';
 import mixContext from '../../../../mix/context';
+import {
+  isLoggerMethod,
+  mergeLoggerBindings,
+  type LoggerBindings,
+} from '../logger';
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
@@ -236,7 +241,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     env.runtime && env._debugTarget !== undefined ? env._debugTarget : undefined;
 
   /** 向 debugLogs 追加一条日志记录（按打印顺序入栈） */
-  const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any }) => {
+  const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any; bindings?: Record<string, any> }) => {
     debugLogs.append(comId, { ...entry, timestamp: Date.now(), mode: runtimeMode });
   };
 
@@ -1046,18 +1051,37 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return DialogRoot
   };
 
+  const createCapturedLogger = (targetLogger: any = {}, bindings: LoggerBindings = {}) => {
+    return new Proxy(targetLogger ?? {}, {
+      get(target, prop: string | symbol) {
+        if (prop === 'child') {
+          return (nextBindings?: LoggerBindings | string) => {
+            const childBindings = mergeLoggerBindings(bindings, nextBindings);
+            const originalChild = typeof target.child === 'function' ? target.child.bind(target) : null;
+            const childLogger = originalChild ? originalChild(nextBindings) : {};
+
+            return createCapturedLogger(childLogger, childBindings);
+          };
+        }
+
+        if (!isLoggerMethod(prop)) {
+          return () => {};
+        }
+
+        const original = typeof target[prop] === 'function' ? target[prop].bind(target) : (() => {});
+
+        return (...args: any[]) => {
+          const result = original(...args);
+          collectDebugLogs({ type: 'logger', method: prop, args, bindings, result });
+          return result;
+        };
+      }
+    });
+  };
+
   const nextLogger = logger({ id: comId, mode: _env.mode })
   // 将 logger 的调用同步收集到 debugLogs（设计态、运行态均收集）
-  const capturedLogger = new Proxy(nextLogger ?? {}, {
-    get(target, prop: string) {
-      const original = typeof target[prop] === 'function' ? target[prop] : (() => {});
-      return (...args: any[]) => {
-        const result = original(...args);
-        collectDebugLogs({ type: 'logger', method: prop, args, result });
-        return result;
-      };
-    }
-  });
+  const capturedLogger = createCapturedLogger(nextLogger);
   /**
    * 浮层类组件在设计态默认展开
    */
@@ -1106,7 +1130,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     useParams,
     logger: capturedLogger,
     makeAutoObservable,
-    /** 供 index.tsx 使用：将 DataSource / spyOn 的调用追加到 debugLogs */
+    /** 供运行时内部追加 logger 日志 */
     _collectDebugLogs: collectDebugLogs,
     PopupVisible,
     useDesignToken,

@@ -57,7 +57,6 @@ const useDependencies = (params: Params) => {
       env,
       data,
       activeEnv,
-      collectDebugLogs: mybricks._collectDebugLogs
     });
     const customDependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks }) || {}
     

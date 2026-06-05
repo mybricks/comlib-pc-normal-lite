@@ -2,12 +2,40 @@ import { getEffectiveLibraries, type EffectiveLibrary } from '../../availableLib
 import { FileSystem } from "../../../utils/ai-code/render/next-runtime/utils";
 import { extractMissingFiles } from "../../../utils/ai-code/render/next-runtime/utils"
 import type { LintMessage } from '../../eslint';
+import type { LogEntry } from '../../context/debugLogs';
+
+type LogListQuery = {
+  page?: number;
+  pageSize?: number;
+  like?: Record<string, string>;
+};
+
+type LogListItem = {
+  id: string;
+  level: string;
+  timestamp: number;
+  mode?: string;
+  runtime?: string;
+  [key: string]: any;
+};
+
+type LogListResult = {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: LogListItem[];
+};
+
+type LogDetail = LogListItem & {
+  args: any[];
+  result?: any;
+};
 
 export interface ProjectConfig {
   getFiles: () => any[];
   getDesignerState?: () => { pages: Array<{ name: string; visible: boolean }>; popups: Array<{ name: string; visible: boolean }>; mode?: string } | undefined;
   getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
-  getLogs?: () => Array<{ type: string; method: string; args: any[]; timestamp: number; mode?: string }> | undefined;
+  getLogs?: () => LogEntry[] | undefined;
   snapshotRuntimeMode?: string;
   getFocusInfo?: string;
   getFileSystem?: () => FileSystem;
@@ -32,28 +60,103 @@ export class Project {
     return errors.length > 0;
   }
 
-  exportLogsToMessage(maxCount = 30, maxArgLength = 50): string {
+  private getCurrentLogs(): LogEntry[] {
     const allLogs = this.config.getLogs?.() ?? [];
-    const filtered = this.snapshotRuntimeMode
+    const logs = this.snapshotRuntimeMode
       ? allLogs.filter((entry) => entry.mode === this.snapshotRuntimeMode)
       : allLogs;
-    const logs = filtered.slice(-maxCount);
-    const truncatedCount = filtered.length - logs.length;
-    if (logs.length === 0) {
-      return `\n## 运行日志\n  （本次载入暂无日志）\n`;
+
+    return logs.filter((entry) => entry.type === 'logger');
+  }
+
+  private getLogFieldValue(entry: LogEntry, field: string): string {
+    if (field === 'runtime') {
+      return String(entry.bindings?.runtime ?? '');
     }
-    const logLines = logs.map((entry, i) => {
-      const argsStr = entry.args.map((a: any) => {
-        let s: string;
-        try { s = JSON.stringify(a); } catch { s = String(a); }
-        return s.length > maxArgLength ? s.slice(0, maxArgLength) + '…' : s;
-      }).join(', ');
-      return `  ${i + 1}. [${entry.type}] ${entry.method}(${argsStr})`;
-    }).join('\n');
-    const truncatedNote = truncatedCount > 0
-      ? `\n  （已省略最早的 ${truncatedCount} 条，仅展示最近 ${maxCount} 条）`
-      : '';
-    return `\n## 运行日志（按顺序）${truncatedNote}\n${logLines}\n`;
+
+    if (field === 'level') {
+      return entry.method;
+    }
+
+    if (entry.bindings && field in entry.bindings) {
+      return String(entry.bindings[field] ?? '');
+    }
+
+    const value = field.split('.').reduce((current: any, key) => {
+      if (key === 'message') {
+        return entry.args;
+      }
+      return current?.[key];
+    }, entry as any);
+
+    if (value === undefined || value === null) {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  getLogList(query: LogListQuery = {}): LogListResult {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const like = query.like ?? {};
+    const logs = this.getCurrentLogs().filter((entry) => {
+      return Object.entries(like).every(([field, keyword]) => {
+        if (!keyword) return true;
+        return this.getLogFieldValue(entry, field).toLowerCase().includes(String(keyword).toLowerCase());
+      });
+    });
+    const start = (page - 1) * pageSize;
+    const items = logs.slice(start, start + pageSize).map((entry) => {
+      const { id, type, method, timestamp, mode, bindings } = entry;
+      const { runtime, ...restBindings } = bindings ?? {};
+
+      return {
+        id,
+        level: method,
+        timestamp,
+        mode,
+        runtime,
+        ...restBindings,
+      };
+    });
+
+    return {
+      total: logs.length,
+      page,
+      pageSize,
+      items,
+    };
+  }
+
+  getLogDetail(id: string): LogDetail | undefined {
+    const entry = this.getCurrentLogs().find((entry) => entry.id === id);
+
+    if (!entry) {
+      return undefined;
+    }
+
+    const { method, bindings, args, result, timestamp, mode } = entry;
+    const { runtime, ...restBindings } = bindings ?? {};
+
+    return {
+      id: entry.id,
+      level: method,
+      timestamp,
+      mode,
+      runtime,
+      ...restBindings,
+      args,
+      result,
+    } as LogDetail;
   }
 
   async exportDesignerToMessage(): Promise<string> {

@@ -31,6 +31,14 @@ const transformData = (data: any[]) => {
   }
 }
 
+const formatBindings = (bindings?: Record<string, any>) => {
+  if (!bindings || !Object.keys(bindings).length) {
+    return '';
+  }
+
+  return `[${Object.entries(bindings).map(([key, value]) => `${key}=${String(value)}`).join(' ')}]`;
+}
+
 export default function ConsoleLogPanel({ componentId, logs }: ConsoleLogPanelProps) {
   const handleClear = useCallback(() => {
     if (componentId) context.clearComLogs();
@@ -54,9 +62,10 @@ export default function ConsoleLogPanel({ componentId, logs }: ConsoleLogPanelPr
           logs={logs.map((log) => {
             const { _, data, method } = log
             const { logData, actionData } = _ ? { logData: data, actionData: [] } : transformData(log.data)
+            const bindingsLabel = formatBindings(log.meta?.bindings);
             return {
               ...log,
-              data: logData,
+              data: bindingsLabel ? [bindingsLabel, ...logData] : logData,
               action: _ ? null : (actionData?.length ? <LogAction method={method} data={logData} action={actionData[0]} componentId={componentId}/> : null)
             }
           })}

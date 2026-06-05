@@ -5,7 +5,7 @@
  *
  * 核心设计：
  * - project 实例在 hooks.beforeRequest 中创建（快照当前 runtimeMode），
- *   每次请求都会重建，确保 exportDesignerToMessage / exportLogsToMessage
+ *   每次请求都会重建，确保 exportDesignerToMessage / getLogList / getLogDetail
  *   读取到请求发起时刻的正确状态。
  * - Designer 方法通过 projectRef.current 访问当前快照的 project 实例。
  */
@@ -554,10 +554,16 @@ export async function registerSandbox(comId: string): Promise<void> {
         return project.exportDesignerToMessage();
       },
 
-      exportLogsToMessage(): string {
+      getLogList(query?: { page?: number; pageSize?: number; like?: Record<string, string> }) {
         const project = projectRef.current;
-        if (!project) return '';
-        return project.exportLogsToMessage();
+        if (!project) return { total: 0, page: query?.page ?? 1, pageSize: query?.pageSize ?? 20, items: [] };
+        return project.getLogList(query);
+      },
+
+      getLogDetail(id: string) {
+        const project = projectRef.current;
+        if (!project) return undefined;
+        return project.getLogDetail(id);
       },
 
       getRuntimeMode(): string | undefined {

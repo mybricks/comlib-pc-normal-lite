@@ -6,12 +6,30 @@ import {StyleProvider} from '@ant-design/cssinjs'
 import {ConfigProvider} from "antd";
 import zhCN from 'antd/locale/zh_CN'
 import context, { config } from './context'
+import {
+  isLoggerMethod,
+  mergeLoggerBindings,
+  type LoggerBindings,
+} from '../utils/ai-code/render/logger'
 
-const SUPPORTED_LOGS = {
-  log: true,
-  info: true,
-  error: true,
-  warn: true,
+function createRuntimeLogger(mode: string, bindings: LoggerBindings = {}) {
+  return new Proxy({}, {
+    get(_, prop: string | symbol) {
+      if (prop === 'child') {
+        return (nextBindings?: LoggerBindings | string) => createRuntimeLogger(mode, mergeLoggerBindings(bindings, nextBindings));
+      }
+
+      if (!isLoggerMethod(prop)) {
+        return () => {};
+      }
+
+      return (...args: any[]) => {
+        if (mode === 'runtime') {
+          context.pushLog(prop, args, { bindings });
+        }
+      };
+    }
+  });
 }
 
 export default genAIRuntime({
@@ -43,24 +61,5 @@ export default genAIRuntime({
       </StyleProvider>
     )
   },
-  logger: ({ id, mode }) => {
-    if (mode === "runtime") {
-      return new Proxy({}, {
-        get(_, prop: string) {
-          return (...args) => {
-            if (SUPPORTED_LOGS[prop]) {
-              context.pushLog(prop as any, args);
-            }
-          }
-        }
-      })
-    } else {
-      return new Proxy({}, {
-        get(_, key) {
-          return () => {}
-          // return console[key] || (() => {})
-        }
-      })
-    }
-  }
+  logger: ({ id, mode }) => createRuntimeLogger(mode)
 })
