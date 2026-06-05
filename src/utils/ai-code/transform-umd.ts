@@ -7,6 +7,7 @@ import loggerPlugin from './plugins/loggerPlugin'
 import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
 import zoneIndexPlugin from './plugins/zoneIndexPlugin'
 import zoneOrderEditablePlugin from './plugins/zoneOrderEditablePlugin'
+import wrapCustomComponentPlugin from './plugins/wrapCustomComponentPlugin'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
@@ -48,7 +49,8 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         loggerPlugin({ fileName }),
         styleAnalysisPlugin(),
         zoneIndexPlugin({ fileName }),
-        zoneOrderEditablePlugin()
+        zoneOrderEditablePlugin(),
+        wrapCustomComponentPlugin({ fileName }),
       ],
       retainLines: true,
     }

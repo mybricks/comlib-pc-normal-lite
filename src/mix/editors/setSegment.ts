@@ -1,10 +1,13 @@
 import context from '../context'
 import { undoRedoManager } from './undoRedo'
 
+/**
+ * 只支持同级拖拽，无法拖到parent外
+ */
 export default function () {
   return {
     '@updateSegment'(ctx: any, type: string, options: any) {
-      console.log('@setSegment', {ctx, type, options})
+      // console.log('@setSegment', {ctx, type, options})
       if (type === 'changeOrder') {
         const { fromEle, toEle, type } = options
 
@@ -33,38 +36,50 @@ export default function () {
           cn: string[]
         }
 
-        // 解析拖拽源元素的位置信息
-        const from: { ele: HTMLElement; loc: Loc; } = {
-          ele: fromEle,
-          loc: JSON.parse(fromEle.dataset.loc),
+        let from
+        let to
+
+        if (fromEle.dataset['customComWrapper']) {
+          from = JSON.parse(fromEle.dataset['customComWrapper'])
+        } else if (fromEle.parentElement.dataset['customComWrapper']) {
+          from = JSON.parse(fromEle.parentElement.dataset['customComWrapper'])
+        } else {
+          const loc = JSON.parse(fromEle.dataset['loc'])
+          from = {
+            fileName: loc.files.jsx,
+            jsx: loc.jsx
+          }
         }
 
-        // 解析拖拽目标元素的位置信息
-        const to: { ele: HTMLElement; loc: Loc; } = {
-          ele: toEle,
-          loc: JSON.parse(toEle.dataset.loc),
+        if (toEle.dataset['customComWrapper']) {
+          to = JSON.parse(toEle.dataset['customComWrapper'])
+        } else if (toEle.parentElement.dataset['customComWrapper']) {
+          to = JSON.parse(toEle.parentElement.dataset['customComWrapper'])
+        } else {
+          const loc = JSON.parse(toEle.dataset['loc'])
+          to = {
+            fileName: loc.files.jsx,
+            jsx: loc.jsx
+          }
         }
 
-        // 获取 JSX 文件路径（以 from 元素为准）
-        const jsxPath = from.loc.files.jsx
+        const { fileName } = from
 
-        if (!jsxPath) return
+        if (!fileName) return
 
         // 从组件参数中查找对应的 JSX 源文件
         const aiComParams = context.component?.params
         const jsxFile = aiComParams?.data?.files?.find(
-          (f: { fileName: string; source: string }) => f.fileName === jsxPath
+          (f: { fileName: string; source: string }) => f.fileName === fileName
         )
         if (!jsxFile) return
 
         // 解码源码字符串
         const source: string = decodeURIComponent(jsxFile.source)
-
-        // 根据 data-loc 中的字符偏移量提取两个 JSX 片段
-        const fromStart = from.loc.jsx.start
-        const fromEnd = from.loc.jsx.end
-        const toStart = to.loc.jsx.start
-        const toEnd = to.loc.jsx.end
+        const fromStart = from.jsx.start
+        const fromEnd = from.jsx.end
+        const toStart = to.jsx.start
+        const toEnd = to.jsx.end
         let newSource
 
         if (type === 'before') {
@@ -103,12 +118,12 @@ export default function () {
         // 通过 undoRedoManager 提交变更，支持撤销/重做
         undoRedoManager.execute({
           execute() {
-            context.updateFile({ fileName: jsxPath, content: newSource, type: undefined })
-            context.saveManualVersion([jsxPath])
+            context.updateFile({ fileName, content: newSource, type: undefined })
+            context.saveManualVersion([fileName])
           },
           undo() {
-            context.updateFile({ fileName: jsxPath, content: source, type: undefined })
-            context.saveManualVersion([jsxPath])
+            context.updateFile({ fileName, content: source, type: undefined })
+            context.saveManualVersion([fileName])
           },
         })
       }

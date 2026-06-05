@@ -40,8 +40,8 @@ const dataCompatible = (props) => {
     }
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 14) {
-      data.version = 14
+    if (!data.version || data.version < 20) {
+      data.version = 20
       console.log('[com:update]', data)
       // 去除重复文件（以 fileName 为唯一键，保留最后出现的条目）
       const fileMap = new Map<string, any>();
