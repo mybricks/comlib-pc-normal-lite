@@ -181,6 +181,18 @@ function observer<P extends object>(Component: React.FC<P>): React.FC<P> {
   return ObserverWrapper;
 }
 
+// 穿透 wrapCustomComponentPlugin 注入的 display:contents wrapper
+function unwrapIfCustomWrapper(el: React.ReactElement): React.ReactElement {
+  if (
+    el.type === 'div' &&
+    (el.props as any)['data-custom-com-wrapper'] !== undefined
+  ) {
+    const child = React.Children.only((el.props as any).children) as React.ReactElement;
+    return child;
+  }
+  return el;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface CreateMyBricksProps {
@@ -685,8 +697,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     } else if (index || path) {
       const routeMatch = getRouteMatch({ index, path }, routerContext.currentPath, routerContext.routeBase)
       if (routeMatch) {
-        const nextElement = React.cloneElement(element, {
-          ['data-loc']: element.props['data-loc'] || '1',
+        // 兼容，做拖拽dom能力，在外层包了一个div，需要这个函数来做判断
+        const actualElement = unwrapIfCustomWrapper(element);
+        const nextElement = React.cloneElement(actualElement, {
+          ['data-loc']: actualElement.props['data-loc'] || '1',
           ['_mybricks_page']: true
         })
 
@@ -870,8 +884,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
     const { ErrorView } = params;
+    let realProps = {}
     const DialogRoot = (props) => {
       if (isDesign() && !props.__mybricks_show) {
+        realProps = props
         return null
       }
       const theme = mixContext.resolveActiveTheme();
@@ -997,6 +1013,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 <ErrorView>
                   <ObservedComponent
                     {...props}
+                    {...realProps}
                     _env={_env}
                     popupNode={container}
                     wrapper={container}
