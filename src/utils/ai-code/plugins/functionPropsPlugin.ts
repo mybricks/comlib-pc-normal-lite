@@ -56,22 +56,22 @@ function shouldTransform(path: any): boolean {
   }
 
   // 情况2：React 函数组件 —— FunctionDeclaration 首字母大写
-  // if (path.type === 'FunctionDeclaration' && path.node.id?.name) {
-  //   return isReactComponentName(path.node.id.name);
-  // }
+  if (path.type === 'FunctionDeclaration' && path.node.id?.name) {
+    return isReactComponentName(path.node.id.name);
+  }
 
   // 情况3：React 函数组件 —— const Xxx = function/箭头函数
-  // if (parent.type === 'VariableDeclarator' && parent.id?.type === 'Identifier') {
-  //   return isReactComponentName(parent.id.name);
-  // }
+  if (parent.type === 'VariableDeclarator' && parent.id?.type === 'Identifier') {
+    return isReactComponentName(parent.id.name);
+  }
 
   // 情况4：export default function Xxx  —— 首字母大写
-  // if (
-  //   parent.type === 'ExportDefaultDeclaration' &&
-  //   path.node.id?.name
-  // ) {
-  //   return isReactComponentName(path.node.id.name);
-  // }
+  if (
+    parent.type === 'ExportDefaultDeclaration' &&
+    path.node.id?.name
+  ) {
+    return isReactComponentName(path.node.id.name);
+  }
 
   return false;
 }
