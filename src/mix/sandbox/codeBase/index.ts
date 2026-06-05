@@ -3,6 +3,7 @@ import { FileSystem } from "../../../utils/ai-code/render/next-runtime/utils";
 import { extractMissingFiles } from "../../../utils/ai-code/render/next-runtime/utils"
 import type { LintMessage } from '../../eslint';
 import type { LogEntry } from '../../context/debugLogs';
+import { formatRuntimeModeLabel, parseRuntimeMode } from '../../../utils/ai-code/runtimeMode';
 
 type LogListQuery = {
   page?: number;
@@ -33,10 +34,10 @@ type LogDetail = LogListItem & {
 
 export interface ProjectConfig {
   getFiles: () => any[];
-  getDesignerState?: () => { pages: Array<{ name: string; visible: boolean }>; popups: Array<{ name: string; visible: boolean }>; mode?: string } | undefined;
+  getDesignerState?: () => { pages: Array<{ name: string; visible: boolean }>; popups: Array<{ name: string; visible: boolean }> } | undefined;
   getErrors?: () => Array<{ message: string; type: string; file?: string }> | undefined;
   getLogs?: () => LogEntry[] | undefined;
-  snapshotRuntimeMode?: string;
+  getRuntimeMode?: () => string | undefined;
   getFocusInfo?: string;
   getFileSystem?: () => FileSystem;
   getLintResults?: () => Promise<LintMessage[]>;
@@ -44,11 +45,9 @@ export interface ProjectConfig {
 
 export class Project {
   private config: ProjectConfig;
-  private snapshotRuntimeMode: string | undefined;
 
   constructor(config: ProjectConfig) {
     this.config = config;
-    this.snapshotRuntimeMode = config.snapshotRuntimeMode;
   }
 
   getFocusInfo(): string {
@@ -62,8 +61,9 @@ export class Project {
 
   private getCurrentLogs(): LogEntry[] {
     const allLogs = this.config.getLogs?.() ?? [];
-    const logs = this.snapshotRuntimeMode
-      ? allLogs.filter((entry) => entry.mode === this.snapshotRuntimeMode)
+    const runtimeMode = this.config.getRuntimeMode?.();
+    const logs = runtimeMode
+      ? allLogs.filter((entry) => entry.mode === runtimeMode)
       : allLogs;
 
     return logs.filter((entry) => entry.type === 'logger');
@@ -177,13 +177,12 @@ export class Project {
 `;
 
     const state = this.config.getDesignerState?.();
-    let mode: string;
-    if (this.snapshotRuntimeMode) {
-      mode = this.snapshotRuntimeMode.endsWith('_edit') ? 'design' : (state?.mode ?? 'design');
-    } else {
-      mode = state?.mode ?? 'design';
-    }
-    const modeLabel = mode === 'design' ? '设计态' : `运行态(${mode.replace(/^.*_runtime_/, '')}环境)`;
+    const runtimeMode = this.config.getRuntimeMode?.();
+    const runtimeModeInfo = parseRuntimeMode(runtimeMode);
+    const modeLabel = formatRuntimeModeLabel(runtimeMode);
+    const dataEnvLine = runtimeModeInfo.viewMode === 'runtime' && runtimeModeInfo.dataEnv
+      ? `数据环境：${runtimeModeInfo.dataEnv}`
+      : '';
 
     const pageRefNames = state?.pages ?? [];
     const popupRefNames = state?.popups ?? [];
@@ -232,6 +231,7 @@ ${zonesList}${unvisibleCount ? `
     const curStatus = `
 ## 当前状态
 状态：${modeLabel}
+${dataEnvLine ? `${dataEnvLine}\n` : ''}
 
 ## 设计态渲染情况
 ${canvasStatus}
@@ -277,7 +277,8 @@ ${missingFilesEntries.map(([file, info], index) => {
 
     return [
       '# 渲染状态',
-      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「运行态」，两种模式下展示的内容不一样',
+      '由于当前在MyBricks设计器中进行搭建和开发，设计器会区分「设计态」和「运行态」，两种模式下展示的内容不一样。',
+      '模式切换由用户自己在页面上方进行切换，如有必要切换来获取信息，可以让用户手动切换一下。',
       designModeKnowledge,
       curStatus,
       lintSection,

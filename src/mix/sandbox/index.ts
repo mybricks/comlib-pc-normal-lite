@@ -4,10 +4,8 @@
  * 实现 plugin-ai 的 Designer + Hooks 接口，通过 window._sandbox_.connectToAI 注册。
  *
  * 核心设计：
- * - project 实例在 hooks.beforeRequest 中创建（快照当前 runtimeMode），
- *   每次请求都会重建，确保 exportDesignerToMessage / getLogList / getLogDetail
- *   读取到请求发起时刻的正确状态。
- * - Designer 方法通过 projectRef.current 访问当前快照的 project 实例。
+ * - project 实例在 hooks.beforeRequest 中创建，每次请求都会重建。
+ * - Designer 方法通过 projectRef.current 访问当前 project 实例，运行模式和画布状态实时读取。
  */
 
 import context, { Version } from '../context';
@@ -169,7 +167,7 @@ function buildProject(comId: string) {
       return errors.concat(aiComParams?.data?._errors || [])
     },
     getLogs: () => debugLogs.get(comId),
-    snapshotRuntimeMode: aiComParams?.data?.runtimeMode,
+    getRuntimeMode: () => context.component?.params?.data?.runtimeMode,
     getLintResults: async () => {
       const messages: any[] = [];
       const files: any[] = aiComParams?.data?.files ?? [];

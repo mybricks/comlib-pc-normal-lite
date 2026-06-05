@@ -13,6 +13,7 @@ import NextRuntime from './next-runtime'
 import { DataSource } from './mybricks/data-source'
 import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
+import { createRuntimeMode } from '../runtimeMode'
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
 export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
@@ -190,7 +191,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     }, [])
 
     // 计算 runtimeMode：唯一标识当前运行模式（设计态 / runtime_mock / runtime_prod）
-    const runtimeMode = env.edit ? `${id}_edit` : `${id}_runtime_${activeEnv}`;
+    const runtimeMode = createRuntimeMode(id, env.edit, activeEnv);
 
     // runtimeMode 变化时：写入 data.runtimeMode，并清除该组件同 runtimeMode 的历史日志
     useEffect(() => {
