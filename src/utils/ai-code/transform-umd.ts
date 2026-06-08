@@ -24,6 +24,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
     }) || []
 
     const options = {
+      filename: fileName,
       presets: [
         [
           "env",
