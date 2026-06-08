@@ -586,7 +586,9 @@ class FileSystem {
       }
     }
 
+    // 文件已存在时，清理旧的正向依赖关系，避免修复路径后 tempFilesMap 残留
     if (entry) {
+      this.cleanupStaleDependencies(filename, entry)
       // 清除错误信息
       entry.errors = {
         runtime: null
@@ -787,6 +789,42 @@ class FileSystem {
         return that.get(currentPath.join('/'), { from: filename })
       }
     })
+  }
+
+  /**
+   * 清理文件更新前的旧正向依赖关系，移除不再引用的 tempFilesMap 条目
+   *
+   * 场景：文件 A 导入了错误路径 ../../foo，tempFilesMap 记录了对应的缺失条目；
+   * 修复为正确路径 ../../../foo 后，旧条目需要被清理，否则 extractMissingFiles
+   * 仍会报出已不存在的"缺失文件"。
+   */
+  private cleanupStaleDependencies(filename: string, fileEntry: FilesMap[string]) {
+    const potentiallyOrphanedTempEntries = new Set<FilesMap[string]>()
+
+    // 从所有旧正向依赖的 dependedBy 中移除当前文件
+    fileEntry.dependencies.forEach((depFilename) => {
+      const depEntry = this.filesMap[depFilename] || this.tempFilesMap[depFilename]
+      if (depEntry) {
+        depEntry.dependedBy.delete(filename)
+        if (this.tempFilesMap[depFilename]) {
+          potentiallyOrphanedTempEntries.add(depEntry)
+        }
+      }
+    })
+
+    // 清空正向依赖，后续 loadModule 会重建
+    fileEntry.dependencies.clear()
+
+    // 删除已无依赖者的 tempFilesMap 条目（同一 tempEntry 可能存储在多个 key 下）
+    for (const tempEntry of potentiallyOrphanedTempEntries) {
+      if (tempEntry.dependedBy.size === 0) {
+        for (const [key, entry] of Object.entries(this.tempFilesMap)) {
+          if (entry === tempEntry) {
+            Reflect.deleteProperty(this.tempFilesMap, key)
+          }
+        }
+      }
+    }
   }
 
   /** 
