@@ -23,6 +23,69 @@ import { isComRefCall, isPopupRefCall } from './utils/comRef';
 const WRAPPER_MARKER = 'data-custom-com-wrapper';
 
 /**
+ * 判断当前 path 是否是 .map() 回调函数的【直接】返回节点。
+ *
+ * 只检查最近一层函数是否是 .map() 的回调，
+ * 中间如果隔了另一个 React.createElement（即嵌套 JSX 元素），立即停止。
+ * 这样保证内部子元素（如 map 返回的 div 内部的 div）不会被误标。
+ *
+ * @example
+ * // ✅ 返回 true：<MyComp /> 是 .map() 回调的直接返回值
+ * //
+ * // JSX 写法：
+ * //   items.map(item => <MyComp key={item.id} />)
+ * //
+ * // 经 JSX transform 后等价于：
+ * //   items.map(item => React.createElement(MyComp, { key: item.id }))
+ * //                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ * //                      此节点的 isInsideMapCallback() === true
+ *
+ * @example
+ * // ❌ 返回 false：<Inner /> 不是 .map() 回调的直接返回值，中间隔了 <div>
+ * //
+ * // JSX 写法：
+ * //   items.map(item => (
+ * //     <div key={item.id}>
+ * //       <Inner />          ← 不应被标记为 isMap
+ * //     </div>
+ * //   ))
+ * //
+ * // 经 JSX transform 后等价于：
+ * //   items.map(item =>
+ * //     React.createElement('div', { key: item.id },
+ * //       React.createElement(Inner, null)   ← isInsideMapCallback() === false
+ * //     )                                       （因为向上遇到了外层 createElement 就停止）
+ * //   )
+ */
+export function isInsideMapCallback(path: any): boolean {
+  let cur = path.parentPath;
+  while (cur) {
+    const { node } = cur;
+
+    // 遇到函数节点，检查它的父调用是否是 .map()
+    if (
+      node.type === 'ArrowFunctionExpression' ||
+      node.type === 'FunctionExpression'
+    ) {
+      const parentCall = cur.parentPath?.node;
+      return (
+        parentCall?.type === 'CallExpression' &&
+        parentCall.callee?.type === 'MemberExpression' &&
+        parentCall.callee.property?.name === 'map'
+      );
+    }
+
+    // 遇到另一个 React.createElement 调用（即中间隔了一层 JSX 元素），停止向上
+    if (isReactCreateElement(node)) {
+      return false;
+    }
+
+    cur = cur.parentPath;
+  }
+  return false;
+}
+
+/**
  * 判断一个 CallExpression 是否是 React.createElement 调用
  */
 function isReactCreateElement(node: any): boolean {
@@ -55,8 +118,17 @@ function isWrapperDiv(node: any): boolean {
  * 构造 wrapper div 的 AST 节点：
  *   React.createElement('div', { 'data-custom-com-wrapper': '1', style: { display: 'contents' } }, child)
  */
-function buildWrapperElement(t: any, child: any, fileName: string): any {
-  const markerValue = JSON.stringify({ fileName, jsx: { start: child.start, end: child.end } });
+function buildWrapperElement(t: any, child: any, params: { fileName: string, isMap: boolean }): any {
+  const { fileName, isMap } = params
+  const markerValue = JSON.stringify({
+    fileName, 
+    jsx: { start: child.start, end: child.end },
+    isMap,
+    codeLine: {
+      start: child.loc.start.line,
+      end: child.loc.end.line
+    },
+  });
   const propsObj = t.objectExpression([
     t.objectProperty(
       t.stringLiteral(WRAPPER_MARKER),
@@ -155,7 +227,8 @@ export default function wrapCustomComponentPlugin({ fileName }) {
               if (isWrapperDiv(parentNode)) return;
 
               // 包裹
-              const wrapper = buildWrapperElement(t, node, fileName);
+              const isMap = isInsideMapCallback(path);
+              const wrapper = buildWrapperElement(t, node, {fileName, isMap});
               path.replaceWith(wrapper);
 
               // replaceWith 之后跳过新节点，避免无限递归

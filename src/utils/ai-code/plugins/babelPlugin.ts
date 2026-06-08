@@ -17,6 +17,44 @@ import {
   extractRefFromVariableDeclarator,
   extractRefFromExportDefault,
 } from "./utils";
+import { isInsideMapCallback } from './wrapCustomComponentPlugin'
+
+/**
+ * 从 JSXElement 的 path 向上找到最近的 `.map()` CallExpression，
+ * 返回该 CallExpression 的代码行范围；找不到则返回 null。
+ *
+ * 注意：此处操作的是 JSX AST（babelPlugin 在 JSX transform 之前运行），
+ * 因此向上找的是原始 ArrowFunctionExpression / FunctionExpression 节点的父级。
+ */
+function getMapCallLoc(path: any): { start: number; end: number } | null {
+  let cur = path.parentPath;
+  while (cur) {
+    const { node } = cur;
+    if (
+      node.type === 'ArrowFunctionExpression' ||
+      node.type === 'FunctionExpression'
+    ) {
+      const parentCall = cur.parentPath?.node;
+      if (
+        parentCall?.type === 'CallExpression' &&
+        parentCall.callee?.type === 'MemberExpression' &&
+        parentCall.callee.property?.name === 'map' &&
+        parentCall.loc
+      ) {
+        return {
+          start: parentCall.loc.start.line,
+          end: parentCall.loc.end.line,
+        };
+      }
+      return null;
+    }
+    if (node.type === 'JSXElement') {
+      return null; // 中间隔了父级 JSX，不是 map 直接子节点
+    }
+    cur = cur.parentPath;
+  }
+  return null;
+}
 
 /** 从文件路径派生组件名：folder/index.jsx → folder 名；直接文件 → 文件名（去扩展名） */
 function deriveNameFromFilePath(filePath?: string): string {
@@ -338,6 +376,15 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               if (zoneType !== "page") {
                 pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
               }
+              
+              if (isInsideMapCallback(path)) {
+                pushDataAttr(node.openingElement.attributes, "data-zone-isMap", "true");
+                const mapCallLoc = getMapCallLoc(path);
+                if (mapCallLoc) {
+                  dataLocValueObject.mapCall = mapCallLoc;
+                }
+              }
+
               pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
 
               let foundDeclaratorPath: any = null;
