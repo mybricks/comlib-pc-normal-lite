@@ -268,6 +268,12 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                   const figmaPropsPayload = extractFigmaProps(node, fullComponentName || tagName);
                   pushDataAttr(node.openingElement.attributes, "data-figma-props", JSON.stringify(figmaPropsPayload));
                 }
+                // 识别第三方图标组件：包名含 icon(s) 或组件名以图标风格后缀结尾
+                const isIconPkg = /icons?$/i.test(source);
+                const isIconName = /(?:Line|Fill|Filled|Outlined|Solid|Outline|TwoTone|Sharp|Icon)$/.test(tagName);
+                if (isIconPkg || isIconName) {
+                  pushDataAttr(node.openingElement.attributes, "data-zone-icon", tagName);
+                }
               }
   
               if (cnList.length > 0) {
@@ -417,9 +423,51 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
           }
         },
         Program: {
-          exit() {
+          exit(path) {
             // 解析/遍历结束：整棵 AST 已访问完，importRecord 等已收集完毕
-            // console.log("[@importRelyMap]", { importRelyMap })
+            // 收集来自图标包的所有导入（包名含 icon/icons），按 source 分组
+            const iconImportsBySource = new Map<string, string[]>()
+            for (const [localName, source] of importRelyMap.entries()) {
+              if (typeof source !== 'string' || !source) continue
+              if (cssModuleNames.has(localName)) continue
+              if (/icons?$/i.test(source)) {
+                let names = iconImportsBySource.get(source)
+                if (!names) { names = []; iconImportsBySource.set(source, names) }
+                names.push(localName)
+              }
+            }
+            // 为每个图标包注入：window.__MB_REGISTER_ICONS__ && window.__MB_REGISTER_ICONS__(source, { Icon1, Icon2 })
+            for (const [source, names] of iconImportsBySource.entries()) {
+              if (!names.length) continue
+              const windowId = { type: 'Identifier', name: 'window' }
+              const registerProp = { type: 'Identifier', name: '__MB_REGISTER_ICONS__' }
+              const callee = { type: 'MemberExpression', object: windowId, property: registerProp, computed: false }
+              path.node.body.push({
+                type: 'ExpressionStatement',
+                expression: {
+                  type: 'LogicalExpression',
+                  operator: '&&',
+                  left: { type: 'MemberExpression', object: { type: 'Identifier', name: 'window' }, property: { type: 'Identifier', name: '__MB_REGISTER_ICONS__' }, computed: false },
+                  right: {
+                    type: 'CallExpression',
+                    callee,
+                    arguments: [
+                      { type: 'StringLiteral', value: source },
+                      {
+                        type: 'ObjectExpression',
+                        properties: names.map(name => ({
+                          type: 'ObjectProperty',
+                          key: { type: 'Identifier', name },
+                          value: { type: 'Identifier', name },
+                          shorthand: true,
+                          computed: false,
+                        })),
+                      },
+                    ],
+                  },
+                },
+              } as any)
+            }
           }
         }
       }

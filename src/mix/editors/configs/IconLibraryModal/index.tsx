@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from 'antd';
 import { loadIconLibraries, deleteIconLibrary, type DumpIconsLibrary, type IconPanel } from './utils';
-import { applyRawSvg } from '../../styleProxy';
+import { applyRawSvg, applyIconWithSvg } from '../../styleProxy';
 import context from '../../../context';
 import AIInputBar from './AIInputBar';
 import EmptyState from './EmptyState';
@@ -15,6 +15,7 @@ export default function IconLibraryModal({
   params,
   comId,
   mode = 'replace',
+  applyFn = applyRawSvg,
   onClose,
 }: {
   visible: boolean;
@@ -22,6 +23,8 @@ export default function IconLibraryModal({
   comId: string;
   /** replace: 点击选中后可替换 SVG 或 AI 修改（默认）；manage: 图标库设置入口，点击选中后只可 AI 修改 */
   mode?: 'replace' | 'manage';
+  /** 自定义替换函数，默认为 applyRawSvg；图标组件编辑器传入 applyIconWithSvg */
+  applyFn?: (params: any, svg: string) => void;
   onClose: () => void;
 }) {
   const [iconPanel, setIconPanel] = useState<IconPanel>('overview');
@@ -243,7 +246,7 @@ export default function IconLibraryModal({
                         className={css.iconItemApplyBtn}
                         onClick={e => {
                           e.stopPropagation();
-                          applyRawSvg(params, icon.svg);
+                          applyFn(params, icon.svg);
                           onClose();
                         }}
                       >

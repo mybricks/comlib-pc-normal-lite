@@ -6,9 +6,10 @@ import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
-import { genStyleValue, genResizer } from './styleProxy';
-import { buildImgEditorItems } from './configs/imgEditor';
-import { buildSvgEditorItems } from './configs/svgEditor';
+import { genStyleValue, genResizer, genSvgResizer } from './styleProxy';
+import { buildImgEditorItems } from './configs/ImgEditor';
+import { buildSvgEditorItems } from './configs/SvgEditor';
+import { buildIconEditorItems } from './configs/IconEditor';
 import { aiSvgIcon5 } from './icons/ai-svg-5';
 import { aiImgIcon } from './icons/ai-img';
 import { AiEditPanel } from './components/AiEditPanel';
@@ -64,6 +65,16 @@ export default function (props: Props, actions: Actions) {
       style: [{items: []}],
     },
     '[data-library-source]': {},
+    '[data-zone-icon]': {
+      '@ai': {
+        title: aiSvgIcon5,
+        desc: '通过AI创作图标',
+        render(_data, {close}) {
+          return <AiEditPanel close={close} mode="SVG" />;
+        }
+      },
+      items: buildIconEditorItems(comId),
+    },
     '[class]': {},
     'img': {
       '@ai': {
@@ -83,6 +94,13 @@ export default function (props: Props, actions: Actions) {
           return <AiEditPanel close={close} mode="SVG" />;
         }
       },
+      style: [
+        {
+          items: [
+            genSvgResizer(),
+          ],
+        },
+      ],
       items: buildSvgEditorItems(comId),
     },
     ...getDataZoneTextEditable(),

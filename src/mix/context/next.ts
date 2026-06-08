@@ -120,6 +120,20 @@ class Context {
   /** 临时的，目前只有themes需要用到 */
   projectConfig: { themes?: any[]; } = {}
 
+  /** 第三方图标组件注册表：source → (iconName → Component) */
+  iconRegistry: Map<string, Map<string, any>> = new Map()
+
+  registerIcons(source: string, icons: Record<string, any>): void {
+    let pkg = this.iconRegistry.get(source)
+    if (!pkg) {
+      pkg = new Map()
+      this.iconRegistry.set(source, pkg)
+    }
+    for (const [name, comp] of Object.entries(icons)) {
+      if (comp != null) pkg.set(name, comp)
+    }
+  }
+
   /**
    * 解析组件实际应使用的主题。
    * 若组件未手动修改过主题（data._themesModified 为假），且项目配置了主题，则取项目主题第一个；

@@ -109,6 +109,7 @@ export default (props: any) => {
   const [render, setRender] = useState(false)
 
   useLayoutEffect(() => {
+    ;(window as any).__MB_REGISTER_ICONS__ = context.registerIcons.bind(context)
     const events = context.component!.events
     const cancelListenDebugTarget = events.on('debugTarget', setDebugTarget);
     // [TODO] 这类文件监听后续整理下
@@ -133,6 +134,7 @@ export default (props: any) => {
     return () => {
       cancelListenDebugTarget();
       cancelListenFileChange();
+      delete (window as any).__MB_REGISTER_ICONS__
     }
   }, [])
 

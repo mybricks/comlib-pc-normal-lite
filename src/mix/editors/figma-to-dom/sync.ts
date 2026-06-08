@@ -1,7 +1,7 @@
 import context from '../../context';
 import { parseLess, stringifyLess } from '../../utils/transform/less';
 import { convertHyphenToCamel } from '../../../utils/string';
-import type { FigmaImportItem } from '../types';
+import type { FigmaImportItem, FigmaComponentPatch } from '../types';
 import { undoRedoManager } from '../undoRedo';
 const MB_TAG_RE = /\[mb:([^\]]+)\]/i;
 const FIGMA_SYNC_DIMENSION_DEBUG_FLAG = '__MB_FIGMA_SYNC_DIMENSION_DEBUG__';
@@ -859,6 +859,20 @@ function pickBestCandidate(
   // Priority 1: DOM computed live baseline
   const domSnap = liveBaseline?._domComputed?.[selector];
   if (domSnap) {
+    // 稳定守卫：若当前 DOM 状态已与某个候选匹配，说明上次同步结果仍有效，
+    // 不应再选"另一个不同的候选"写入，否则会导致多次点击来回切换。
+    const alreadyMatchedByDom = group.some((ri) =>
+      !Object.entries(ri.item.value).some(([cssKey, figmaValue]) => {
+        const camelKey = convertHyphenToCamel(cssKey);
+        const snapVal = domSnap[camelKey];
+        if (snapVal === undefined) return false;
+        return !valuesEqualForSync(camelKey, figmaValue, snapVal);
+      })
+    );
+    if (alreadyMatchedByDom) {
+      return null;
+    }
+
     for (const ri of group) {
       const differs = Object.entries(ri.item.value).some(([cssKey, figmaValue]) => {
         const camelKey = convertHyphenToCamel(cssKey);
@@ -911,6 +925,18 @@ function pickBestCandidate(
     );
     if (liveBaselineSelectorKey) {
       const liveBaselineSnap = liveBaselineFileObj[liveBaselineSelectorKey];
+      // 稳定守卫：若当前 Less 状态已与某个候选匹配，说明上次同步结果仍有效，
+      // 不应再选"另一个不同的候选"写入，否则会导致多次点击来回切换。
+      const alreadyMatchedByLess = group.some((ri) =>
+        !Object.entries(ri.item.value).some(([cssKey, figmaValue]) => {
+          const camelKey = convertHyphenToCamel(cssKey);
+          return !valuesEqualForSync(camelKey, figmaValue, liveBaselineSnap[camelKey]);
+        })
+      );
+      if (alreadyMatchedByLess) {
+        return null;
+      }
+
       for (const ri of group) {
         const differs = Object.entries(ri.item.value).some(([cssKey, figmaValue]) => {
           const camelKey = convertHyphenToCamel(cssKey);
@@ -950,18 +976,26 @@ function pickBestCandidate(
   return null;
 }
 
-/** 从 Figma JSON（含 selectors）同步样式到组件各 less 文件，只同步有差异的部分 */
-export function syncStylesFromFigmaJson(
+type SyncFiles = Array<{ fileName: string; source: string }>;
+type StyleChangesResult = {
+  current: SyncFiles;
+  previous: SyncFiles;
+  updateFiles: Set<string>;
+  actualChangedCount: number;
+};
+
+/** 从 Figma JSON（含 selectors）收集样式变更，只收集有差异的部分，不直接写入历史 */
+function collectStyleChanges(
   comId: string,
   figmaItems: FigmaImportItem[],
   options?: { rootEl?: Element | null }
-): number {
+): StyleChangesResult {
   const aiComParams = context.component?.params;
   if (!aiComParams?.data) {
-    console.warn('[figma-sync][style] abort-no-aiComParams', { comId });
-    return 0;
+    return { current: [], previous: [], updateFiles: new Set(), actualChangedCount: 0 };
   }
   const files: Array<{ fileName: string; source: string }> = aiComParams.data.files || [];
+
   // 同步时实时采样当前 less + DOM computed 作为参考快照，不再使用持久化快照
   const liveBaseline = buildLiveBaseline(files, options?.rootEl ?? null);
 
@@ -1345,36 +1379,477 @@ export function syncStylesFromFigmaJson(
         fileName: targetFileName,
         source: cssStr
       })
-      // context.updateFile(comId, { fileName: targetFileName, content: cssStr, type: undefined });
       anyChange = true;
-      updateFiles.add(targetFileName)
+      updateFiles.add(targetFileName);
     }
   });
 
-  if (anyChange) {
+  return { current, previous, updateFiles, actualChangedCount };
+}
+
+// ─── 以下内容来自原 sync-props.ts ────────────────────────────────────────────
+
+function decodeSource(v?: string): string {
+  if (!v) return '';
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function encodeSource(v: string): string {
+  return encodeURIComponent(v);
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 从 left（`<` 的位置）向右扫描，跳过 JSX 表达式 `{…}` / `(…)` 内部的 `>` 字符，
+ * 返回真正的开标签结束符 `>` 的位置（含自闭 `/>` 的 `>`）。
+ * 遇到字符串字面量（`'...'` / `"..."` / `` `...` ``）同样跳过。
+ */
+function findTagClose(src: string, left: number): number {
+  let i = left;
+  let depth = 0; // { 深度
+  let parenDepth = 0; // ( 深度
+  let inString: string | null = null;
+  while (i < src.length) {
+    const ch = src[i];
+    if (inString) {
+      if (ch === '\\') {
+        i += 2;
+        continue;
+      }
+      if (ch === inString) inString = null;
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inString = ch;
+      i++;
+      continue;
+    }
+    if (ch === '{') { depth++; i++; continue; }
+    if (ch === '}') { depth--; i++; continue; }
+    if (ch === '(') { parenDepth++; i++; continue; }
+    if (ch === ')') { parenDepth--; i++; continue; }
+    if (ch === '>' && depth === 0 && parenDepth === 0) {
+      return i;
+    }
+    i++;
+  }
+  return -1;
+}
+
+function toJsonString(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return '';
+  }
+}
+
+function safeParseJson(v: string): any | null {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
+type SyncLocHint = {
+  fileJsx?: string;
+  jsxStart?: number;
+  jsxEnd?: number;
+  lineStart?: number;
+};
+
+function normalizePathLike(v: string): string {
+  return String(v || '').replace(/\\/g, '/').replace(/^\.\//, '').trim();
+}
+
+function parseSyncLocHint(syncId?: string): SyncLocHint | null {
+  if (!syncId) return null;
+  const p = safeParseJson(syncId);
+  if (!p || typeof p !== 'object') return null;
+  const fileJsx = normalizePathLike(String(p?.files?.jsx || ''));
+  const jsxStart = Number(p?.jsx?.start);
+  const jsxEnd = Number(p?.jsx?.end);
+  const lineStart = Number(p?.codeLine?.start);
+  return {
+    fileJsx: fileJsx || undefined,
+    jsxStart: Number.isFinite(jsxStart) ? jsxStart : undefined,
+    jsxEnd: Number.isFinite(jsxEnd) ? jsxEnd : undefined,
+    lineStart: Number.isFinite(lineStart) ? lineStart : undefined,
+  };
+}
+
+function getPatchLocMeta(patch: FigmaComponentPatch): SyncLocHint | null {
+  const m = patch.meta || {};
+  const fileJsx = normalizePathLike(String(m.fileJsx || ''));
+  const jsxStart = Number(m.jsxStart);
+  const jsxEnd = Number(m.jsxEnd);
+  const lineStart = Number(m.codeLineStart);
+  const hasExplicit =
+    !!fileJsx || Number.isFinite(jsxStart) || Number.isFinite(jsxEnd) || Number.isFinite(lineStart);
+  if (hasExplicit) {
+    return {
+      fileJsx: fileJsx || undefined,
+      jsxStart: Number.isFinite(jsxStart) ? jsxStart : undefined,
+      jsxEnd: Number.isFinite(jsxEnd) ? jsxEnd : undefined,
+      lineStart: Number.isFinite(lineStart) ? lineStart : undefined,
+    };
+  }
+  const syncId = m.syncId ? String(m.syncId) : '';
+  return parseSyncLocHint(syncId);
+}
+
+function parseCnFromSyncId(syncId?: string): string[] {
+  if (!syncId) return [];
+  const p = safeParseJson(syncId);
+  if (!p || !Array.isArray(p.cn)) return [];
+  return p.cn.map((x: unknown) => String(x)).filter(Boolean);
+}
+
+/**
+ * 校验 patch 的 cn 与目标标签的 className/cn 是否匹配。
+ * 仅当 patch 携带 cn 信息时生效；没有 cn 的 patch 不做额外限制。
+ */
+function matchPatchCnToAttrs(cnList: string[], attrs: string): boolean {
+  if (!cnList.length) return true;
+  // 从 data-zone-classnames 属性读取 cn 列表
+  const zoneMatch = attrs.match(/data-zone-classnames="([^"]*)"/);
+  if (zoneMatch) {
+    const attrCns = zoneMatch[1].split(/\s+/).filter(Boolean);
+    return cnList.some((c) => attrCns.includes(c));
+  }
+  // 字符串字面量 className（如 className="btn reset"）
+  const classStrMatch =
+    attrs.match(/className="([^"]*)"/) ||
+    attrs.match(/className='([^']*)'/);
+  if (classStrMatch) {
+    return cnList.some((c) => classStrMatch[1].includes(c));
+  }
+  // JSX 表达式 className（如 className={styles.resetBtn} / className={css.resetBtn} /
+  // className={classnames(css.resetBtn, ...)}）：扫描整个表达式里是否出现 `.cnValue`
+  const classJsxMatch = attrs.match(/className=(\{[^}]+\})/);
+  if (classJsxMatch) {
+    const expr = classJsxMatch[1];
+    return cnList.some((c) => new RegExp(`\\.${c}\\b`).test(expr));
+  }
+  return false;
+}
+
+function escapeAttrString(v: string): string {
+  return String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function formatJsxAttrValue(v: string | boolean | number): string {
+  if (typeof v === 'boolean') return `{${v ? 'true' : 'false'}}`;
+  if (typeof v === 'number') return `{${v}}`;
+  return `"${escapeAttrString(v)}"`;
+}
+
+function matchTagComponent(tagName: string, component: string): boolean {
+  if (!tagName || !component) return false;
+  if (tagName === component) return true;
+  if (tagName.startsWith(`${component}.`)) return true;
+  return false;
+}
+
+const COMPONENT_MANAGED_PROPS: Record<string, string[]> = {
+  Input: ['size', 'addonBefore', 'addonAfter', 'placeholder', 'prefix', 'suffix', 'allowClear', 'showCount', 'disabled', 'bordered'],
+  Button: ['size', 'type', 'shape', 'danger', 'ghost', 'loading', 'disabled'],
+  Alert: ['type', 'message', 'description', 'showIcon', 'closable', 'banner'],
+  Tag: ['color', 'closable', 'bordered'],
+};
+
+function getManagedPropsByComponent(component: string): string[] {
+  return COMPONENT_MANAGED_PROPS[component] || [];
+}
+
+function normalizePatchProps(
+  component: string,
+  props: Record<string, string | boolean | number>
+): Record<string, string | boolean | number | undefined> {
+  const next: Record<string, string | boolean | number | undefined> = Object.assign({}, props || {});
+  if (component === 'Button') {
+    if (next.type === 'secondary') {
+      next.type = undefined;
+    }
+  }
+  return next;
+}
+
+function upsertJsxProp(attrs: string, prop: string, value: string | boolean | number): string {
+  const valueExpr = formatJsxAttrValue(value);
+  const assignRe = new RegExp(`(\\s${escapeRegExp(prop)}\\s*=\\s*)(\\{[^}]*\\}|"[^"]*"|'[^']*')`);
+  if (assignRe.test(attrs)) {
+    return attrs.replace(assignRe, `$1${valueExpr}`);
+  }
+  const boolOnlyRe = new RegExp(`\\s${escapeRegExp(prop)}(?=\\s|$)`);
+  if (boolOnlyRe.test(attrs)) {
+    return attrs.replace(boolOnlyRe, ` ${prop}=${valueExpr}`);
+  }
+  return `${attrs} ${prop}=${valueExpr}`;
+}
+
+function removeJsxProp(attrs: string, prop: string): string {
+  const assignRe = new RegExp(`\\s${escapeRegExp(prop)}\\s*=\\s*(\\{[^}]*\\}|"[^"]*"|'[^']*')`, 'g');
+  const boolOnlyRe = new RegExp(`\\s${escapeRegExp(prop)}(?=\\s|$)`, 'g');
+  return attrs.replace(assignRe, '').replace(boolOnlyRe, '');
+}
+
+function replaceDataFigmaPropsAttr(attrs: string, json: string): string {
+  if (/data-figma-props=\{`([^`]*)`\}/.test(attrs)) {
+    return attrs.replace(
+      /data-figma-props=\{`([^`]*)`\}/,
+      `data-figma-props={\`${json}\`}`
+    );
+  }
+  if (/data-figma-props="([^"]*)"/.test(attrs)) {
+    return attrs.replace(
+      /data-figma-props="([^"]*)"/,
+      `data-figma-props="${json.replace(/"/g, '&quot;')}"`
+    );
+  }
+  return attrs.replace(
+    /data-figma-props='([^']*)'/,
+    `data-figma-props='${json.replace(/'/g, "\\'")}'`
+  );
+}
+
+function applyPatchToJsxAttrs(
+  attrs: string,
+  patch: FigmaComponentPatch,
+  normalizedProps: Record<string, string | boolean | number | undefined>
+): { nextAttrs: string; changed: boolean } {
+  const slashMatch = attrs.match(/\s*\/\s*$/);
+  const trailingSlash = slashMatch ? slashMatch[0] : '';
+  let next = trailingSlash ? attrs.slice(0, attrs.length - trailingSlash.length) : attrs;
+  const before = attrs;
+  const incomingProps = normalizedProps || {};
+  const managedProps = getManagedPropsByComponent(patch.component);
+
+  managedProps.forEach((k) => {
+    const v = Object.prototype.hasOwnProperty.call(incomingProps, k) ? incomingProps[k] : undefined;
+    if (v === undefined) {
+      if (!Object.prototype.hasOwnProperty.call(incomingProps, k)) {
+        next = removeJsxProp(next, k);
+      }
+      return;
+    }
+    next = upsertJsxProp(next, k, v as string | boolean | number);
+  });
+
+  Object.entries(incomingProps).forEach(([k, v]) => {
+    if (k === 'children') return;
+    if (v === undefined || v === null) return;
+    if (managedProps.includes(k)) return;
+    next = upsertJsxProp(next, k, v as string | boolean | number);
+  });
+
+  next = next + trailingSlash;
+  return { nextAttrs: next, changed: next !== before };
+}
+
+function applyPatchToSource(
+  source: string,
+  patch: FigmaComponentPatch,
+  currentFile?: string
+): { nextSource: string; changed: boolean } {
+  const targetSyncId = patch.meta?.syncId ? String(patch.meta.syncId) : '';
+  const syncLocHint = getPatchLocMeta(patch);
+  const managedProps = getManagedPropsByComponent(patch.component);
+  const normalizedProps = normalizePatchProps(patch.component, patch.props || {});
+  const cnList = parseCnFromSyncId(targetSyncId);
+  if (syncLocHint?.fileJsx && currentFile) {
+    const cur = normalizePathLike(currentFile);
+    if (cur !== syncLocHint.fileJsx) {
+      return { nextSource: source, changed: false };
+    }
+  }
+  if (!syncLocHint || typeof syncLocHint?.jsxStart !== 'number') {
+    return { nextSource: source, changed: false };
+  }
+  const start = Math.max(0, syncLocHint.jsxStart);
+  const endHint = Math.max(start, syncLocHint.jsxEnd ?? start);
+  let left = source.lastIndexOf('<', start);
+  if (start < source.length && source[start] === '<') {
+    left = start;
+  }
+  if (left < 0) {
+    return { nextSource: source, changed: false };
+  }
+  const right = findTagClose(source, left);
+  if (right < 0) {
+    return { nextSource: source, changed: false };
+  }
+  const full = source.slice(left, right + 1);
+  const m = full.match(/^<([A-Za-z][\w.]*)\b([\s\S]*)>$/);
+  if (!m) {
+    return { nextSource: source, changed: false };
+  }
+  const tagName = m[1];
+  const attrs = m[2] || '';
+  if (!matchTagComponent(tagName, patch.component)) {
+    return { nextSource: source, changed: false };
+  }
+  if (cnList.length && !matchPatchCnToAttrs(cnList, attrs)) {
+    return { nextSource: source, changed: false };
+  }
+
+  let nextAttrs = attrs;
+  const dataAttrMatch =
+    attrs.match(/data-figma-props=\{`([^`]*)`\}/) ||
+    attrs.match(/data-figma-props="([^"]*)"/) ||
+    attrs.match(/data-figma-props='([^']*)'/);
+  if (dataAttrMatch) {
+    const raw = dataAttrMatch[1];
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+    if (parsed && typeof parsed === 'object') {
+      const oldJson = toJsonString(parsed);
+      const nextMetaProps: Record<string, unknown> = Object.assign({}, parsed.props || {});
+      managedProps.forEach((k) => {
+        delete nextMetaProps[k];
+      });
+      Object.entries(normalizedProps).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) {
+          nextMetaProps[k] = v;
+        }
+      });
+      parsed.props = nextMetaProps;
+      const newJson = toJsonString(parsed);
+      if (newJson && newJson !== oldJson) {
+        nextAttrs = replaceDataFigmaPropsAttr(nextAttrs, newJson);
+      }
+    }
+  }
+  const jsxAttrState = applyPatchToJsxAttrs(nextAttrs, patch, normalizedProps);
+  if (!jsxAttrState.changed && nextAttrs === attrs) {
+    return { nextSource: source, changed: false };
+  }
+  if (jsxAttrState.changed) {
+    nextAttrs = jsxAttrState.nextAttrs;
+  }
+  const replaced = `<${tagName}${nextAttrs}>`;
+  const nextSource = source.slice(0, left) + replaced + source.slice(right + 1);
+  return { nextSource, changed: nextSource !== source };
+}
+
+type PropsChangesResult = {
+  current: SyncFiles;
+  previous: SyncFiles;
+  updatedFiles: Set<string>;
+  changedCount: number;
+};
+
+/** 收集 JSX props 变更，不直接写入历史 */
+function collectPropsChanges(
+  comId: string,
+  patches: FigmaComponentPatch[]
+): PropsChangesResult {
+  if (!Array.isArray(patches) || patches.length === 0) {
+    return { current: [], previous: [], updatedFiles: new Set(), changedCount: 0 };
+  }
+
+  const aiComParams = context.component?.params;
+  if (!aiComParams?.data?.files) {
+    return { current: [], previous: [], updatedFiles: new Set(), changedCount: 0 };
+  }
+  const files: Array<{ fileName: string; source?: string }> = aiComParams.data.files;
+  const jsxFiles = files.filter((f) => /\.(jsx|tsx)$/i.test(f.fileName) && !!f.source);
+
+  if (!jsxFiles.length) {
+    return { current: [], previous: [], updatedFiles: new Set(), changedCount: 0 };
+  }
+
+  // 预检：如果某个 patch 的 fileJsx 目标文件不在 jsxFiles 中（无 source），
+  // 则清除其 fileJsx 限制，让 patch 尝试所有文件——由 jsxStart 位置 + cn 匹配兜底，防止误写。
+  const jsxFileNameSet = new Set(jsxFiles.map((f) => normalizePathLike(f.fileName)));
+  const resolvedPatches: FigmaComponentPatch[] = patches.map((patch) => {
+    if (!patch.meta?.fileJsx) return patch;
+    const normalized = normalizePathLike(patch.meta.fileJsx);
+    if (jsxFileNameSet.has(normalized)) return patch;
+    return { ...patch, meta: { ...patch.meta, fileJsx: undefined } };
+  });
+
+  let changedCount = 0;
+  const updatedFiles = new Set<string>();
+
+  const current: SyncFiles = [];
+  const previous: SyncFiles = [];
+
+  for (const file of jsxFiles) {
+    let source = decodeSource(file.source);
+    let fileChanged = false;
+    const sortedPatches = [...resolvedPatches].sort((a, b) => {
+      const aStart = a.meta?.jsxStart ?? -1;
+      const bStart = b.meta?.jsxStart ?? -1;
+      return bStart - aStart;
+    });
+    for (const patch of sortedPatches) {
+      const out = applyPatchToSource(source, patch, file.fileName);
+      if (out.changed) {
+        previous.push({
+          fileName: file.fileName,
+          source,
+        });
+        current.push({
+          fileName: file.fileName,
+          source: out.nextSource,
+        });
+        source = out.nextSource;
+        fileChanged = true;
+        changedCount += 1;
+      }
+    }
+    if (fileChanged) {
+      updatedFiles.add(file.fileName);
+    }
+  }
+
+  return { current, previous, updatedFiles, changedCount };
+}
+
+/** 从 Figma JSON 一次性同步 less 样式 + JSX props，合并为单条 undo 历史记录 */
+export function syncFromFigmaJson(
+  comId: string,
+  figmaItems: FigmaImportItem[],
+  patches: FigmaComponentPatch[],
+  options?: { rootEl?: Element | null }
+): number {
+  const styleResult = collectStyleChanges(comId, figmaItems, options);
+  const propsResult = collectPropsChanges(comId, patches);
+
+  const allCurrent = [...styleResult.current, ...propsResult.current];
+  const allPrevious = [...styleResult.previous, ...propsResult.previous];
+  const allFiles = new Set([...styleResult.updateFiles, ...propsResult.updatedFiles]);
+
+  if (allCurrent.length > 0) {
     undoRedoManager.execute({
       execute() {
-        current.forEach(({ fileName, source }) => {
-          context.updateFile({
-            fileName,
-            content: source,
-            type: undefined,
-          });
-        })
-        context.saveManualVersion(Array.from(updateFiles));
+        allCurrent.forEach(({ fileName, source }) => {
+          context.updateFile({ fileName, content: source, type: undefined });
+        });
+        context.saveManualVersion(Array.from(allFiles));
       },
       undo() {
-        previous.forEach(({ fileName, source }) => {
-          context.updateFile({
-            fileName,
-            content: source,
-            type: undefined,
-          });
-        })
-        context.saveManualVersion(Array.from(updateFiles));
-      }
-    })
-    // context.saveManualVersion(comId, Array.from(updateFiles));
+        allPrevious.forEach(({ fileName, source }) => {
+          context.updateFile({ fileName, content: source, type: undefined });
+        });
+        context.saveManualVersion(Array.from(allFiles));
+      },
+    });
   }
-  return actualChangedCount;
+
+  return styleResult.actualChangedCount + propsResult.changedCount;
 }

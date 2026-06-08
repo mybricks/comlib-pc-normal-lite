@@ -44,14 +44,8 @@ export default genAIRuntime({
     return config.getAllDependencies()
   },
   wrapper: ({ children, env, canvasContainer }) => {
-    // const container = useRef(
-    //   env.edit || env.runtime.debug
-    //     ? document.querySelector('#_mybricks-geo-webview_')!.shadowRoot
-    //     : null
-    // )
     return (
       <StyleProvider
-        // container={container.current!}
         container={canvasContainer}
         hashPriority="high"
       >

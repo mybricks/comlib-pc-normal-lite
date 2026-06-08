@@ -6,6 +6,9 @@ import versionViewCss from '../lowcodeView/version/index.lazy.less';
 import treeViewCss from '../lowcodeView/tree/index.lazy.less';
 import exportCodeCss from './configs/style.lazy.less';
 import iconLibraryModalCss from './configs/IconLibraryModal/style.lazy.less';
+import svgEditorCss from './configs/SvgEditor/style.lazy.less';
+import imgEditorCss from './configs/ImgEditor/style.lazy.less';
+import iconEditorCss from './configs/IconEditor/style.lazy.less';
 import aiSvgIconCss from './icons/aiSvgIcon.lazy.less';
 import aiEditPanelCss from './components/AiEditPanel.lazy.less';
 
@@ -15,6 +18,9 @@ import * as versionViewCssNS from '../lowcodeView/version/index.lazy.less';
 import * as treeViewCssNS from '../lowcodeView/tree/index.lazy.less';
 import * as exportCodeCssNS from './configs/style.lazy.less';
 import * as iconLibraryModalCssNS from './configs/IconLibraryModal/style.lazy.less';
+import * as svgEditorCssNS from './configs/SvgEditor/style.lazy.less';
+import * as imgEditorCssNS from './configs/ImgEditor/style.lazy.less';
+import * as iconEditorCssNS from './configs/IconEditor/style.lazy.less';
 import * as aiSvgIconCssNS from './icons/aiSvgIcon.lazy.less';
 import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 
@@ -107,6 +113,18 @@ export function buildHooks(props: Props) {
           {
             css: transform(iconLibraryModalCssNS),
             use: genUse(iconLibraryModalCss)
+          },
+          {
+            css: transform(svgEditorCssNS),
+            use: genUse(svgEditorCss)
+          },
+          {
+            css: transform(imgEditorCssNS),
+            use: genUse(imgEditorCss)
+          },
+          {
+            css: transform(iconEditorCssNS),
+            use: genUse(iconEditorCss)
           },
           {
             css: transform(aiSvgIconCssNS),

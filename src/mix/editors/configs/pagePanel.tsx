@@ -1,6 +1,5 @@
 import context from '../../context';
-import { syncStylesFromFigmaJson } from '../figma-to-dom/sync';
-import { syncComponentPropsFromFigmaJson } from '../figma-to-dom/sync-props';
+import { syncFromFigmaJson } from '../figma-to-dom/sync';
 import type { Props, FigmaComponentPatch, FigmaImportItem } from '../types';
 
 export function buildPagePanel(props: Props) {
@@ -26,9 +25,7 @@ export function buildPagePanel(props: Props) {
                       componentPatches?: FigmaComponentPatch[],
                       rootEl?: Element | null
                     ) => {
-                      const styleChanged = syncStylesFromFigmaJson(comId, items, { rootEl: rootEl ?? null });
-                      const propsChanged = syncComponentPropsFromFigmaJson(comId, componentPatches || []);
-                      return styleChanged + propsChanged;
+                      return syncFromFigmaJson(comId, items, componentPatches || [], { rootEl: rootEl ?? null });
                     },
                   };
                 },

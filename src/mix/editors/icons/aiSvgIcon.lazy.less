@@ -15,12 +15,20 @@
 }
 
 .path {
-  fill: var(--mybricks-color-primary);
+  fill: #333333;
   transition: fill 0.2s;
 }
 
 .strokePath {
   fill: none;
-  stroke: var(--mybricks-color-primary);
+  stroke: #333333;
   transition: stroke 0.2s;
+}
+
+.wrap:hover .path {
+  fill: var(--mybricks-color-primary);
+}
+
+.wrap:hover .strokePath {
+  stroke: var(--mybricks-color-primary);
 }

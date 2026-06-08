@@ -214,8 +214,6 @@ export function genStyleValue(params: { comId: string }) {
 
       const fullSelector = params.selector;
 
-      // console.log("editConfig.value.set 组件侧接收params.selector",fullSelector)
-
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList });
@@ -664,6 +662,65 @@ export function genSvgReplacer() {
   };
 }
 
+/**
+ * 将第三方图标组件（如 <NormalHistogramLine />）替换为上传的内联 SVG。
+ * 与 applyRawSvg 的区别：不要求源码该位置是 <svg，而是任意 JSX 元素（<ComponentName ... />）。
+ */
+export function applyIconWithSvg(params: any, rawSvg: string): void {
+  const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
+  const jsxPath = loc.files?.jsx;
+  if (!jsxPath) return;
+
+  const aiComParams = context.component?.params;
+  const jsxFile = aiComParams?.data?.files?.find(
+    (f: { fileName: string; source: string }) => f.fileName === jsxPath
+  );
+  if (!jsxFile) return;
+  const source = decodeURIComponent(jsxFile.source);
+
+  const start: number = loc.jsx?.start;
+  const end: number = loc.jsx?.end;
+  if (start == null || end == null || start < 0 || end > source.length) return;
+
+  const candidate = source.slice(start, end);
+  // 安全断言：必须是 JSX 元素（以 < 开头）
+  if (!candidate.startsWith('<')) return;
+
+  const jsxSvg = svgToJsx(rawSvg, {});
+  const newSource = source.slice(0, start) + jsxSvg + source.slice(end);
+
+  undoRedoManager.execute({
+    execute() {
+      context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
+      context.saveManualVersion([jsxPath]);
+    },
+    undo() {
+      context.updateFile({ fileName: jsxPath, content: source, type: undefined });
+      context.saveManualVersion([jsxPath]);
+    },
+  });
+
+  _svgAppliedCallback?.(rawSvg);
+}
+
+/** 触发文件选择框，用户上传 SVG 后替换第三方图标组件 */
+export function genIconReplacer() {
+  return {
+    set(params: any) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.svg,image/svg+xml';
+      input.onchange = async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const rawSvg = await file.text();
+        applyIconWithSvg(params, rawSvg);
+      };
+      input.click();
+    },
+  };
+}
+
 function styleToCss(style: Record<string, string | number>): string {
   return Object.entries(style)
     .map(([key, value]) => {
@@ -675,6 +732,95 @@ function styleToCss(style: Record<string, string | number>): string {
 }
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
+
+function getFocusAreaEle(params: any): HTMLElement | null {
+  return (params.focusArea?.ele ?? params.focusArea ?? null) as HTMLElement | null
+}
+
+function patchSvgOpenTagSize(svgSource: string, size: { width?: number; height?: number }): string | null {
+  const openTagMatch = svgSource.match(/^<svg\b[^>]*>/)
+  if (!openTagMatch) return null
+
+  let openTag = openTagMatch[0]
+
+  const replaceAttr = (tag: string, attr: 'width' | 'height', value?: number) => {
+    if (value == null) return tag
+    const attrRe = new RegExp(`\\s${attr}=(?:"[^"]*"|'[^']*'|\\{[^}]*\\})`)
+    const existing = tag.match(attrRe)?.[0]
+    if (!existing) {
+      return tag.replace(/^<svg\b/, `<svg ${attr}="${value}"`)
+    }
+    const normalized = existing.includes('{')
+      ? ` ${attr}={${value}}`
+      : existing.includes("'")
+        ? ` ${attr}='${value}'`
+        : ` ${attr}="${value}"`
+    return tag.replace(attrRe, normalized)
+  }
+
+  openTag = replaceAttr(openTag, 'width', size.width)
+  openTag = replaceAttr(openTag, 'height', size.height)
+
+  return openTag + svgSource.slice(openTagMatch[0].length)
+}
+
+function patchSvgSizeInTsx(params: any, size: { width?: number; height?: number }): void {
+  const focusAreaEle = getFocusAreaEle(params)
+  const loc = JSON.parse(focusAreaEle?.dataset?.loc ?? '{}')
+  const jsxPath = loc.files?.jsx
+  if (!jsxPath) return
+
+  const comId = params.id
+  const aiComParams = context.component?.params
+  const jsxFile = aiComParams?.data?.files?.find(
+    (f: { fileName: string; source: string }) => f.fileName === jsxPath
+  )
+  if (!jsxFile) return
+
+  const source = decodeURIComponent(jsxFile.source)
+  let hintStart: number = loc.jsx?.start
+  let hintEnd: number = loc.jsx?.end
+
+  if (
+    _lastSvgState &&
+    _lastSvgState.comId === comId &&
+    _lastSvgState.jsxPath === jsxPath &&
+    _lastSvgState.dataLocStart === loc.jsx?.start &&
+    source.slice(_lastSvgState.start, _lastSvgState.start + 4) === '<svg'
+  ) {
+    hintStart = _lastSvgState.start
+    hintEnd = _lastSvgState.end
+  }
+
+  const range = findActualSvgRange(source, hintStart, hintEnd)
+  if (!range) return
+
+  const candidate = source.slice(range.start, range.end)
+  if (!candidate.startsWith('<svg') || !candidate.trimEnd().endsWith('</svg>')) return
+
+  const patchedSvg = patchSvgOpenTagSize(candidate, size)
+  if (!patchedSvg || patchedSvg === candidate) return
+
+  const newSource = source.slice(0, range.start) + patchedSvg + source.slice(range.end)
+  _lastSvgState = {
+    comId,
+    jsxPath,
+    dataLocStart: loc.jsx?.start,
+    start: range.start,
+    end: range.start + patchedSvg.length,
+  }
+
+  undoRedoManager.execute({
+    execute() {
+      context.updateFile({ fileName: jsxPath, content: newSource, type: undefined })
+      context.saveManualVersion([jsxPath])
+    },
+    undo() {
+      context.updateFile({ fileName: jsxPath, content: source, type: undefined })
+      context.saveManualVersion([jsxPath])
+    },
+  })
+}
 
 /**
  * 将一组静态 style 键值直接替换到 JSX/TSX 源码中。
@@ -920,6 +1066,36 @@ export function genResizer() {
           style = value
         }
         handler(ctx, { state })
+      },
+    },
+  }
+}
+
+export function genSvgResizer() {
+  let style: Record<string, number> = {}
+
+  return {
+    type: '_resizer',
+    value: {
+      get() {},
+      set(params: any, value: any, status: any) {
+        const { state } = status
+        const svgEle = getFocusAreaEle(params) as SVGElement | null
+
+        if ((state === 'ing' || state === 'finish') && value) {
+          style = value
+        }
+        if (state === 'ing') {
+          if (svgEle) {
+            if (style.width != null) svgEle.setAttribute('width', `${style.width}`)
+            if (style.height != null) svgEle.setAttribute('height', `${style.height}`)
+          }
+        } else if (state === 'finish') {
+          patchSvgSizeInTsx(params, {
+            width: style.width,
+            height: style.height,
+          })
+        }
       },
     },
   }

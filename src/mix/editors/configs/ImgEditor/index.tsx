@@ -1,7 +1,11 @@
 import React from 'react';
-import context from '../../context';
-import { STATIC_SRC_RE, genImgSrcReplacer } from '../styleProxy';
-import { AiBlingblingIcon } from '../icons/ai-svg-blingbling';
+import context from '../../../context';
+import { STATIC_SRC_RE, genImgSrcReplacer } from '../../styleProxy';
+import { AiBlingblingIcon } from '../../icons/ai-svg-blingbling';
+import * as styles from './style.lazy.less';
+import { getLazyCss } from '../../../lowcodeView/utils/css';
+
+const css = getLazyCss(styles);
 
 const imgReplacer = genImgSrcReplacer();
 
@@ -25,25 +29,10 @@ function ImgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
     env: context.component?.params?.env,
   };
 
-  const btnStyle: React.CSSProperties = {
-    cursor: 'pointer',
-    width: '100%',
-    height: 26,
-    borderRadius: 6,
-    border: '1px solid var(--mybricks-border-color-main)',
-    backgroundColor: 'var(--mybricks-bg-color-main)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'var(--mybricks-text-color-main)',
-    fontSize: 12,
-    padding: 0,
-  };
-
   return (
     <button
       type="button"
-      style={btnStyle}
+      className={css.btn}
       data-mybricks-tip={isDynamic ? '上传图片，AI 帮你替换' : '上传图片进行替换'}
       onClick={() => imgReplacer.set(syntheticParams)}
     >
