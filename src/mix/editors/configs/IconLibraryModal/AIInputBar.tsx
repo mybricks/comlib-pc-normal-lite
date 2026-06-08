@@ -1,6 +1,9 @@
 import React, { useState, useRef, useLayoutEffect } from 'react';
 import { AiSendIcon } from '../../components/AiSendIcon';
-import styles from './style.lazy.less';
+import * as styleNS from './style.lazy.less';
+import { getLazyCss } from '../../../lowcodeView/utils/css';
+
+const css = getLazyCss(styleNS);
 
 const SVG_PRESETS = ['线条风格', '填充风格', '扁平设计', '单色图标'];
 
@@ -47,10 +50,10 @@ export default function AIInputBar({
 
   return (
     <>
-      <div className={styles.locals.inputWrap}>
+      <div className={css.inputWrap}>
         <textarea
           ref={textareaRef}
-          className={styles.locals.textarea}
+          className={css.textarea}
           value={value}
           placeholder={placeholder}
           rows={1}
@@ -59,7 +62,7 @@ export default function AIInputBar({
         />
         <button
           type="button"
-          className={styles.locals.sendButton}
+          className={css.sendButton}
           onClick={handleSubmit}
           disabled={!canSubmit}
           aria-label="生成图标库"
@@ -68,12 +71,12 @@ export default function AIInputBar({
         </button>
       </div>
       {showPresets && (
-        <div className={styles.locals.presetWrap}>
+        <div className={css.presetWrap}>
           {SVG_PRESETS.map(preset => (
             <button
               key={preset}
               type="button"
-              className={styles.locals.presetButton}
+              className={css.presetButton}
               onClick={() => appendPreset(preset)}
             >
               {preset}
