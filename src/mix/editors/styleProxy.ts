@@ -717,7 +717,7 @@ function patchStyleInTsx(
  * @param style       要写入的样式键值对（值为数字，写入时追加 px）
  * @param ignoreFirst 若为 true，在解析出的选择器后追加 :not(:first-child)
  */
-function applyStyleToLessFile(
+export function applyStyleToLessFile(
   ctx: any,
   ele: HTMLElement,
   style: Record<string, number>,

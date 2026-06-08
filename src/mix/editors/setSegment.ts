@@ -1,5 +1,6 @@
 import context from '../context'
 import { undoRedoManager } from './undoRedo'
+import { applyStyleToLessFile } from './styleProxy'
 
 /**
  * buildAIReorderPrompt 的参数接口
@@ -169,7 +170,7 @@ ${toSnippet}
 export default function () {
   return {
     '@updateSegment'(ctx: any, type: string, options: any) {
-      // console.log('@setSegment', {ctx, type, options})
+      // console.log('@updateSegment', {ctx, type, options})
       if (type === 'changeOrder') {
         const { fromEle, toEle, type } = options
         // console.log('[options]', options)
@@ -354,6 +355,22 @@ export default function () {
             context.saveManualVersion([fileName])
           },
         })
+      } else if (type === 'setPosition') {
+        const { fromEle, top, left, right, bottom } = options
+
+        // 过滤掉 undefined 的属性，只保留有值的 top/left/right/bottom
+        const style: Record<string, number> = {}
+        if (top !== undefined) style['top'] = top
+        if (left !== undefined) style['left'] = left
+        if (right !== undefined) style['right'] = right
+        if (bottom !== undefined) style['bottom'] = bottom
+
+        if (Object.keys(style).length === 0) return
+
+        // 复用 styleProxy 的分流逻辑：有 static style-info → 改 tsx，否则 → 改 less
+        // 传入 no-op ctx（applyStyleToLessFile 末尾会调用 ctx.css.remove，此处无预览 CSS）
+        const noopCtx = { css: { remove: () => {} } }
+        applyStyleToLessFile(noopCtx, fromEle as HTMLElement, style, false)
       }
     }
   }
