@@ -20,6 +20,7 @@ import type { LintMessage } from './types';
 import { createNoConsoleRule, RULE_ID as NO_CONSOLE_RULE_ID } from './rules/no-console';
 import { createNoWindowLocationRule, RULE_ID as NO_WINDOW_LOC_RULE_ID } from './rules/no-window-location';
 import { createRequireDatasourceAsyncRule, RULE_ID as DS_ASYNC_RULE_ID } from './rules/require-datasource-async';
+import { createRequireComRefRule, RULE_ID as REQUIRE_COM_REF_RULE_ID } from './rules/require-com-ref';
 import { createExtractComRefsRule, type ComRefInfo } from './rules/extract-comrefs';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
 import { checkJSDoc, RULE_ID as JSDOC_RULE_ID } from './rules/jsdoc';
@@ -37,6 +38,7 @@ export const RULE_IDS = {
   REQUIRE_DATASOURCE_ASYNC: DS_ASYNC_RULE_ID,
   REQUIREMENT_CHECK: REQ_RULE_ID,
   JSDOC_CHECK: JSDOC_RULE_ID,
+  REQUIRE_COM_REF: REQUIRE_COM_REF_RULE_ID,
 } as const;
 
 /**
@@ -90,6 +92,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
   const noWindowLocation = createNoWindowLocationRule();
   const isDataSourceFile = fileName.includes('dataSource');
   const requireDatasourceAsync = isDataSourceFile ? createRequireDatasourceAsyncRule() : null;
+  const requireComRef = createRequireComRefRule(fileName);
 
   try {
     Babel.transform(code, {
@@ -104,6 +107,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
         noConsole.plugin,
         noWindowLocation.plugin,
         ...(requireDatasourceAsync ? [requireDatasourceAsync.plugin] : []),
+        requireComRef.plugin,
       ],
       retainLines: true,
     });
@@ -115,6 +119,7 @@ export function verifyFile(code: string, fileName: string): LintMessage[] {
     ...noConsole.getMessages(),
     ...noWindowLocation.getMessages(),
     ...(requireDatasourceAsync?.getMessages() ?? []),
+    ...requireComRef.getMessages(),
   ].map((msg) => ({ ...msg, fileName }));
 
   return messages;
