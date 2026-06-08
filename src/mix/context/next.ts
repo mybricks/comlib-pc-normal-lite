@@ -7,7 +7,8 @@ import { randomUUID } from '../utils/uuid'
 import { getTimestamp } from "../../utils/time"
 
 const updateFileContent = ({ fileName, files, content }) => {
-  const file = files.find((f) => f.fileName === fileName);
+  const replaceFileName = fileName.replace(/^\//, '')
+  const file = files.find((f) => f.fileName === replaceFileName);
   if (file) {
     // 更新
     Object.entries(content).forEach(([key, value]) => {
@@ -15,7 +16,7 @@ const updateFileContent = ({ fileName, files, content }) => {
     });
   } else {
     // 新增
-    files.push({ fileName, ...content });
+    files.push({ fileName: replaceFileName, ...content });
   }
 }
 

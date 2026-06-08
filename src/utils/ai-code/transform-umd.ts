@@ -8,6 +8,7 @@ import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
 import zoneIndexPlugin from './plugins/zoneIndexPlugin'
 import zoneOrderEditablePlugin from './plugins/zoneOrderEditablePlugin'
 import wrapCustomComponentPlugin from './plugins/wrapCustomComponentPlugin'
+import esmPreCheckPlugin from './plugins/esmPreCheckPlugin'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
@@ -33,6 +34,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         'react'
       ],
       plugins: [
+        esmPreCheckPlugin(),
         ['proposal-decorators', {legacy: true}],
         'proposal-class-properties',
         [

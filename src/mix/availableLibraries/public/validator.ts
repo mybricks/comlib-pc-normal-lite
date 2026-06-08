@@ -188,11 +188,6 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
                       `[dataSource.ts 校验] 必须有且只有一个 export default 导出（应为 export default new MyDatasource()）。`
                     );
                   }
-                  if (exportDefaultCount > 1) {
-                    throw programPath.buildCodeFrameError(
-                      `[dataSource.ts 校验] 只能有一个 export default 导出，当前发现 ${exportDefaultCount} 个。`
-                    );
-                  }
                 }
 
                 // ── 标识符引用校验 ───────────────────────────────────────────
