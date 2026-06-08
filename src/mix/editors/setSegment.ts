@@ -356,6 +356,7 @@ export default function () {
           },
         })
       } else if (type === 'setPosition') {
+        return
         const { fromEle, top, left, right, bottom } = options
 
         // 过滤掉 undefined 的属性，只保留有值的 top/left/right/bottom

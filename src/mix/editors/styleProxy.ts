@@ -865,6 +865,8 @@ function createSetStyleHandler(
   getIgnoreFirst: (ctx: any, params: any) => boolean = () => false,
 ) {
   let className = ''
+  // [引擎兼容处理] start、finish状态可能没有style，在ing阶段进行收集
+  let style = {}
 
   return function handler(ctx: any, params: any) {
     const { state } = params
@@ -879,18 +881,19 @@ function createSetStyleHandler(
     try {
       if (state === 'start') {
         const ele = getEle(ctx, params)
-        const style = getStyle(ctx, params)
+        style = getStyle(ctx, params) || {}
         const { targetEle, ignoreFirst } = resolveTarget(ele, style)
         const renderKey = targetEle.dataset.renderKey
         const classSelector = `.${targetEle.className.split(' ').join('.')}`
         const renderKeySelector = renderKey ? `[data-render-key="${renderKey}"]` : ''
         className = `${classSelector}${renderKeySelector}${ignoreFirst ? ':not(:first-child)' : ''}`
-      } else if (state === 'ing') {
-        const style = getStyle(ctx, params)
+      } else if (state === 'ing' || state === 'moving') {
+        // [引擎兼容处理] state传参未统一
+        style = getStyle(ctx, params)
         ctx.css.set(SETSTYLE_CSS_ID, `${className} {${styleToCss(style)}}`)
       } else if (state === 'finish') {
         const ele = getEle(ctx, params)
-        const style = getStyle(ctx, params)
+        style = getStyle(ctx, params) || style
         const { targetEle, ignoreFirst } = resolveTarget(ele, style)
         applyStyleToLessFile(ctx, targetEle, style, ignoreFirst)
       }
