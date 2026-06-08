@@ -117,11 +117,12 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
           // 构建详细的错误信息，包含依赖关系
           const errorDetails = Object.entries(missingFiles)
             .map(([file, info], index) => {
-              return `${index ? '、' : ''}\`${file}\``
+              const dependents = Array.from(info.dependedBy).join('、')
+              return `${index ? '；' : ''}${dependents} 导入了不存在的路径 \`${file}\`${info.isEntry ? '（入口文件）' : ''}，请检查相对路径是否有误，或缺失该文件`
             })
             .join('')
 
-          errorMessage += `缺失以下依赖文件，组件无法渲染：${errorDetails}\n`
+          errorMessage += `以下文件的相对引用无法解析：${errorDetails}\n`
         }
 
         if (tempDependencies.size) {

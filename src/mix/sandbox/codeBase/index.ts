@@ -246,12 +246,13 @@ ${canvasStatus}
 
       if (missingFilesEntries.length > 0) {
         emptyFiles = `
-# 文件检查
+# 文件引用检查
 
-当前有 ${missingFilesEntries.length} 个文件缺失，未编写，导致部分内容无法渲染：
+当前有 ${missingFilesEntries.length} 个文件的相对引用无法解析，导致部分内容无法渲染：
 
 ${missingFilesEntries.map(([file, info], index) => {
-  return `${index + 1}. ${file}${info.isEntry ? '（入口文件）' : ''}，该文件被 ${Array.from(info.dependedBy).join('、')} 依赖`
+  const dependents = Array.from(info.dependedBy).join('、')
+  return `${index + 1}. ${dependents} 导入了不存在的路径 ${file}${info.isEntry ? '（入口文件）' : ''}，请检查相对路径是否有误，或缺失该文件`
 }).join('\n')}
 `
       }
