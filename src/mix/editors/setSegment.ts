@@ -292,6 +292,7 @@ export default function () {
           // console.log("[message]", message)
 
           const componentId = aiComParams?.model?.runtime?.id ?? aiComParams?.id
+          ;(window as any)._sendToAgent_source_ = 'dom_change'
           ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message })
           return
         }

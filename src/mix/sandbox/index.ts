@@ -388,7 +388,7 @@ export function createDesignerLoading(
   };
 
   const resolveMode = (): 'progress' | 'component' =>
-    !focusArea || compileError || runtimeError || hasErrorOccurred ? 'progress' : 'component';
+    !focusArea || compileError || runtimeError || hasErrorOccurred || ((window as any)._sendToAgent_source_ === 'dom_change') ? 'progress' : 'component';
 
   const applyLock = (mode: 'progress' | 'component') => {
     if (mode === 'progress') {
@@ -596,6 +596,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         }
       },
       async afterTurn(turn: { id?: string }) {
+        (window as any)._sendToAgent_source_ = null
         turnLogs.turnID = turn.id
         turnLogs.setLog({
           message: '[轮次/afterTurn] 本轮结束 — 开始执行轮后处理',
