@@ -2,7 +2,6 @@ import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 
 const updateText = (options) => {
-  console.log('@updateText', options)
   const { fromEle, content } = options
   let zoneTextEditable = fromEle.dataset['zoneTextEditable']
 
@@ -32,7 +31,13 @@ const updateText = (options) => {
       },
     })
   } else {
-    console.log("这里没法直接修改了, 走ai调用")
+    const message = `将当前聚焦元素的文字内容修改为 "${content}"` + 
+      ""
+      // "\n当前聚焦元素的文字内容来自变量，请修改对应变量的值，但不要改变代码结构"
+
+    const componentId = context.component!.params.id
+    ;(window as any)._sendToAgent_source_ = 'dom_change'
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message })
   }
 }
 

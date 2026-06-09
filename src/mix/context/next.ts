@@ -523,8 +523,12 @@ export class Version {
 
     while (this.promiseStack.length) {
       // 取出最先加入的任务
-      const task = this.promiseStack.shift()
-      await task?.()
+      try {
+        const task = this.promiseStack.shift()
+        await task?.()
+      } catch (e) {
+        console.error('[runStack]', e)
+      }
     }
 
     this.running = false

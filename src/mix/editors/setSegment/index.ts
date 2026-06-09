@@ -1,5 +1,6 @@
 import changeOrder from './changeOrder'
 import updateText from './updateText'
+import runDelete from './delete'
 
 export default function () {
   return {
@@ -8,6 +9,8 @@ export default function () {
         changeOrder(options)
       } else if (type === 'updateText') {
         updateText(options)
+      } else if (type === 'delete') {
+        runDelete(options)
       }
     }
   }
