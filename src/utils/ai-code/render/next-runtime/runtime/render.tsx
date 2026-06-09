@@ -118,16 +118,18 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
           const errorDetails = Object.entries(missingFiles)
             .map(([file, info], index) => {
               const dependents = Array.from(info.dependedBy).join('、')
-              return `${index ? '；' : ''}${dependents} 导入了不存在的路径 \`${file}\`${info.isEntry ? '（入口文件）' : ''}，请检查相对路径是否有误，或缺失该文件`
+              return `${index ? '；' : ''}${dependents} 导入了不存在的文件 \`${file}\`${info.isEntry ? '（入口文件）' : ''}，请检查相对路径是否有误，或缺失该文件`
             })
             .join('')
 
           errorMessage += `以下文件的相对引用无法解析：${errorDetails}\n`
         }
 
-        if (tempDependencies.size) {
-          errorMessage += `使用了不允许的三方依赖：${Array.from(tempDependencies).join(', ')}`
-        }
+        tempDependencies.forEach((deps, filename) => {
+          if (deps.size) {
+            errorMessage += `${filename} 使用了不允许的三方依赖：${Array.from(deps).join(', ')}\n`
+          }
+        })
 
         if (errorMessage) {
           setError(new Error(errorMessage))

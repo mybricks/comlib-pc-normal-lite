@@ -281,8 +281,8 @@ class FileSystem {
   /** 临时文件存储 */
   tempFilesMap: FilesMap = {}
 
-  /** 临时依赖存储，使用了未注入的依赖 */
-  tempDependencies = new Set<string>()
+  /** 临时依赖存储，使用了未注入的依赖。key 为文件名，value 为该文件引用但未注入的包名集合 */
+  tempDependencies = new Map<string, Set<string>>()
 
   /** 全局错误监听器引用 */
   private _onError: ((event: ErrorEvent) => void) | null = null
@@ -560,6 +560,8 @@ class FileSystem {
     })
 
     Reflect.deleteProperty(this.filesMap, filename)
+    // 清理该文件的临时依赖记录
+    this.tempDependencies.delete(filename)
 
     this.events.emit('fileChange', { filename, type: 'delete' })
 
@@ -766,7 +768,12 @@ class FileSystem {
 
         // 判断是依赖还是相对路径，依赖直接抛出错误
         if (!key.startsWith('.')) {
-          that.tempDependencies.add(key)
+          let fileDeps = that.tempDependencies.get(filename)
+          if (!fileDeps) {
+            fileDeps = new Set()
+            that.tempDependencies.set(filename, fileDeps)
+          }
+          fileDeps.add(key)
           return {
             default: hackProxy(),
             __default: null
@@ -814,6 +821,9 @@ class FileSystem {
 
     // 清空正向依赖，后续 loadModule 会重建
     fileEntry.dependencies.clear()
+
+    // 清空该文件的临时依赖记录，后续 loadModule 会重建
+    this.tempDependencies.delete(filename)
 
     // 删除已无依赖者的 tempFilesMap 条目（同一 tempEntry 可能存储在多个 key 下）
     for (const tempEntry of potentiallyOrphanedTempEntries) {
@@ -1018,7 +1028,7 @@ class FileSystem {
   }
 
   getErrors() {
-    const errors: Error[] = []
+    const errors: any[] = []
     if (this.error) {
       errors.push(this.error)
     }
@@ -1029,19 +1039,26 @@ class FileSystem {
       }
     })
 
-    const { tempFilesMap } = this
-            
-    if (Object.keys(tempFilesMap).length > 0) {
-      const missingFiles = extractMissingFiles(tempFilesMap)
-      // 构建详细的错误信息，包含依赖关系
-      const errorDetails = Object.entries(missingFiles)
-        .map(([file, info], index) => {
-          return `${index ? '、' : ''}\`${file}\``
+    const tempFilesMap = this.tempFilesMap
+    const missingFiles = extractMissingFiles(tempFilesMap)
+    const missingFilesEntries = Object.entries(missingFiles)
+    if (missingFilesEntries.length > 0) {
+      missingFilesEntries.forEach(([file, info]) => {
+        const dependents = Array.from(info.dependedBy).join('、')
+        errors.push({
+          type: '相对引用错误',
+          message: `${dependents} 导入了不存在的文件 ${file}${info.isEntry ? '（入口文件）' : ''}，请检查相对路径是否有误，或缺失该文件`
         })
-        .join('')
-
-      errors.push(new Error(`缺失以下依赖文件，组件无法渲染：${errorDetails}`))
+      })
     }
+    this.tempDependencies.forEach((deps, filename) => {
+      if (deps.size) {
+        errors.push({
+          type: '使用不允许的三方依赖',
+          message: `${filename} 使用了不允许的三方依赖：${Array.from(deps).join(', ')}`
+        })
+      }
+    })
 
     return errors
   }
