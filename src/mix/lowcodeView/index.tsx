@@ -12,8 +12,15 @@ import type { FileTreeNode } from "./filesToTree";
 import { getLazyCss } from './utils/css';
 import { registerLowcodeViewMonacoContext } from '../eslint/monaco-language-service';
 import { undoRedoManager } from "../editors/undoRedo";
+import { isVSCodeEnv } from "../vscode/isVSCodeEnv";
+import { VSCODE_CODEEDITOR_ESLINT, VSCODE_CODEEDITOR_LOADER_CONFIG } from "../vscode/constants";
 
 const css = getLazyCss(lazyCss)
+
+const isVsCode = isVSCodeEnv()
+
+const CODEEDITOR_ESLINT = isVsCode ? VSCODE_CODEEDITOR_ESLINT : undefined
+const CODEEDITOR_LOADER_CONFIG = isVsCode ? VSCODE_CODEEDITOR_LOADER_CONFIG : undefined
 
 interface Params {
   data: any;
@@ -643,6 +650,8 @@ function LowcodeView(params: Params) {
                 options={editorOptions}
                 theme={editorTheme}
                 wrapperClassName={css['coder']}
+                loaderConfig={CODEEDITOR_LOADER_CONFIG}
+                eslint={CODEEDITOR_ESLINT}
                 onChange={handleEditorChange}
                 onMount={handleEditorMount}
               />
