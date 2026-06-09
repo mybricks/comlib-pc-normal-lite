@@ -103,7 +103,7 @@ export default function (props: Props, actions: Actions) {
       ],
       items: buildSvgEditorItems(comId),
     },
-    ...getDataZoneTextEditable(),
+    // ...getDataZoneTextEditable(),
     ...undoRedo(),
     ...styles(),
     ...setSegment()
