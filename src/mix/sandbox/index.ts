@@ -360,6 +360,7 @@ export function createDesignerLoading(
   let runtimeError: any = null;
   // [TODO] 临时加一个字段，只要报错过就只能 progress 模式，目前报错后focusArea已经丢失
   let hasErrorOccurred: boolean = false;
+  let extra: Record<string, any> = {}
 
   const events = context.component!.events
   const offCompileError = events.on('compileError', (error) => {
@@ -388,7 +389,7 @@ export function createDesignerLoading(
   };
 
   const resolveMode = (): 'progress' | 'component' =>
-    !focusArea || compileError || runtimeError || hasErrorOccurred || ((window as any)._sendToAgent_source_ === 'dom_change') ? 'progress' : 'component';
+    !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.source === '@updateSegment:changeOrder') ? 'progress' : 'component';
 
   const applyLock = (mode: 'progress' | 'component') => {
     if (mode === 'progress') {
@@ -461,7 +462,16 @@ export function createDesignerLoading(
     offRuntimeError();
   };
 
-  return { setLock, dispose };
+  const setExtra = (_extra) => {
+    if (_extra) {
+      extra = _extra
+    }
+  }
+
+  return {
+    setLock,
+    dispose,
+    setExtra};
 }
 
 // ─── 注册沙箱 ─────────────────────────────────────────────────────────────────
@@ -577,9 +587,10 @@ export async function registerSandbox(comId: string): Promise<void> {
     },
 
     hooks: {
-      async beforeRequest({ meta }) {
+      async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
         
+        loadingRef.current?.setExtra(extra);
         loadingRef.current?.setLock('lock');
 
         context.component?.events.emit('vibing', true);

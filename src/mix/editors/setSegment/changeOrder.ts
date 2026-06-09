@@ -70,32 +70,18 @@ function buildAIReorderPrompt({
     const mapCallSection = from.mapCallLine
       ? `\n所在 .map() 表达式（第 ${from.mapCallLine.start}~${from.mapCallLine.end} 行）：\n\`\`\`jsx\n${extractLines(source, from.mapCallLine.start, from.mapCallLine.end)}\n\`\`\`\n`
       : ''
-    return `用户在 UI 上进行了拖拽操作。
-
-文件：${fileName}
-
-## 操作说明
-
-UI 上将 .map() 列表中第 ${fromMapIndex} 项对应的节点（共 ${mapTotal} 项），
-移动到第 ${toMapIndex} 项的${directionWord}。
+    return `在 UI 表现上上将 .map() 列表中第 ${fromMapIndex + 1} 项对应的节点（共 ${mapTotal} 项），
+移动到第 ${toMapIndex + 1} 项的${directionWord}。
 ${mapCallSection}
-from 节点 JSX 片段（第 ${from.codeLine.start}~${from.codeLine.end} 行）：
+JSX 片段（第 ${from.codeLine.start}~${from.codeLine.end} 行）：
 \`\`\`jsx
 ${fromSnippet}
 \`\`\`
 
-to 节点 JSX 片段（第 ${to.codeLine.start}~${to.codeLine.end} 行）：
-\`\`\`jsx
-${toSnippet}
-\`\`\`
-
-## 要求
-
 1. 请读取文件 ${fileName}，找到该 .map() 调用的数据数组定义
 2. 数据数组可能定义在当前文件或其他关联文件（如 setup.ts）中，请自行查找
-3. 将数组第 ${fromMapIndex} 项移动到第 ${toMapIndex} 项的${directionWord}
-4. **不需要修改 JSX 模板结构，只修改数据数组**
-5. 先说明你找到的数据数组位于哪个文件哪里，再输出修改代码`
+3. **禁止修改 JSX 结构，只修改数据数组**
+4. 先说明你找到的数据数组位于哪个文件，再修改代码`
   }
 
   // ── 场景 B：from 在 map 外，to 在 map 内 ──────────────────────────────────
@@ -284,8 +270,7 @@ const changeOrder = (options) => {
     // console.log("[message]", message)
 
     const componentId = aiComParams?.model?.runtime?.id ?? aiComParams?.id
-    ;(window as any)._sendToAgent_source_ = 'dom_change'
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message })
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, extra: { source: '@updateSegment:changeOrder' } })
     return
   }
 

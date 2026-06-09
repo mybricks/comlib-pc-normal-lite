@@ -3,6 +3,10 @@ import { undoRedoManager } from '../undoRedo'
 
 const updateText = (options) => {
   const { fromEle, content } = options
+  if (!content.trim()) {
+    // 不允许空字符
+    return
+  }
   let zoneTextEditable = fromEle.dataset['zoneTextEditable']
 
   if (zoneTextEditable) {
@@ -36,7 +40,6 @@ const updateText = (options) => {
       // "\n当前聚焦元素的文字内容来自变量，请修改对应变量的值，但不要改变代码结构"
 
     const componentId = context.component!.params.id
-    ;(window as any)._sendToAgent_source_ = 'dom_change'
     ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message })
   }
 }
