@@ -1,5 +1,6 @@
 import { ANTD_KNOWLEDGES_MAP, ANTD_ICONS_KNOWLEDGES_MAP } from '../../knowledges';
-import { genStyleValue, genResizer } from '../styleProxy';
+import { genStyleValue } from '../styleProxy';
+import resizer from '../style/resizer'
 
 /**
  * 根据 runtimeJsxConstituency 构建 focusAreaConfigs。
@@ -34,7 +35,7 @@ export function buildFocusAreaConfigs(data: any, comId: string): Record<string, 
           autoOptions: true,
           valueProxy: genStyleValue({ comId }),
         },
-        genResizer(),
+        resizer(),
       ];
 
       selectors?.forEach((selector: string) => {

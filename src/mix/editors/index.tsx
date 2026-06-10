@@ -6,7 +6,7 @@ import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
 import { buildHooks } from './hooks';
-import { genStyleValue, genResizer, genSvgResizer } from './styleProxy';
+import { genStyleValue, genSvgResizer } from './styleProxy';
 import { buildImgEditorItems } from './configs/ImgEditor';
 import { buildSvgEditorItems } from './configs/SvgEditor';
 import { buildIconEditorItems } from './configs/IconEditor';
@@ -18,8 +18,9 @@ import { registerResourcesCode } from './registerResourcesCode';
 import { getDataZoneTextEditable } from './getDataZoneTextEditable'
 import undoRedo from './undoRedo';
 import { verify as eslintVerify } from '../eslint';
-import styles from './styleProxy';
 import setSegment from './setSegment';
+import setStyle from './style/setStyle'
+import resizer from './style/resizer'
 
 export default function (props: Props, actions: Actions) {
 
@@ -56,7 +57,7 @@ export default function (props: Props, actions: Actions) {
               autoOptions: true,
               valueProxy: genStyleValue(props),
             },
-            genResizer(),
+            resizer(),
           ],
         },
       ],
@@ -105,7 +106,7 @@ export default function (props: Props, actions: Actions) {
     },
     ...getDataZoneTextEditable(),
     ...undoRedo(),
-    ...styles(),
+    ...setStyle(),
     ...setSegment()
   };
 }
