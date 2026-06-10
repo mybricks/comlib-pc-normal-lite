@@ -1,4 +1,43 @@
 import { deepCopy } from '../../../../utils'
+import context from '../../../../mix/context'
+
+/** HTTP 方法列表 */
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch'])
+
+/**
+ * 用 Proxy 统一劫持 axios 实例上的 HTTP 方法，注入请求/响应日志。
+ * 仅代理 get/post/put/delete/patch，其余属性透传。
+ */
+function wrapAxiosWithLogger(axiosInstance: any): any {
+  return new Proxy(axiosInstance, {
+    get(target, prop: string) {
+      if (!HTTP_METHODS.has(prop)) {
+        return target[prop];
+      }
+      const method = prop.toUpperCase();
+      return (url: string, ...args: any[]) => {
+        const firstMessage = `[HTTP] ${method} ${url}`
+        context.pushLog('info', [firstMessage, ...args]);
+        const result = target[prop](url, ...args);
+        if (result && typeof result.then === 'function') {
+          return result.then(
+            (res: any) => {
+              context.pushLog('info', [firstMessage, res]);
+              return res;
+            },
+            (err: any) => {
+              context.pushLog('error', [firstMessage, err]);
+              return Promise.reject(err);
+            }
+          );
+        } else {
+          context.pushLog('info', [firstMessage, result]);
+        }
+        return result;
+      };
+    },
+  });
+}
 
 /**
  * DataSource 基类
@@ -161,5 +200,8 @@ export class DataSource {
         };
       }
     }
+
+    // 统一注入日志代理，无论哪种环境均生效
+    this.axios = wrapAxiosWithLogger(this.axios);
   }
 }

@@ -7,6 +7,7 @@ import treeViewCss from '../lowcodeView/tree/index.lazy.less';
 import exportCodeCss from './configs/style.lazy.less';
 import iconLibraryModalCss from './configs/IconLibraryModal/style.lazy.less';
 import svgEditorCss from './configs/SvgEditor/style.lazy.less';
+import sizeEditorCss from './configs/SizeEditor/style.lazy.less';
 import imgEditorCss from './configs/ImgEditor/style.lazy.less';
 import iconEditorCss from './configs/IconEditor/style.lazy.less';
 import aiSvgIconCss from './icons/aiSvgIcon.lazy.less';
@@ -19,6 +20,7 @@ import * as treeViewCssNS from '../lowcodeView/tree/index.lazy.less';
 import * as exportCodeCssNS from './configs/style.lazy.less';
 import * as iconLibraryModalCssNS from './configs/IconLibraryModal/style.lazy.less';
 import * as svgEditorCssNS from './configs/SvgEditor/style.lazy.less';
+import * as sizeEditorCssNS from './configs/SizeEditor/style.lazy.less';
 import * as imgEditorCssNS from './configs/ImgEditor/style.lazy.less';
 import * as iconEditorCssNS from './configs/IconEditor/style.lazy.less';
 import * as aiSvgIconCssNS from './icons/aiSvgIcon.lazy.less';
@@ -117,6 +119,10 @@ export function buildHooks(props: Props) {
           {
             css: transform(svgEditorCssNS),
             use: genUse(svgEditorCss)
+          },
+          {
+            css: transform(sizeEditorCssNS),
+            use: genUse(sizeEditorCss)
           },
           {
             css: transform(imgEditorCssNS),

@@ -1,0 +1,122 @@
+.sizeRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0px;
+  position: relative;
+}
+
+.sizeInput {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 6px 0 6px;
+  border-radius: 4px;
+  background-color: var(--mybricks-bg-color-secondary, rgba(0, 0, 0, 0.04));
+  font-size: 12px;
+  font-weight: 400;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+
+  &:hover {
+    outline: 1px solid var(--mybricks-border-color-main);
+  }
+
+  &:focus-within {
+    outline: none !important;
+    border-color: var(--mybricks-color-primary, #1890ff) !important;
+  }
+}
+
+// 锁定横纵比时两框之间的小方块指示器，绝对定位居中
+.linkDot {
+  position: absolute;
+  left: calc(50% - 14px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 8px;
+  background-color: var(--mybricks-bg-color-secondary, rgba(0, 0, 0, 0.08));
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sizeLabel {
+  font-size: 10px;
+  color: var(--mybricks-text-color-secondary, rgba(0, 0, 0, 0.45));
+  flex-shrink: 0;
+  user-select: none;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.sizeField {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--mybricks-text-color-main);
+  font-size: 12px;
+  padding: 0;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  -moz-appearance: textfield;
+}
+
+// 锁定按钮（放最右侧，--fpl-icon-color 让图标 SVG fill 跟随按钮颜色）
+.lockBtn {
+  --fpl-icon-color: currentColor;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  color: var(--mybricks-text-color-secondary, rgba(0, 0, 0, 0.4));
+
+  svg {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background-color: var(--mybricks-bg-color-secondary, rgba(0, 0, 0, 0.05));
+    color: var(--mybricks-text-color-main);
+  }
+}
+
+.lockBtnDisabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: auto;
+
+  &:hover {
+    background-color: transparent;
+    color: var(--mybricks-text-color-secondary, rgba(0, 0, 0, 0.4));
+  }
+}
+
+.lockBtnActive {
+  border-color: color-mix(in srgb, var(--mybricks-color-primary, #1890ff) 20%, transparent);
+  color: var(--mybricks-color-primary, #1890ff);
+  background-color: color-mix(in srgb, var(--mybricks-color-primary, #1890ff) 10%, transparent);
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--mybricks-color-primary, #1890ff) 15%, transparent);
+  }
+}

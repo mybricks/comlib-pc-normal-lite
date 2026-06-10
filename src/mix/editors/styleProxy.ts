@@ -663,8 +663,56 @@ export function genSvgReplacer() {
 }
 
 /**
+ * 从 hintStart 向后扫描，动态找到 JSX 自闭合标签（<Comp ... />）的实际结束位置。
+ * 通过追踪花括号深度跳过 style={{ ... }} 等表达式，避免被其中的 /> 误判。
+ * 同时支持 open+close 形式（<Comp>...</Comp>），但图标组件基本都是自闭合。
+ */
+function findActualIconTagRange(
+  source: string,
+  hintStart: number,
+): { start: number; end: number } | null {
+  // 找到实际的 < 起始位置（允许 hintStart 前后 ±5 字符的偏差）
+  let start = hintStart;
+  if (source[start] !== '<') {
+    const near = source.lastIndexOf('<', hintStart);
+    if (near === -1 || hintStart - near > 10) return null;
+    start = near;
+  }
+
+  let pos = start + 1;
+  let braceDepth = 0;
+
+  while (pos < source.length) {
+    const ch = source[pos];
+    if (ch === '{') {
+      braceDepth++;
+    } else if (ch === '}') {
+      braceDepth--;
+    } else if (braceDepth === 0) {
+      if (ch === '/' && source[pos + 1] === '>') {
+        // 自闭合标签结束
+        return { start, end: pos + 2 };
+      }
+      if (ch === '>' && source[pos - 1] !== '/') {
+        // open tag，找对应的 </TagName>
+        const tagMatch = source.slice(start).match(/^<([A-Za-z][A-Za-z0-9.]*)/);
+        if (!tagMatch) return null;
+        const closeTag = `</${tagMatch[1]}>`;
+        const closeIdx = source.indexOf(closeTag, pos + 1);
+        if (closeIdx !== -1) return { start, end: closeIdx + closeTag.length };
+        return null;
+      }
+    }
+    pos++;
+  }
+  return null;
+}
+
+/**
  * 将第三方图标组件（如 <NormalHistogramLine />）替换为上传的内联 SVG。
  * 与 applyRawSvg 的区别：不要求源码该位置是 <svg，而是任意 JSX 元素（<ComponentName ... />）。
+ * 使用 findActualIconTagRange 动态确定标签范围，避免 patchIconSizeInTsx 改过源码后
+ * data-loc.jsx.end 失效导致截断不完整的问题。
  */
 export function applyIconWithSvg(params: any, rawSvg: string): void {
   const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
@@ -678,10 +726,14 @@ export function applyIconWithSvg(params: any, rawSvg: string): void {
   if (!jsxFile) return;
   const source = decodeURIComponent(jsxFile.source);
 
-  const start: number = loc.jsx?.start;
-  const end: number = loc.jsx?.end;
-  if (start == null || end == null || start < 0 || end > source.length) return;
+  const hintStart: number = loc.jsx?.start;
+  if (hintStart == null || hintStart < 0) return;
 
+  // 动态扫描标签实际范围，不依赖可能已过期的 loc.jsx.end
+  const range = findActualIconTagRange(source, hintStart);
+  if (!range) return;
+
+  const { start, end } = range;
   const candidate = source.slice(start, end);
   // 安全断言：必须是 JSX 元素（以 < 开头）
   if (!candidate.startsWith('<')) return;
@@ -761,10 +813,44 @@ function patchSvgOpenTagSize(svgSource: string, size: { width?: number; height?:
   openTag = replaceAttr(openTag, 'width', size.width)
   openTag = replaceAttr(openTag, 'height', size.height)
 
+  // 若显式设置了 height，需清除 style 中的 height: auto（内联 style 优先级高于属性，会覆盖 height 值）
+  if (size.height != null) {
+    openTag = openTag.replace(
+      /(\bstyle=\{\{)([^}]*)(\}\})/,
+      (_, prefix, inner, suffix) => {
+        const cleaned = inner
+          .replace(/,?\s*\bheight\s*:\s*['"]?auto['"]?\s*/g, '')
+          .replace(/^\s*,\s*/, '')
+          .replace(/,\s*$/, '')
+          .trim();
+        return cleaned ? `${prefix} ${cleaned} ${suffix}` : '';
+      },
+    );
+  }
+
+  // 宽高不等时需要 preserveAspectRatio="none" 才能真正拉伸变形，
+  // 否则浏览器会按 viewBox 的比例等比缩放（默认 xMidYMid meet）。
+  // 宽高相等时恢复默认（移除该属性）。
+  if (size.width != null && size.height != null) {
+    const parAttrRe = /\s+preserveAspectRatio=(?:"[^"]*"|'[^']*'|\{[^}]*\})/;
+    const isSquare = size.width === size.height;
+    if (isSquare) {
+      // 相等时移除 preserveAspectRatio，交由浏览器默认等比处理
+      openTag = openTag.replace(parAttrRe, '');
+    } else {
+      // 不等时强制设为 none，允许独立拉伸
+      if (parAttrRe.test(openTag)) {
+        openTag = openTag.replace(parAttrRe, ' preserveAspectRatio="none"');
+      } else {
+        openTag = openTag.replace(/^<svg\b/, '<svg preserveAspectRatio="none"');
+      }
+    }
+  }
+
   return openTag + svgSource.slice(openTagMatch[0].length)
 }
 
-function patchSvgSizeInTsx(params: any, size: { width?: number; height?: number }): void {
+export function patchSvgSizeInTsx(params: any, size: { width?: number; height?: number }): void {
   const focusAreaEle = getFocusAreaEle(params)
   const loc = JSON.parse(focusAreaEle?.dataset?.loc ?? '{}')
   const jsxPath = loc.files?.jsx
@@ -1099,6 +1185,158 @@ export function genSvgResizer() {
       },
     },
   }
+}
+
+/**
+ * 将 style prop 中的 fontSize（或 width/height）patch 到三方图标组件的 JSX 片段中。
+ * 适用于 <PlusOutlined />、<NormalHistogramLine /> 等场景。
+ * - 宽高相等时写 fontSize（antd 等图标库通用）
+ * - 宽高不等时写 width/height
+ */
+/** 清除 style object inner 字符串两端多余的逗号和空白 */
+function cleanStyleInner(inner: string): string {
+  return inner.replace(/^\s*,\s*/, '').replace(/,\s*$/, '').trim();
+}
+
+/** 在已有 style object inner 中追加一个属性（如果未存在）或替换（如果已存在） */
+function setStyleProp(inner: string, key: string, value: string | number): string {
+  const keyRe = new RegExp(`\\b${key}\\s*:\\s*[^,}]+`);
+  if (keyRe.test(inner)) {
+    return inner.replace(keyRe, `${key}: ${value}`);
+  }
+  const cleaned = cleanStyleInner(inner);
+  return cleaned ? `${cleaned}, ${key}: ${value}` : `${key}: ${value}`;
+}
+
+function patchStylePropInJsxSnippet(
+  snippet: string,
+  size: { width: number; height: number },
+): string {
+  const isSquare = size.width === size.height;
+
+  const styleIdx = snippet.indexOf('style={{');
+  if (styleIdx !== -1) {
+    const innerStart = styleIdx + 'style={{'.length;
+    const innerEnd = snippet.indexOf('}}', innerStart);
+    if (innerEnd !== -1) {
+      let inner = snippet.slice(innerStart, innerEnd);
+
+      if (isSquare) {
+        // 去掉 width / height，改用 fontSize
+        inner = inner.replace(/,?\s*\bwidth\s*:\s*[^,}]+/g, '');
+        inner = inner.replace(/,?\s*\bheight\s*:\s*[^,}]+/g, '');
+        inner = cleanStyleInner(inner);
+        inner = setStyleProp(inner, 'fontSize', size.width);
+      } else {
+        // 去掉 fontSize，改用 width / height
+        inner = inner.replace(/,?\s*\bfontSize\s*:\s*[^,}]+/g, '');
+        inner = cleanStyleInner(inner);
+        inner = setStyleProp(inner, 'width', size.width);
+        inner = setStyleProp(inner, 'height', size.height);
+      }
+
+      return snippet.slice(0, styleIdx) + 'style={{ ' + inner + ' }}' + snippet.slice(innerEnd + 2);
+    }
+  }
+
+  // 没有 style prop，插入新的
+  const styleStr = isSquare
+    ? `style={{ fontSize: ${size.width} }}`
+    : `style={{ width: ${size.width}, height: ${size.height} }}`;
+
+  const selfClose = snippet.lastIndexOf('/>');
+  if (selfClose !== -1) {
+    return snippet.slice(0, selfClose).trimEnd() + ' ' + styleStr + ' />';
+  }
+  const firstClose = snippet.indexOf('>');
+  if (firstClose !== -1) {
+    return snippet.slice(0, firstClose) + ' ' + styleStr + snippet.slice(firstClose);
+  }
+  return snippet;
+}
+
+/**
+ * 从三方图标组件对应的 JSX 源码片段中读取当前显式设置的尺寸。
+ * 优先读 style.fontSize（方形图标），其次读 style.width/height。
+ * 找不到显式尺寸时返回 { w: 0, h: 0 }，调用方可回退到 DOM 测量。
+ */
+export function readIconSizeFromJsx(params: any): { w: number; h: number } {
+  const focusAreaEle = getFocusAreaEle(params);
+  const loc = JSON.parse(focusAreaEle?.dataset?.loc ?? '{}');
+  const jsxPath = loc.files?.jsx;
+  if (!jsxPath) return { w: 0, h: 0 };
+
+  const aiComParams = context.component?.params;
+  const jsxFile = aiComParams?.data?.files?.find(
+    (f: { fileName: string; source: string }) => f.fileName === jsxPath,
+  );
+  if (!jsxFile) return { w: 0, h: 0 };
+
+  const source = decodeURIComponent(jsxFile.source);
+  const start: number = loc.jsx?.start;
+  const end: number = loc.jsx?.end;
+  if (start == null || end == null || start < 0 || end > source.length) return { w: 0, h: 0 };
+
+  const snippet = source.slice(start, end);
+
+  // fontSize 优先（antd 等方形图标）
+  const fontSizeMatch = snippet.match(/\bfontSize\s*:\s*(\d+(?:\.\d+)?)/);
+  if (fontSizeMatch) {
+    const size = Math.round(parseFloat(fontSizeMatch[1]));
+    if (size > 0) return { w: size, h: size };
+  }
+
+  // 非方形：读 width / height
+  const widthMatch = snippet.match(/\bwidth\s*:\s*(\d+(?:\.\d+)?)/);
+  const heightMatch = snippet.match(/\bheight\s*:\s*(\d+(?:\.\d+)?)/);
+  const w = widthMatch ? Math.round(parseFloat(widthMatch[1])) : 0;
+  const h = heightMatch ? Math.round(parseFloat(heightMatch[1])) : 0;
+  if (w > 0 && h > 0) return { w, h };
+  if (w > 0) return { w, h: w };
+  if (h > 0) return { w: h, h };
+
+  return { w: 0, h: 0 };
+}
+
+export function patchIconSizeInTsx(params: any, size: { width: number; height: number }): void {
+  const focusAreaEle = getFocusAreaEle(params);
+  const loc = JSON.parse(focusAreaEle?.dataset?.loc ?? '{}');
+  const jsxPath = loc.files?.jsx;
+  if (!jsxPath) return;
+
+  const aiComParams = context.component?.params;
+  const jsxFile = aiComParams?.data?.files?.find(
+    (f: { fileName: string; source: string }) => f.fileName === jsxPath,
+  );
+  if (!jsxFile) return;
+
+  const source = decodeURIComponent(jsxFile.source);
+  const hintStart: number = loc.jsx?.start;
+  if (hintStart == null || hintStart < 0) return;
+
+  // 动态扫描标签实际范围，避免前一次 patch 后 loc.jsx.end 失效
+  const range = findActualIconTagRange(source, hintStart);
+  if (!range) return;
+
+  const { start, end } = range;
+  const snippet = source.slice(start, end);
+  if (!snippet.startsWith('<')) return;
+
+  const newSnippet = patchStylePropInJsxSnippet(snippet, size);
+  if (newSnippet === snippet) return;
+
+  const newSource = source.slice(0, start) + newSnippet + source.slice(end);
+
+  undoRedoManager.execute({
+    execute() {
+      context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
+      context.saveManualVersion([jsxPath]);
+    },
+    undo() {
+      context.updateFile({ fileName: jsxPath, content: source, type: undefined });
+      context.saveManualVersion([jsxPath]);
+    },
+  });
 }
 
 export default function () {
