@@ -13,7 +13,6 @@ export function resolveLocalUrl(url: string): string {
   if (/^(https?:|blob:|data:|vscode-webview:)/i.test(url)) return url
   const uriMap = (window as any).__WEBVIEW_URI_MAP__
   if (!uriMap) {
-    console.warn('[resolveLocalUrl] __WEBVIEW_URI_MAP__ 未注入，本地路径可能无法加载')
     return url
   }
   // ./asserts/xxx → asserts 基址 + xxx

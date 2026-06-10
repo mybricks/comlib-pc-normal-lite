@@ -370,7 +370,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
                 const myContent = css.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
                   .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
                 // 组件id + 文件路径，保证唯一性
-                env.canvas.css.set(replaceToUnderline(`${id}_${filename}`), myContent)
+                env.canvas.css.set(`${id}_${filename}`.replace(/\./g, '__').replace(/\//g, '_'), myContent)
               },
               remove() {
                 env.canvas.css.remove(id)

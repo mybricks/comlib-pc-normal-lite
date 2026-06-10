@@ -54,7 +54,7 @@ export default function (props: Props, actions: Actions) {
             {
               title: '样式',
               autoOptions: true,
-              valueProxy: genStyleValue({comId}),
+              valueProxy: genStyleValue(props),
             },
             genResizer(),
           ],

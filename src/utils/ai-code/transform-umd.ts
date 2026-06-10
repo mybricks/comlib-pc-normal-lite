@@ -74,7 +74,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
 }
 
 export function transformLess(code, filename: string) {
-  const prefix = filename.replace(/[^0-9a-zA-Z_]/g, '_')
+  const prefix = filename.replace(/\./g, '__').replace(/\//g, '_')
   const useCssModule = filename.endsWith('.module.less')
   const cssModule: any = {
     cssContent: "",
@@ -147,7 +147,7 @@ export function transformLess(code, filename: string) {
                     cssModule.classMap[className] = className
                     return match
                   }
-                  const hashedName = `${prefix ? `${prefix}-` : ""}${className}`;
+                  const hashedName = `${prefix ? `${prefix}--` : ""}${className}`;
                   cssModule.classMap[className] = hashedName;
                   return `.${hashedName}`;
                 },

@@ -22,7 +22,11 @@
     "noImplicitAny": false,
     "noEmit": true,
     "jsx": "react",
-    "rootDirs": ["."]
+    "rootDirs": ["."],
+    "paths": {
+      "@": ["./src"],
+      "@/*": ["./src/*"]
+    },
   },
   "exclude": [
     "./node_modules"
