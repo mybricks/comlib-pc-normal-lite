@@ -313,6 +313,7 @@ class Context {
         case 'yml':
         case 'txt':
         case 'json':
+        case 'md':
           updateFileContent({
             fileName,
             files,
