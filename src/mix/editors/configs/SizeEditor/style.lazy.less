@@ -20,6 +20,8 @@
   font-weight: 400;
   border: 1px solid transparent;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
 
   &:hover {
     outline: 1px solid var(--mybricks-border-color-main);
@@ -37,7 +39,7 @@
   left: calc(50% - 14px);
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 6px;
+  width: 8px;
   height: 8px;
   background-color: var(--mybricks-bg-color-secondary, rgba(0, 0, 0, 0.08));
   pointer-events: none;
