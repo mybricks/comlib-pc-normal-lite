@@ -1,6 +1,8 @@
 import * as antd from "antd";
 import echartsForReact from '../../utils/echarts-for-react'
 import zhCN from 'antd/locale/zh_CN'
+import { isLoggerMethod } from '../../utils/ai-code/render/logger'
+import context from './index'
 
 const DEFAULT_ENTRY_FILE = 'index'
 const MODULE_FRONTEND_TYPE = 'frontend'
@@ -15,6 +17,22 @@ type CompatibleAvailableLibrary = {
     validatePlugin: () => void
   }
 }[]
+
+function createRuntimeLogger() {
+  return new Proxy({}, {
+    get(_, prop: string | symbol) {
+      if (!isLoggerMethod(prop)) {
+        return () => {};
+      }
+      return (...args: any[]) => {
+        if (context.comDebugStateMap.isDebugging) {
+          console.log(args)
+          context.pushLog(prop, args);
+        }
+      };
+    }
+  });
+}
 
 class Config {
   getEntryFile() {
@@ -102,14 +120,14 @@ class Config {
       }
 
       if (typeof getDependencies === 'function') {
-        transformDependencies(getDependencies())
+        transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
       }
 
       if (modules) {
         Object.entries(modules).forEach(([key, module]: any) => {
           const { getDependencies } = module
           if (typeof getDependencies === 'function') {
-            transformDependencies(getDependencies())
+            transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
           }
         })
       }
@@ -146,7 +164,7 @@ class Config {
       }
 
       if (typeof getDependencies === 'function') {
-        transformDependencies(getDependencies())
+        transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
       }
 
       if (modules) {
@@ -154,7 +172,7 @@ class Config {
           if (fileName.startsWith(key)) {
             const { getDependencies, type } = module
             if (typeof getDependencies === 'function') {
-              transformDependencies(getDependencies())
+              transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
             }
             if (type === MODULE_FRONTEND_TYPE) {
               // 前端默认注入 react、react-dom
@@ -224,7 +242,7 @@ class Config {
       }
 
       if (typeof getDependencies === 'function') {
-        transformDependencies(getDependencies())
+        transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
       }
 
       if (modules) {
@@ -232,7 +250,7 @@ class Config {
           if (fileName.startsWith(key)) {
             const { getDependencies } = module
             if (typeof getDependencies === 'function') {
-              transformDependencies(getDependencies())
+              transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
             }
           }
         })
@@ -265,14 +283,14 @@ class Config {
       }
 
       if (typeof getDependencies === 'function') {
-        transformDependencies(getDependencies())
+        transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
       }
 
       if (modules) {
         Object.entries(modules).forEach(([key, module]: any) => {
           const { getDependencies } = module
           if (typeof getDependencies === 'function') {
-            transformDependencies(getDependencies())
+            transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
           }
         })
       }
