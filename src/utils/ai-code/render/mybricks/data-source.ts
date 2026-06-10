@@ -17,21 +17,21 @@ function wrapAxiosWithLogger(axiosInstance: any): any {
       const method = prop.toUpperCase();
       return (url: string, ...args: any[]) => {
         const firstMessage = `[HTTP] ${method} ${url}`
-        context.pushLog('info', [firstMessage, ...args]);
+        context.pushLog('info', [`${firstMessage} start:`, ...args]);
         const result = target[prop](url, ...args);
         if (result && typeof result.then === 'function') {
           return result.then(
             (res: any) => {
-              context.pushLog('info', [firstMessage, res]);
+              context.pushLog('info', [`${firstMessage} response:`, res]);
               return res;
             },
             (err: any) => {
-              context.pushLog('error', [firstMessage, err]);
+              context.pushLog('error', [`${firstMessage} error:`, err]);
               return Promise.reject(err);
             }
           );
         } else {
-          context.pushLog('info', [firstMessage, result]);
+          context.pushLog('info', [`${firstMessage} response:`, result]);
         }
         return result;
       };
