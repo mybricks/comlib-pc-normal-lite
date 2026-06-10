@@ -26,7 +26,6 @@ function createRuntimeLogger() {
       }
       return (...args: any[]) => {
         if (context.comDebugStateMap.isDebugging) {
-          console.log(args)
           context.pushLog(prop, args);
         }
       };
