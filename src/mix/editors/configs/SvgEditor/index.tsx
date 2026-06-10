@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { genSvgReplacer, registerSvgAppliedCallback, applyRawSvg } from '../../styleProxy';
+import { genSvgReplacer, registerSvgAppliedCallback, applyRawSvg, patchSvgSizeInTsx } from '../../styleProxy';
 import IconLibraryModal from '../IconLibraryModal';
+import { SizeEditor } from '../SizeEditor';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 
 const css = getLazyCss(styles);
 
-// ─── SvgPreview ───────────────────────────────────────────────────────────────
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeSvgSize(svgHtml: string, size = 48): string {
   return svgHtml
@@ -23,27 +24,41 @@ function getSvgComputedColor(el: Element | null): string | undefined {
   return style.getPropertyValue('color') || undefined;
 }
 
-function SvgPreview({ editConfig }: { editConfig: any }) {
-  const svgEl: Element | null = editConfig.editConfig.ele ?? null;
-  const [svgHtml, setSvgHtml] = useState(svgEl?.outerHTML ?? '');
-  const [svgColor] = useState<string | undefined>(() => getSvgComputedColor(svgEl));
-  const [previewColor, setPreviewColor] = useState<string | undefined>(svgColor);
+/** 从 SVG HTML 字符串或 DOM 元素读取 width/height（整数 px） */
+function readSvgSize(svgHtml: string, el: SVGElement | null): { w: number; h: number } {
+  // 优先从 HTML 属性字符串解析
+  const wMatch = svgHtml.match(/\bwidth="([^"]+)"/);
+  const hMatch = svgHtml.match(/\bheight="([^"]+)"/);
+  const wAttr = parseFloat(wMatch?.[1] ?? '');
+  const hAttr = parseFloat(hMatch?.[1] ?? '');
+  if (!isNaN(wAttr) && wAttr > 0 && !isNaN(hAttr) && hAttr > 0) {
+    return { w: Math.round(wAttr), h: Math.round(hAttr) };
+  }
+  // fallback 1：offsetWidth/offsetHeight（Shadow DOM 内可读）
+  if (el) {
+    const ow = (el as unknown as HTMLElement).offsetWidth;
+    const oh = (el as unknown as HTMLElement).offsetHeight;
+    if (ow > 0 && oh > 0) return { w: Math.round(ow), h: Math.round(oh) };
+  }
+  // fallback 2：getBoundingClientRect
+  if (el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return { w: Math.round(rect.width), h: Math.round(rect.height) };
+    }
+  }
+  return { w: 0, h: 0 };
+}
 
-  useEffect(() => {
-    registerSvgAppliedCallback((rawSvg: string) => {
-      setSvgHtml(rawSvg);
-      setPreviewColor(undefined);
-    });
-    return () => registerSvgAppliedCallback(null);
-  }, []);
+// ─── SvgPreview ───────────────────────────────────────────────────────────────
 
+function SvgPreview({ svgHtml, color }: { svgHtml: string; color: string | undefined }) {
   if (!svgHtml) return null;
-
   return (
     <div className={css.preview}>
       <div
         className={css.previewInner}
-        style={{ color: previewColor }}
+        style={{ color }}
         dangerouslySetInnerHTML={{ __html: normalizeSvgSize(svgHtml) }}
       />
     </div>
@@ -55,12 +70,30 @@ function SvgPreview({ editConfig }: { editConfig: any }) {
 const svgReplacer = genSvgReplacer();
 
 function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string }) {
+  const svgEle = editConfig.editConfig?.ele as SVGElement | null;
   const [pickerOpen, setPickerOpen] = useState(false);
-  const syntheticParams = { focusArea: editConfig.editConfig?.ele, id: comId };
+  const [currentSvgHtml, setCurrentSvgHtml] = useState(svgEle?.outerHTML ?? '');
+  const [svgColor] = useState<string | undefined>(() => getSvgComputedColor(svgEle));
+
+  useEffect(() => {
+    registerSvgAppliedCallback((rawSvg: string) => {
+      setCurrentSvgHtml(rawSvg);
+    });
+    return () => registerSvgAppliedCallback(null);
+  }, []);
+
+  const syntheticParams = { focusArea: svgEle, id: comId };
+  const svgSize = readSvgSize(currentSvgHtml, svgEle);
 
   return (
     <div className={css.panel}>
-      <SvgPreview editConfig={editConfig} />
+      <SvgPreview svgHtml={currentSvgHtml} color={svgColor} />
+      {currentSvgHtml && (
+        <SizeEditor
+          size={svgSize}
+          onCommit={(size) => patchSvgSizeInTsx(syntheticParams, size)}
+        />
+      )}
       <div className={css.btnRow}>
         <button
           type="button"

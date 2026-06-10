@@ -1,7 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import context from '../../../context';
-import { genIconReplacer, registerSvgAppliedCallback, applyIconWithSvg } from '../../styleProxy';
+import {
+  genIconReplacer,
+  registerSvgAppliedCallback,
+  applyIconWithSvg,
+  patchIconSizeInTsx,
+  patchSvgSizeInTsx,
+  readIconSizeFromJsx,
+} from '../../styleProxy';
 import IconLibraryModal from '../IconLibraryModal';
+import { SizeEditor } from '../SizeEditor';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 
@@ -22,6 +30,48 @@ function getSvgComputedColor(el: Element | null): string | undefined {
   const fill = style.getPropertyValue('fill');
   if (fill && fill !== 'none' && fill !== 'auto' && !fill.startsWith('url')) return fill;
   return style.getPropertyValue('color') || undefined;
+}
+
+/** 从三方图标的 DOM 元素读取实际渲染尺寸（多种 fallback） */
+function readIconDomSize(ele: Element | null): { w: number; h: number } {
+  if (!ele) return { w: 0, h: 0 };
+
+  // 直接读 ele 本身
+  const elW = (ele as HTMLElement).offsetWidth;
+  const elH = (ele as HTMLElement).offsetHeight;
+  if (elW > 0 && elH > 0) return { w: Math.round(elW), h: Math.round(elH) };
+
+  // 内部 SVG
+  const svgEl = ele.querySelector('svg') as HTMLElement | null;
+  if (svgEl) {
+    const w = svgEl.offsetWidth;
+    const h = svgEl.offsetHeight;
+    if (w > 0 && h > 0) return { w: Math.round(w), h: Math.round(h) };
+
+    const rect = svgEl.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return { w: Math.round(rect.width), h: Math.round(rect.height) };
+    }
+  }
+
+  // ele 的 getBoundingClientRect
+  const rect = ele.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    return { w: Math.round(rect.width), h: Math.round(rect.height) };
+  }
+
+  return { w: 0, h: 0 };
+}
+
+/** 从替换后的 SVG HTML 字符串读取 width/height 属性 */
+function readSvgHtmlSize(svgHtml: string): { w: number; h: number } {
+  const wMatch = svgHtml.match(/\bwidth="([^"]+)"/);
+  const hMatch = svgHtml.match(/\bheight="([^"]+)"/);
+  const w = parseFloat(wMatch?.[1] ?? '');
+  const h = parseFloat(hMatch?.[1] ?? '');
+  return !isNaN(w) && w > 0 && !isNaN(h) && h > 0
+    ? { w: Math.round(w), h: Math.round(h) }
+    : { w: 0, h: 0 };
 }
 
 // ─── IconEditorPanel ──────────────────────────────────────────────────────────
@@ -52,6 +102,26 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
     return () => registerSvgAppliedCallback(null);
   }, []);
 
+  // 替换为内联 SVG 后从 HTML 字符串读取；否则优先从 JSX 源码读显式尺寸，fallback 到 DOM 测量
+  const iconSize = replacedSvg
+    ? readSvgHtmlSize(replacedSvg)
+    : (() => {
+        const jsxSize = readIconSizeFromJsx(syntheticParams);
+        return jsxSize.w > 0 ? jsxSize : readIconDomSize(ele);
+      })();
+
+  const handleSizeCommit = useCallback(
+    (size: { width: number; height: number }) => {
+      if (replacedSvg) {
+        patchSvgSizeInTsx(syntheticParams, size);
+      } else {
+        patchIconSizeInTsx(syntheticParams, size);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [replacedSvg],
+  );
+
   return (
     <div className={css.panel}>
       {/* 图标预览 */}
@@ -67,6 +137,9 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
           <span className={css.previewEmpty}>{iconName || '无法预览'}</span>
         )}
       </div>
+
+      {/* 尺寸编辑器：三方组件图标不支持非等比变形，禁止解锁宽高比 */}
+      <SizeEditor size={iconSize} onCommit={handleSizeCommit} disableLock={!replacedSvg} />
 
       {/* 操作按钮 */}
       <div className={css.btnRow}>
