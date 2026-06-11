@@ -303,6 +303,7 @@ ${canvasStatus}
 }
 
 export function createProject(config: ProjectConfig): Project {
+  (window as any).__mybricksProjectConfig = () => config;
   return new Project(config);
 }
 

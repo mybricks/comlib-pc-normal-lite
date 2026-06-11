@@ -17,28 +17,38 @@ export function getMybricksUsage() {
 ### 组件声明
 组件必须通过 comRef 包裹实现
 
+\`\`\`ts
+comRef(baseComponent: FunctionComponent<Props>): FunctionComponent<Props>
+\`\`\`
+
 ### 页面声明
 页面同样需要通过 comRef 包裹实现，但是需要被 Route 注册为页面
 
 ### 浮层类组件声明
 浮层类组件（弹窗、抽屉等）必须通过 popupRef 包裹实现，popupRef是MyBricks提供的高阶函数，用于创建一个浮层类组件。
 
+\`\`\`ts
+popupRef(baseComponent: FunctionComponent<Props>): FunctionComponent<Props>
+\`\`\`
+
 > 浮层类组件不是路由页面，禁止将其注册为 \`Route\`；浮层必须使用 \`popupRef\` 包裹，作为普通子组件挂载在所属页面或组件内；
 
 #### 浮层使用
 在代码中使用浮层类组件时必须使用环境变量，这样设计者才能选中浮层内部的元素进行编辑
-  - 使用提供的环境变量 \`process.env.POPUP_VISIBLE\` 将浮层默认设置为打开状态
-  - 使用提供的环境变量 \`process.env.POPUP_NODE\` 将浮层渲染到指定的容器内
+
+> **重要**：\`process.env.POPUP_VISIBLE\` 和 \`process.env.POPUP_NODE\` 这两个环境变量**只能在 \`popupRef\` 包裹的组件内部使用**。这是因为运行时会将它们替换为 \`popupRef\` 注入的内部变量，若在 \`popupRef\` 外使用会导致运行时报错。
+
+  - \`visible\` 属性：必须先写 \`process.env.POPUP_VISIBLE\`，再用 \`||\` 跟上真实控制 visible 的变量
+  - \`getContainer\` 属性：必须先写 \`process.env.POPUP_NODE\`，如果还需要变量控制挂载节点，同样用 \`||\` 跟在后面
 \`\`\`tsx
 import { popupRef } from 'mybricks'
-import store from './store';
 import { Modal } from 'lib'
 
-const ConfirmModal = popupRef(() => {
+const ConfirmModal = popupRef(({ visible, container }) => {
   return (
     <Modal
-      visible={process.env.POPUP_VISIBLE || store.modalVisible}
-      getContainer={() => process.env.POPUP_NODE}
+      visible={process.env.POPUP_VISIBLE || visible}
+      getContainer={() => process.env.POPUP_NODE || container}
     />
   )
 })
@@ -140,9 +150,18 @@ describe('无权限测试', () => {
 
 \`\`\`tsx
 import { comRef, appRef, Routes, Route, useNavigate, useLocation, useParams } from 'mybricks';
-import { Button } from 'xy-ui';
-import store from './store';
-import css from 'style.less';
+import css from './index.module.less';
+
+const BUTTONS = [
+  {
+    text: '用户A',
+    path: '/user/a'
+  },
+  {
+    text: '用户B',
+    path: '/user/b'
+  }
+]
 
 /**
  * @summary 工具条
@@ -150,12 +169,12 @@ import css from 'style.less';
 const ToolBar = comRef(() => {
   const navigate = useNavigate();
   const location = useLocation(); // { pathname, search, hash, state }
-  return store.btns.map((btn) => (
-    <Button
+  return BUTTONS.map((btn) => (
+    <button
       key={btn.text}
       className={location.pathname === btn.path ? css.btnActive : css.btn}
       onClick={() => navigate(btn.path)}
-    >{btn.text}</Button>
+    >{btn.text}</button>
   ));
 });
 
@@ -168,8 +187,7 @@ const PageButton = comRef(() => (
  */
 const UserDetail = comRef(() => {
   const { id } = useParams(); // 读取动态段参数
-  const user = store.users.find((u) => String(u.id) === id);
-  return <div>{user?.name}</div>;
+  return <div>{id}</div>;
 });
 
 const PageUser = comRef(() => <UserDetail />);
