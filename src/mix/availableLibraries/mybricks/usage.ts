@@ -44,11 +44,11 @@ popupRef(baseComponent: FunctionComponent<Props>): FunctionComponent<Props>
 import { popupRef } from 'mybricks'
 import { Modal } from 'lib'
 
-const ConfirmModal = popupRef(({ visible, container }) => {
+const ConfirmModal = popupRef(({ visible }) => {
   return (
     <Modal
       visible={process.env.POPUP_VISIBLE || visible}
-      getContainer={() => process.env.POPUP_NODE || container}
+      getContainer={() => process.env.POPUP_NODE}
     />
   )
 })
