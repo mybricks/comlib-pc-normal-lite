@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ChatPanel, Agent } from '/Users/lianglihao/Documents/GitHub/plugin-ai/packages/plugin/src/index'
+import { ChatPanel, Agent } from '../../../../../../plugin-ai/packages/plugin/src/index'
 
 import css from './index.less'
 
