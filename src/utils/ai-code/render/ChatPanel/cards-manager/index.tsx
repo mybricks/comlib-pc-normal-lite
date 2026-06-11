@@ -1,0 +1,120 @@
+import React from "react";
+import { CardRender } from './card'
+import type { CardGroup } from "./types";
+
+type Tool = any
+type ToolResult = any
+
+// ─── 工具名称常量 ──────────────────────────────────────────────────────────────
+
+export const SHOW_CARD_TOOL_NAME = "show_ui_card";
+
+// ─── createShowCardTool ────────────────────────────────────────────────────────
+
+/**
+ * 创建 `show_ui_card` 工具。
+ *
+ * LLM 通过此工具触发 UI 层渲染指定卡片。
+ * execute 本身只做参数校验并返回渲染状态，实际渲染由 UI 层
+ * 监听 tool call 后通过 `CardRender` 组件完成。
+ *
+ * @param groups  卡片分组列表（在调用方构造后传入）
+ */
+export function createShowCardTool(groups: CardGroup[]): Tool {
+  const allCards = groups.flatMap((g) => g.cards);
+  const cardNames = allCards.map((c) => c.name);
+
+  return {
+    name: SHOW_CARD_TOOL_NAME,
+    title: "展示 UI 卡片",
+    description: `根据 name 渲染对应的 UI 卡片，并将 props 数据传递给卡片。
+调用时请从 available_cards 中选择合适的卡片 name，并根据卡片的 props 结构传入对应数据。`,
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          enum: cardNames,
+          description: "要渲染的卡片唯一 key（来自 available_cards）",
+        },
+        props: {
+          type: "object",
+          description: "传递给卡片的数据，结构参考 available_cards 中该卡片的 props 描述",
+        },
+      },
+      required: ["name"],
+    },
+    validate(params: { name?: string; props?: Record<string, any> }) {
+      if (!params.name || typeof params.name !== "string" || !params.name.trim()) {
+        throw new Error("name is required and must be a non-empty string");
+      }
+      if (!cardNames.includes(params.name)) {
+        throw new Error(
+          `Card not found: "${params.name}". Available cards: ${cardNames.join(", ")}`,
+        );
+      }
+    },
+    async execute(params: { name: string; props?: Record<string, any> }): Promise<ToolResult> {
+      const card = allCards.find((c) => c.name === params.name);
+      if (!card) {
+        return {
+          output: `Error: Card "${params.name}" not found.`,
+          metadata: { success: false, name: params.name },
+        };
+      }
+
+      return {
+        output: `UI 卡片 "${card.title}" 已渲染。`,
+        metadata: {
+          success: true,
+          name: params.name,
+          props: params.props ?? {},
+        },
+      };
+    },
+    render: ({ tool }) => {
+      const { name, props } = tool?.args ?? {};
+      return <CardRender groups={groups} name={name} props={props ?? {}} />
+    }
+  };
+}
+
+// ─── buildAvailableCardsSection ───────────────────────────────────────────────
+
+/**
+ * 构建 available_cards 提示词片段。
+ *
+ * 将 CardGroup[] 格式化为类似 available_skills 的结构化文本，
+ * 注入到 system prompt 中，告知 LLM 当前可用的卡片及其用途。
+ *
+ * 输出格式示例：
+ * ```
+ * <available_cards>
+ * <card_group title="team" description="team management">
+ *   <card name="member-list" title="成员列表" description="展示团队成员信息">
+ *     props: { "teamId": "string" }
+ *   </card>
+ * </card_group>
+ * </available_cards>
+ * ```
+ *
+ * @param groups  卡片分组列表
+ */
+export function buildAvailableCardsSection(groups: CardGroup[]): string {
+  if (!groups.length) return "";
+
+  const groupBlocks = groups.map((group) => {
+    const cardLines = group.cards.map((card) => {
+      const propsStr =
+        card.props && Object.keys(card.props).length > 0
+          ? `\n    props: ${JSON.stringify(card.props)}`
+          : "";
+
+      return `  <card name="${card.name}" title="${card.title}" description="${card.description}">${propsStr}\n  </card>`;
+    });
+
+    return `<card_group title="${group.title}" description="${group.description}">\n${cardLines.join("\n")}\n</card_group>`;
+  });
+
+  return `<available_cards>\n${groupBlocks.join("\n")}\n</available_cards>`;
+}

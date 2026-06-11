@@ -1,16 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ChatPanel, Agent } from '../../../../../../plugin-ai/packages/plugin/src/index'
+import { ChatPanel, Agent, IDBHistory, createRequestAsStream } from '../../../../../../plugin-ai/packages/plugin/src/index'
+import { createShowCardTool, buildAvailableCardsSection } from './cards-manager'
 
 import css from './index.less'
 
-const AIChatPanel = ({ chat }) => {
+const AIChatPanel = ({ key, cardsGroups }) => {
   const chatPanelRef = useRef(null)
 
   const [agent, setAgent] = useState<Agent>()
 
   useEffect(() => {
     try {
-      const agent = new Agent(chat.agent)
+      const agent = new Agent({
+        key: key,
+        tools: [
+          createShowCardTool(cardsGroups),
+        ],
+        request: (params) => {
+          return createRequestAsStream()?.(params)
+        },
+        history: new IDBHistory({
+          dbName: "@plugin-ai/simple-chat",
+        }),
+        getAttachmentContextMessages: () => [buildAvailableCardsSection(cardsGroups)]
+      })
       setAgent(agent)
     } catch (e) {
       console.error(e)
@@ -26,7 +39,7 @@ const AIChatPanel = ({ chat }) => {
       <ChatPanel
         ref={chatPanelRef}
         agent={agent}
-        {...chat.panel}
+        header={false}
       />
     </div>
   )

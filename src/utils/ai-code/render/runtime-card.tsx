@@ -178,10 +178,6 @@ interface AIRuntimeProps {
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, id}: any) => {
 
-    if (window._sandbox_.config.componentRuntime?.chat) {
-      return <AIChatPanel chat={window._sandbox_.config.componentRuntime?.chat}/>
-    }
-
     const containerRef = useRef<HTMLDivElement>(null);
     const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
     const [reload, setReload] = useState(0)
