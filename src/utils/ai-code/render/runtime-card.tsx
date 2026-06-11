@@ -14,6 +14,7 @@ import { DataSource } from './mybricks/data-source'
 import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
 import { createRuntimeMode } from '../runtimeMode'
+// import AIChatPanel from './ChatPanel';
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
 export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
@@ -178,6 +179,11 @@ interface AIRuntimeProps {
 
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, id}: any) => {
+
+    // if (window._sandbox_.config.componentRuntime?.chat) {
+    //   return <AIChatPanel chat={window._sandbox_.config.componentRuntime?.chat}/>
+    // }
+
     const containerRef = useRef<HTMLDivElement>(null);
     const files = Array.isArray(data.files) ? data.files : [];
     const runtimeFiles = files.filter((file: any) => !isAgentFile(file.fileName));
