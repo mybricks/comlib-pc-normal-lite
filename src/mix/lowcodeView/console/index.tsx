@@ -11,8 +11,8 @@ import { lowcodeViewEvents } from '../'
 const css = getLazyCss(lazyCss)
 
 interface ConsoleLogPanelProps {
-  componentId: string;
   logs: LogMessage[];
+  sendToAgent: (params: { message: string }) => void
 }
 
 const transformData = (data: any[]) => {
@@ -39,10 +39,10 @@ const formatBindings = (bindings?: Record<string, any>) => {
   return `[${Object.entries(bindings).map(([key, value]) => `${key}=${String(value)}`).join(' ')}]`;
 }
 
-export default function ConsoleLogPanel({ componentId, logs }: ConsoleLogPanelProps) {
+export default function ConsoleLogPanel({ logs, sendToAgent }: ConsoleLogPanelProps) {
   const handleClear = useCallback(() => {
-    if (componentId) context.clearComLogs();
-  }, [componentId]);
+    context.clearComLogs();
+  }, []);
 
   const isDark = useDarkMode();
   const variant = isDark ? 'dark' : 'light';
@@ -66,7 +66,7 @@ export default function ConsoleLogPanel({ componentId, logs }: ConsoleLogPanelPr
             return {
               ...log,
               data: bindingsLabel ? [bindingsLabel, ...logData] : logData,
-              action: _ ? null : (actionData?.length ? <LogAction method={method} data={logData} action={actionData[0]} componentId={componentId}/> : null)
+              action: _ ? null : (actionData?.length ? <LogAction method={method} data={logData} action={actionData[0]} sendToAgent={sendToAgent}/> : null)
             }
           })}
           variant={variant}
@@ -92,7 +92,7 @@ const formatItem = (item: any): string => {
   }
 };
 
-const LogAction = ({ data, method, action, componentId }) => {
+const LogAction = ({ data, method, action, sendToAgent }) => {
   return (
     <div className={css.logActionContainer}>
       {method === 'error' && (
@@ -100,10 +100,10 @@ const LogAction = ({ data, method, action, componentId }) => {
           data-mybricks-tip="交给AI修复"
           className={css.logActionButton}
           onClick={() => {
-            const message = '当前组件运行时，在控制台打印以下错误，分析问题并修复：\n' +
-              data.map(formatItem).join(' ');
-
-            (window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message });
+            sendToAgent({
+              message: '当前组件运行时，在控制台打印以下错误，分析问题并修复：\n' +
+                data.map(formatItem).join(' ')
+            })
           }}
         >
           <AiFix size={14}/>

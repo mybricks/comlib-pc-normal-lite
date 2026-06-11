@@ -297,41 +297,6 @@ function LowcodeView(params: Params) {
     }));
   }, [selectFile]);
 
-  const handleSave = useCallback(async () => {
-    if (!selectFile) {
-      return
-    }
-
-    const { fileName, source } = selectFile;
-
-    if (fileName in modifiedContent) {
-      const comId = params.model.runtime.id;
-      // context.updateFile(comId, { fileName, content: modifiedContent[fileName], type: "update" });
-      setModifiedContent((prev) => {
-        const next = { ...prev };
-        delete next[fileName];
-        return next;
-      });
-
-      const currentSource = modifiedContent[fileName]
-      const previousSource = source;
-
-      undoRedoManager.execute({
-        execute() {
-          context.updateFile({ fileName, content: currentSource, type: "update" });
-          context.saveManualVersion([fileName]);
-        },
-        undo() {
-          context.updateFile({ fileName, content: previousSource, type: "update" });
-          context.saveManualVersion([fileName]);
-        },
-      })
-
-      // 手动编辑保存后，添加 manual 类型版本记录
-      // await context.saveManualVersion(comId, [fileName]);
-    }
-  }, [selectFile, modifiedContent, params.model]);
-
   // 保存所有有未保存修改的文件
   const handleSaveAll = useCallback(async () => {
     const dirtyFileNames = Object.keys(modifiedContent);
@@ -392,20 +357,6 @@ function LowcodeView(params: Params) {
       horizontalScrollbarSize: 10
     }
   }), []);
-
-  // 按需覆盖：仅当某 data 字段变化时，只清除对应文件的未保存内容，其它文件保留
-  // const clearFileIfDataChanged = useCallback((fileName: FileName) => {
-  //   setModifiedContent((prev) => {
-  //     if (!(fileName in prev)) {
-  //       return {
-  //         ...prev,
-  //       };
-  //     }
-  //     const next = { ...prev };
-  //     delete next[fileName];
-  //     return next;
-  //   });
-  // }, []);
 
   const mountRef = useRef<any>(null)
   // 保存各文件的滚动位置，key 为 fileName
@@ -662,15 +613,18 @@ function LowcodeView(params: Params) {
       {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}
       {isDebugging && (
         <div className={css['lowcode-view']} style={{ display: bottomTab === 'console' ? 'flex' : 'none' }}>
-          <ConsoleLogPanel componentId={componentId} logs={consoleLogs} />
+          <ConsoleLogPanel
+            logs={consoleLogs}
+            sendToAgent={(params) => {
+              (window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, params);
+            }}
+          />
         </div>
       )}
       {/* 版本面板 */}
-      {componentId && (
-        <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
-          <VersionPanel render={bottomTab === 'version'} componentId={componentId} />
-        </div>
-      )}
+      <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
+        <VersionPanel render={bottomTab === 'version'} />
+      </div>
     </div>
   )
 }

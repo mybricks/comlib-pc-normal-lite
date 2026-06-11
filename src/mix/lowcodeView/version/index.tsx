@@ -6,15 +6,10 @@ import type { VersionRecord } from "../../context";
 import { Version } from "../../context";
 import * as lazyCss from "./index.lazy.less";
 import { getLazyCss } from "../utils/css";
-import { randomUUID } from "../../utils/uuid"
 import InfiniteScroll from '../infinite-scroll'
 import { undoRedoManager } from '../../editors/undoRedo'
 
 const css = getLazyCss(lazyCss)
-
-interface VersionPanelProps {
-  componentId: string;
-}
 
 const TYPE_LABEL: Record<VersionRecord['type'], string> = {
   init: '初始版本',
@@ -66,12 +61,6 @@ function Popconfirm({ title, visible, onVisible, onConfirm, children, parentElem
 
     // 监听所有祖先元素的滚动事件，实时更新 popup 位置
     const scrollParents: Array<HTMLElement | Window> = [parentElement];
-    // let el: HTMLElement | null = triggerRef.current?.parentElement ?? null;
-    // while (el) {
-    //   console.log('[el]', el)
-    //   scrollParents.push(el);
-    //   el = el.parentElement;
-    // }
     scrollParents.push(window);
     scrollParents.forEach(p => p.addEventListener('scroll', updatePosition, true));
 
@@ -192,7 +181,7 @@ function VersionItem({
   );
 }
 
-export default function ({ componentId, render }) {
+export default function ({ render }) {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
@@ -201,10 +190,10 @@ export default function ({ componentId, render }) {
     }
   }, [render])
 
-  return show && <VersionPanel2 componentId={componentId}/>
+  return show && <VersionPanel2 />
 }
 
-function VersionPanel2({ componentId }: VersionPanelProps) {
+function VersionPanel2() {
   const panelContainer = useRef<HTMLDivElement>(null);
   const [{ history, version }] = useState(() => {
     return {
@@ -225,7 +214,6 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
     pageSize: 20,
     history,
     version,
-    componentId
   })
 
   const handleRollback = useCallback((version: VersionRecord, latestVersion: VersionRecord) => {
@@ -239,7 +227,7 @@ function VersionPanel2({ componentId }: VersionPanelProps) {
         rollback?.(latestVersion.id);
       },
     })
-  }, [componentId]);
+  }, []);
 
   return (
     <div className={css.list} id="com-material-list" ref={panelContainer}>
@@ -298,14 +286,12 @@ interface UseVersionsOptions {
     listVersions: (params: { pageSize: number, pageNum: number }) => Promise<{ total: number; list: VersionRecord[] }>
   }
   version: Version
-  componentId: string
 }
 export function useVersions(options: UseVersionsOptions) {
   const { 
     pageSize,
     history,
     version,
-    componentId
   } = options;
   
   const [loading, setLoading] = useState(false);
@@ -353,9 +339,6 @@ export function useVersions(options: UseVersionsOptions) {
 
         return versions
       });
-      // setTotal(response.total);
-      // setHasMore(newVersions.length === pageSize);
-      
 
       if (!reset) {
         setCurrentPage(prev => {
