@@ -1,6 +1,6 @@
 import { calculate, compare } from 'specificity';
 import context from '../../../context'
-import { getShadowRoot } from '@/helpers/designer'
+import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
