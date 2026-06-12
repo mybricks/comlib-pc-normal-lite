@@ -825,7 +825,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                       />
                     </Page>
                   )
-                }) : (
+                }) : Object.keys(configCard).length === 0 ? (
                   <Page
                     path={'/'}
                     onMount={onMount}
@@ -837,7 +837,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                       )}
                     />
                   </Page>
-                )}
+                ) : null}
                 {Object.entries(configCard).map(([filename, { render }]: any) => {
                   const Render = render
                   return <Render />
