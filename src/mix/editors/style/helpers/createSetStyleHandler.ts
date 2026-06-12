@@ -1,6 +1,6 @@
 import { calculate, compare } from 'specificity';
 import context from '../../../context'
-import { getShadowRoot } from '@/helpers/designer'
+import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
@@ -9,7 +9,14 @@ const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
 const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>) => {
   const hasGap = 'rowGap' in style || 'columnGap' in style || 'gap' in style
-  return hasGap ? (ele.parentElement as HTMLElement) : ele
+  if (hasGap) {
+    const parent = ele.parentElement!
+    if (parent.dataset['customComWrapper']) {
+      return parent.parentElement
+    }
+    return parent
+  }
+  return ele
 }
 
 /**

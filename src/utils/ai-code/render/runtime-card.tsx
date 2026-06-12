@@ -117,6 +117,8 @@ const GenerateLoadingView = ({
   );
 };
 
+const isAgentFile = (fileName = '') => fileName.replace(/^\//, '').startsWith('.agent/');
+
 const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = []}: any) => {
   const copy = useCallback((text) => {
     copyToClipboard(text).then((res) => {
@@ -179,6 +181,8 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
   ({env, data, id}: any) => {
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const files = Array.isArray(data.files) ? data.files : [];
+    const runtimeFiles = files.filter((file: any) => !isAgentFile(file.fileName));
     const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
     const [reload, setReload] = useState(0)
     const [vibing, setVibing] = useState(false);
@@ -242,7 +246,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       if (vibing) {
         return
       }
-      const compileErrors = Array.isArray(data._errors) ? data._errors : []
+      const compileErrors = (Array.isArray(data._errors) ? data._errors : []).filter((error) => !isAgentFile(error?.file))
 
       if (compileErrors.length > 0) {
         const firstError = compileErrors[0];
@@ -338,7 +342,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           />
         );
       }
-      if ((data.document && !data.files.length) || data.loading) {
+      if ((data.document && !files.length) || data.loading) {
         return (
           <div className={css.documentCard}>
             <div className={css.documentContent}>{data.document}</div>
@@ -383,7 +387,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             vibing={vibing}
             onMount={({ fileSystem }) => {
               context.fileSystem = fileSystem
-              fileSystem.init(data.files.map((file) => {
+              fileSystem.init(runtimeFiles.map((file) => {
                 return {
                   ...file,
                   filename: file.fileName
