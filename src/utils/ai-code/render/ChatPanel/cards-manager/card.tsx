@@ -101,15 +101,16 @@ export interface CardRenderProps {
  * ```
  */
 export function CardRender({ groups, name, props = {}, loading = false }: CardRenderProps) {
-  // ── Loading 状态 ──────────────────────────────────────────────────────────
-  if (loading) {
-    return <LoadingCard />;
-  }
-
+  // ── Hooks 必须在最顶部，不能在条件之后 ──────────────────────────────────
   const card = useMemo(
     () => groups.flatMap((g) => g.cards).find((c) => c.name === name),
     [groups, name],
   );
+
+  // ── Loading 状态 ──────────────────────────────────────────────────────────
+  if (loading) {
+    return <LoadingCard />;
+  }
 
   // ── 未找到兜底 ────────────────────────────────────────────────────────────
   if (!card) {
