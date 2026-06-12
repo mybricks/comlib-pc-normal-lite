@@ -840,8 +840,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 )}
                 {Object.entries(configCard).map(([filename, { render }]: any) => {
                   const Render = render
-                  console.log(111, filename)
-                  console.log(222, render)
                   return <Render />
                 })}
               </>

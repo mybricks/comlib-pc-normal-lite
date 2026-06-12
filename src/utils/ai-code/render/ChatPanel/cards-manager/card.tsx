@@ -37,9 +37,15 @@ export function CardRender({ groups, name, props = {} }: CardRenderProps) {
     );
   }
 
+  console.log('[card]', card)
+  console.log('[props]', props)
+
+  const Render = card.render;
+
   return (
     <div data-card-name={card.name}>
-      {card.render(props as any)}
+      <Render {...props}/>
+      {/* {card.render(props as any)} */}
     </div>
   );
 }

@@ -424,8 +424,8 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           />
         )
 
+        const cards: any = []
         if (showChatPanel) {
-          const cards: any = []
           Object.entries(dependencies.mybricks._configCard).forEach(([filename, { config, render }]: any) => {
             const { title, props, description } = config
             cards.push({
@@ -436,19 +436,20 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               render
             })
           })
-          return (
-            <div className={css.withAIChatPanel}>
+        }
+
+        return (
+          <div className={showChatPanel ? css.withAIChatPanel : undefined}>
+            {showChatPanel && (
               <AIChatPanel key={id} cardsGroups={[{
                 title: '通用分组',
                 description: '通用卡片',
                 cards,
               }]}/>
-              {nextRuntime}
-            </div>
-          )
-        }
-
-        return nextRuntime
+            )}
+            {nextRuntime}
+          </div>
+        )
       }
 
       return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;
