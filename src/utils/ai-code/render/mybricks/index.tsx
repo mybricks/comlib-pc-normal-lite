@@ -840,7 +840,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 ) : null}
                 {Object.entries(configCard).map(([filename, { render }]: any) => {
                   const Render = render
-                  return <Render />
+                  return (
+                    <div style={{ width: 414 }}>
+                      <Render />
+                    </div>
+                  )
                 })}
               </>
             )}
