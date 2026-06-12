@@ -183,6 +183,8 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const [reload, setReload] = useState(0)
     const [vibing, setVibing] = useState(false);
 
+    const [showChatPanel, setShowChatPanel] = useState(false)
+
     useLayoutEffect(() => {
       const events = context.component!.events;
       const cancelListenVibing = events.on('vibing', setVibing);
@@ -354,7 +356,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       }
 
       if (data.files.length) {
-        return (
+        const nextRuntime = (
           <NextRuntime
             key={activeEnv + "_" + reload}
             wrapper={({ children }) => {
@@ -387,6 +389,10 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
                   filename: file.fileName
                 }
               }))
+
+              if (window._sandbox_.config.componentRuntime?.chat) {
+                setShowChatPanel(true)
+              }
             }}
             onRuntimeError={(error) => {
               context.component!.events.emit('runtimeError', error)
@@ -417,6 +423,32 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
             }}
           />
         )
+
+        if (showChatPanel) {
+          const cards: any = []
+          Object.entries(dependencies.mybricks._configCard).forEach(([filename, { config, render }]: any) => {
+            const { title, props, description } = config
+            cards.push({
+              name: title,
+              title,
+              description,
+              props,
+              render
+            })
+          })
+          return (
+            <div className={css.withAIChatPanel}>
+              <AIChatPanel key={id} cardsGroups={[{
+                title: '通用分组',
+                description: '通用卡片',
+                cards,
+              }]}/>
+              {nextRuntime}
+            </div>
+          )
+        }
+
+        return nextRuntime
       }
 
       return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;

@@ -76,6 +76,9 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
         },
         comRef: (Component, params = {}) => {
           return result.comRef(Component, { filename, ...params })
+        },
+        defineConfig: (config) => {
+          return result.defineConfig(config, { filename })
         }
       }
     }
@@ -390,6 +393,14 @@ class FileSystem {
         return result
       }
       sorted = topoSort(files)
+      // 把所有 .config.ts 文件提前到最前面
+      sorted.sort((a, b) => {
+        const aIsConfig = a.filename.endsWith('.config.ts')
+        const bIsConfig = b.filename.endsWith('.config.ts')
+        if (aIsConfig && !bIsConfig) return -1
+        if (!aIsConfig && bIsConfig) return 1
+        return 0
+      })
     } catch {}
 
     sorted.forEach(file => {

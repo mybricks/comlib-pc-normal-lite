@@ -19,7 +19,8 @@ const VALID_NAMES = new Set([
   'PopupVisible',
   'useDesignToken',
   '_refreshPopups',
-  'DataSource'
+  'DataSource',
+  'defineConfig'
 ])
 
 // ── 校验器实现 ────────────────────────────────────────────────────────────────

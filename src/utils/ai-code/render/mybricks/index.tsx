@@ -757,6 +757,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
 
+  const configCard = {}
 
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
@@ -809,33 +810,41 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               <ObservedComponent {...props} _env={_env}/>
             )}
             {app.state === 'runtime' && (
-              collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
-                return (
+              <>
+                {collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
+                  return (
+                    <Page
+                      path={route}
+                      onMount={onMount}
+                    >
+                      <CollectingRoute
+                        {...props}
+                        _env={_env}
+                        _route={route}
+                        _Component={ObservedComponent}
+                      />
+                    </Page>
+                  )
+                }) : (
                   <Page
-                    path={route}
+                    path={'/'}
                     onMount={onMount}
                   >
-                    <CollectingRoute
-                      {...props}
-                      _env={_env}
-                      _route={route}
-                      _Component={ObservedComponent}
+                    <Route
+                      path='/'
+                      element={(
+                        <ObservedComponent {...props} _env={_env}/>
+                      )}
                     />
                   </Page>
-                )
-              }) : (
-                <Page
-                  path={'/'}
-                  onMount={onMount}
-                >
-                  <Route
-                    path='/'
-                    element={(
-                      <ObservedComponent {...props} _env={_env}/>
-                    )}
-                  />
-                </Page>
-              )
+                )}
+                {Object.entries(configCard).map(([filename, { render }]: any) => {
+                  const Render = render
+                  console.log(111, filename)
+                  console.log(222, render)
+                  return <Render />
+                })}
+              </>
             )}
             {app.state === 'runtime' && (
               Object.entries(popupRefRegistry).map(([filename, DialogRoots]) => {
@@ -869,6 +878,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const comRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
+    if (configCard[params.filename]) {
+      configCard[params.filename].render = ObservedComponent
+      popupRefRegistryForceUpdate?.()
+    }
+
     return (props: any) => {
       const pageContext = useContext(PageContext);
 
@@ -1145,7 +1159,22 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         popupRefRegistry[filename] = []
         popupRefRegistryForceUpdate?.()
       }
-    }
+    },
+    defineConfig(config, { filename }) {
+      let splits = filename.split('/')
+      splits = splits.slice(0, splits.length - 1)
+      splits.push('index.tsx')
+     
+      const cardFilename = splits.join('/')
+
+      if (!configCard[cardFilename]) {
+        configCard[cardFilename] = {
+          config,
+          render: null
+        }
+      }
+    },
+    _configCard: configCard
   }
 }
 
