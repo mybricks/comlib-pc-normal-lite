@@ -74,7 +74,8 @@ export function createShowCardTool(groups: CardGroup[]): Tool {
     },
     render: (tool) => {
       const { name, props } = tool?.args ?? {};
-      return <CardRender groups={groups} name={name} props={props ?? {}} />
+      const loading = tool?.status === 'pending';
+      return <CardRender groups={groups} name={name} props={props ?? {}} loading={loading} />
     }
   };
 }
@@ -107,14 +108,14 @@ export function buildAvailableCardsSection(groups: CardGroup[]): string {
     const cardLines = group.cards.map((card) => {
       const propsStr =
         card.props && Object.keys(card.props).length > 0
-          ? `\n    props: ${JSON.stringify(card.props)}`
+          ? `\n  - props: ${JSON.stringify(card.props)}`
           : "";
 
-      return `  <card name="${card.name}" title="${card.title}" description="${card.description}">${propsStr}\n  </card>`;
+      return `- name: \`${card.name}\`  title: ${card.title}  desc: ${card.description}${propsStr}`;
     });
 
-    return `<card_group title="${group.title}" description="${group.description}">\n${cardLines.join("\n")}\n</card_group>`;
+    return `## ${group.title}\n> ${group.description}\n\n可用的卡片如下：\n${cardLines.join("\n")}`;
   });
 
-  return `<available_cards>\n${groupBlocks.join("\n")}\n</available_cards>`;
+  return `<available_cards>\n当前可用的卡片分组如下，每一个分组下都有分组相关的卡片，你可以通过提供各类卡片来和用户完成交互。\n\n${groupBlocks.join("\n\n")}\n</available_cards>`;
 }

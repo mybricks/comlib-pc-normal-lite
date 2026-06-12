@@ -22,7 +22,8 @@ const AIChatPanel = ({ key, cardsGroups }) => {
         history: new IDBHistory({
           dbName: "@plugin-ai/simple-chat",
         }),
-        getAttachmentContextMessages: () => [buildAvailableCardsSection(cardsGroups)]
+        getAttachmentContextMessages: () => [buildAvailableCardsSection(cardsGroups)],
+        disabledModes: ["plan"]
       })
       setAgent(agent)
     } catch (e) {
