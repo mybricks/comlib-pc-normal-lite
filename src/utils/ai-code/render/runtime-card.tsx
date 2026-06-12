@@ -428,28 +428,40 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           />
         )
 
-        const cards: any = []
-        if (showChatPanel) {
-          Object.entries(dependencies.mybricks._configCard).forEach(([filename, { config, render }]: any) => {
-            const { title, props, description } = config
-            cards.push({
-              name: title,
-              title,
-              description,
-              props,
-              render
-            })
-          })
-        }
-
         return (
           <div className={showChatPanel ? css.withAIChatPanel : undefined}>
             {showChatPanel && (
-              <AIChatPanel key={id} cardsGroups={[{
-                title: '通用分组',
-                description: '通用卡片',
-                cards,
-              }]}/>
+              <AIChatPanel
+                key={id}
+                getCardsGroups={() => {
+                  const cards: any = []
+                  Object.entries(dependencies.mybricks._configCard).forEach(([filename, card]: any) => {
+                    // const { title, props, description } = config
+                    cards.push({
+                      get name() {
+                        return card.config.title
+                      },
+                      get title() {
+                        return card.config.title
+                      },
+                      get description() {
+                        return card.config.description
+                      },
+                      get props() {
+                        return card.config.props
+                      },
+                      get render() {
+                        return card.render
+                      }
+                    })
+                  })
+                  return [{
+                    title: '通用分组',
+                    description: '通用卡片',
+                    cards,
+                  }]
+                }}
+              />
             )}
             {nextRuntime}
           </div>

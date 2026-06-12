@@ -4,7 +4,7 @@ import { createShowCardTool, buildAvailableCardsSection } from './cards-manager'
 
 import css from './index.less'
 
-const AIChatPanel = ({ key, cardsGroups }) => {
+const AIChatPanel = ({ key, getCardsGroups }) => {
   const chatPanelRef = useRef(null)
 
   const [agent, setAgent] = useState<Agent>()
@@ -13,16 +13,18 @@ const AIChatPanel = ({ key, cardsGroups }) => {
     try {
       const agent = new Agent({
         key: key,
-        tools: [
-          createShowCardTool(cardsGroups),
-        ],
+        get tools() {
+          return [
+            createShowCardTool(getCardsGroups()),
+          ]
+        },
         request: (params) => {
           return createRequestAsStream()?.(params)
         },
         history: new IDBHistory({
           dbName: "@plugin-ai/simple-chat",
         }),
-        getAttachmentContextMessages: () => [buildAvailableCardsSection(cardsGroups)],
+        getAttachmentContextMessages: () => [buildAvailableCardsSection(getCardsGroups())],
         disabledModes: ["plan"]
       })
       setAgent(agent)
