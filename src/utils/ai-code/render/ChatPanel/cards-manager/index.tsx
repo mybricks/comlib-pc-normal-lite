@@ -72,7 +72,7 @@ export function createShowCardTool(groups: CardGroup[]): Tool {
         },
       };
     },
-    render: ({ tool }) => {
+    render: (tool) => {
       const { name, props } = tool?.args ?? {};
       return <CardRender groups={groups} name={name} props={props ?? {}} />
     }
