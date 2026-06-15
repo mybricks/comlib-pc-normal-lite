@@ -208,6 +208,10 @@ export function genStyleValue(props) {
 
       const fullSelector = params.selector;
 
+      console.log("组件侧接收到的fullSelector", fullSelector);
+
+      debugger
+
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList });
