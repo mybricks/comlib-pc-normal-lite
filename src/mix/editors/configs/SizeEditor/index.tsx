@@ -3,14 +3,18 @@ import { AspectRadiolock } from '../../icons/aspect-radio-lock';
 import { AspectRadioUnlock } from '../../icons/aspect-radio-unlock';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
+import { useDragLabel } from '../hooks/useDragLabel';
 
 const css = getLazyCss(styles);
 
 // ─── SizeField ────────────────────────────────────────────────────────────────
 
-function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+function SizeField({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
   const [draft, setDraft] = useState(value > 0 ? String(value) : '');
   const [focused, setFocused] = useState(false);
+
+  const getValue = useCallback(() => value, [value]);
+  const dragLabelProps = useDragLabel(getValue, onCommit);
 
   useEffect(() => {
     if (!focused) setDraft(value > 0 ? String(value) : '');
@@ -23,23 +27,26 @@ function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) =
   };
 
   return (
-    <input
-      className={css.sizeField}
-      type="number"
-      min={1}
-      value={draft}
-      onChange={e => setDraft(e.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => {
-        setFocused(false);
-        tryCommit();
-      }}
-      onKeyDown={e => {
-        if (e.key === 'Enter') {
-          (e.target as HTMLInputElement).blur();
-        }
-      }}
-    />
+    <>
+      <span className={css.sizeLabel} {...dragLabelProps}>{label}</span>
+      <input
+        className={css.sizeField}
+        type="number"
+        min={1}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          tryCommit();
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
+    </>
   );
 }
 
@@ -113,15 +120,13 @@ export function SizeEditor({ size: initialSize, onCommit, disableLock = false }:
   return (
     <div className={css.sizeRow}>
       <div className={css.sizeInput}>
-        <span className={css.sizeLabel}>宽度</span>
-        <SizeField value={w} onCommit={handleWCommit} />
+        <SizeField label="宽度" value={w} onCommit={handleWCommit} />
       </div>
 
       {locked && <span className={css.linkDot} />}
 
       <div className={css.sizeInput}>
-        <span className={css.sizeLabel}>高度</span>
-        <SizeField value={h} onCommit={handleHCommit} />
+        <SizeField label="高度" value={h} onCommit={handleHCommit} />
       </div>
 
       <button
