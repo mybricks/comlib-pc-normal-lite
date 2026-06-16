@@ -77,15 +77,21 @@ export default function createSetStyleHandler(
         style = getStyle(ctx, params)
 
         if (!isStart) {
-          isStart = true
-          ele = resolveTargetEle(getEle(ctx, params), style)
-          // [TODO] 处理多个classname的情况
-          const result = ele.className.replace(/--.*$/, '');
+          const sourceEle = getEle(ctx, params)
+          ele = resolveTargetEle(sourceEle, style)
           const componentID = context.component!.params.id
-          const styleID = `${componentID}_${result}`
+          // styleID 计算规则与 runtime-card.tsx 中 css.set 保持一致：
+          // `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+          const locRaw = sourceEle.dataset?.loc
+          const loc = locRaw ? (() => { try { return JSON.parse(locRaw) } catch { return null } })() : null
+          const lessFile: string = loc?.files?.less ?? 'style.less'
+          const styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           const shadowRoot = getShadowRoot()
-          const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement
-          const sheet = styleTag.sheet!
+          const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement | null
+          const sheet = styleTag?.sheet ?? null
+          // styleTag 或 sheet 未就绪时跳过本次，等下次 ing 再试
+          if (!sheet) return
+          isStart = true
           const matchedRules: CSSStyleRule[] = [];
           for (const rule of sheet.cssRules) {
             if (rule instanceof CSSStyleRule) {
@@ -104,7 +110,17 @@ export default function createSetStyleHandler(
             // specificity 相同时，source order 靠后的优先（index 越大越靠后）
             return 0; // stable sort 下 push 顺序即书写顺序，同权重保持原序
           })
-          const winningRule = matchedRules[0]
+          let winningRule: CSSStyleRule
+          if (matchedRules[0]) {
+            winningRule = matchedRules[0]
+          } else {
+            // Less 编译时空规则会被省略，sheet 里找不到该 class 的规则。
+            // 回退：从 classList 里找 CSS Module 前缀类（含 '--'），构造合成选择器
+            const moduleClass = Array.from(ele.classList).find(c => c.includes('--'))
+            if (!moduleClass) return
+            const syntheticSelector = `:where(.${componentID}) .${moduleClass}`
+            winningRule = { selectorText: syntheticSelector, style: { getPropertyValue: () => '' } } as unknown as CSSStyleRule
+          }
 
           // ── 解析 data-style-info，决定每个 key 路由到哪个选择器 ───────────────
           type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart: number; valueEnd: number }
@@ -147,6 +163,7 @@ export default function createSetStyleHandler(
         const selectorStyleMap = new Map<string, Record<string, { value: number; isJsx: boolean }>>()
         Object.entries(style as Record<string, number>).forEach(([key, val]) => {
           const route = styleKeyRoutes[key]
+          if (!route) return
           const selector = route.selector
           if (!selectorStyleMap.has(selector)) selectorStyleMap.set(selector, {})
           selectorStyleMap.get(selector)![key] = { value: val, isJsx: route?.isJsx ?? false }
@@ -235,6 +252,9 @@ export default function createSetStyleHandler(
             const lessFile = context.component!.params.data.files.find((f) => f.fileName === fileName)
             const lessPreviousCode = decodeURIComponent(lessFile.source)
             const cssObj = parseLess(lessPreviousCode)
+            if (!cssObj[cssKey]) {
+              cssObj[cssKey] = {}
+            }
             value.forEach(({ key, value }) => {
               cssObj[cssKey][key] = `${value}px`
             })
