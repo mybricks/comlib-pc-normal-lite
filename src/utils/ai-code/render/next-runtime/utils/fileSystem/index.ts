@@ -1032,6 +1032,17 @@ class FileSystem {
     if (this.error) {
       errors.push(this.error)
     }
+
+    // 检查入口文件是否缺失
+    const entryFile = this.params.entryFile
+    const entryExists = Object.keys(this.filesMap).some(filename => filename === entryFile)
+    if (!entryExists) {
+      errors.push({
+        type: '入口文件缺失',
+        message: `入口文件 \`${entryFile}\` 缺失，组件无法渲染`
+      })
+    }
+
     Object.entries(this.filesMap).forEach(([_, value]: any) => {
       const error = value.errors.runtime
       if (error) {

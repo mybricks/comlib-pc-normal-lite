@@ -4,7 +4,7 @@ import zhCN from 'antd/locale/zh_CN'
 import { isLoggerMethod } from '../../utils/ai-code/render/logger'
 import context from './index'
 
-const DEFAULT_ENTRY_FILE = 'index'
+const DEFAULT_ENTRY_FILE = 'index.tsx'
 const MODULE_FRONTEND_TYPE = 'frontend'
 
 type CompatibleAvailableLibrary = {
