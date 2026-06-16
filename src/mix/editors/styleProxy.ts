@@ -152,6 +152,68 @@ function resolveTargetKey(params: {
   return suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? fullSelector;
 }
 
+/**
+ * 检测 fullSelector 是否命中 cssObj 中的嵌套伪类/伪元素规则（如 ".pageBtn" 下的 "&:disabled"），
+ * 若命中则直接在原位写入样式，完全保留 Less 嵌套结构，并清理可能存在的历史孤儿复合规则。
+ *
+ * 背景：parseLess 会将 `&:disabled { ... }` 解析为父规则下的嵌套 key；
+ * resolveTargetKey 只查顶层 key，导致 .pageBtn:disabled 匹配失败，退化成
+ * 创建全路径孤立复合选择器（如 ".container ... .pageBtn:disabled"）。
+ *
+ * 返回 true 表示已处理，调用方应跳过后续的 resolveTargetKey 流程；
+ * 返回 false 表示未命中，继续走正常流程。
+ */
+function tryWriteNestedPseudo(
+  cssObj: Record<string, any>,
+  fullSelector: string,
+  value: Record<string, any>,
+  deletions: string[] | null,
+): boolean {
+  const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
+  if (segments.length < 2) return false;
+
+  // 按 shrinkMatchKey 相同顺序遍历候选后缀（从长到短），取最短匹配
+  for (let i = 1; i < segments.length; i++) {
+    const candidate = segments.slice(i).join(' ');
+
+    // 只关注单段候选（无空格）
+    if (candidate.includes(' ')) continue;
+
+    // 必须是「单类名 + 伪类/伪元素」形式，支持 :disabled、::placeholder、:hover:not(:disabled) 等
+    const pseudoMatch = candidate.match(/^(\.[^:]+)(:{1,2}.+)$/);
+    if (!pseudoMatch) continue;
+
+    const [, base, pseudo] = pseudoMatch;
+    if (!cssObj[base] || typeof cssObj[base] !== 'object') continue;
+
+    const nestedKey = '&' + pseudo;
+    if (cssObj[base][nestedKey] === undefined) continue;
+
+    // 找到嵌套伪类，直接在原位写入，保留 Less 嵌套结构
+    const target = cssObj[base][nestedKey] as Record<string, any>;
+    Object.entries(value).forEach(([k, v]) => { target[k] = v; });
+
+    if (deletions && deletions.length > 0) {
+      const expandedDeletions = expandDeletions(deletions);
+      expandedDeletions.forEach(k => delete target[k]);
+    }
+
+    // 嵌套块变为空时删除该嵌套 key
+    if (Object.keys(target).length === 0) {
+      delete cssObj[base][nestedKey];
+    }
+
+    // 顺手清除因历史 bug 产生的孤儿复合规则
+    if (cssObj[fullSelector]) {
+      delete cssObj[fullSelector];
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 export function genStyleValue(props) {
@@ -210,6 +272,22 @@ export function genStyleValue(props) {
 
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
+
+      // 嵌套伪类快速路径：直接写入 &:disabled 等嵌套位置，保留 Less 原有结构
+      if (tryWriteNestedPseudo(cssObj, fullSelector, value, deletions)) {
+        const cssStr = stringifyLess(cssObj);
+        context.updateFile({ fileName: lessPath, content: cssStr, type: undefined });
+        debouncedUpdateFile({
+          path: lessPath,
+          current: cssStr,
+          previous: previousLess,
+          callback: () => {
+            previousLess = null
+          }
+        });
+        return;
+      }
+
       const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList });
 
       absorbOrphans(cssObj, targetKey);
