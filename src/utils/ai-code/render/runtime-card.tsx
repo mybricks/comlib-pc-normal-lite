@@ -434,8 +434,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               <AIChatPanel
                 getCardsGroups={() => {
                   const cards: any = []
-                  Object.entries(dependencies.mybricks._configCard).forEach(([filename, card]: any) => {
-                    // const { title, props, description } = config
+                  Object.entries(dependencies.mybricks._cardConfig).forEach(([filename, card]: any) => {
                     cards.push({
                       get name() {
                         return card.config.title

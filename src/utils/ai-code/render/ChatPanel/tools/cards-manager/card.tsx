@@ -110,13 +110,16 @@ export function CardRender({ groups, name, props = {}, loading = false, cardId }
     () => groups.flatMap((g) => g.cards).find((c) => c.name === name),
     [groups, name],
   );
+  const cardIdRef = useRef(cardId)
+
+  cardIdRef.current = cardId
 
   const cardValueRef = useRef({
     register: (apis) => {
-      cardClass.register(cardId, apis)
+      cardClass.register(cardIdRef.current, apis)
     },
     unregister: () => {
-      cardClass.unregister(cardId)
+      cardClass.unregister(cardIdRef.current)
     }
   })
 

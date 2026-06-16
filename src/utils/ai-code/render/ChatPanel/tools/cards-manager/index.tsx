@@ -1,5 +1,6 @@
 import React from "react";
 import { CardRender } from './card'
+import { randomUUID } from '../../../../../../mix/utils/uuid'
 import type { CardGroup } from "./types";
 
 type Tool = any
@@ -8,8 +9,6 @@ type ToolResult = any
 // ─── 工具名称常量 ──────────────────────────────────────────────────────────────
 
 export const SHOW_CARD_TOOL_NAME = "show_ui_card";
-
-let currentCard
 
 // ─── createShowCardTool ────────────────────────────────────────────────────────
 
@@ -70,13 +69,16 @@ export function createShowCardTool(groups: CardGroup[]): Tool {
         ? card.apis.map((api) => `  - ${api.name}: ${api.description}`).join('\n')
         : '  （该卡片未声明任何 API）'
 
+      const id = randomUUID()
+
       return {
         output: `UI 卡片 "${card.title}" 已渲染。
-cardId: ${currentCard?.callId ?? ''}
+cardId: ${id}
 可通过 call_ui_card_api 调用以下查询类 API 获取卡片数据（仅用于查询，不触发任何操作）：
 ${apisDesc}
 注意：当用户要求重新执行某个动作（如“再试一次”、“重新查询”等），应重新调用 show_ui_card 渲染新卡片，而非调用 call_ui_card_api。`,
         metadata: {
+          id,
           success: true,
           name: params.name,
           props: params.props ?? {},
@@ -84,12 +86,9 @@ ${apisDesc}
       };
     },
     render: (tool) => {
-
-      currentCard = tool
-
       const { name, props } = tool?.args ?? {};
       const loading = tool?.status === 'pending';
-      return <CardRender groups={groups} name={name} props={props ?? {}} loading={loading} cardId={tool?.callId} />
+      return <CardRender groups={groups} name={name} props={props ?? {}} loading={loading} cardId={tool?.result?.metadata?.id} />
     }
   };
 }

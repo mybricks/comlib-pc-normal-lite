@@ -757,7 +757,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
 
-  const configCard = {}
+  const cardConfig = {}
 
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
@@ -825,7 +825,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                       />
                     </Page>
                   )
-                }) : Object.keys(configCard).length === 0 ? (
+                }) : Object.keys(cardConfig).length === 0 ? (
                   <Page
                     path={'/'}
                     onMount={onMount}
@@ -838,7 +838,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                     />
                   </Page>
                 ) : null}
-                {Object.entries(configCard).map(([filename, { render }]: any) => {
+                {Object.entries(cardConfig).map(([filename, { render }]: any) => {
                   const Render = render
                   return (
                     <div style={{ width: 414 }}>
@@ -880,8 +880,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const comRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
-    if (configCard[params.filename]) {
-      configCard[params.filename].render = ObservedComponent
+    if (cardConfig[params.filename]) {
+      cardConfig[params.filename].render = ObservedComponent
       popupRefRegistryForceUpdate?.()
     }
 
@@ -1169,16 +1169,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
      
       const cardFilename = splits.join('/')
 
-      if (!configCard[cardFilename]) {
-        configCard[cardFilename] = {
+      if (!cardConfig[cardFilename]) {
+        cardConfig[cardFilename] = {
           config,
           render: null
         }
       } else {
-        configCard[cardFilename].config = config
+        cardConfig[cardFilename].config = config
       }
     },
-    _configCard: configCard
+    _cardConfig: cardConfig
   }
 }
 
