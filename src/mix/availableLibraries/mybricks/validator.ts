@@ -20,7 +20,8 @@ const VALID_NAMES = new Set([
   'useDesignToken',
   '_refreshPopups',
   'DataSource',
-  'defineConfig'
+  'defineConfig',
+  'useCardApis'
 ])
 
 // ── 校验器实现 ────────────────────────────────────────────────────────────────

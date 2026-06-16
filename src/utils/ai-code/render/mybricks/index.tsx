@@ -1174,6 +1174,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           config,
           render: null
         }
+      } else {
+        configCard[cardFilename].config = config
       }
     },
     _configCard: configCard

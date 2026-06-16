@@ -452,6 +452,9 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
                       },
                       get render() {
                         return card.render
+                      },
+                      get apis() {
+                        return card.config.apis
                       }
                     })
                   })

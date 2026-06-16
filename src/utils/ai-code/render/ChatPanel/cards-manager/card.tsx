@@ -1,4 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useRef, useMemo } from "react";
+import { CardContext } from "../../mybricks/hooks";
+import cardClass from '../tools/card';
 import type { CardGroup } from "./types";
 import css from "./card.less";
 
@@ -83,6 +85,8 @@ export interface CardRenderProps {
   props?: Record<string, any>;
   /** 是否处于 loading 状态，显示骨架屏 */
   loading?: boolean;
+  /** 卡片实例，唯一ID */
+  cardId: string;
 }
 
 /**
@@ -100,17 +104,34 @@ export interface CardRenderProps {
  * <CardRender groups={myGroups} name="xxx" loading />     // 骨架屏
  * ```
  */
-export function CardRender({ groups, name, props = {}, loading = false }: CardRenderProps) {
+export function CardRender({ groups, name, props = {}, loading = false, cardId }: CardRenderProps) {
   // ── Hooks 必须在最顶部，不能在条件之后 ──────────────────────────────────
   const card = useMemo(
     () => groups.flatMap((g) => g.cards).find((c) => c.name === name),
     [groups, name],
   );
 
+  const cardValueRef = useRef({
+    register: (apis) => {
+      cardClass.register(cardId, apis)
+    },
+    unregister: () => {
+      cardClass.unregister(cardId)
+    }
+  })
+
   // ── Loading 状态 ──────────────────────────────────────────────────────────
   if (loading) {
     return <LoadingCard />;
   }
+
+  console.log('[groups]', groups)
+  console.log('props', {
+    name,
+    props,
+    loading,
+    cardId
+  })
 
   // ── 未找到兜底 ────────────────────────────────────────────────────────────
   if (!card) {
@@ -123,7 +144,9 @@ export function CardRender({ groups, name, props = {}, loading = false }: CardRe
   return (
     <div className={css.wrapper}>
       <div className={css.cardWrapper} data-card-name={card.name}>
-        <Render {...props} />
+        <CardContext.Provider value={cardValueRef.current}>
+          <Render {...props}/>
+        </CardContext.Provider>
       </div>
     </div>
   );
