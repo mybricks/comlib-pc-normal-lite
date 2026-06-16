@@ -11,3 +11,38 @@
 .popupContainer {
   overflow: visible !important;
 }
+
+.titleBar {
+  position: absolute;
+  z-index: 10000000;
+  height: 26px;
+  left: 50%;
+  top: -30px;
+  transform: translateX(-50%) !important;
+  padding: 3px 20px 3px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto !important;
+  border-radius: 6px 6px 0 0;
+  box-shadow: var(--mybricks-shadow-main);
+  background: var(--mybricks-bg-color-main);
+  white-space: nowrap;
+
+  .debug {
+    height: 14px;
+    width: 14px;
+    cursor: pointer !important;
+    margin: 0 7px 0 -5px;
+
+    svg {
+      max-width: 14px;
+      max-height: 14px;
+    }
+
+    label {
+      cursor: pointer !important;
+      white-space: nowrap;
+    }
+  }
+}

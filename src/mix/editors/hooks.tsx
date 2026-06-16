@@ -33,7 +33,8 @@ import type {Props} from './types';
 const errorSet = new Set();
 
 function getDisallowedDebugEnvs() {
-  const disallowedDebugEnvs = (window as any)._sandbox_?.config?.disallowedDebugEnvs;
+  // [TEMP] 临时兼容，后续只需从 componentRuntime 读取配置
+  const disallowedDebugEnvs = (window as any)._sandbox_?.config?.componentRuntime?.disallowedDebugEnvs || (window as any)._sandbox_?.config?.disallowedDebugEnvs;
 
   return Array.isArray(disallowedDebugEnvs) ? disallowedDebugEnvs : [];
 }

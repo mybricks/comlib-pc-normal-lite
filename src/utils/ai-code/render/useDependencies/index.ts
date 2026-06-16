@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { createMyBricksTesting } from './mybricks-testing'
 import type { MyBricksTesting } from './mybricks-testing'
 import { createMyBricks } from '../mybricks'
+import { useCardApis } from '../mybricks/hooks/card'
 
 class EmptyDataSource {}
 
@@ -75,7 +76,8 @@ const useDependencies = (params: Params) => {
     }
 
     dependencies.mybricks.DataSource = DataSourceWithProxy
-
+    dependencies.mybricks.useCardApis = useCardApis
+    
     return dependencies as {
       ['mybricks/testing']: MyBricksTesting
       [key: string]: any

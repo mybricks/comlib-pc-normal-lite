@@ -14,7 +14,7 @@ import { DataSource } from './mybricks/data-source'
 import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
 import { createRuntimeMode } from '../runtimeMode'
-// import AIChatPanel from './ChatPanel';
+import AIChatPanel from './ChatPanel';
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
 export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
@@ -180,16 +180,14 @@ interface AIRuntimeProps {
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, id}: any) => {
 
-    // if (window._sandbox_.config.componentRuntime?.chat) {
-    //   return <AIChatPanel chat={window._sandbox_.config.componentRuntime?.chat}/>
-    // }
-
     const containerRef = useRef<HTMLDivElement>(null);
     const files = Array.isArray(data.files) ? data.files : [];
     const runtimeFiles = files.filter((file: any) => !isAgentFile(file.fileName));
     const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
     const [reload, setReload] = useState(0)
     const [vibing, setVibing] = useState(false);
+
+    const [showChatPanel, setShowChatPanel] = useState(false)
 
     useLayoutEffect(() => {
       const events = context.component!.events;
@@ -361,7 +359,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
 
-      if (runtimeFiles.length) {
+      if (data.files.length) {
         return (
           <NextRuntime
             key={activeEnv + "_" + reload}
@@ -395,6 +393,10 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
                   filename: file.fileName
                 }
               }))
+
+              if (window._sandbox_.config.componentRuntime?.chat) {
+                setShowChatPanel(true)
+              }
             }}
             onRuntimeError={(error) => {
               context.component!.events.emit('runtimeError', error)

@@ -228,12 +228,19 @@ ${zonesList}${unvisibleCount ? `
   ` : ''}`;
     }
 
+    canvasStatus = `## 设计态渲染情况
+${canvasStatus}`
+
+    if (window._sandbox_.config.componentRuntime?.chat) {
+      // [TODO] 没有页面概念，只有卡片
+      canvasStatus = '## 设计态渲染情况\n全部正常渲染'
+    }
+
     const curStatus = `
 ## 当前状态
 状态：${modeLabel}
 ${dataEnvLine ? `${dataEnvLine}\n` : ''}
 
-## 设计态渲染情况
 ${canvasStatus}
 `;
 

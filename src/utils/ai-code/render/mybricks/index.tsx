@@ -12,12 +12,13 @@ import React, {
 import { parseFrameSize } from "./utils";
 import css from './index.less';
 import { debugLogs } from '../../../../mix/context/debugLogs';
-import mixContext from '../../../../mix/context';
+import mixContext, { config } from '../../../../mix/context';
 import {
   isLoggerMethod,
   mergeLoggerBindings,
   type LoggerBindings,
 } from '../logger';
+import AIChatPanel from '../ChatPanel'
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
@@ -221,6 +222,9 @@ interface CreateMyBricksProps {
 }
 
 const createMyBricks = (props: CreateMyBricksProps) => {
+
+  const frontendMode = config.getFrontendMode()
+
   // 配置的画布信息
   const { width: canvasWidth = 1440, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
   
@@ -757,6 +761,49 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
 
+  const cardConfig = {}
+
+  const Card = ({
+    config,
+    filename,
+    children,
+    onMount,
+    style = {},
+    ...rest
+  }: any) => {
+    const ref = useRef<HTMLDivElement>(null)
+
+    useLayoutEffect(() => {
+      const firstWidget = ref.current!.querySelector('[data-widget-name]')!
+      if (firstWidget) {
+        const widgetName = firstWidget.getAttribute('data-widget-name')!
+        ref.current?.setAttribute('data-widget-name', widgetName)
+      }
+    }, [children])
+
+    useEffect(() => {
+      onMount?.()
+    }, [])
+
+    return (
+      <div
+        ref={ref}
+        style={{
+          width: 414,
+          height: 'fit-content',
+          ...style,
+        }}
+        data-zone-type="page"
+        data-zone-kind="page"
+        data-zone-title={config.title}
+        data-desn-page={filename}
+        data-zone-filename={filename}
+        {...rest}
+      >
+        {children}
+      </div>
+    )
+  }
 
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
@@ -797,7 +844,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         const onMount = useCallback((params) => {
           mountRef.current = mountRef.current + 1
           const dialogRootsCount = Object.values(popupRefRegistry).reduce((sum, arr) => sum + arr.length, 0)
-          const totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
+          let totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount + Object.keys(cardConfig).length
+          if (Object.keys(cardConfig).length) {
+            // 渲染卡片，默认不渲染appRef，减去默认的1
+            totalMountCount = totalMountCount - 1
+          }
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
           }
@@ -809,33 +860,90 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               <ObservedComponent {...props} _env={_env}/>
             )}
             {app.state === 'runtime' && (
-              collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
-                return (
+              <>
+                {collectingRoutes.current.length > 0 ? collectingRoutes.current.map((route) => {
+                  return (
+                    <Page
+                      path={route}
+                      onMount={onMount}
+                    >
+                      <CollectingRoute
+                        {...props}
+                        _env={_env}
+                        _route={route}
+                        _Component={ObservedComponent}
+                      />
+                    </Page>
+                  )
+                }) : Object.keys(cardConfig).length === 0 ? (
                   <Page
-                    path={route}
+                    path={'/'}
                     onMount={onMount}
                   >
-                    <CollectingRoute
-                      {...props}
-                      _env={_env}
-                      _route={route}
-                      _Component={ObservedComponent}
+                    <Route
+                      path='/'
+                      element={(
+                        <ObservedComponent {...props} _env={_env}/>
+                      )}
                     />
                   </Page>
-                )
-              }) : (
-                <Page
-                  path={'/'}
-                  onMount={onMount}
-                >
-                  <Route
-                    path='/'
-                    element={(
-                      <ObservedComponent {...props} _env={_env}/>
-                    )}
-                  />
-                </Page>
-              )
+                ) : null}
+                {frontendMode === 'gui_card' ? (
+                  <Card
+                    config={{
+                      title: 'Agent'
+                    }}
+                    filename='GUI_AGENT'
+                    onMount={onMount}
+                    data-widget-name='GUI_AGENT'
+                    style={{
+                      width: 800,
+                      height: 900,
+                    }}
+                  >
+                    <AIChatPanel
+                      getCardsGroups={() => {
+                        const cards: any = []
+                        Object.entries(cardConfig).forEach(([filename, card]: any) => {
+                          cards.push({
+                            get name() {
+                              return card.config.title
+                            },
+                            get title() {
+                              return card.config.title
+                            },
+                            get description() {
+                              return card.config.description
+                            },
+                            get props() {
+                              return card.config.props
+                            },
+                            get render() {
+                              return card.render
+                            },
+                            get apis() {
+                              return card.config.apis
+                            }
+                          })
+                        })
+                        return [{
+                          title: '通用分组',
+                          description: '通用卡片',
+                          cards,
+                        }]
+                      }}
+                    />
+                  </Card>
+                ) : null}
+                {Object.entries(cardConfig).map(([filename, { render, config }]: any) => {
+                  const Render = render
+                  return (
+                    <Card config={config} filename={filename} onMount={onMount}>
+                      <Render />
+                    </Card>
+                  )
+                })}
+              </>
             )}
             {app.state === 'runtime' && (
               Object.entries(popupRefRegistry).map(([filename, DialogRoots]) => {
@@ -856,6 +964,76 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         return <ObservedComponent {...props} _env={_env}/>
       }
 
+      if (frontendMode === 'gui_card') {
+        const filename = debugTarget.pageIndex
+
+        if (filename === 'GUI_AGENT') {
+          return (
+            <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
+              <Card
+                config={{
+                  title: 'Agent'
+                }}
+                filename='GUI_AGENT'
+                data-widget-name='GUI_AGENT'
+                style={{
+                  width: 800,
+                  height: 900,
+                }}
+              >
+                <AIChatPanel
+                  getCardsGroups={() => {
+                    const cards: any = []
+                    Object.entries(cardConfig).forEach(([filename, card]: any) => {
+                      cards.push({
+                        get name() {
+                          return card.config.title
+                        },
+                        get title() {
+                          return card.config.title
+                        },
+                        get description() {
+                          return card.config.description
+                        },
+                        get props() {
+                          return card.config.props
+                        },
+                        get render() {
+                          return card.render
+                        },
+                        get apis() {
+                          return card.config.apis
+                        }
+                      })
+                    })
+                    return [{
+                      title: '通用分组',
+                      description: '通用卡片',
+                      cards,
+                    }]
+                  }}
+                />
+              </Card>
+            </div>
+          )
+        }
+
+        const { render: Render, config } = cardConfig[filename]
+
+        return (
+          <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
+            <Card
+              config={config}
+              filename={filename}
+              onMount={() => {}}
+              style={debugTarget?.style}
+            >
+              <Render />
+            </Card>
+          </div>
+        )
+      }
+
       return (
         <RuntimeRoute
           {...props}
@@ -869,6 +1047,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const comRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
+    if (cardConfig[params.filename]) {
+      cardConfig[params.filename].render = ObservedComponent
+      popupRefRegistryForceUpdate?.()
+    }
+
     return (props: any) => {
       const pageContext = useContext(PageContext);
 
@@ -1145,7 +1328,24 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         popupRefRegistry[filename] = []
         popupRefRegistryForceUpdate?.()
       }
-    }
+    },
+    defineConfig(config, { filename }) {
+      let splits = filename.split('/')
+      splits = splits.slice(0, splits.length - 1)
+      splits.push('index.tsx')
+     
+      const cardFilename = splits.join('/')
+
+      if (!cardConfig[cardFilename]) {
+        cardConfig[cardFilename] = {
+          config,
+          render: null
+        }
+      } else {
+        cardConfig[cardFilename].config = config
+      }
+    },
+    _cardConfig: cardConfig
   }
 }
 
