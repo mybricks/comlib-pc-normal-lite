@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from "react";
-import { CardContext } from "../../mybricks/hooks";
-import cardClass from '../tools/card';
+import { CardContext } from "../../../mybricks/hooks";
+import cardClass from '../card';
 import type { CardGroup } from "./types";
 import css from "./card.less";
 

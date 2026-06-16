@@ -1,19 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ChatPanel, Agent, IDBHistory, createRequestAsStream } from '../../../../../../plugin-ai/packages/plugin/src/index'
-import { createShowCardTool, buildAvailableCardsSection } from './cards-manager'
+import { createShowCardTool, buildAvailableCardsSection } from './tools/cards-manager'
 import { createCallCardApiTool } from './tools/callUiCardApi'
 
 import css from './index.less'
 
-const AIChatPanel = ({ key, getCardsGroups }) => {
+const AIChatPanel = ({ getCardsGroups }) => {
+  const { createAgent, ChatPanel } = window._sandbox_.config.componentRuntime.chat
   const chatPanelRef = useRef(null)
 
-  const [agent, setAgent] = useState<Agent>()
+  const [agent, setAgent] = useState()
 
   useEffect(() => {
     try {
-      const agent = new Agent({
-        key: key,
+      const agent = createAgent({
         system: `你是一个可以渲染交互式 UI 卡片的 AI 助手。
 
 ## 卡片渲染规则
@@ -41,14 +40,7 @@ const AIChatPanel = ({ key, getCardsGroups }) => {
             createCallCardApiTool()
           ]
         },
-        request: (params) => {
-          return createRequestAsStream()?.(params)
-        },
-        history: new IDBHistory({
-          dbName: "@plugin-ai/simple-chat",
-        }),
         getAttachmentContextMessages: () => {
-          console.log('getAttachmentContextMessages', buildAvailableCardsSection(getCardsGroups()))
           return [buildAvailableCardsSection(getCardsGroups())]
         },
         disabledModes: ["plan"]
