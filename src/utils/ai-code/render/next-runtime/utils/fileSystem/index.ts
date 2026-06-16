@@ -713,9 +713,9 @@ class FileSystem {
 
       if (entry) {
         const { module } = loadCssModule({ file, css: this.params.css, dependencies: this.proxyDependencies(filename), })
-        if (!entry.module.classMap || (Object.keys(entry.module.classMap).join('') !== Object.keys(module.classMap).join(''))) {
-          refresh = true
-        }
+        // if (!entry.module.classMap || (Object.keys(entry.module.classMap).join('') !== Object.keys(module.classMap).join(''))) {
+        //   refresh = true
+        // }
         entry.file = file
         entry.module = module
       } else {
