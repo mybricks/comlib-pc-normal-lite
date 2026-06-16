@@ -12,12 +12,13 @@ import React, {
 import { parseFrameSize } from "./utils";
 import css from './index.less';
 import { debugLogs } from '../../../../mix/context/debugLogs';
-import mixContext from '../../../../mix/context';
+import mixContext, { config } from '../../../../mix/context';
 import {
   isLoggerMethod,
   mergeLoggerBindings,
   type LoggerBindings,
 } from '../logger';
+import AIChatPanel from '../ChatPanel'
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
@@ -221,6 +222,9 @@ interface CreateMyBricksProps {
 }
 
 const createMyBricks = (props: CreateMyBricksProps) => {
+
+  const frontendMode = config.getFrontendMode()
+
   // 配置的画布信息
   const { width: canvasWidth = 1440, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
   
@@ -759,6 +763,48 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const cardConfig = {}
 
+  const Card = ({
+    config,
+    filename,
+    children,
+    onMount,
+    style = {},
+    ...rest
+  }: any) => {
+    const ref = useRef<HTMLDivElement>(null)
+
+    useLayoutEffect(() => {
+      const firstWidget = ref.current!.querySelector('[data-widget-name]')!
+      if (firstWidget) {
+        const widgetName = firstWidget.getAttribute('data-widget-name')!
+        ref.current?.setAttribute('data-widget-name', widgetName)
+      }
+    }, [children])
+
+    useEffect(() => {
+      onMount?.()
+    }, [])
+
+    return (
+      <div
+        ref={ref}
+        style={{
+          width: 414,
+          height: 'fit-content',
+          ...style,
+        }}
+        data-zone-type="page"
+        data-zone-kind="page"
+        data-zone-title={config.title}
+        data-desn-page={filename}
+        data-zone-filename={filename}
+        {...rest}
+      >
+        {children}
+      </div>
+    )
+  }
+
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
     return (props) => {
@@ -798,7 +844,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         const onMount = useCallback((params) => {
           mountRef.current = mountRef.current + 1
           const dialogRootsCount = Object.values(popupRefRegistry).reduce((sum, arr) => sum + arr.length, 0)
-          const totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
+          let totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount + Object.keys(cardConfig).length
+          if (Object.keys(cardConfig).length) {
+            // 渲染卡片，默认不渲染appRef，减去默认的1
+            totalMountCount = totalMountCount - 1
+          }
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
           }
@@ -838,12 +888,59 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                     />
                   </Page>
                 ) : null}
-                {Object.entries(cardConfig).map(([filename, { render }]: any) => {
+                {frontendMode === 'gui_card' ? (
+                  <Card
+                    config={{
+                      title: 'Agent'
+                    }}
+                    filename='GUI_AGENT'
+                    onMount={onMount}
+                    data-widget-name='GUI_AGENT'
+                    style={{
+                      width: 800,
+                      height: 900,
+                    }}
+                  >
+                    <AIChatPanel
+                      getCardsGroups={() => {
+                        const cards: any = []
+                        Object.entries(cardConfig).forEach(([filename, card]: any) => {
+                          cards.push({
+                            get name() {
+                              return card.config.title
+                            },
+                            get title() {
+                              return card.config.title
+                            },
+                            get description() {
+                              return card.config.description
+                            },
+                            get props() {
+                              return card.config.props
+                            },
+                            get render() {
+                              return card.render
+                            },
+                            get apis() {
+                              return card.config.apis
+                            }
+                          })
+                        })
+                        return [{
+                          title: '通用分组',
+                          description: '通用卡片',
+                          cards,
+                        }]
+                      }}
+                    />
+                  </Card>
+                ) : null}
+                {Object.entries(cardConfig).map(([filename, { render, config }]: any) => {
                   const Render = render
                   return (
-                    <div style={{ width: 414 }}>
+                    <Card config={config} filename={filename} onMount={onMount}>
                       <Render />
-                    </div>
+                    </Card>
                   )
                 })}
               </>
@@ -865,6 +962,76 @@ const createMyBricks = (props: CreateMyBricksProps) => {
          * 独立渲染，不使用默认的react-router-dom
          */
         return <ObservedComponent {...props} _env={_env}/>
+      }
+
+      if (frontendMode === 'gui_card') {
+        const filename = debugTarget.pageIndex
+
+        if (filename === 'GUI_AGENT') {
+          return (
+            <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
+              <Card
+                config={{
+                  title: 'Agent'
+                }}
+                filename='GUI_AGENT'
+                data-widget-name='GUI_AGENT'
+                style={{
+                  width: 800,
+                  height: 900,
+                }}
+              >
+                <AIChatPanel
+                  getCardsGroups={() => {
+                    const cards: any = []
+                    Object.entries(cardConfig).forEach(([filename, card]: any) => {
+                      cards.push({
+                        get name() {
+                          return card.config.title
+                        },
+                        get title() {
+                          return card.config.title
+                        },
+                        get description() {
+                          return card.config.description
+                        },
+                        get props() {
+                          return card.config.props
+                        },
+                        get render() {
+                          return card.render
+                        },
+                        get apis() {
+                          return card.config.apis
+                        }
+                      })
+                    })
+                    return [{
+                      title: '通用分组',
+                      description: '通用卡片',
+                      cards,
+                    }]
+                  }}
+                />
+              </Card>
+            </div>
+          )
+        }
+
+        const { render: Render, config } = cardConfig[filename]
+
+        return (
+          <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
+            <Card
+              config={config}
+              filename={filename}
+              onMount={() => {}}
+              style={debugTarget?.style}
+            >
+              <Render />
+            </Card>
+          </div>
+        )
       }
 
       return (

@@ -360,7 +360,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       }
 
       if (data.files.length) {
-        const nextRuntime = (
+        return (
           <NextRuntime
             key={activeEnv + "_" + reload}
             wrapper={({ children }) => {
@@ -426,46 +426,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               'process.env': '({})'
             }}
           />
-        )
-
-        return (
-          <div className={showChatPanel ? css.withAIChatPanel : undefined}>
-            {showChatPanel && (
-              <AIChatPanel
-                getCardsGroups={() => {
-                  const cards: any = []
-                  Object.entries(dependencies.mybricks._cardConfig).forEach(([filename, card]: any) => {
-                    cards.push({
-                      get name() {
-                        return card.config.title
-                      },
-                      get title() {
-                        return card.config.title
-                      },
-                      get description() {
-                        return card.config.description
-                      },
-                      get props() {
-                        return card.config.props
-                      },
-                      get render() {
-                        return card.render
-                      },
-                      get apis() {
-                        return card.config.apis
-                      }
-                    })
-                  })
-                  return [{
-                    title: '通用分组',
-                    description: '通用卡片',
-                    cards,
-                  }]
-                }}
-              />
-            )}
-            {nextRuntime}
-          </div>
         )
       }
 

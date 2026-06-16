@@ -6,6 +6,7 @@ import context from './index'
 
 const DEFAULT_ENTRY_FILE = 'index'
 const MODULE_FRONTEND_TYPE = 'frontend'
+const DEFAULT_FRONTEND_MODE = 'default'
 
 type CompatibleAvailableLibrary = {
   name: string
@@ -48,6 +49,23 @@ class Config {
       return frontend?.entryFile || DEFAULT_ENTRY_FILE
     } else {
       return componentRuntime?.entryFile || DEFAULT_ENTRY_FILE
+    }
+  }
+
+  // 前端渲染模式
+  getFrontendMode() {
+    const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return DEFAULT_FRONTEND_MODE
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.mode || DEFAULT_FRONTEND_MODE
+    } else {
+      return componentRuntime?.mode || DEFAULT_FRONTEND_MODE
     }
   }
 
