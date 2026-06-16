@@ -299,9 +299,21 @@ export function normalizeFigmaSelector(selector: string, comId: string): string 
 }
 
 /**
- * 解析多文件格式的 Figma 选择器：`.{encodedFilePath}-{className}`
- * encodedFilePath = fileName.replace(/[^0-9a-zA-Z_]/g, '_')
- * 返回 null 表示是旧格式选择器，走兼容逻辑。
+ * 解析多文件格式的 Figma 选择器。
+ *
+ * 支持两种编码格式：
+ *
+ * 新格式（CSS Modules 运行时类名）：`.{encodedFilePath}--{localClass}`
+ *   编码规则：fileName → `.` 替换为 `__`，其余非字母数字下划线字符替换为 `_`
+ *   分隔符：`--`（双破折号）
+ *   例：`pages/HomePage/index.module.less` + `.headerTitle`
+ *     → `.pages_HomePage_index__module__less--headerTitle`
+ *
+ * 旧格式：`.{encodedFilePath}-{className}`
+ *   编码规则：fileName → 所有非字母数字下划线字符替换为 `_`
+ *   分隔符：`-`（单破折号）
+ *
+ * 返回 null 表示两种格式均不匹配，走旧格式兼容逻辑。
  */
 function parseMultiFileSelector(
   rawSelector: string,
@@ -309,6 +321,25 @@ function parseMultiFileSelector(
 ): { fileName: string; cssClass: string } | null {
   if (!rawSelector.startsWith('.')) return null;
   const inner = rawSelector.slice(1);
+
+  // ── 优先尝试新格式：`--` 双破折号分隔，`.` → `__`，`/` → `_` ──
+  const doubleDashIdx = inner.indexOf('--');
+  if (doubleDashIdx > 0) {
+    const prefix = inner.substring(0, doubleDashIdx);
+    const localClass = '.' + inner.substring(doubleDashIdx + 2);
+    if (localClass.length > 1) {
+      const matchedFile = files?.find((f) => {
+        // 新编码：先将 `.` 替换为 `__`，再将剩余特殊字符替换为 `_`
+        const encoded = f.fileName.replace(/\./g, '__').replace(/[^0-9a-zA-Z_]/g, '_');
+        return encoded === prefix;
+      });
+      if (matchedFile) {
+        return { fileName: matchedFile.fileName, cssClass: localClass };
+      }
+    }
+  }
+
+  // ── 回退旧格式：`-` 单破折号分隔，所有特殊字符 → `_` ──
   const dashIdx = inner.indexOf('-');
   if (dashIdx === -1) return null;
 
