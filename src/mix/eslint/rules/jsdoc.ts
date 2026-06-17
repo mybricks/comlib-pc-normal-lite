@@ -221,6 +221,19 @@ function checkRequiredFields(
 // ─── 主校验函数 ───────────────────────────────────────────────────────────────
 
 /**
+ * checkJSDoc 子规则开关。
+ * 每项默认为 true（开启），外部传入 false 则关闭对应校验。
+ */
+export interface JsDocCheckOptions {
+  /** 是否校验 events 一致性（默认 true） */
+  events?: boolean;
+  /** 是否校验 state 一致性（默认 true） */
+  state?: boolean;
+  /** 是否校验 datasource 一致性（默认 true） */
+  datasource?: boolean;
+}
+
+/**
  * JSDoc 规范校验规则。
  *
  * 不依赖 README.md，直接通过组件侧注释（@mybricks JSDoc）与 AST 分析结果对比，
@@ -233,13 +246,21 @@ function checkRequiredFields(
  * @param jsdocMap    由 collectJsDocPlugin 采集的 JSDoc Map，key 为组件变量名
  * @param comRefInfos 从 JSX 文件提取的节点信息列表（来自 extract-comrefs）
  * @param fileName    文件名（用于 LintMessage.fileName）
+ * @param options     子规则开关，默认全部开启
  * @returns           LintMessage 数组
  */
 export function checkJSDoc(
   jsdocMap: Map<string, MybricksJSDoc>,
   comRefInfos: ComRefInfo[],
   fileName: string,
+  options: JsDocCheckOptions = {},
 ): LintMessage[] {
+  const {
+    events: checkEventsEnabled = true,
+    state: checkStateEnabled = true,
+    datasource: checkDatasourceEnabled = true,
+  } = options;
+
   const messages: LintMessage[] = [];
 
   // 建立 comRefInfo 的快速查找表：name → ComRefInfo
@@ -257,9 +278,9 @@ export function checkJSDoc(
     const comRefInfo = comRefMap.get(componentName);
     if (!comRefInfo) continue;
 
-    checkEvents(componentName, jsdoc, comRefInfo, messages);
-    checkDatasource(componentName, jsdoc, comRefInfo, messages);
-    checkState(componentName, jsdoc, comRefInfo, messages);
+    if (checkEventsEnabled) checkEvents(componentName, jsdoc, comRefInfo, messages);
+    if (checkDatasourceEnabled) checkDatasource(componentName, jsdoc, comRefInfo, messages);
+    if (checkStateEnabled) checkState(componentName, jsdoc, comRefInfo, messages);
   }
 
   // 反向校验：源码中有组件，但没有对应 JSDoc

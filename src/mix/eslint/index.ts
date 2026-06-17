@@ -23,7 +23,7 @@ import { createRequireDatasourceAsyncRule, RULE_ID as DS_ASYNC_RULE_ID } from '.
 import { createRequireComRefRule, RULE_ID as REQUIRE_COM_REF_RULE_ID } from './rules/require-com-ref';
 import { createExtractComRefsRule, type ComRefInfo } from './rules/extract-comrefs';
 import { checkRequirement, RULE_ID as REQ_RULE_ID } from './rules/requirement';
-import { checkJSDoc, RULE_ID as JSDOC_RULE_ID } from './rules/jsdoc';
+import { checkJSDoc, RULE_ID as JSDOC_RULE_ID, type JsDocCheckOptions } from './rules/jsdoc';
 import { getLowcodeViewStoreDatasource } from './monaco-language-service';
 import type { MybricksJSDoc } from '../../utils/ai-code/plugins/utils/parseMybricksJSDoc';
 import collectJsDocPlugin from '../../utils/ai-code/plugins/collectJsDocPlugin';
@@ -43,21 +43,50 @@ export const RULE_IDS = {
 
 /**
  * 规则严重程度，与 ESLint 保持一致：
- * - `-1` / `'off'`  — 禁用
- * - `1`  / `'warn'` — 警告
- * - `2`  / `'error'`— 错误
+ * - `-1` / `'off'` — 禁用
+ * - `1`  / `'warn'` — 警告（当前 jsdoc 子项不支持，仅用于其他规则）
+ * - `2`  / `'error'` — 错误
  */
 export type RuleSeverity = -1 | 1 | 2 | 'off' | 'warn' | 'error';
 
-/** 与 ESLint config.rules 格式一致的规则配置表 */
-export type RulesConfig = Record<string, RuleSeverity | [RuleSeverity, ...unknown[]]>;
+/**
+ * jsdoc-check 子项开关配置。
+ * 每项缺省为开启；传入 `'off'` 即关闭对应校验。
+ */
+export interface JsdocSubOptions {
+  events?: 'off';
+  state?: 'off';
+  datasource?: 'off';
+}
+
+/**
+ * 与 ESLint config.rules 格式一致的规则配置表。
+ *
+ * jsdoc-check 支持两种写法：
+ * - `'off'`                      — 整体关闭 jsdoc 校验
+ * - `[{ events?: 'off', state?: 'off', datasource?: 'off' }]`
+ *                                — 开启 jsdoc 校验，并对子项单独关闭
+ *
+ * @example
+ * // 整体关闭
+ * rules: { 'jsdoc-check': 'off' }
+ *
+ * @example
+ * // 仅关闭 events 和 state 校验
+ * rules: { 'jsdoc-check': [{ events: 'off', state: 'off' }] }
+ */
+export type RulesConfig = Record<
+  string,
+  RuleSeverity | [JsdocSubOptions, ...unknown[]] | [RuleSeverity, ...unknown[]]
+>;
 
 /** 与 ESLint Linter.verify() 第二个参数对齐的配置对象 */
 export interface VerifyConfig {
   rules?: RulesConfig;
 }
 
-/** 将 ESLint 风格的 severity 值归一化为数字 -1 / 1 / 2 */function normalizeSeverity(raw: RuleSeverity): -1 | 1 | 2 {
+/** 将 ESLint 风格的 severity 值归一化为数字 -1 / 1 / 2 */
+function normalizeSeverity(raw: RuleSeverity): -1 | 1 | 2 {
   if (raw === 'off') return -1;
   if (raw === 'warn') return 1;
   if (raw === 'error') return 2;
@@ -68,8 +97,31 @@ export interface VerifyConfig {
 function getRuleSeverity(rules: RulesConfig, ruleId: string, defaultSeverity: 1 | 2): -1 | 1 | 2 {
   if (!(ruleId in rules)) return defaultSeverity;
   const entry = rules[ruleId];
-  const raw: RuleSeverity = Array.isArray(entry) ? entry[0] : entry;
+  // 如果是数组且第一项是对象（JsdocSubOptions），说明是 jsdoc-check 的子项配置，规则本身视为开启
+  if (Array.isArray(entry) && entry[0] !== null && typeof entry[0] === 'object') return defaultSeverity;
+  const raw: RuleSeverity = Array.isArray(entry) ? (entry[0] as RuleSeverity) : entry as RuleSeverity;
   return normalizeSeverity(raw);
+}
+
+/**
+ * 从 RulesConfig 中解析 jsdoc-check 的子项开关配置。
+ *
+ * - 未配置 → 全部开启（默认）
+ * - `'off'` → 父规则关闭，子项不需解析
+ * - `[{ events?: 'off', ... }]` → 按对象字段决定子项开关
+ */
+function parseJsdocOptions(rules: RulesConfig): JsDocCheckOptions {
+  const entry = rules[JSDOC_RULE_ID];
+  if (!Array.isArray(entry)) {
+    // 'off' 或未配置时，子项开关均开启（整体关闭由 jsdocSeverity === -1 控制）
+    return { events: true, state: true, datasource: true };
+  }
+  const sub = entry[0] as JsdocSubOptions;
+  return {
+    events: sub?.events !== 'off',
+    state: sub?.state !== 'off',
+    datasource: sub?.datasource !== 'off',
+  };
 }
 
 /**
@@ -256,6 +308,9 @@ export async function verify(
 
   // 采集 JSDoc 注释（所有 comRef/popupRef/appRef 节点均必须包含 @mybricks JSDoc）
   const jsdocSeverity = getRuleSeverity(rules, JSDOC_RULE_ID, 2);
+  // 解析 jsdoc-check 子项开关（数组配置中的对象）
+  const jsdocOptions: JsDocCheckOptions = parseJsdocOptions(rules);
+
   const jsdocMapByFile = new Map<string, Map<string, MybricksJSDoc>>();
 
   const perFileComRefInfos = new Map<string, ComRefInfo[]>();
@@ -283,7 +338,7 @@ export async function verify(
       const fileComRefInfos = allComRefInfos.filter(
         info => comRefInfos.some(r => r.name === info.name),
       );
-      const msgs = checkJSDoc(jsdocMap, fileComRefInfos, fileName)
+      const msgs = checkJSDoc(jsdocMap, fileComRefInfos, fileName, jsdocOptions)
         .map(msg => ({ ...msg, severity: jsdocSeverity }));
       results.push(...msgs);
     }
