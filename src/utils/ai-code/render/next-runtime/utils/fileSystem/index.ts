@@ -110,7 +110,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
   }
 
   if (typeof exports.default === 'function') {
-    dependencies.mybricks._registerCardConfig({
+    dependencies.mybricks._registerCardConfig?.({
       filename,
       Component: exports.default
     })

@@ -3,6 +3,8 @@ import { createMyBricksTesting } from './mybricks-testing'
 import type { MyBricksTesting } from './mybricks-testing'
 import { createMyBricks } from '../mybricks'
 import { useCardApis } from '../mybricks/hooks/card'
+import createMyBricksForKdsWeb from '../mybricks/kds-web'
+import { config } from '../../../../mix/context'
 
 class EmptyDataSource {}
 
@@ -53,7 +55,16 @@ const useDependencies = (params: Params) => {
     }
 
     const { id, env, data, activeEnv, runtimeMode, logger } = params;
-    const mybricks = createMyBricks({ comId: id, runtimeMode, logger, env, data });
+    const frontendMode = config.getFrontendMode()
+    const createMyBricksProps = { comId: id, runtimeMode, logger, env, data }
+    let mybricks: any = {}
+
+    if (frontendMode === 'kds_web') {
+      mybricks = createMyBricksForKdsWeb(createMyBricksProps)
+    } else {
+      mybricks = createMyBricks(createMyBricksProps);
+    }
+
     const mybricksTesting = createMyBricksTesting({
       env,
       data,
