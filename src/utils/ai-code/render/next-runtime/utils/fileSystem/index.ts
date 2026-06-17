@@ -734,6 +734,9 @@ class FileSystem {
         // if (!entry.module.classMap || (Object.keys(entry.module.classMap).join('') !== Object.keys(module.classMap).join(''))) {
         //   refresh = true
         // }
+        if (!entry.module.classMap) {
+          refresh = true
+        }
         entry.file = file
         entry.module = module
       } else {
