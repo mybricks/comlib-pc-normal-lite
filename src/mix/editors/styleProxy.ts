@@ -569,7 +569,9 @@ function svgToJsx(rawSvg: string, sizeOverride?: { width?: string; height?: stri
     if (node.nodeType !== Node.ELEMENT_NODE) return '';
 
     const el = node as Element;
-    const tagName = el.tagName.toLowerCase();
+    // 使用 localName 而非 tagName.toLowerCase()，以保留 SVG camelCase 元素名
+    // 例如 linearGradient、radialGradient、clipPath、feGaussianBlur 等
+    const tagName = el.localName;
     const attrs: string[] = [];
 
     for (let i = 0; i < el.attributes.length; i++) {
