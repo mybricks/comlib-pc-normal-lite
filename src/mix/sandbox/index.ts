@@ -4,7 +4,7 @@
  * 实现 plugin-ai 的 Designer + Hooks 接口，通过 window._sandbox_.connectToAI 注册。
  *
  * 核心设计：
- * - project 实例在 hooks.beforeRequest 中创建，每次请求都会重建。
+ * - project 实例在 sandbox 注册时兜底创建，并在 hooks.beforeTurn 中刷新。
  * - Designer 方法通过 projectRef.current 访问当前 project 实例，运行模式和画布状态实时读取。
  */
 
@@ -28,8 +28,7 @@ const VERIFY_CONFIG = {
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
 /**
- * 每个 comId 对应一个 projectRef，在 beforeRequest 时更新。
- * 初始为 undefined，首次请求前必须通过 beforeRequest 完成初始化。
+ * 每个 comId 对应一个 projectRef，在 sandbox 注册时兜底初始化，并在 beforeTurn 时刷新。
  */
 const projectRefMap = new Map<string, { current: ReturnType<typeof createProject> | undefined }>();
 const requestSourceSnapshotMap = new WeakMap<object, Map<string, string>>();
@@ -199,6 +198,17 @@ function buildProject(comId: string) {
       return messages;
     },
   });
+}
+
+function refreshProjectBaseline(
+  comId: string,
+  projectRef: { current: ReturnType<typeof createProject> | undefined }
+) {
+  projectRef.current = buildProject(comId);
+  const data = context.component?.params?.data;
+  if (data && typeof data === 'object') {
+    requestSourceSnapshotMap.set(data, createSourceSnapshot(data.files ?? []));
+  }
 }
 
 // ─── 类型定义 ─────────────────────────────────────────────────────────────────
@@ -497,6 +507,8 @@ export async function registerSandbox(comId: string): Promise<void> {
   };
 
   const projectRef = getProjectRef(comId);
+  refreshProjectBaseline(comId, projectRef);
+
   const { history } = connectToAI(comId, {
     designer: {
       // ── 文件系统 ──────────────────────────────────────────────────────────
@@ -599,12 +611,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
         loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
-
-        projectRef.current = buildProject(comId);
-        const data = context.component?.params?.data;
-        if (data && typeof data === 'object') {
-          requestSourceSnapshotMap.set(data, createSourceSnapshot(data.files ?? []));
-        }
+        refreshProjectBaseline(comId, projectRef);
       },
       async afterTurn(turn: { id?: string }) {
         (window as any)._sendToAgent_source_ = null
