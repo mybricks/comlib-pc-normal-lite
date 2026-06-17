@@ -121,6 +121,59 @@ function findCompoundClassKey(cssObj: Record<string, any>, eleClassList: string[
   return best;
 }
 
+/**
+ * 第 5 条匹配策略：处理 CSS Modules 哈希类名场景。
+ *
+ * 触发条件（同时满足）：
+ *   1. fullSelector 含 '--'（CSS Modules 哈希分隔符）
+ *   2. 最后一段是复合类选择器（含多个 .class）
+ *
+ * 核心逻辑：
+ *   - 从最后一段的各 class 中提取原始类名（取 lastIndexOf('--') 之后的部分）
+ *   - 将有 '--' 的（哈希化的动态类）与没有 '--' 的（静态基类）区分开
+ *   - 优先对"哈希化的动态类"做 shrink match（含祖先路径）和独立 match
+ *   - 返回 cssObj 中第一个命中的 key
+ */
+function tryResolveCSSModulesHashedSelector(
+  cssObj: Record<string, any>,
+  fullSelector: string,
+): string | undefined {
+  if (!fullSelector.includes('--')) return undefined;
+
+  const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
+  const lastSeg = segments[segments.length - 1];
+
+  // 最后一段必须是复合类（含 >= 2 个 .class）
+  const rawClasses = (lastSeg.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
+  if (rawClasses.length < 2) return undefined;
+
+  // 区分"哈希动态类"和"静态基类"
+  // 有 '--' 的是 CSS Modules 哈希类（如 pages_...--cyan → 原始名 cyan）
+  const dynamicClasses = rawClasses
+    .filter(c => c.includes('--'))
+    .map(c => c.slice(c.lastIndexOf('--') + 2));
+
+  if (dynamicClasses.length === 0) return undefined;
+
+  const ancestorSegs = segments.slice(0, -1); // 祖先路径段（已是原始类名）
+
+  for (const origName of dynamicClasses) {
+    const cls = '.' + origName;
+    // 优先尝试含祖先路径的 key（从最长到最短）
+    for (let i = 0; i < ancestorSegs.length; i++) {
+      const cand = [...ancestorSegs.slice(i), cls].join(' ');
+      if (cssObj[cand] !== undefined) return cand;
+    }
+    // 尝试独立 key（已存在于 cssObj 时直接返回）
+    if (cssObj[cls] !== undefined) return cls;
+    // cssObj 中尚无此 key（首次写入）：直接返回独立类名。
+    // 这样首次写入也会落到 ".cyan" 而非哈希复合键，完全避免产生脏键。
+    return cls;
+  }
+
+  return undefined;
+}
+
 // 根据选择器获取对应的css对象key
 function resolveTargetKey(params: {
   cssObj: Record<string, any>;
@@ -149,7 +202,10 @@ function resolveTargetKey(params: {
     return k.split(',').map(s => s.trim()).some(s => s === fullSelector || s.endsWith(' ' + fullSelector));
   });
 
-  return suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? fullSelector;
+  // 第 5 策略：CSS Modules 哈希复合类名反推（前 4 策略均失败时才触发）
+  const cssModulesKey = tryResolveCSSModulesHashedSelector(cssObj, fullSelector);
+
+  return suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? cssModulesKey ?? fullSelector;
 }
 
 /**
@@ -290,6 +346,27 @@ export function genStyleValue(props) {
 
       const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList });
 
+      // 若 targetKey 是独立单类（如 ".cyan"），清除 cssObj 中可能残留的旧版复合选择器键。
+      // 例：历史写入产生了 ".topFeatureItem.cyan" 或 ".topFeatureItem.pages_xxx--cyan"，
+      // 它们的 CSS 优先级（0,2,0）高于 ".cyan"（0,1,0），会覆盖新写入的规则。
+      if (/^\.[\w-]+$/.test(targetKey)) {
+        const targetClass = targetKey.slice(1);
+        Object.keys(cssObj).forEach(key => {
+          if (key === targetKey) return;
+          const keyLastSeg = (key.trim().split(/\s+/).pop() || '');
+          const keyClasses = (keyLastSeg.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
+          if (keyClasses.length < 2) return; // 非复合类选择器，不处理
+          // 将哈希类名还原为原始类名（pages_xxx--cyan → cyan）
+          const normalizedClasses = keyClasses.map(c => {
+            const ddIdx = c.lastIndexOf('--');
+            return ddIdx > 0 ? c.slice(ddIdx + 2) : c;
+          });
+          if (normalizedClasses.includes(targetClass)) {
+            delete cssObj[key];
+          }
+        });
+      }
+
       absorbOrphans(cssObj, targetKey);
 
       if (!cssObj[targetKey]) {
@@ -299,6 +376,18 @@ export function genStyleValue(props) {
       Object.entries(value).forEach(([key, val]) => {
         cssObj[targetKey][key] = val;
       });
+
+      // 若写入了 background-image: none（表示用户切换到纯色背景），
+      // 自动清除 background 简写属性，避免简写残留导致渐变未被覆盖。
+      // CSS 中 shorthand + longhand 同规则共存时行为不稳定，删除简写是最可靠的做法。
+      if (
+        cssObj[targetKey] &&
+        'backgroundImage' in value &&
+        (value as any)['backgroundImage'] === 'none' &&
+        'background' in cssObj[targetKey]
+      ) {
+        delete cssObj[targetKey]['background'];
+      }
 
       if (deletions && deletions.length > 0) {
         const expandedDeletions = expandDeletions(deletions);
