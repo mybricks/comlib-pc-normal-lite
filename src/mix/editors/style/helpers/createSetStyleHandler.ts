@@ -253,24 +253,53 @@ export default function createSetStyleHandler(
         }[] = []
 
         if (lessStyle.size) {
-          // [TODO] 处理多className的情况
-          lessStyle.forEach((value, key) => {
-            let cssKey = key
-              .replace(/^:where\([^)]*\)\s*/, '')
-              .replace(/^./, '')
-              .replace(/__/g, '.').replace(/_/g, '/');
+          lessStyle.forEach((value, selectorKey) => {
+            // 移除 :where(...) 前缀，剩余部分由空格分隔的多个模块 class token 组成
+            // 例：":where(.u_Dt_Si) .mod--gridCard .mod--topGrid" → ".mod--gridCard .mod--topGrid"
+            const withoutWhere = selectorKey.replace(/^:where\([^)]*\)\s*/, '')
+            const tokens = withoutWhere.split(/\s+/).filter(Boolean)
+            if (!tokens.length) return
 
-            const [fileName, ...cssKeys] = cssKey.split('--')
-            cssKey = `.${cssKeys.join('--')}`
+            // 每个 token 形如 ".pages_StoreDashboard_index__module__less--topGrid"
+            // 去掉前导 dot，在 "--" 处分割，还原文件路径和 class 名
+            const parsed = tokens.map(token => {
+              const clean = token.replace(/^\./, '')
+              const dashIdx = clean.indexOf('--')
+              if (dashIdx === -1) return null
+              const fileRaw = clean.slice(0, dashIdx)
+              const className = clean.slice(dashIdx + 2)
+              const fileName = fileRaw.replace(/__/g, '.').replace(/_/g, '/')
+              return { fileName, className }
+            }).filter(Boolean) as { fileName: string; className: string }[]
+
+            if (!parsed.length) return
+
+            const fileName = parsed[0].fileName
+            // Less 嵌套路径：['.gridCard', '.topGrid']
+            const classPath = parsed.map(p => `.${p.className}`)
+
             const lessFile = context.component!.params.data.files.find((f) => f.fileName === fileName)
+            if (!lessFile) return
             const lessPreviousCode = decodeURIComponent(lessFile.source)
             const cssObj = parseLess(lessPreviousCode)
-            if (!cssObj[cssKey]) {
-              cssObj[cssKey] = {}
+
+            // 按 classPath 逐层导航嵌套的 cssObj，最后一层写入属性
+            let target = cssObj
+            for (let i = 0; i < classPath.length - 1; i++) {
+              if (!target[classPath[i]] || typeof target[classPath[i]] !== 'object') {
+                target[classPath[i]] = {}
+              }
+              target = target[classPath[i]]
             }
-            value.forEach(({ key, value }) => {
-              cssObj[cssKey][key] = `${value}px`
+            const targetKey = classPath[classPath.length - 1]
+            if (!target[targetKey] || typeof target[targetKey] !== 'object') {
+              target[targetKey] = {}
+            }
+
+            value.forEach(({ key: propKey, value: propVal }) => {
+              target[targetKey][propKey] = `${propVal}px`
             })
+
             const lessNewCode = stringifyLess(cssObj)
             lesss.push({
               fileName,
