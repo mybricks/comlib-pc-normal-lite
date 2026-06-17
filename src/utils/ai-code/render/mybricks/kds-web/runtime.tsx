@@ -17,7 +17,7 @@ const runtime = (props: CreateMyBricksProps) => {
         data-zone-title='页面'
         data-widge-name='页面'
         style={{
-          width: 1200,
+          width: 414,
           display: 'flex',
           flexDirection: 'column',
           ...style
