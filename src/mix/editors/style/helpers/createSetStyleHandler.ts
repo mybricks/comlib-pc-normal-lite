@@ -7,6 +7,9 @@ import { undoRedoManager } from '../../undoRedo'
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
+// gap 相关属性：由三方组件 size/gap prop 内部控制，无法通过 CSS 修改，需交 AI 处理
+const GAP_KEYS = new Set(['gap', 'columnGap', 'rowGap'])
+
 const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>) => {
   const hasGap = 'rowGap' in style || 'columnGap' in style || 'gap' in style
   if (hasGap) {
@@ -64,12 +67,12 @@ export default function createSetStyleHandler(
    * 记录每个 style key 在预览阶段应注入到哪个选择器。
    * - selector: 目标 CSS 选择器字符串
    * - isJsx: 是否为 JSX 内联 style（static），为 true 时用 !important 强制覆盖
+   * - needsAI: 样式由三方组件 prop 控制（非 CSS/JSX style），需交由 AI 修改源码
    */
-  let styleKeyRoutes: Record<string, { selector: string; isJsx: boolean, loc?: { start: number, end: number } }> = {}
+  let styleKeyRoutes: Record<string, { selector: string; isJsx: boolean; loc?: { start: number; end: number }; needsAI?: boolean }> = {}
 
   return function handler(ctx: any, params: any) {
     const { state } = params
-
     try {
       if (state === 'start') {
 
@@ -82,7 +85,8 @@ export default function createSetStyleHandler(
           const componentID = context.component!.params.id
           // styleID 计算规则与 runtime-card.tsx 中 css.set 保持一致：
           // `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
-          const locRaw = sourceEle.dataset?.loc
+          // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
+          const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
           const loc = locRaw ? (() => { try { return JSON.parse(locRaw) } catch { return null } })() : null
           const lessFile: string = loc?.files?.less ?? 'style.less'
           const styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
@@ -116,7 +120,7 @@ export default function createSetStyleHandler(
           } else {
             // Less 编译时空规则会被省略，sheet 里找不到该 class 的规则。
             // 回退：从 classList 里找 CSS Module 前缀类（含 '--'），构造合成选择器
-            const moduleClass = Array.from(ele.classList).find(c => c.includes('--'))
+            const moduleClass = [...ele.classList].find(c => c.includes('--'))
             if (!moduleClass) return
             const syntheticSelector = `:where(.${componentID}) .${moduleClass}`
             winningRule = { selectorText: syntheticSelector, style: { getPropertyValue: () => '' } } as unknown as CSSStyleRule
@@ -128,6 +132,9 @@ export default function createSetStyleHandler(
           const styleInfo: Record<string, StyleKeyInfo> | null = styleInfoRaw
             ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
             : null
+
+          // 目标元素是否来自三方库组件（data-library-source 由 babelPlugin 写入）
+          const isLibraryElement = !!ele.dataset.librarySource
 
           styleKeyRoutes = {}
           Object.keys(style).forEach((key) => {
@@ -150,25 +157,30 @@ export default function createSetStyleHandler(
             } else {
               // CSS rule：从 matchedRules 中找第一个已声明该属性的 rule
               const cssProp = convertCamelToHyphen(key)
-              const ownerRule = matchedRules.find(
+              const ownerCssRule = matchedRules.find(
                 (rule) => rule.style.getPropertyValue(cssProp) !== ''
-              ) ?? winningRule
-              styleKeyRoutes[key] = { selector: ownerRule.selectorText, isJsx: false }
+              )
+              // 若三方库组件 + 用户 Less 中无该属性的规则 + 属于 gap 属性，说明间距由组件 prop 控制，交给 AI
+              if (isLibraryElement && !ownerCssRule && GAP_KEYS.has(key)) {
+                styleKeyRoutes[key] = { selector: '', isJsx: false, needsAI: true }
+              } else {
+                styleKeyRoutes[key] = { selector: (ownerCssRule ?? winningRule).selectorText, isJsx: false }
+              }
             }
           })
+
         }
 
-        // 将各 key 按目标选择器分组，拼成若干段 CSS 规则
-        let cssText: string
+        // 将各 key 按目标选择器分组，拼成若干段 CSS 规则（needsAI 的 key 跳过预览）
         const selectorStyleMap = new Map<string, Record<string, { value: number; isJsx: boolean }>>()
         Object.entries(style as Record<string, number>).forEach(([key, val]) => {
           const route = styleKeyRoutes[key]
-          if (!route) return
+          if (!route || route.needsAI) return
           const selector = route.selector
           if (!selectorStyleMap.has(selector)) selectorStyleMap.set(selector, {})
           selectorStyleMap.get(selector)![key] = { value: val, isJsx: route?.isJsx ?? false }
         })
-        cssText = Array.from(selectorStyleMap.entries())
+        const cssText = Array.from(selectorStyleMap.entries())
           .map(([selector, props]) => {
             const declarations = Object.entries(props)
               .map(([prop, { value, isJsx }]) => {
@@ -187,7 +199,8 @@ export default function createSetStyleHandler(
         let jsxStyle = new Map()
         let lessStyle = new Map()
 
-        Object.entries(styleKeyRoutes).forEach(([key, { isJsx, selector, loc }]) => {
+        Object.entries(styleKeyRoutes).forEach(([key, { isJsx, selector, loc, needsAI }]) => {
+          if (needsAI) return  // 交给 AI，不写入 JSX/Less
           const value = style[key]
           if (isJsx) {
             jsxStyle.set(key, {
@@ -285,6 +298,48 @@ export default function createSetStyleHandler(
               context.saveManualVersion(filenames);
             },
           });
+        }
+
+        // 处理 needsAI 的 key：间距由三方组件 prop 控制，交给 AI 修改源码
+        const aiKeys = Object.entries(styleKeyRoutes)
+          .filter(([, route]) => route.needsAI)
+          .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
+
+        if (aiKeys.length > 0) {
+          try {
+            const loc = JSON.parse(ele.dataset.loc ?? '{}')
+            const jsxFileName: string = loc?.files?.jsx
+            const lineStart: number = loc?.codeLine?.start
+            const lineEnd: number = loc?.codeLine?.end
+
+            let codeSnippet = ''
+            if (jsxFileName) {
+              const jsxFile = context.component!.params.data.files.find((f: any) => f.fileName === jsxFileName)
+              if (jsxFile) {
+                const lines = decodeURIComponent(jsxFile.source).split('\n')
+                codeSnippet = lines
+                  .slice(Math.max(0, lineStart - 3), Math.min(lines.length, lineEnd + 2))
+                  .join('\n')
+              }
+            }
+
+            const styleDesc = aiKeys
+              .map(({ key, value }) => `${convertCamelToHyphen(key)}: ${value}px`)
+              .join('，')
+
+            const message = [
+              `用户通过可视化拖拽调整了组件间距，目标样式为：${styleDesc}。`,
+              `但该间距由组件 prop 控制（非 CSS），无法直接写入 Less，需要修改 JSX 源码中的对应 prop。`,
+              jsxFileName ? `请修改文件 \`${jsxFileName}\` 第 ${lineStart}~${lineEnd} 行附近的代码，将控制间距的 prop 改为对应新值。` : '',
+              codeSnippet ? `\n相关代码片段：\n\`\`\`tsx\n${codeSnippet}\n\`\`\`` : '',
+            ].filter(Boolean).join('\n')
+
+            const plugins = (context as any).plugins as any
+            plugins?.showAIDialog?.()
+            plugins?.aiService?.request({ message, attachments: [] })
+          } catch (e) {
+            console.error('[createSetStyleHandler] AI request failed:', e)
+          }
         }
 
         ctx.css.remove(SETSTYLE_CSS_ID)
