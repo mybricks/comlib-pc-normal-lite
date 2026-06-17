@@ -91,6 +91,23 @@ class Config {
     }
   }
 
+  /** 获取外壳容器 */
+  getFrontendWrapper() {
+    const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return null
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.Wrapper
+    } else {
+      return componentRuntime.Wrapper
+    }
+  }
+
   getCompatibleAvailableLibraries(): CompatibleAvailableLibrary {
     return window._sandbox_.config.availableLibraries || []
   }

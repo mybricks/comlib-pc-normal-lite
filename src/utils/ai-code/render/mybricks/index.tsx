@@ -224,6 +224,7 @@ interface CreateMyBricksProps {
 const createMyBricks = (props: CreateMyBricksProps) => {
 
   const frontendMode = config.getFrontendMode()
+  const Wrapper = config.getFrontendWrapper()
 
   // 配置的画布信息
   const { width: canvasWidth = 1440, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
@@ -1059,6 +1060,17 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           pageContext.onPageInfo(params)
         }, [])
       }
+
+      if (props['_mybricks_page'] && Wrapper) {
+        return (
+          <Wrapper
+            container={pageContext.container}
+          >
+            <ObservedComponent {...props} _env={_env} popupNode={pageContext.container}/>
+          </Wrapper>
+        )
+      }
+
       return (
         <ObservedComponent {...props} _env={_env} popupNode={pageContext.container}/>
       );
