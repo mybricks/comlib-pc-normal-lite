@@ -74,6 +74,23 @@ class Config {
     }
   }
 
+  /** 配置mybricks文档 */
+  getMyBricksUsage() {
+    const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return null
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.mybricksPrompt
+    } else {
+      return componentRuntime.mybricksPrompt
+    }
+  }
+
   getCompatibleAvailableLibraries(): CompatibleAvailableLibrary {
     return window._sandbox_.config.availableLibraries || []
   }
