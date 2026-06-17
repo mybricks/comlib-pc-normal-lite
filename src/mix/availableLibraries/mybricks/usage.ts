@@ -130,10 +130,20 @@ describe('预发环境', () => {
 })
 
 // 按需：用户需要的话，需要配置中文名
-describe('无权限测试', () => {
-  // 测试接口403情况
+describe('游客角色测试', () => {
+  // dataSource.getUserById 返回值为 { username, age } 结构，按照此结构模拟
   spyOn(dataSource, 'getUserById').mockReturn({
+    username: '李四',
+    age: 20
+  })
+
+  // dataSource.createUser 返回值为 axios 原始返回，包含http的status，按照此结构模拟
+  spyOn(dataSource, 'createUser').mockReturn({
     status: 403,
+    data: {
+      code: 'FORBIDDEN',
+      message: '没有权限'
+    }
   })
 })
 \`\`\`
