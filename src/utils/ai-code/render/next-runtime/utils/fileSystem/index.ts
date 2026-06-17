@@ -38,7 +38,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     ErrorView
   } = params
 
-  const exports = {
+  const exports: any = {
     default: null,
     __default: null
   }
@@ -107,6 +107,13 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     enrichedError.fileName = filename
     // throw enrichedError
     params.onRuntimeError(enrichedError)
+  }
+
+  if (typeof exports.default === 'function') {
+    dependencies.mybricks._registerCardConfig({
+      filename,
+      Component: exports.default
+    })
   }
 
   return exports

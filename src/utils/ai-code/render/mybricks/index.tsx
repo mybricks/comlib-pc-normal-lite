@@ -937,6 +937,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 ) : null}
                 {Object.entries(cardConfig).map(([filename, { render, config }]: any) => {
                   const Render = render
+                  if (!Render) {
+                    return null
+                  }
                   return (
                     <Card config={config} filename={filename} onMount={onMount}>
                       <Render />
@@ -1047,12 +1050,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const comRef = (Component: any, params) => {
     const ObservedComponent = observer(Component);
-    if (cardConfig[params.filename]) {
-      cardConfig[params.filename].render = ObservedComponent
-      popupRefRegistryForceUpdate?.()
-    }
 
-    return (props: any) => {
+    return function comRef (props: any) {
       const pageContext = useContext(PageContext);
 
       if (props['_mybricks_page']) {
@@ -1345,7 +1344,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         cardConfig[cardFilename].config = config
       }
     },
-    _cardConfig: cardConfig
+    _cardConfig: cardConfig,
+    _registerCardConfig: ({ filename, Component }) => {
+      if (cardConfig[filename]) {
+        cardConfig[filename].render = Component
+        popupRefRegistryForceUpdate?.()
+      }
+    }
   }
 }
 

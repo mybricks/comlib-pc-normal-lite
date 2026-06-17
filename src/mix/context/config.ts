@@ -53,6 +53,11 @@ class Config {
   }
 
   // 前端渲染模式
+  /**
+   * kds_web
+   * gui_card
+   * default
+   */
   getFrontendMode() {
     const componentRuntime = window._sandbox_.config.componentRuntime
     if (!componentRuntime) {
