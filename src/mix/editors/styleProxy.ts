@@ -16,6 +16,7 @@ const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
   'border-style': ['border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style'],
   'border-radius': ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-right-radius', 'border-bottom-left-radius'],
   'background': ['background-color', 'background-image', 'background-repeat', 'background-position', 'background-size', 'background-attachment', 'background-origin', 'background-clip'],
+  'gap': ['row-gap', 'column-gap'],
 };
 
 const LONGHAND_TO_SHORTHAND: Record<string, string> = {};
@@ -1090,12 +1091,6 @@ export function genSvgResizer() {
   }
 }
 
-/**
- * 将 style prop 中的 fontSize（或 width/height）patch 到三方图标组件的 JSX 片段中。
- * 适用于 <PlusOutlined />、<NormalHistogramLine /> 等场景。
- * - 宽高相等时写 fontSize（antd 等图标库通用）
- * - 宽高不等时写 width/height
- */
 /** 清除 style object inner 字符串两端多余的逗号和空白 */
 function cleanStyleInner(inner: string): string {
   return inner.replace(/^\s*,\s*/, '').replace(/,\s*$/, '').trim();
@@ -1111,11 +1106,17 @@ function setStyleProp(inner: string, key: string, value: string | number): strin
   return cleaned ? `${cleaned}, ${key}: ${value}` : `${key}: ${value}`;
 }
 
+/**
+ * 将 style prop 中的尺寸 patch 到三方图标组件的 JSX 片段中。
+ * 适用于 <PlusOutlined />、<NormalHistogramLine /> 等场景。
+ * 三方图标组件统一使用 fontSize 控制大小，不使用 width/height。
+ * 若源码中存在 width/height（如 AI 生成的代码），自动清除并转为 fontSize（取 width 值）。
+ */
 function patchStylePropInJsxSnippet(
   snippet: string,
   size: { width: number; height: number },
 ): string {
-  const isSquare = size.width === size.height;
+  const fontSize = size.width;
 
   const styleIdx = snippet.indexOf('style={{');
   if (styleIdx !== -1) {
@@ -1124,43 +1125,31 @@ function patchStylePropInJsxSnippet(
     if (innerEnd !== -1) {
       let inner = snippet.slice(innerStart, innerEnd);
 
-      if (isSquare) {
-        // 去掉 width / height，改用 fontSize
-        inner = inner.replace(/,?\s*\bwidth\s*:\s*[^,}]+/g, '');
-        inner = inner.replace(/,?\s*\bheight\s*:\s*[^,}]+/g, '');
-        inner = cleanStyleInner(inner);
-        inner = setStyleProp(inner, 'fontSize', size.width);
-      } else {
-        // 去掉 fontSize，改用 width / height
-        inner = inner.replace(/,?\s*\bfontSize\s*:\s*[^,}]+/g, '');
-        inner = cleanStyleInner(inner);
-        inner = setStyleProp(inner, 'width', size.width);
-        inner = setStyleProp(inner, 'height', size.height);
-      }
+      // 清除 width / height（不论 AI 写了什么），统一改用 fontSize
+      inner = inner.replace(/,?\s*\bwidth\s*:\s*[^,}]+/g, '');
+      inner = inner.replace(/,?\s*\bheight\s*:\s*[^,}]+/g, '');
+      inner = cleanStyleInner(inner);
+      inner = setStyleProp(inner, 'fontSize', fontSize);
 
       return snippet.slice(0, styleIdx) + 'style={{ ' + inner + ' }}' + snippet.slice(innerEnd + 2);
     }
   }
 
   // 没有 style prop，插入新的
-  const styleStr = isSquare
-    ? `style={{ fontSize: ${size.width} }}`
-    : `style={{ width: ${size.width}, height: ${size.height} }}`;
-
   const selfClose = snippet.lastIndexOf('/>');
   if (selfClose !== -1) {
-    return snippet.slice(0, selfClose).trimEnd() + ' ' + styleStr + ' />';
+    return snippet.slice(0, selfClose).trimEnd() + ` style={{ fontSize: ${fontSize} }} />`;
   }
   const firstClose = snippet.indexOf('>');
   if (firstClose !== -1) {
-    return snippet.slice(0, firstClose) + ' ' + styleStr + snippet.slice(firstClose);
+    return snippet.slice(0, firstClose) + ` style={{ fontSize: ${fontSize} }}` + snippet.slice(firstClose);
   }
   return snippet;
 }
 
 /**
  * 从三方图标组件对应的 JSX 源码片段中读取当前显式设置的尺寸。
- * 优先读 style.fontSize（方形图标），其次读 style.width/height。
+ * 优先读 style.fontSize；若 AI 生成了旧式 style.width/height 则作为 fallback 兼容读取。
  * 找不到显式尺寸时返回 { w: 0, h: 0 }，调用方可回退到 DOM 测量。
  */
 export function readIconSizeFromJsx(params: any): { w: number; h: number } {
