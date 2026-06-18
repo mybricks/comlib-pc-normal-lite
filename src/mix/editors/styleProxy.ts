@@ -473,6 +473,7 @@ export function genImgSrcReplacer() {
           plugins?.showAIDialog?.();
           plugins?.aiService?.request({
             message: '请将页面中当前这张图片的地址替换为用户上传的图片链接',
+            mentionFocus: true,
             attachments: [{ url: newSrc }],
           });
         }

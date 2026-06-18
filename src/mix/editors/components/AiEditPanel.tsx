@@ -54,6 +54,7 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
     try {
       const result = aiService?.request({
         message: `${modeConfig.messagePrefix}${content}`,
+        mentionFocus: true,
         attachments: [],
       });
       console.log('[AiEditPanel] request result:', result);
