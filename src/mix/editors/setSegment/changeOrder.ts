@@ -182,7 +182,7 @@ const changeOrder = (options) => {
             context.saveManualVersion([fromFile])
           },
         })
-        return
+        return true
       }
     }
   }
@@ -195,16 +195,16 @@ const changeOrder = (options) => {
     `请调整页面中两个元素在 JSX 源码里的顺序。\n` +
     `\n` +
     `## 操作意图\n` +
-    `用户将元素 A 拖拽到元素 B 的${direction}，请在源码中完成对应的位置调换。\n` +
+    `用户将【被拖拽元素】拖拽到【参照元素】的${direction}，请在源码中完成对应的位置调换。\n` +
     `\n` +
-    `## 元素 A（被拖拽的元素，需要移动）\n` +
+    `## 被拖拽元素（需要移动）\n` +
     `- DOM 结构快照：\n` +
     `\`\`\`html\n${fromDOMSnapshot}\n\`\`\`\n` +
     `- 所在文件：${fromFile}（${fromLineRange}）\n` +
     `- 对应的 JSX 代码：\n` +
     `\`\`\`jsx\n${fromSnippet}\n\`\`\`\n` +
     `\n` +
-    `## 元素 B（目标参照元素，位置不变）\n` +
+    `## 参照元素（位置不变）\n` +
     `- DOM 结构快照：\n` +
     `\`\`\`html\n${toDOMSnapshot}\n\`\`\`\n` +
     `- 所在文件：${toFile}（${toLineRange}）\n` +
@@ -212,13 +212,17 @@ const changeOrder = (options) => {
     `\`\`\`jsx\n${toSnippet}\n\`\`\`\n` +
     `\n` +
     `## 修改要求\n` +
-    `1. 只移动元素 A 的 JSX 节点（含其完整子树），不修改任何属性或样式，保证修改前后代码语义不变\n` +
-    `2. 将元素 A 移动到元素 B 的${direction}\n` +
+    `1. 只移动【被拖拽元素】的 JSX 节点（含其完整子树），不修改任何属性或样式，保证修改前后代码语义不变\n` +
+    `2. 将【被拖拽元素】移动到【参照元素】的${direction}\n` +
     `3. 保持其余元素的顺序和缩进不变\n` +
-    `4. 如果两个元素位于不同父容器，请自行判断最合理的移动方案`
+    `4. 如果两个元素位于不同父容器，请自行判断最合理的移动方案\n` +
+    `\n` +
+    `## 注意\n` +
+    `如果你认为这次操作不合法，请用一句话向用户说明原因，不要修改任何代码。`
 
   const componentId = context.component!.params.id
   ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, extra: { source: '@updateSegment:changeOrder' } })
+  return false
 }
 
 export default changeOrder
