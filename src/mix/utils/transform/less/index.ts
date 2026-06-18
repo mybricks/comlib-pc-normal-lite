@@ -221,6 +221,55 @@ const getRawSelector = (selectors: Rule["selectors"]): string => {
   return parts.join(", ");
 };
 
+/**
+ * 检测 Less AST 子树中是否含有 Variable 节点（@xxx 引用）。
+ * 用于在调用 toCSS() 前快速判断是否需要走 AST 遍历路径。
+ */
+function hasVariableNode(node: any): boolean {
+  if (!node) return false;
+  if ((node.type ?? node.constructor?.name) === 'Variable') return true;
+  if (Array.isArray(node.value))    return node.value.some((c: any) => hasVariableNode(c));
+  if (Array.isArray(node.args))     return node.args.some((a: any) => hasVariableNode(a));
+  if (Array.isArray(node.operands)) return node.operands.some((o: any) => hasVariableNode(o));
+  return false;
+}
+
+/**
+ * 递归提取 Less AST 节点的原始文本表示，保留变量引用（@xxx）不求值。
+ * Variable 节点直接返回 node.name，其余节点降级调用 toCSS()。
+ */
+function extractRawLessValue(node: any): string {
+  if (!node) return '';
+  const type = node.type ?? node.constructor?.name;
+
+  if (type === 'Variable') return String(node.name ?? '');
+
+  if (type === 'Value' && Array.isArray(node.value))
+    return node.value.map((c: any) => extractRawLessValue(c)).join(', ');
+
+  if (type === 'Expression' && Array.isArray(node.value))
+    return node.value.map((c: any) => extractRawLessValue(c)).join(' ');
+
+  if (type === 'Call' && node.name) {
+    const args = Array.isArray(node.args)
+      ? node.args.map((a: any) => extractRawLessValue(a)).join(', ')
+      : '';
+    return `${node.name}(${args})`;
+  }
+
+  if (type === 'Operation' && node.op != null && Array.isArray(node.operands)) {
+    const l = extractRawLessValue(node.operands[0]);
+    const r = extractRawLessValue(node.operands[1]);
+    return `${l} ${node.op} ${r}`;
+  }
+
+  if (typeof node.toCSS === 'function') {
+    try { const v = node.toCSS(); if (v) return String(v); } catch {}
+  }
+  if (typeof node.value === 'string') return node.value;
+  return '';
+}
+
 class Parse {
 
   cssObj: CSSObj = {};
@@ -305,11 +354,25 @@ class Parse {
     } else {
       key = declaration.name[0].toCSS();
     }
-    const value = declaration.value.toCSS() + (declaration.important || "");
+
+    // 若值中含有 Less 变量引用（如 @canvas-soft），直接从 AST 读取原始文本，
+    // 绕过 toCSS()——后者在无求值上下文时会将变量降级为空字符串。
+    const valueNode = declaration.value as any;
+    let rawValue: string;
+    if (hasVariableNode(valueNode)) {
+      rawValue = extractRawLessValue(valueNode);
+    } else {
+      try {
+        rawValue = declaration.value.toCSS();
+      } catch {
+        rawValue = extractRawLessValue(valueNode);
+      }
+    }
 
     return {
-      key: convertHyphenToCamel(key),
-      value
+      // Less 变量定义（@xxx: value）不做驼峰转换，保留原始名称
+      key: key.startsWith('@') ? key : convertHyphenToCamel(key),
+      value: rawValue + (declaration.important || ""),
     }
   }
 
@@ -401,7 +464,9 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
         `${formatCSSString(value, indent + "  ")}` +
         `\n${indent}}`;
     } else {
-      code += `${indent}${convertCamelToHyphen(key)}: ${value};${index === lastIndex ? "" : "\n"}`;
+      // Less 变量定义（@xxx: value）不做 kebab 转换，保留原始名称
+      const outputKey = key.startsWith('@') ? key : convertCamelToHyphen(key);
+      code += `${indent}${outputKey}: ${value};${index === lastIndex ? "" : "\n"}`;
     }
   });
 

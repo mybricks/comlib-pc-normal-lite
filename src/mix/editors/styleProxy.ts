@@ -6,6 +6,22 @@ import { convertCamelToHyphen } from '../../utils/string'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
+/**
+ * 将 CSS 颜色值归一化为统一的 rgb(...) 形式，用于跨格式比较。
+ * 支持：#rgb / #rrggbb → rgb(r,g,b)，rgba(r,g,b,1/1.0) → rgb(r,g,b)，统一空白。
+ */
+function normalizeCSSValue(v: string): string {
+  const s = v.trim().toLowerCase();
+  const h3 = s.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/);
+  if (h3) return `rgb(${parseInt(h3[1] + h3[1], 16)}, ${parseInt(h3[2] + h3[2], 16)}, ${parseInt(h3[3] + h3[3], 16)})`;
+  const h6 = s.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/);
+  if (h6) return `rgb(${parseInt(h6[1], 16)}, ${parseInt(h6[2], 16)}, ${parseInt(h6[3], 16)})`;
+  // rgba(r,g,b,1) / rgba(r,g,b,1.0) 与 rgb(r,g,b) 视觉等价
+  const rgba1 = s.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*1(?:\.0*)?\s*\)$/);
+  if (rgba1) return `rgb(${rgba1[1]}, ${rgba1[2]}, ${rgba1[3]})`;
+  return s.replace(/\s+/g, ' ');
+}
+
 // ── CSS shorthand 映射 ────────────────────────────────────────────────────────
 
 const CSS_SHORTHAND_GROUPS: Record<string, string[]> = {
@@ -374,7 +390,20 @@ export function genStyleValue(props) {
         cssObj[targetKey] = {};
       }
 
+      const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
+
       Object.entries(value).forEach(([key, val]) => {
+        const existing = cssObj[targetKey]?.[key];
+        // 当前 Less 文件中该属性是 Less 变量引用（@xxx）时，判断是否真正被用户改动：
+        // - 无法取到计算值 → 变量未解析 → 保留变量
+        // - 计算值与写入值归一化后相同 → editConfig 里只是旧缓存，用户未真正改动 → 保留变量
+        // - 不同 → 用户确实改了 → 允许覆盖
+        if (typeof existing === 'string' && /^\s*@[\w-]/.test(existing)) {
+          if (!computedStyle) return;
+          const computedVal = computedStyle.getPropertyValue(convertCamelToHyphen(key)).trim();
+          if (!computedVal) return;
+          if (normalizeCSSValue(computedVal) === normalizeCSSValue(String(val ?? ''))) return;
+        }
         cssObj[targetKey][key] = val;
       });
 
