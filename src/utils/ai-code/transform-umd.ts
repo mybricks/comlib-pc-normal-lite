@@ -86,6 +86,10 @@ export function transformLess(code, filename: string) {
     return cssModule
   }
 
+  const externalLessPlugins = window._sandbox_?.config?.componentRuntime?.lessPlugins?.map((factory) => {
+    return factory({ filename })
+  }) || []
+
   window.less.render(code, {
     javascriptEnabled: true,
     plugins: [
@@ -167,6 +171,7 @@ export function transformLess(code, filename: string) {
           })
         },
       },
+      ...externalLessPlugins,
     ],
   }, (error, result) => {
     if (error) {
