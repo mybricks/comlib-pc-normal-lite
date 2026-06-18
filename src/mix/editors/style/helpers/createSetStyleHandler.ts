@@ -10,6 +10,60 @@ const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 // gap 相关属性：由三方组件 size/gap prop 内部控制，无法通过 CSS 修改，需交 AI 处理
 const GAP_KEYS = new Set(['gap', 'columnGap', 'rowGap'])
 
+// gap 简写展开表（camelCase），用于检测平铺规则中与嵌套路径写入产生的级联冲突
+const GAP_SHORTHAND_TO_LONGHANDS: Record<string, string[]> = {
+  gap: ['rowGap', 'columnGap'],
+}
+const GAP_LONGHAND_TO_SHORTHAND: Record<string, string> = {
+  rowGap: 'gap',
+  columnGap: 'gap',
+}
+
+/**
+ * 当编辑器将属性写入嵌套规则后，检查是否存在同选择器的平铺规则（源码靠后、CSS 级联优先级更高）。
+ * 若平铺规则中存在与写入属性冲突的简写（如 gap 覆盖 column-gap），则展开该简写：
+ *   - 删除简写属性
+ *   - 将其余分量以原值写回平铺规则（避免 row-gap 等丢失）
+ * 这样嵌套规则中刚写入的 longhand 就不再被平铺规则的 shorthand 覆盖。
+ */
+function clearFlatRuleConflicts(
+  cssObj: Record<string, any>,
+  classPath: string[],
+  writtenProps: string[],
+): void {
+  if (classPath.length < 2) return
+  const flatKey = classPath.join(' ')
+  const flatRule = cssObj[flatKey]
+  if (!flatRule || typeof flatRule !== 'object') return
+
+  writtenProps.forEach(propKey => {
+    // 情形 1：平铺规则直接含有与写入同名属性 → 直接删除，嵌套规则的值将生效
+    // （相同选择器、相同特异性，嵌套规则在前、平铺规则在后，
+    //  若平铺规则也有该属性会覆盖嵌套规则；删除后嵌套规则的值独立生效）
+    // 注意：此处不删除，因为平铺规则靠后仍然胜出。
+    // 正确做法是处理 情形 2（简写覆盖 longhand）。
+
+    // 情形 2：平铺规则含有覆盖 propKey 的简写（如 gap 覆盖 columnGap）→ 展开简写
+    const shorthand = GAP_LONGHAND_TO_SHORTHAND[propKey]
+    if (shorthand && shorthand in flatRule) {
+      const shorthandVal = flatRule[shorthand]
+      delete flatRule[shorthand]
+      // 将简写的其他分量以原值写回，避免 row-gap 等意外丢失
+      GAP_SHORTHAND_TO_LONGHANDS[shorthand].forEach(lh => {
+        if (lh !== propKey && flatRule[lh] == null) {
+          flatRule[lh] = shorthandVal
+        }
+      })
+    }
+
+    // 情形 3：写入的是 gap 简写本身，平铺规则也有 gap → 直接删除平铺规则的 gap
+    // （嵌套规则写入 gap 后，平铺规则同名 gap 靠后仍覆盖；删除后嵌套规则胜出）
+    if (propKey === 'gap' && 'gap' in flatRule) {
+      delete flatRule['gap']
+    }
+  })
+}
+
 const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>) => {
   const hasGap = 'rowGap' in style || 'columnGap' in style || 'gap' in style
   if (hasGap) {
@@ -299,6 +353,9 @@ export default function createSetStyleHandler(
             value.forEach(({ key: propKey, value: propVal }) => {
               target[targetKey][propKey] = `${propVal}px`
             })
+
+            // 写完嵌套路径后，清理平铺规则中可能覆盖上述属性的简写冲突
+            clearFlatRuleConflicts(cssObj, classPath, value.map(v => v.key))
 
             const lessNewCode = stringifyLess(cssObj)
             lesss.push({
