@@ -1,338 +1,224 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 
-/**
- * buildAIReorderPrompt 的参数接口
- */
-interface AIReorderOptions {
-  /** 当前 JSX 文件的源码内容 */
-  source: string
-  /** JSX 文件名，AI 读文件时需要 */
-  fileName: string
-  from: {
-    fileName: string
-    jsx: { start: number; end: number }
-    isMap: boolean,
-    codeLine: { start: number; end: number }
-    /** from 节点所在的 .map() 表达式整体的代码行范围（isMap=true 时存在） */
-    mapCallLine?: { start: number; end: number }
-  }
-  to: {
-    fileName: string
-    jsx: { start: number; end: number }
-    isMap: boolean,
-    codeLine: { start: number; end: number }
-    /** to 节点所在的 .map() 表达式整体的代码行范围（isMap=true 时存在） */
-    mapCallLine?: { start: number; end: number }
-  }
-  /** 拖拽方向：放到目标节点之前还是之后 */
-  direction: 'before' | 'after'
-  /** from 节点在 map 兄弟列表中的 0-based 下标，-1 表示不在 map 内 */
-  fromMapIndex: number
-  /** to 节点在 map 兄弟列表中的 0-based 下标，-1 表示不在 map 内 */
-  toMapIndex: number
-  /** map 渲染的节点总数 */
-  mapTotal: number
+const getSnippet = (fileName: string, loc: any, files): string => {
+  const file = files.find((f) => f.fileName === fileName)
+  if (!file) return ''
+  const source = decodeURIComponent(file.source)
+  const start: number = loc.jsx?.start ?? 0
+  const end: number = loc.jsx?.end ?? source.length
+  return source.slice(start, end).trim()
+}
+
+const getLineRange = (source: string, loc: any): string => {
+  const start: number = loc.jsx?.start ?? 0
+  const end: number = loc.jsx?.end ?? source.length
+  const startLine = source.slice(0, start).split('\n').length
+  const endLine = source.slice(0, end).split('\n').length
+  return startLine === endLine ? `第 ${startLine} 行` : `第 ${startLine}~${endLine} 行`
 }
 
 /**
- * 从源码字符串中按行号（1-based，闭区间）提取子字符串
+ * 将 DOM 元素序列化为简洁的 HTML 结构字符串，最多展开 maxDepth 层。
+ * 过滤掉平台注入的 data-* 属性，保留 class / id / type 等有语义的属性。
  */
-function extractLines(source: string, startLine: number, endLine: number): string {
-  const lines = source.split('\n')
-  return lines.slice(startLine - 1, endLine).join('\n')
+const serializeDOMShallow = (ele: Element, maxDepth: number, depth = 0): string => {
+  const tag = ele.tagName.toLowerCase()
+  const attrs = Array.from(ele.attributes)
+    .filter((a) => !a.name.startsWith('data-'))
+    .map((a) => `${a.name}="${a.value}"`)
+    .join(' ')
+  const openTag = attrs ? `<${tag} ${attrs}>` : `<${tag}>`
+
+  if (depth >= maxDepth) {
+    // 到达深度上限，只输出文本内容（截断）
+    const text = ele.textContent?.trim().slice(0, 40) ?? ''
+    return text ? `${openTag}${text}</${tag}>` : `<${tag} />`
+  }
+
+  const childNodes = Array.from(ele.childNodes)
+  const childParts: string[] = []
+  for (const node of childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim()
+      if (text) childParts.push(text)
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const indent = '  '.repeat(depth + 1)
+      childParts.push(indent + serializeDOMShallow(node as Element, maxDepth, depth + 1))
+    }
+  }
+
+  if (!childParts.length) return `<${tag} />`
+  const indent = '  '.repeat(depth)
+  return `${openTag}\n${childParts.join('\n')}\n${indent}</${tag}>`
 }
 
 /**
- * 为 map 渲染节点的拖拽排序组装 AI 提示词
+ * 直接用字符串替换交换源码中两段 JSX 节点的位置。
+ * 要求：fromSnippet 和 toSnippet 在 source 中各自只出现一次，且均为纯净 JSX。
  *
- * 场景分类：
- *   A. from=map内，to=map内  → 操作数据数组，交换两个元素的位置
- *   B. from=map外，to=map内  → AI 自行决策：插入数组 或 移到 map 块外侧
- *   C. from=map内，to=map外  → 从数组提取一项为静态节点
+ * 返回替换后的新 source，若失败返回 null。
  */
-function buildAIReorderPrompt({
-  source,
-  fileName,
-  from,
-  to,
-  direction,
-  fromMapIndex,
-  toMapIndex,
-  mapTotal,
-}: AIReorderOptions): string {
-  const fromSnippet = source.slice(from.jsx.start, from.jsx.end)
-  const toSnippet = source.slice(to.jsx.start, to.jsx.end)
-  const directionWord = direction === 'before' ? '之前' : '之后'
+const swapSnippetsInSource = (source: string, fromSnippet: string, toSnippet: string): string | null => {
+  // 用占位符避免先替换 A 后找不到 B 的问题
+  const PLACEHOLDER_A = `__SWAP_PLACEHOLDER_A_${Date.now()}__`
+  const PLACEHOLDER_B = `__SWAP_PLACEHOLDER_B_${Date.now()}__`
 
-  // ── 场景 A：两者都在 .map() 回调中，调整数据数组元素顺序 ─────────────────
-  if (from.isMap && to.isMap) {
-    const mapCallSection = from.mapCallLine
-      ? `\n所在 .map() 表达式（第 ${from.mapCallLine.start}~${from.mapCallLine.end} 行）：\n\`\`\`jsx\n${extractLines(source, from.mapCallLine.start, from.mapCallLine.end)}\n\`\`\`\n`
-      : ''
-    return `在 UI 表现上上将 .map() 列表中第 ${fromMapIndex + 1} 项对应的节点（共 ${mapTotal} 项），
-移动到第 ${toMapIndex + 1} 项的${directionWord}。
-${mapCallSection}
-JSX 片段（第 ${from.codeLine.start}~${from.codeLine.end} 行）：
-\`\`\`jsx
-${fromSnippet}
-\`\`\`
-
-1. 请读取文件 ${fileName}，找到该 .map() 调用的数据数组定义
-2. 数据数组可能定义在当前文件或其他关联文件（如 setup.ts）中，请自行查找
-3. **禁止修改 JSX 结构，只修改数据数组**
-4. 先说明你找到的数据数组位于哪个文件，再修改代码`
+  if (!source.includes(fromSnippet) || !source.includes(toSnippet)) {
+    return null
   }
-
-  // ── 场景 B：from 在 map 外，to 在 map 内 ──────────────────────────────────
-  if (!from.isMap && to.isMap) {
-    const mapCallSection = to.mapCallLine
-      ? `\nto 节点所在 .map() 表达式（第 ${to.mapCallLine.start}~${to.mapCallLine.end} 行）：\n\`\`\`jsx\n${extractLines(source, to.mapCallLine.start, to.mapCallLine.end)}\n\`\`\`\n`
-      : ''
-    return `用户在 UI 上进行了拖拽操作，将一个静态 JSX 节点拖到了 .map() 渲染列表中。
-
-文件：${fileName}
-
-## 操作说明
-
-将静态节点（from）放到 .map() 列表第 ${toMapIndex} 项的${directionWord}
-（该 map 共 ${mapTotal} 项，目标是第 ${toMapIndex} 项）
-${mapCallSection}
-from 节点（静态，不在 map 中，第 ${from.codeLine.start}~${from.codeLine.end} 行）：
-\`\`\`jsx
-${fromSnippet}
-\`\`\`
-
-to 节点（map 内第 ${toMapIndex} 项，第 ${to.codeLine.start}~${to.codeLine.end} 行）：
-\`\`\`jsx
-${toSnippet}
-\`\`\`
-
-## 要求
-
-**请先声明你的处理方案**，选择以下之一并说明理由：
-- 方案1：将 from 对应的数据项插入到数组第 ${toMapIndex} 项的${directionWord}，并从 JSX 中移除原静态节点
-- 方案2：将 from 静态节点整体移到 .map() 表达式块的${directionWord}，不修改数组
-
-然后输出修改代码`
-  }
-
-  // ── 场景 C：from 在 map 内，to 在 map 外 ──────────────────────────────────
-  const mapCallSection = from.mapCallLine
-    ? `\nfrom 节点所在 .map() 表达式（第 ${from.mapCallLine.start}~${from.mapCallLine.end} 行）：\n\`\`\`jsx\n${extractLines(source, from.mapCallLine.start, from.mapCallLine.end)}\n\`\`\`\n`
-    : ''
-  return `用户在 UI 上进行了拖拽操作，将 .map() 列表中的一个节点拖到了外部静态位置。
-
-文件：${fileName}
-
-## 操作说明
-
-将 map 数组第 ${fromMapIndex} 项（共 ${mapTotal} 项），
-提取为静态节点放到 to 节点的${directionWord}
-${mapCallSection}
-from 节点（map 内第 ${fromMapIndex} 项，第 ${from.codeLine.start}~${from.codeLine.end} 行）：
-\`\`\`jsx
-${fromSnippet}
-\`\`\`
-
-to 节点（静态，第 ${to.codeLine.start}~${to.codeLine.end} 行）：
-\`\`\`jsx
-${toSnippet}
-\`\`\`
-
-## 要求
-
-**请先声明你的处理方案**：
-- 你将从数组第 ${fromMapIndex} 项提取哪些属性值作为静态节点的 props
-- 删除数组该项后，若数组为空如何处理 .map() 表达式
-
-然后输出修改代码`
+  let result = source
+  result = result.replace(fromSnippet, PLACEHOLDER_A)
+  result = result.replace(toSnippet, PLACEHOLDER_B)
+  result = result.replace(PLACEHOLDER_A, toSnippet)
+  result = result.replace(PLACEHOLDER_B, fromSnippet)
+  return result
 }
 
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
-  // console.log('[options]', options)
+  // console.log('[changeOrder]', options)
   if (fromEle === toEle) {
-    // 相对自己移动
+    // 相对自己移动，无需处理
     return
   }
 
-  // 位置信息接口：记录 JSX 片段的字符偏移、标签结束位置、代码行号、关联文件路径及类名
+  const fromDataLoc = fromEle.getAttribute('data-loc')
+  let fromDOM = fromEle
 
-  let from: any = {
-    isMap: !!fromEle.dataset['zoneIsmap']
-  }
-  let to: any = {
-    isMap: !!toEle.dataset['zoneIsmap']
+  let useAI = false
+
+  if (!fromDataLoc) {
+    // 说明这个dom元素是在某段JSX的内部实现
+    // 找到实现它的组件dom，这里有代码信息 loc
+    fromDOM = fromEle.closest('[data-loc]')
+    // 此时一定是走AI了
+    useAI = true
   }
 
-  if (!from.isMap) {
-    if (fromEle.parentElement.dataset['customComWrapper']) {
-      from = JSON.parse(fromEle.parentElement.dataset['customComWrapper'])
-    } else {
-      const loc = JSON.parse(fromEle.dataset['loc'])
-      from = {
-        fileName: loc.files.jsx,
-        jsx: loc.jsx,
-        isMap: !!fromEle.dataset['zoneIsmap']
+  const toDataLoc = toEle.getAttribute('data-loc')
+  let toDOM = toEle
+
+  if (!toDataLoc) {
+    // 说明这个dom元素是在某段JSX的内部实现
+    // 找到实现它的组件dom，这里有代码信息 loc
+    toDOM = toEle.closest('[data-loc]')
+    // 此时一定是走AI了
+    useAI = true
+  }
+
+  // 判断 1：fromEle 和 toEle 的 parent 节点不是同一个 DOM，走 AI
+  if (fromEle.parentElement !== toEle.parentElement) {
+    useAI = true
+  }
+
+  // 判断 2：先用 getAttribute 查 data-widget-name，没有则用 closest 查
+  // 如果两者的 data-widget-name 不同，走 AI
+  const getWidgetName = (el: HTMLElement): string | null => {
+    return el.getAttribute('data-widget-name') ?? el.closest('[data-widget-name]')?.getAttribute('data-widget-name') ?? null
+  }
+  if (getWidgetName(fromEle) !== getWidgetName(toEle)) {
+    useAI = true
+  }
+
+  const fromLoc = JSON.parse(fromDOM.getAttribute('data-loc')!)
+  const toLoc = JSON.parse(toDOM.getAttribute('data-loc')!)
+
+  const fromFile = fromLoc.files?.jsx ?? ''
+  const toFile = toLoc.files?.jsx ?? ''
+
+  // 判断 3：两个元素对应的 jsx 文件不是同一个，走 AI
+  if (fromFile !== toFile) {
+    useAI = true
+  }
+
+  // 判断 4：fromLoc 和 toLoc 的原始字符串相同（如 map 渲染的列表项），走 AI
+  if (fromDOM.getAttribute('data-loc') === toDOM.getAttribute('data-loc')) {
+    useAI = true
+  }
+
+  const files: Array<{ fileName: string; source: string }> = context.component!.params.data.files ?? []
+  const fromSnippet = getSnippet(fromFile, fromLoc, files)
+  const toSnippet = getSnippet(toFile, toLoc, files)
+
+  const fromFileSource = decodeURIComponent(files.find((f) => f.fileName === fromFile)?.source ?? '')
+  const toFileSource = decodeURIComponent(files.find((f) => f.fileName === toFile)?.source ?? '')
+  const fromLineRange = getLineRange(fromFileSource, fromLoc)
+  const toLineRange = getLineRange(toFileSource, toLoc)
+
+  // ─── 快速路径：不走 AI，直接替换 ─────────────────────────────────────
+  // 条件：
+  //   1. 两个元素都直接有 data-loc（fromDOM === fromEle && toDOM === toEle）
+  //   2. 在同一个文件内
+  //   3. data-loc.swappable === true（由 babelPlugin 在 AST 阶段精确计算）
+  //      - 非变量赋值右值（const h1 = <h1>）
+  //      - children 中无 JSXExpressionContainer（{h1}、{items.map(...)} 等）
+  const fileEntry = files.find((f) => f.fileName === fromFile)
+  const source = fileEntry ? decodeURIComponent(fileEntry.source) : ''
+
+  // console.log('[结果]', {
+  //   useAI,
+  //   'fromFile === toFile': fromFile === toFile,
+  //   'fromLoc.swappable': fromLoc.swappable,
+  //   'toLoc.swappable': toLoc.swappable
+  // })
+
+  if (
+    !useAI &&
+    fromFile === toFile &&
+    fromLoc.swappable === true &&
+    toLoc.swappable === true
+  ) {
+    if (fileEntry) {
+      const newSource = swapSnippetsInSource(source, fromSnippet, toSnippet)
+      if (newSource !== null) {
+        undoRedoManager.execute({
+          execute() {
+            context.updateFile({ fileName: fromFile, content: newSource, type: undefined })
+            context.saveManualVersion([fromFile])
+          },
+          undo() {
+            context.updateFile({ fileName: fromFile, content: source, type: undefined })
+            context.saveManualVersion([fromFile])
+          },
+        })
+        return
       }
     }
-  } else {
-    const loc = JSON.parse(fromEle.dataset['loc'])
-    from = {
-      fileName: loc.files.jsx,
-      jsx: loc.jsx,
-      isMap: true,
-      codeLine: loc.codeLine,
-      mapCallLine: loc.mapCall ?? undefined
-    }
   }
+  // ─────────────────────────────────────────────────────────────────────
 
-  if (!to.isMap) {
-    if (toEle.parentElement.dataset['customComWrapper']) {
-      to = JSON.parse(toEle.parentElement.dataset['customComWrapper'])
-    } else {
-      const loc = JSON.parse(toEle.dataset['loc'])
-      to = {
-        fileName: loc.files.jsx,
-        jsx: loc.jsx,
-        isMap: !!toEle.dataset['zoneIsmap']
-      }
-    }
-  } else {
-    const loc = JSON.parse(toEle.dataset['loc'])
-    to = {
-      fileName: loc.files.jsx,
-      jsx: loc.jsx,
-      isMap: true,
-      codeLine: loc.codeLine,
-      mapCallLine: loc.mapCall ?? undefined
-    }
-  }
+  const fromDOMSnapshot = serializeDOMShallow(fromEle, 3)
+  const toDOMSnapshot = serializeDOMShallow(toEle, 3)
+  const direction = type === 'before' ? '之前（上方）' : '之后（下方）'
+  const message =
+    `请调整页面中两个元素在 JSX 源码里的顺序。\n` +
+    `\n` +
+    `## 操作意图\n` +
+    `用户将元素 A 拖拽到元素 B 的${direction}，请在源码中完成对应的位置调换。\n` +
+    `\n` +
+    `## 元素 A（被拖拽的元素，需要移动）\n` +
+    `- DOM 结构快照：\n` +
+    `\`\`\`html\n${fromDOMSnapshot}\n\`\`\`\n` +
+    `- 所在文件：${fromFile}（${fromLineRange}）\n` +
+    `- 对应的 JSX 代码：\n` +
+    `\`\`\`jsx\n${fromSnippet}\n\`\`\`\n` +
+    `\n` +
+    `## 元素 B（目标参照元素，位置不变）\n` +
+    `- DOM 结构快照：\n` +
+    `\`\`\`html\n${toDOMSnapshot}\n\`\`\`\n` +
+    `- 所在文件：${toFile}（${toLineRange}）\n` +
+    `- 对应的 JSX 代码：\n` +
+    `\`\`\`jsx\n${toSnippet}\n\`\`\`\n` +
+    `\n` +
+    `## 修改要求\n` +
+    `1. 只移动元素 A 的 JSX 节点（含其完整子树），不修改任何属性或样式，保证修改前后代码语义不变\n` +
+    `2. 将元素 A 移动到元素 B 的${direction}\n` +
+    `3. 保持其余元素的顺序和缩进不变\n` +
+    `4. 如果两个元素位于不同父容器，请自行判断最合理的移动方案`
 
-  const { fileName } = from
-
-  if (!fileName) return
-
-  // 任意一方是 map 渲染节点，走 AI 修改
-  if (from.isMap || to.isMap) {
-    const aiComParams = context.component?.params
-    const jsxFile = aiComParams?.data?.files?.find(
-      (f: { fileName: string; source: string }) => f.fileName === from.fileName
-    )
-    if (!jsxFile) return
-
-    const source: string = decodeURIComponent(jsxFile.source)
-
-    /**
-     * 自定义组件外层会被 wrapCustomComponentPlugin 额外套一层
-     *   div[data-custom-com-wrapper] { display: contents }
-     * 所以 fromEle / toEle 的实际 DOM 层级可能是：
-     *
-     *   mapContainer
-     *     ├── div[data-custom-com-wrapper]   ← 自定义组件的外层 wrapper
-     *     │     └── <CustomComp>[data-zone-ismap]   ← fromEle / toEle
-     *     └── ...
-     *
-     * 也可能是原生标签直接挂在 mapContainer 下：
-     *
-     *   mapContainer
-     *     ├── div[data-zone-ismap]   ← fromEle / toEle
-     *     └── ...
-     *
-     * 为了统一处理，将 fromEle / toEle "提升"到 mapContainer 的直接子节点层级：
-     * 若其直接父节点是 wrapper div，则用父节点代替自身作为"slot"元素。
-     */
-    const getSlotEle = (ele: HTMLElement): HTMLElement =>
-      ele.parentElement?.dataset['customComWrapper'] ? ele.parentElement : ele
-
-    const fromSlot = getSlotEle(fromEle)
-    const toSlot   = getSlotEle(toEle)
-
-    // 以 fromSlot 的父节点作为 map 容器
-    const mapParent = fromSlot.parentElement
-    const allMapSiblings = Array.from(mapParent?.children ?? [])
-    const fromMapIndex = from.isMap ? allMapSiblings.indexOf(fromSlot) : -1
-    const toMapIndex = to.isMap   ? allMapSiblings.indexOf(toSlot)   : -1
-    const mapTotal = allMapSiblings.length
-
-    const message = buildAIReorderPrompt({
-      source,
-      fileName: from.fileName,
-      from,
-      to,
-      direction: type as 'before' | 'after',
-      fromMapIndex,
-      toMapIndex,
-      mapTotal,
-    })
-
-    // console.log("[message]", message)
-
-    const componentId = aiComParams?.model?.runtime?.id ?? aiComParams?.id
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, extra: { source: '@updateSegment:changeOrder' } })
-    return
-  }
-
-  // 从组件参数中查找对应的 JSX 源文件
-  const aiComParams = context.component?.params
-  const jsxFile = aiComParams?.data?.files?.find(
-    (f: { fileName: string; source: string }) => f.fileName === fileName
-  )
-  if (!jsxFile) return
-
-  // 解码源码字符串
-  const source: string = decodeURIComponent(jsxFile.source)
-  const fromStart = from.jsx.start
-  const fromEnd = from.jsx.end
-  const toStart = to.jsx.start
-  const toEnd = to.jsx.end
-  let newSource
-
-  if (type === 'before') {
-    if (fromStart < toStart) {
-      // 移动到之前
-      newSource = 
-        source.slice(0, fromStart) + 
-        source.slice(fromEnd, toStart) + 
-        source.slice(fromStart, fromEnd) + 
-        source.slice(toStart)
-    } else {
-      newSource = 
-        source.slice(0, toStart) + 
-        source.slice(fromStart, fromEnd) + 
-        source.slice(toStart, fromStart) +
-        source.slice(fromEnd)
-    }
-  } else {
-    // 移动到之后
-    if (fromStart > toStart) {
-      // 目前不会触发这个逻辑
-      newSource = 
-        source.slice(0, toEnd) + 
-        source.slice(fromStart, fromEnd) + 
-        source.slice(toEnd, fromStart) +
-        source.slice(fromEnd)
-    } else {
-      newSource = 
-        source.slice(0, fromStart) + 
-        source.slice(fromEnd, toEnd) +
-        source.slice(fromStart, fromEnd) + 
-        source.slice(toEnd)
-    }
-  }
-
-  // 通过 undoRedoManager 提交变更，支持撤销/重做
-  undoRedoManager.execute({
-    execute() {
-      context.updateFile({ fileName, content: newSource, type: undefined })
-      context.saveManualVersion([fileName])
-    },
-    undo() {
-      context.updateFile({ fileName, content: source, type: undefined })
-      context.saveManualVersion([fileName])
-    },
-  })
+  const componentId = context.component!.params.id
+  ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, extra: { source: '@updateSegment:changeOrder' } })
 }
 
 export default changeOrder

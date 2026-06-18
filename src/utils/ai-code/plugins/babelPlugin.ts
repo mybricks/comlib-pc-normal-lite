@@ -391,6 +391,36 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 }
               }
 
+              // ── 可交换性标记 ────────────────────────────────────────────────
+              // 通过 AST 精确判断该 JSX 节点能否安全做字符串位置互换（不走 AI）。
+              // 规则：
+              //   父路径是 VariableDeclarator（const h1 = <h1>）→ 不可换（赋值右值）
+              //   从当前节点向上、在遇到父级 JSXElement 之前，若经过 JSXExpressionContainer，
+              //     说明该节点被包在 {num > 3 ? <div>...</div> : null} 这类三元/逻辑表达式内
+              //     → 不可换，直接字符串替换会把另一个节点塞进条件分支里
+              //   其余情况 → 可换
+              //
+              // 注意：含 {h1} 等 JSXExpressionContainer 子节点的节点仍可换，
+              // 因为我们交换的是整个子树，表达式引用跟着一起移动，作用域不变。
+              const isAssignmentRhs = path.parentPath?.isVariableDeclarator() === true;
+              // 向上遍历，直到遇到父级 JSXElement 为止；
+              // 若中途经过 JSXExpressionContainer，说明当前节点嵌套在条件/逻辑表达式中，
+              // 直接字符串替换会破坏条件结构。
+              let isInsideJSXExpression = false;
+              {
+                let cur = path.parentPath;
+                while (cur) {
+                  if (cur.isJSXElement()) break; // 遇到父 JSXElement 则停止
+                  if (cur.isJSXExpressionContainer()) {
+                    isInsideJSXExpression = true;
+                    break;
+                  }
+                  cur = cur.parentPath;
+                }
+              }
+              dataLocValueObject.swappable = !isAssignmentRhs && !isInsideJSXExpression;
+              // ────────────────────────────────────────────────────────────────
+
               pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
 
               let foundDeclaratorPath: any = null;
