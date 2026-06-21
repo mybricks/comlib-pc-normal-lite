@@ -1,4 +1,10 @@
-import React from 'react'
+import React, {
+  useRef,
+  useState,
+  useContext,
+  createContext,
+  useLayoutEffect
+} from 'react'
 import context from '../../../../../mix/context'
 import type { CreateMyBricksProps } from '../type'
 import RuntimeContainer from '../components/runtimeContainer'
@@ -6,11 +12,22 @@ import RuntimeContainer from '../components/runtimeContainer'
 const runtime = (props: CreateMyBricksProps) => {
   const debugTarget: any = props.env._debugTarget
 
+  const PageContext = createContext({
+    container: document.body,
+  });
+
   const Page = ({ page, style }) => {
     const Render = page.module.default
+    const containerRef = useRef(null)
+    const [container, setContainer] = useState<HTMLDivElement>()
+
+    useLayoutEffect(() => {
+      setContainer(containerRef.current!)
+    }, [])
 
     return (
       <div
+        ref={containerRef}
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={page.file.filename}
@@ -20,10 +37,16 @@ const runtime = (props: CreateMyBricksProps) => {
           width: 414,
           display: 'flex',
           flexDirection: 'column',
+          transform: 'scale(1)',
+          height: 896,
           ...style
         }}
       >
-        <Render />
+        {container && (
+          <PageContext.Provider value={{ container }}>
+            <Render />
+          </PageContext.Provider>
+        )}
       </div>
     )
   }
@@ -45,9 +68,10 @@ const runtime = (props: CreateMyBricksProps) => {
     }
   }
 
-  const popupRef = () => {
-    return () => {
-      return
+  const popupRef = (Component) => {
+    return (props) => {
+      const pageContext = useContext(PageContext)
+      return <Component {...props} popupNode={pageContext.container}/>
     }
   }
 
