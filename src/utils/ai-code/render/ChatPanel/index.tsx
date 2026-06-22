@@ -158,7 +158,7 @@ const DEFAULT_EMPTY_GUIDE: EmptyGuideConfig = {
   ],
 }
 
-const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, disabled = false }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig; disabled?: boolean }) => {
+const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, copilot, user, disabled = false }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig; disabled?: boolean }) => {
   const { createAgent, ChatPanel } = window._sandbox_.config.componentRuntime.chat
   const chatPanelRef = useRef(null)
 
@@ -217,14 +217,8 @@ const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, disable
     <div className={css.pageWrapper} data-zone-type='ai-fixed'>
       <div className={css.chatPanel} data-zone-type='ai-fixed'>
         <ChatPanel
-          copilot={{
-            name: '运维助手',
-            avatar: 'https://f2.eckwai.com/kos/nlav12333/aicode/logo/newlogo.png',
-          }}
-          user={{
-            name: '用户',
-            avatar: 'https://f2.eckwai.com/kos/nlav12333/aicode/logo/newlogo.png',
-          }}
+          copilot={copilot}
+          user={user}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}
