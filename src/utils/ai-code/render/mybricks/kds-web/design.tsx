@@ -1,9 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../../../../../mix/context'
-import { PAGE_ENTRY_PATTERN } from './constants'
+import { PAGE_ENTRY_PATTERN, DEFAULT_STYLE } from './constants'
 import { randomUUID } from '../../../../../mix/utils/uuid'
 import type { CreateMyBricksProps } from '../type'
-
 
 const design = (props: CreateMyBricksProps) => {
   // 弹窗注册表，存储通过 popupRef 包装的组件实例
@@ -20,13 +19,7 @@ const design = (props: CreateMyBricksProps) => {
         data-desn-page={page.file.filename}
         data-zone-title='页面'
         data-widge-name='页面'
-        style={{
-          width: 414,
-          display: 'flex',
-          flexDirection: 'column',
-          transform: 'scale(1)',
-          height: 896,
-        }}
+        style={DEFAULT_STYLE}
       >
         <Render />
       </div>
@@ -49,13 +42,7 @@ const design = (props: CreateMyBricksProps) => {
         data-desn-page=''
         data-zone-title='弹窗'
         data-widge-name='弹窗'
-        style={{
-          width: 414,
-          display: 'flex',
-          flexDirection: 'column',
-          transform: 'scale(1)',
-          height: 896,
-        }}
+        style={DEFAULT_STYLE}
       >
         {container && <Component {...props} popupNode={container}/>}
       </div>

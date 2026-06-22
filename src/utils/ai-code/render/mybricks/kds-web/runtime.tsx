@@ -8,6 +8,7 @@ import React, {
 import context from '../../../../../mix/context'
 import type { CreateMyBricksProps } from '../type'
 import RuntimeContainer from '../components/runtimeContainer'
+import { DEFAULT_STYLE } from './constants'
 
 const runtime = (props: CreateMyBricksProps) => {
   const debugTarget: any = props.env._debugTarget
@@ -34,11 +35,7 @@ const runtime = (props: CreateMyBricksProps) => {
         data-zone-title='页面'
         data-widge-name='页面'
         style={{
-          width: 414,
-          display: 'flex',
-          flexDirection: 'column',
-          transform: 'scale(1)',
-          height: 896,
+          ...DEFAULT_STYLE,
           ...style
         }}
       >
