@@ -217,8 +217,10 @@ const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, copilot
     <div className={css.pageWrapper} data-zone-type='ai-fixed'>
       <div className={css.chatPanel} data-zone-type='ai-fixed'>
         <ChatPanel
-          copilot={copilot}
-          user={user}
+          copilot={{
+            name: '智能助手',
+            avatar: emptyGuide.icon
+          }}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}

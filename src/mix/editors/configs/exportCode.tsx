@@ -88,6 +88,32 @@ export function buildExportCodeConfig(props: Props) {
           }
         },
         {
+          title: '图标',
+          type: 'text',
+          value: {
+            get(params) {
+              if (!params.data.gui_card) {
+                params.data.gui_card = {
+                  title: '欢迎使用',
+                  titleHighlight: 'AI 助手',
+                  subtitle: '你可以向我提问'
+                }
+              }
+
+              return params.data.gui_card.icon
+            },
+            set(params, value) {
+              const trimValue = value.trim()
+              if (trimValue) {
+                params.data.gui_card = {
+                  ...params.data.gui_card,
+                  icon: trimValue
+                }
+              }
+            }
+          }
+        },
+        {
           title: '高亮文字',
           type: 'text',
           description: '主标题中高亮展示的部分',
@@ -101,6 +127,33 @@ export function buildExportCodeConfig(props: Props) {
                 params.data.gui_card = {
                   ...params.data.gui_card,
                   titleHighlight: trimValue
+                }
+              }
+            }
+          },
+        },
+        {
+          title: '默认场景',
+          type: 'code',
+          options: {
+            language: 'json',
+            minimap: {
+              enabled: false
+            }
+          },
+          value: {
+            get(params) {
+              if (params.data?.gui_card?.groups) {
+                return JSON.stringify(params.data?.gui_card?.groups, null, 2)
+              }
+              return
+            },
+            set(params, value) {
+              const trimValue = value.trim()
+              if (trimValue) {
+                params.data.gui_card = {
+                  ...params.data.gui_card,
+                  groups: JSON.parse(decodeURIComponent(trimValue))
                 }
               }
             }
