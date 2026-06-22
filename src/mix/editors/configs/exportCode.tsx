@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RequirementViewModal } from '../../../utils/requirement-view';
-import context from '../../context';
+import context, { config } from '../../context';
 import type { Props, FigmaImportItem } from '../types';
 import IconLibraryModal from './IconLibraryModal';
 import * as styles from './style.lazy.less';
@@ -55,6 +55,79 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
 
 export function buildExportCodeConfig(props: Props) {
 
+  const mode = config.getFrontendMode()
+  const expand: any[] = []
+  if (mode === 'gui_card') {
+    expand.push({
+      title: 'Agent',
+      items: [
+        {
+          title: '主标题',
+          type: 'text',
+          value: {
+            get(params) {
+              if (!params.data.gui_card) {
+                params.data.gui_card = {
+                  title: '欢迎使用',
+                  titleHighlight: 'AI 助手',
+                  subtitle: '你可以向我提问'
+                }
+              }
+
+              return params.data.gui_card.title
+            },
+            set(params, value) {
+              const trimValue = value.trim()
+              if (trimValue) {
+                params.data.gui_card = {
+                  ...params.data.gui_card,
+                  title: trimValue
+                }
+              }
+            }
+          }
+        },
+        {
+          title: '高亮文字',
+          type: 'text',
+          description: '主标题中高亮展示的部分',
+          value: {
+            get(params) {
+              return params.data.gui_card.titleHighlight
+            },
+            set(params, value) {
+              const trimValue = value.trim()
+              if (trimValue) {
+                params.data.gui_card = {
+                  ...params.data.gui_card,
+                  titleHighlight: trimValue
+                }
+              }
+            }
+          }
+        },
+        {
+          title: '副标题',
+          type: 'text',
+          value: {
+            get(params) {
+              return params.data.gui_card.subtitle
+            },
+            set(params, value) {
+              const trimValue = value.trim()
+              if (trimValue) {
+                params.data.gui_card = {
+                  ...params.data.gui_card,
+                  subtitle: trimValue
+                }
+              }
+            }
+          }
+        },
+      ]
+    })
+  }
+
   return [
     {
       title: '',
@@ -74,7 +147,8 @@ export function buildExportCodeConfig(props: Props) {
           };
         },
       },
-    }
+    },
+    ...expand
     // {
     //   title: '导出',
     //   items: [

@@ -40,7 +40,7 @@ const updateText = (options) => {
       // "\n当前聚焦元素的文字内容来自变量，请修改对应变量的值，但不要改变代码结构"
 
     const componentId = context.component!.params.id
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message })
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, mentionFocus: true })
   }
 }
 

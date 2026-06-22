@@ -934,6 +934,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                           cards,
                         }]
                       }}
+                      emptyGuide={data.gui_card}
                     />
                   </Card>
                 ) : null}
@@ -1017,6 +1018,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                       cards,
                     }]
                   }}
+                  emptyGuide={data.gui_card}
                 />
               </Card>
             </div>

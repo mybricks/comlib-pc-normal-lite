@@ -125,36 +125,37 @@ function EmptyGuide({
 const DEFAULT_EMPTY_GUIDE: EmptyGuideConfig = {
   title: '欢迎使用',
   titleHighlight: 'AI 助手',
-  subtitle: '你可以向我提问，或从下方场景快速开始',
-  groups: [
-    {
-      title: '场景一',
-      description: '场景一的简短描述...',
-      cases: [
-        { label: '示例问题 1' },
-        { label: '示例问题 2' },
-        { label: '示例问题 3' },
-      ],
-    },
-    {
-      title: '场景二',
-      description: '场景二的简短描述...',
-      cases: [
-        { label: '示例问题 1' },
-        { label: '示例问题 2' },
-        { label: '示例问题 3' },
-      ],
-    },
-    {
-      title: '场景三',
-      description: '场景三的简短描述...',
-      cases: [
-        { label: '示例问题 1' },
-        { label: '示例问题 2' },
-        { label: '示例问题 3' },
-      ],
-    },
-  ],
+  subtitle: '你可以向我提问'
+  // subtitle: '你可以向我提问，或从下方场景快速开始',
+  // groups: [
+  //   {
+  //     title: '场景一',
+  //     description: '场景一的简短描述...',
+  //     cases: [
+  //       { label: '示例问题 1' },
+  //       { label: '示例问题 2' },
+  //       { label: '示例问题 3' },
+  //     ],
+  //   },
+  //   {
+  //     title: '场景二',
+  //     description: '场景二的简短描述...',
+  //     cases: [
+  //       { label: '示例问题 1' },
+  //       { label: '示例问题 2' },
+  //       { label: '示例问题 3' },
+  //     ],
+  //   },
+  //   {
+  //     title: '场景三',
+  //     description: '场景三的简短描述...',
+  //     cases: [
+  //       { label: '示例问题 1' },
+  //       { label: '示例问题 2' },
+  //       { label: '示例问题 3' },
+  //     ],
+  //   },
+  // ],
 }
 
 const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, disabled = false }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig; disabled?: boolean }) => {
