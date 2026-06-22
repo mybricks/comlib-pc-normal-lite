@@ -108,6 +108,11 @@ class Config {
     }
   }
 
+  /** 获取配置的版本号 */
+  getVersion() {
+    return window._sandbox_.config.componentRuntime?.version
+  }
+
   getCompatibleAvailableLibraries(): CompatibleAvailableLibrary {
     return window._sandbox_.config.availableLibraries || []
   }

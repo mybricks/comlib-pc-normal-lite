@@ -1,11 +1,14 @@
 import React, { useLayoutEffect, useMemo, useState, useRef, useEffect } from 'react';
 import Runtime from './runtime';
-import context from './context';
+import context, { config } from './context';
 import { registerSandbox } from './sandbox';
 
 const dataCompatible = (props) => {
   try {
     const { id, data } = props;
+    if (!data._componentRuntime) {
+      data._componentRuntime = {}
+    }
     if (!data._errors) {
       data._errors = [];
     }
@@ -39,9 +42,12 @@ const dataCompatible = (props) => {
       data.files = data.files.filter((file) => file.fileName !== "README.md");
     }
 
+    const version = config.getVersion()
+
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 25) {
+    if (!data.version || data.version < 25 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
       data.version = 25
+      data._componentRuntime.version = version
       console.log('[com:update]', data)
       // 去除重复文件（以 fileName 为唯一键，保留最后出现的条目）
       const fileMap = new Map<string, any>();
