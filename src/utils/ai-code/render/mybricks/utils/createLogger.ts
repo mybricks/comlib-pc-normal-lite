@@ -7,7 +7,7 @@ import { debugLogs } from '../../../../../mix/context/debugLogs';
 import type { CreateMyBricksProps } from '../type';
 
 const createLogger = (props: CreateMyBricksProps) => {
-  const { comId, runtimeMode } = props;
+  const { comId, runtimeMode, logger } = props;
 
   const collectDebugLogs = (entry: { type: string; method: string; args: any[]; result?: any; bindings?: Record<string, any> }) => {
     debugLogs.append(comId, { ...entry, timestamp: Date.now(), mode: runtimeMode });
@@ -39,6 +39,10 @@ const createLogger = (props: CreateMyBricksProps) => {
       }
     });
   };
+  const nextLogger = logger({ id: comId, mode: runtimeMode })
+  const capturedLogger = createCapturedLogger(nextLogger);
+
+  return capturedLogger
 }
 
 export default createLogger
