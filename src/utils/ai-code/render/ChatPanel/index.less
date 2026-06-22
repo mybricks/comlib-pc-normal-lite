@@ -5,3 +5,122 @@
   border-radius: 20px;
   background-color: #f0f1f3;
 }
+
+// ─── EmptyGuide ───────────────────────────────────────────────────────────────
+
+.emptyGuide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px 0;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.emptyGuideIcon {
+  margin-bottom: 16px;
+
+  img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+  }
+}
+
+.emptyGuideTitle {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.emptyGuideTitleNormal {
+  color: #1a1a2e;
+}
+
+.emptyGuideTitleHighlight {
+  color: var(--mybricks-color-primary, #1677ff);
+}
+
+.emptyGuideSubtitle {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 28px;
+  line-height: 1.6;
+}
+
+.emptyGuideGroups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  width: 100%;
+  max-width: 960px;
+}
+
+.emptyGuideGroupCard {
+  flex: 1 1 240px;
+  min-width: 200px;
+  max-width: 340px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  text-align: left;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+
+  &:last-child:nth-child(3n - 1) {
+    margin-right: auto;
+  }
+}
+
+.emptyGuideGroupTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyGuideGroupDesc {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyGuideGroupCases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emptyGuideGroupCaseItem {
+  font-size: 12px;
+  color: #444;
+  cursor: pointer;
+  line-height: 1.5;
+  padding-left: 12px;
+  position: relative;
+  transition: color 0.15s;
+
+  &::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--mybricks-color-primary, #1677ff);
+  }
+
+  &:hover {
+    color: var(--mybricks-color-primary, #1677ff);
+  }
+}

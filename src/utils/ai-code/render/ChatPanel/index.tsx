@@ -4,7 +4,156 @@ import { createCallCardApiTool } from './tools/callUiCardApi'
 
 import css from './index.less'
 
-const AIChatPanel = ({ getCardsGroups }) => {
+// ─── EmptyGuide Types ─────────────────────────────────────────────────────────
+
+export interface EmptyGuideCase {
+  /** 显示文本 */
+  label: string
+}
+
+export interface EmptyGuideGroup {
+  /** 分组标题 */
+  title: string
+  /** 分组描述（单行截断） */
+  description?: string
+  /** 快捷问题列表 */
+  cases: EmptyGuideCase[]
+}
+
+export interface EmptyGuideConfig {
+  /** 顶部图标，支持 URL 字符串或任意 ReactNode */
+  icon?: React.ReactNode
+  /** 主标题普通文字部分，如 "欢迎使用" */
+  title?: string
+  /** 主标题高亮文字部分，如 "Data Agent" */
+  titleHighlight?: string
+  /** 副标题 */
+  subtitle?: string
+  /** 快捷场景分组 */
+  groups?: EmptyGuideGroup[]
+}
+
+// ─── EmptyGuide Component ─────────────────────────────────────────────────────
+
+interface EmptyGuideProps extends EmptyGuideConfig {
+  agent: any
+}
+
+function EmptyGuide({
+  agent,
+  icon,
+  title = '欢迎使用',
+  titleHighlight,
+  subtitle,
+  groups = [],
+}: EmptyGuideProps) {
+  const handleCaseClick = (label: string) => {
+    agent?.requestAI?.({ message: label })
+  }
+
+  const renderIcon = () => {
+    if (!icon) return null
+    if (typeof icon === 'string') {
+      return (
+        <img
+          src={icon}
+          alt="icon"
+          style={{ width: 80, height: 80, objectFit: 'contain' }}
+        />
+      )
+    }
+    return <>{icon}</>
+  }
+
+  return (
+    <div className={css.emptyGuide}>
+      {/* Icon */}
+      {icon && <div className={css.emptyGuideIcon}>{renderIcon()}</div>}
+
+      {/* Title */}
+      <div className={css.emptyGuideTitle}>
+        {title && <span className={css.emptyGuideTitleNormal}>{title}&nbsp;</span>}
+        {titleHighlight && <span className={css.emptyGuideTitleHighlight}>{titleHighlight}</span>}
+      </div>
+
+      {/* Subtitle */}
+      {subtitle && <div className={css.emptyGuideSubtitle}>{subtitle}</div>}
+
+      {/* Groups */}
+      {groups.length > 0 && (
+        <div className={css.emptyGuideGroups}>
+          {groups.map((group, gi) => (
+            <div key={gi} className={css.emptyGuideGroupCard}>
+              <div className={css.emptyGuideGroupTitle}>{group.title}</div>
+              {group.description && (
+                <div className={css.emptyGuideGroupDesc}>{group.description}</div>
+              )}
+              <ul className={css.emptyGuideGroupCases}>
+                {group.cases.map((c, ci) => (
+                  <li
+                    key={ci}
+                    className={css.emptyGuideGroupCaseItem}
+                    onClick={() => handleCaseClick(c.label)}
+                  >
+                    {c.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── AIChatPanel ──────────────────────────────────────────────────────────────
+
+/**
+ * 欢迎页默认配置，根据实际业务场景修改以下内容：
+ *
+ * - title / titleHighlight：主标题，titleHighlight 会显示为渐变高亮色
+ * - subtitle：副标题说明文字
+ * - icon：顶部图标，传入图片 URL 字符串或 ReactNode
+ * - groups：快捷场景分组，每组包含 title（标题）、description（描述）、cases（快捷问题列表）
+ *           点击 cases 中的条目会直接向 AI 发送对应消息
+ */
+const DEFAULT_EMPTY_GUIDE: EmptyGuideConfig = {
+  title: '欢迎使用',
+  titleHighlight: 'AI 助手',
+  subtitle: '你可以向我提问，或从下方场景快速开始',
+  groups: [
+    {
+      title: '场景一',
+      description: '场景一的简短描述...',
+      cases: [
+        { label: '示例问题 1' },
+        { label: '示例问题 2' },
+        { label: '示例问题 3' },
+      ],
+    },
+    {
+      title: '场景二',
+      description: '场景二的简短描述...',
+      cases: [
+        { label: '示例问题 1' },
+        { label: '示例问题 2' },
+        { label: '示例问题 3' },
+      ],
+    },
+    {
+      title: '场景三',
+      description: '场景三的简短描述...',
+      cases: [
+        { label: '示例问题 1' },
+        { label: '示例问题 2' },
+        { label: '示例问题 3' },
+      ],
+    },
+  ],
+}
+
+const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig }) => {
   const { createAgent, ChatPanel } = window._sandbox_.config.componentRuntime.chat
   const chatPanelRef = useRef(null)
 
@@ -41,7 +190,11 @@ const AIChatPanel = ({ getCardsGroups }) => {
           ]
         },
         getAttachmentContextMessages: () => {
-          return [buildAvailableCardsSection(getCardsGroups())]
+          const now = new Date()
+          const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+          const weekDay = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()]
+          const dateSection = `<current_date>\n当前日期：${dateStr} 星期${weekDay}\n</current_date>`
+          return [dateSection, buildAvailableCardsSection(getCardsGroups())]
         },
         disabledModes: ["plan"]
       })
@@ -61,6 +214,7 @@ const AIChatPanel = ({ getCardsGroups }) => {
         ref={chatPanelRef}
         agent={agent}
         header={false}
+        renderEmpty={() => <EmptyGuide agent={agent} {...emptyGuide} />}
       />
     </div>
   )
