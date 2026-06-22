@@ -1,12 +1,20 @@
+/** 壳样式 */
+.pageWrapper {
+  padding: 16px 32px;
+  max-width: 1300px;
+  height: 900px;
+  background-color: #ffffff;
+}
+
 .chatPanel {
   width: 100%;
   height: 100%;
-  box-shadow: 0px -3px 10px 3px rgba(167, 79, 198, 0.2);
-  border-radius: 20px;
-  background-color: #f0f1f3;
 }
 
 // ─── EmptyGuide ───────────────────────────────────────────────────────────────
+
+@empty-guide-body-font-size: 16px;
+@empty-guide-secondary-font-size: 14px;
 
 .emptyGuide {
   display: flex;
@@ -16,6 +24,7 @@
   text-align: center;
   width: 100%;
   box-sizing: border-box;
+  font-size: @empty-guide-body-font-size;
 }
 
 .emptyGuideIcon {
@@ -44,31 +53,30 @@
 }
 
 .emptyGuideSubtitle {
-  font-size: 13px;
+  font-size: 15px;
   color: #888;
-  margin-bottom: 28px;
-  line-height: 1.6;
+  margin-bottom: 24px;
+  line-height: 24px;
 }
 
 .emptyGuideGroups {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   justify-content: center;
   width: 100%;
   max-width: 960px;
 }
 
 .emptyGuideGroupCard {
-  flex: 1 1 240px;
-  min-width: 200px;
+  flex: 1;
   max-width: 340px;
   background: #fff;
   border-radius: 12px;
   padding: 16px 18px;
   text-align: left;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
 
   &:last-child:nth-child(3n - 1) {
@@ -77,19 +85,21 @@
 }
 
 .emptyGuideGroupTitle {
-  font-size: 14px;
+  font-size: @empty-guide-body-font-size;
   font-weight: 600;
   color: #1a1a2e;
-  margin-bottom: 4px;
+  line-height: 24px;
+  margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .emptyGuideGroupDesc {
-  font-size: 12px;
+  font-size: @empty-guide-secondary-font-size;
   color: #aaa;
-  margin-bottom: 12px;
+  line-height: 22px;
+  margin-bottom: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -101,15 +111,15 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .emptyGuideGroupCaseItem {
-  font-size: 12px;
+  font-size: @empty-guide-secondary-font-size;
   color: #444;
   cursor: pointer;
-  line-height: 1.5;
-  padding-left: 12px;
+  line-height: 22px;
+  padding-left: 14px;
   position: relative;
   transition: color 0.15s;
 
