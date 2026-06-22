@@ -903,6 +903,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                     }}
                   >
                     <AIChatPanel
+                      disabled={!env.runtime}
                       getCardsGroups={() => {
                         const cards: any = []
                         Object.entries(cardConfig).forEach(([filename, card]: any) => {

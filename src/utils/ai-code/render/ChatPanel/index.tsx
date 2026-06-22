@@ -37,6 +37,8 @@ export interface EmptyGuideConfig {
 
 interface EmptyGuideProps extends EmptyGuideConfig {
   agent: any
+  /** 禁用态（非调试态时为 true），禁用后 case 点击无效 */
+  disabled?: boolean
 }
 
 function EmptyGuide({
@@ -46,8 +48,10 @@ function EmptyGuide({
   titleHighlight,
   subtitle,
   groups = [],
+  disabled = false,
 }: EmptyGuideProps) {
   const handleCaseClick = (label: string) => {
+    if (disabled) return
     agent?.requestAI?.({ message: label })
   }
 
@@ -92,7 +96,7 @@ function EmptyGuide({
                 {group.cases.map((c, ci) => (
                   <li
                     key={ci}
-                    className={css.emptyGuideGroupCaseItem}
+                    className={[css.emptyGuideGroupCaseItem, disabled ? css.emptyGuideGroupCaseItemDisabled : ''].join(' ').trim()}
                     onClick={() => handleCaseClick(c.label)}
                   >
                     {c.label}
@@ -153,7 +157,7 @@ const DEFAULT_EMPTY_GUIDE: EmptyGuideConfig = {
   ],
 }
 
-const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig }) => {
+const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, disabled = false }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig; disabled?: boolean }) => {
   const { createAgent, ChatPanel } = window._sandbox_.config.componentRuntime.chat
   const chatPanelRef = useRef(null)
 
@@ -214,7 +218,8 @@ const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE }: { get
         ref={chatPanelRef}
         agent={agent}
         header={false}
-        renderEmpty={() => <EmptyGuide agent={agent} {...emptyGuide} />}
+        disabled={disabled}
+        renderEmpty={() => <EmptyGuide agent={agent} disabled={disabled} {...emptyGuide} />}
       />
     </div>
   )
