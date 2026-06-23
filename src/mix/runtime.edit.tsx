@@ -45,8 +45,8 @@ const dataCompatible = (props) => {
     const version = config.getVersion()
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 25 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 25
+    if (!data.version || data.version < 26 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 26
       data._componentRuntime.version = version
       console.log('[com:update]', data)
       // 去除重复文件（以 fileName 为唯一键，保留最后出现的条目）

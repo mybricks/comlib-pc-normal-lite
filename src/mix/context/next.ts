@@ -186,10 +186,7 @@ class Context {
         case 'tsx':
           try {
             const { transformCode, constituency, jsDocMap } = transformTsx(content, { fileName });
-            const transformJsDoc = jsDocMap.entries().reduce((pre, [key, value]) => {
-              pre[key] = value
-              return pre
-            }, {})
+            const transformJsDoc = Object.fromEntries(jsDocMap)
             const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
             this.notifyChanged(fileName, 'update', notifyChangedValue);
             updateFileContent({
@@ -199,10 +196,7 @@ class Context {
                 source: encodeURIComponent(content),
                 compiled: encodeURIComponent(transformCode),
                 constituency,
-                jsDocMap: encodeURIComponent(JSON.stringify(jsDocMap.entries().reduce((pre, [key, value]) => {
-                  pre[key] = value
-                  return pre
-                }, {})))
+                jsDocMap: encodeURIComponent(JSON.stringify(Object.fromEntries(jsDocMap)))
               }
             })
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
