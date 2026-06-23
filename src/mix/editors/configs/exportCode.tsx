@@ -78,7 +78,11 @@ function setGuiCardField(params: EditorResult<any>, key: string, value: any) {
     return
   }
 
-  ensureGuiCard(params.data)[key] = nextValue
+  const guiCard = ensureGuiCard(params.data)
+  params.data.gui_card = {
+    ...guiCard,
+    [key]: nextValue
+  }
 }
 
 export function buildExportCodeConfig(props: Props) {

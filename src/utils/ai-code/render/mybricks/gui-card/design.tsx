@@ -102,7 +102,7 @@ const design = (props: CreateMyBricksProps) => {
             <AIChatPanel
               disabled={true}
               getCardsGroups={() => []}
-              emptyGuide={data.gui_card}
+              config={data.gui_card}
             />
           </Card>
           {cards.map(({ render: Render, filename, config }) => {
