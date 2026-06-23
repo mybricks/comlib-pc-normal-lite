@@ -83,6 +83,21 @@ const design = (props: CreateMyBricksProps) => {
       }, [])
 
       useEffect(() => {
+        context.notifyChanged('gui_agent', 'update', {
+          docs: [
+            {
+              name: 'GUI_AGENT',
+              refSelector: '[data-widget-name="GUI_AGENT"]',
+              summary: 'GUI_AGENT',
+              title: 'GUI_AGENT',
+              type: 'com'
+            }
+          ],
+          events: [],
+          services: [],
+          state: [],
+          store: [],
+        })
         context.component!.actions.loaded()
       }, [cards])
 

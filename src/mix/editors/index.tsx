@@ -107,6 +107,18 @@ export default function (props: Props, actions: Actions) {
     ...getDataZoneTextEditable(),
     ...undoRedo(),
     ...setStyle(),
-    ...setSegment()
+    ...setSegment(),
+    '[data-widget-name="GUI_AGENT"]': {
+      title: 'agent',
+      items: [
+        {
+          title: '点击',
+          type: 'Button',
+          value: {
+            set() {}
+          }
+        }
+      ]
+    }
   };
 }
