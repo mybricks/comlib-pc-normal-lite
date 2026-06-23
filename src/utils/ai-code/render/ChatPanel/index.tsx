@@ -145,14 +145,32 @@ function EmptyGuide({
 interface ChatHeaderProps extends ChatHeaderConfig {
   onExport: () => void
   onClear: () => void
+  disabled: boolean
 }
 
-function ChatHeader({
-  icon,
-  title,
-  onExport,
-  onClear,
-}: ChatHeaderProps) {
+interface HeaderActionButtonProps {
+  tooltip: string
+  icon: React.ReactNode
+  disabled: boolean
+  onClick?: () => void
+}
+
+function HeaderActionButton({ tooltip, icon, disabled, onClick }: HeaderActionButtonProps) {
+  return (
+    <Tooltip title={tooltip}>
+      <button
+        type="button"
+        className={css.chatHeaderAction}
+        aria-label={tooltip}
+        onClick={disabled ? undefined : onClick}
+      >
+        {icon}
+      </button>
+    </Tooltip>
+  )
+}
+
+function ChatHeader({ icon, title, disabled, onExport, onClear }: ChatHeaderProps) {
   return (
     <div className={css.chatHeader}>
       <div className={css.chatHeaderBrand}>
@@ -162,26 +180,8 @@ function ChatHeader({
         <span className={css.chatHeaderName}>{title}</span>
       </div>
       <div className={css.chatHeaderActions}>
-        <Tooltip title="导出会话记录">
-          <button
-            type="button"
-            className={css.chatHeaderAction}
-            aria-label="导出会话记录"
-            onClick={onExport}
-          >
-            <ExportOutlined />
-          </button>
-        </Tooltip>
-        <Tooltip title="清空会话记录">
-          <button
-            type="button"
-            className={css.chatHeaderAction}
-            aria-label="清空会话记录"
-            onClick={onClear}
-          >
-            <ClearOutlined />
-          </button>
-        </Tooltip>
+        <HeaderActionButton tooltip="导出会话记录" icon={<ExportOutlined />} disabled={disabled} onClick={onExport} />
+        <HeaderActionButton tooltip="清空会话记录" icon={<ClearOutlined />} disabled={disabled} onClick={onClear} />
       </div>
     </div>
   )
@@ -310,6 +310,7 @@ const AIChatPanel = ({
       {headerConfig && (
         <ChatHeader
           {...headerConfig}
+          disabled={disabled}
           onExport={handleExportChat}
           onClear={handleClearChat}
         />

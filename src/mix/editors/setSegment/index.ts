@@ -6,7 +6,7 @@ export default function () {
   return {
     '@updateSegment'(ctx: any, type: string, options: any) {
       if (type === 'changeOrder') {
-        changeOrder(options)
+        return changeOrder(options)
       } else if (type === 'updateText') {
         updateText(options)
       } else if (type === 'delete') {
