@@ -29,7 +29,6 @@
 .chatBody {
   flex: 1;
   min-height: 0;
-  max-width: 900px;
   width: 100%;
 }
 
@@ -159,16 +158,16 @@
 
 .emptyGuideGroups {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 16px;
   justify-content: center;
   width: 100%;
-  max-width: 960px;
+  max-width: 1000px;
 }
 
 .emptyGuideGroupCard {
-  flex: 1;
-  max-width: 340px;
+  flex: 1 1 0;
+  min-width: 0;
   background: #fff;
   border-radius: 12px;
   padding: 16px 18px;
@@ -176,10 +175,6 @@
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
-
-  &:last-child:nth-child(3n - 1) {
-    margin-right: auto;
-  }
 }
 
 .emptyGuideGroupTitle {
@@ -220,6 +215,9 @@
   padding-left: 14px;
   position: relative;
   transition: color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   &::before {
     content: '•';
@@ -230,6 +228,16 @@
 
   &:hover {
     color: var(--mybricks-color-primary, #FA6400);
+  }
+}
+
+@media (max-width: 768px) {
+  .emptyGuideGroups {
+    flex-wrap: wrap;
+  }
+
+  .emptyGuideGroupCard {
+    flex-basis: 100%;
   }
 }
 
