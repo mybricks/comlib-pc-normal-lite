@@ -1,0 +1,1 @@
+export const IS_CARD_CONFIG = Symbol('IS_CARD_CONFIG')
