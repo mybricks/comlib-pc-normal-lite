@@ -4,6 +4,7 @@ import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
+import { patchJsxInlineStyle } from './patchJsxInlineStyle'
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
@@ -76,30 +77,6 @@ const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>) => {
   return ele
 }
 
-/**
- * 将一组静态 style 键值直接替换到 JSX/TSX 源码中。
- * 利用 data-style-info 中记录的 valueStart/valueEnd 字符偏移，
- * 从后向前替换，避免偏移量因前面内容长度变化而失效。
- *
- * @returns 替换后的新源码字符串，若无法定位则返回 null
- */
-function patchStyleInTsx(
-  source: string,
-  styleEntries: Array<{ key: string; val: number; valueStart: number; valueEnd: number }>,
-): string | null {
-  if (styleEntries.length === 0) return null
-
-  // 按 valueStart 从大到小排序，从后向前替换，保证偏移量不受前面替换影响
-  const sorted = [...styleEntries].sort((a, b) => b.valueStart - a.valueStart)
-
-  let result = source
-  for (const { val, valueStart, valueEnd } of sorted) {
-    if (valueStart < 0 || valueEnd > result.length || valueStart >= valueEnd) return null
-    const newVal = `${val}`
-    result = result.slice(0, valueStart) + newVal + result.slice(valueEnd)
-  }
-  return result
-}
 
 /**
  * 构造一个处理 start / ing / finish 三态的样式拖拽处理器。
@@ -281,7 +258,7 @@ export default function createSetStyleHandler(
           const jsxFileName = JSON.parse(ele.dataset.loc).files.jsx
           const jsxFile = context.component!.params.data.files.find((f) => f.fileName === jsxFileName)
           const jsxPreviousCode = decodeURIComponent(jsxFile.source)
-          const jsxNewCode = patchStyleInTsx(
+          const jsxNewCode = patchJsxInlineStyle(
             jsxPreviousCode,
             Array.from(jsxStyle.entries()).map(([key, value]) => {
               return {

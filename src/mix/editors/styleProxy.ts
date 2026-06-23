@@ -3,6 +3,7 @@ import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
+import { patchJsxInlineStyle, patchDataStyleInfo } from './style/helpers/patchJsxInlineStyle'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
@@ -346,8 +347,89 @@ export function genStyleValue(props) {
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
 
+      // ── 内联样式优先路径 ──────────────────────────────────────────
+      // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
+      type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number };
+      const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
+      const styleInfo: Record<string, StyleKeyInfo> | null = styleInfoRaw
+        ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
+        : null;
+
+      // 将 value 分为"内联写 JSX"和"剩余写 Less"两组
+      type InlineEntry = { key: string; val: string; valueStart: number; valueEnd: number };
+      const inlineEntries: InlineEntry[] = [];
+      const lessValue: Record<string, any> = {};
+
+      Object.entries(value as Record<string, any>).forEach(([key, val]) => {
+        const info = styleInfo?.[key];
+        if (
+          val !== null && val !== undefined &&
+          info?.kind === 'static' &&
+          info.valueStart != null && info.valueEnd != null
+        ) {
+          inlineEntries.push({ key, val: String(val), valueStart: info.valueStart, valueEnd: info.valueEnd });
+        } else {
+          lessValue[key] = val;
+        }
+      });
+
+      // 写 JSX 内联 style
+      if (inlineEntries.length > 0) {
+        const jsxPath = cn.files?.jsx;
+        if (jsxPath) {
+          const jsxFile = aiComParams.data.files?.find(
+            (f: { fileName: string; source: string }) => f.fileName === jsxPath
+          );
+          if (jsxFile) {
+            const jsxPrevSource = decodeURIComponent(jsxFile.source);
+            const jsxNewSource = patchJsxInlineStyle(
+              jsxPrevSource,
+              inlineEntries.map(({ val, valueStart, valueEnd }) => ({ val, valueStart, valueEnd, asString: true })),
+            );
+            if (jsxNewSource) {
+              context.updateFile({ fileName: jsxPath, content: jsxNewSource, type: undefined });
+              debouncedUpdateFile({
+                path: jsxPath,
+                current: jsxNewSource,
+                previous: jsxPrevSource,
+                callback: () => { previousLess = null; },
+              });
+              // 同步更新 DOM 上的 data-style-info 偏移量，防止连续编辑时偏移量因字符长度变化而失效
+              if (ele) {
+                patchDataStyleInfo(ele as HTMLElement, inlineEntries.map(({ val, valueStart, valueEnd }) => {
+                  const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                  return { valueStart, valueEnd, newLen: `'${escaped}'`.length };
+                }));
+              }
+            } else {
+              // patch 失败（偏移过期）→ 降级：把这些 key 回退到 Less 流程
+              inlineEntries.forEach(({ key, val }) => { lessValue[key] = val; });
+            }
+          } else {
+            // 找不到 JSX 文件，全部降级
+            inlineEntries.forEach(({ key, val }) => { lessValue[key] = val; });
+          }
+        } else {
+          // 没有 jsxPath，全部降级
+          inlineEntries.forEach(({ key, val }) => { lessValue[key] = val; });
+        }
+      }
+
+      // 若无需改 Less，提前退出
+      if (Object.keys(lessValue).length === 0 && !(deletions && deletions.length > 0)) {
+        return;
+      }
+
+      // 无 className 的元素（选择器为标签名如 h2 / div），不写 Less：
+      // 写入会产生全局性标签选择器规则，影响范围过宽，且此类元素的样式应全部由内联 style 承载。
+      // deletion 在这种情况下也跳过（Less 里本就没有对应规则，是 no-op）。
+      if (eleClassList.length === 0) {
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────
+
       // 嵌套伪类快速路径：直接写入 &:disabled 等嵌套位置，保留 Less 原有结构
-      if (tryWriteNestedPseudo(cssObj, fullSelector, value, deletions)) {
+      if (tryWriteNestedPseudo(cssObj, fullSelector, lessValue, deletions)) {
         const cssStr = stringifyLess(cssObj);
         context.updateFile({ fileName: lessPath, content: cssStr, type: undefined });
         debouncedUpdateFile({
@@ -392,7 +474,7 @@ export function genStyleValue(props) {
 
       const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
 
-      Object.entries(value).forEach(([key, val]) => {
+      Object.entries(lessValue).forEach(([key, val]) => {
         const existing = cssObj[targetKey]?.[key];
         // 当前 Less 文件中该属性是 Less 变量引用（@xxx）时，判断是否真正被用户改动：
         // - 无法取到计算值 → 变量未解析 → 保留变量
