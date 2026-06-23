@@ -221,6 +221,9 @@ const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, copilot
             name: '智能助手',
             avatar: emptyGuide.icon
           }}
+          style={{
+            '--mybricks-color-primary': emptyGuide?.colorPrimary ?? '#FA6400'
+          }}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}

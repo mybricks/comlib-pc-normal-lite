@@ -62,6 +62,25 @@ export function buildExportCodeConfig(props: Props) {
       title: 'Agent',
       items: [
         {
+          title: '主题色',
+          type: 'colorPicker',
+          value: {
+            get({ data }: EditorResult<any>) {
+              if (!data.gui_card) {
+                data.gui_card = {
+                  title: '欢迎使用',
+                  titleHighlight: 'AI 助手',
+                  subtitle: '你可以向我提问'
+                }
+              }
+              return data.gui_card?.colorPrimary || '#FA6400';
+            },
+            set({ data }: EditorResult<any>, value) {
+              data.gui_card.colorPrimary = value;
+            }
+          }
+        },
+        {
           title: '主标题',
           type: 'text',
           value: {
