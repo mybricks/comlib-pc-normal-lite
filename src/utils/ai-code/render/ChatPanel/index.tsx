@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { ClearOutlined, ExportOutlined } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 import { createShowCardTool, buildAvailableCardsSection } from './tools/cards-manager'
 import { createCallCardApiTool } from './tools/callUiCardApi'
 
@@ -20,6 +22,13 @@ export interface EmptyGuideGroup {
   cases: EmptyGuideCase[]
 }
 
+export interface ChatHeaderConfig {
+  /** 左侧图标，支持 URL 字符串或任意 ReactNode */
+  icon?: React.ReactNode
+  /** 左侧名称 */
+  title?: string
+}
+
 export interface EmptyGuideConfig {
   /** 顶部图标，支持 URL 字符串或任意 ReactNode */
   icon?: React.ReactNode
@@ -31,6 +40,37 @@ export interface EmptyGuideConfig {
   subtitle?: string
   /** 快捷场景分组 */
   groups?: EmptyGuideGroup[]
+  /** 主题色 */
+  colorPrimary?: string
+  /** 聊天面板头部配置 */
+  header?: ChatHeaderConfig | false
+  /** 助手标题，用于 Header 标题和 Copilot 名称 */
+  assistantTitle?: string
+}
+
+interface AIChatPanelProps {
+  getCardsGroups: () => any
+  /** gui_card 完整配置 */
+  config?: EmptyGuideConfig
+  disabled?: boolean
+}
+
+const renderImageLikeNode = (node: React.ReactNode, alt: string, className?: string) => {
+  if (!node) return null
+  if (typeof node === 'string') {
+    return <img src={node} alt={alt} className={className} />
+  }
+  return node
+}
+
+const downloadJson = async ({ name, content }: { name: string; content: string }) => {
+  const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── EmptyGuide Component ─────────────────────────────────────────────────────
@@ -44,9 +84,9 @@ interface EmptyGuideProps extends EmptyGuideConfig {
 function EmptyGuide({
   agent,
   icon,
-  title = '欢迎使用',
+  title = '开始对话',
   titleHighlight,
-  subtitle,
+  subtitle = '你可以向我提问',
   groups = [],
   disabled = false,
 }: EmptyGuideProps) {
@@ -57,16 +97,7 @@ function EmptyGuide({
 
   const renderIcon = () => {
     if (!icon) return null
-    if (typeof icon === 'string') {
-      return (
-        <img
-          src={icon}
-          alt="icon"
-          style={{ width: 80, height: 80, objectFit: 'contain' }}
-        />
-      )
-    }
-    return <>{icon}</>
+    return renderImageLikeNode(icon, 'icon')
   }
 
   return (
@@ -111,6 +142,51 @@ function EmptyGuide({
   )
 }
 
+interface ChatHeaderProps extends ChatHeaderConfig {
+  onExport: () => void
+  onClear: () => void
+}
+
+function ChatHeader({
+  icon,
+  title,
+  onExport,
+  onClear,
+}: ChatHeaderProps) {
+  return (
+    <div className={css.chatHeader}>
+      <div className={css.chatHeaderBrand}>
+        <span className={css.chatHeaderLogo}>
+          {renderImageLikeNode(icon, 'logo', css.chatHeaderLogoImage)}
+        </span>
+        <span className={css.chatHeaderName}>{title}</span>
+      </div>
+      <div className={css.chatHeaderActions}>
+        <Tooltip title="导出会话记录">
+          <button
+            type="button"
+            className={css.chatHeaderAction}
+            aria-label="导出会话记录"
+            onClick={onExport}
+          >
+            <ExportOutlined />
+          </button>
+        </Tooltip>
+        <Tooltip title="清空会话记录">
+          <button
+            type="button"
+            className={css.chatHeaderAction}
+            aria-label="清空会话记录"
+            onClick={onClear}
+          >
+            <ClearOutlined />
+          </button>
+        </Tooltip>
+      </div>
+    </div>
+  )
+}
+
 // ─── AIChatPanel ──────────────────────────────────────────────────────────────
 
 /**
@@ -122,47 +198,16 @@ function EmptyGuide({
  * - groups：快捷场景分组，每组包含 title（标题）、description（描述）、cases（快捷问题列表）
  *           点击 cases 中的条目会直接向 AI 发送对应消息
  */
-const DEFAULT_EMPTY_GUIDE: EmptyGuideConfig = {
-  icon: 'https://f2.eckwai.com/kos/nlav12333/aicode/logo/newlogo.png',
-  title: '开始对话',
-  // titleHighlight: 'AI 助手',
-  subtitle: '你可以向我提问，或从下方场景快速开始',
-  groups: [
-    {
-      title: '场景一',
-      description: '场景一的简短描述...',
-      cases: [
-        { label: '示例问题 1' },
-        { label: '示例问题 2' },
-        { label: '示例问题 3' },
-      ],
-    },
-    {
-      title: '场景二',
-      description: '场景二的简短描述...',
-      cases: [
-        { label: '示例问题 1' },
-        { label: '示例问题 2' },
-        { label: '示例问题 3' },
-      ],
-    },
-    {
-      title: '场景三',
-      description: '场景三的简短描述...',
-      cases: [
-        { label: '示例问题 1' },
-        { label: '示例问题 2' },
-        { label: '示例问题 3' },
-      ],
-    },
-  ],
-}
-
-const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, copilot, user, disabled = false }: { getCardsGroups: () => any; emptyGuide?: EmptyGuideConfig; disabled?: boolean }) => {
+const AIChatPanel = ({
+  getCardsGroups,
+  config,
+  disabled = false
+}: AIChatPanelProps) => {
   const { createAgent, ChatPanel } = window._sandbox_.config.componentRuntime.chat
   const chatPanelRef = useRef(null)
 
-  const [agent, setAgent] = useState()
+  const [agent, setAgent] = useState<any>()
+  const [sessionKey, setSessionKey] = useState(0)
 
   useEffect(() => {
     try {
@@ -213,23 +258,73 @@ const AIChatPanel = ({ getCardsGroups, emptyGuide = DEFAULT_EMPTY_GUIDE, copilot
     return
   }
 
+  const handleClearChat = async () => {
+    if (!agent || disabled) return
+    try {
+      await agent.clearHistory?.()
+      setSessionKey((key) => key + 1)
+    } catch (e) {
+      console.error('[AIChatPanel] clear history failed', e)
+    }
+  }
+
+  const handleExportChat = async () => {
+    if (!agent) return
+
+    try {
+      const content = {
+        agentKey: agent.key,
+        exportedAt: new Date().toISOString(),
+        turns: agent.getTurns?.() ?? [],
+        compactRecord: agent.getCompactRecord?.() ?? null,
+      }
+      const name = `chat-${Date.now()}.json`
+      await downloadJson({ name, content: JSON.stringify(content) })
+    } catch (e) {
+      console.error('[AIChatPanel] export history failed', e)
+    }
+  }
+
+  const guiCard = config ?? {}
+
+  const copilotConfig = {
+    name: guiCard.assistantTitle,
+    avatar: guiCard.icon
+  }
+
+  const resolvedHeader = guiCard.header
+  const headerConfig = resolvedHeader === false ? null : {
+    ...resolvedHeader,
+    icon: copilotConfig.avatar,
+    title: copilotConfig.name,
+  }
+
   return (
-    <div className={css.pageWrapper} data-zone-type='ai-fixed'>
-      <div className={css.chatPanel} data-zone-type='ai-fixed'>
+    <div
+      className={css.wrapper}
+      data-zone-type='ai-fixed'
+      style={guiCard.colorPrimary ? {
+        '--mybricks-color-primary': guiCard.colorPrimary,
+      } as React.CSSProperties : undefined}
+    >
+      {headerConfig && (
+        <ChatHeader
+          {...headerConfig}
+          onExport={handleExportChat}
+          onClear={handleClearChat}
+        />
+      )}
+      <div className={css.chatBody} data-zone-type='ai-fixed'>
         <ChatPanel
-          copilot={{
-            name: '智能助手',
-            avatar: emptyGuide.icon
-          }}
-          style={{
-            '--mybricks-color-primary': emptyGuide?.colorPrimary ?? '#FA6400'
-          }}
+          key={sessionKey}
+          copilot={copilotConfig}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}
           header={false}
           disabled={disabled}
-          renderEmpty={() => <EmptyGuide agent={agent} disabled={disabled} {...emptyGuide} />}
+          scrollWithSender
+          renderEmpty={() => <EmptyGuide agent={agent} disabled={disabled} {...guiCard} />}
         />
       </div>
     </div>

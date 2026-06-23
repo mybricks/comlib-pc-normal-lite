@@ -53,6 +53,34 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   );
 }
 
+function ensureGuiCard(data: any) {
+  if (!data.gui_card) {
+    data.gui_card = {}
+  }
+
+  data.gui_card.assistantTitle ??= '智能助手'
+  data.gui_card.icon ??= 'https://f2.eckwai.com/kos/nlav12333/aicode/logo/newlogo.png'
+  data.gui_card.title ??= '欢迎使用'
+  data.gui_card.titleHighlight ??= 'AI 助手'
+  data.gui_card.subtitle ??= '你可以向我提问'
+  data.gui_card.colorPrimary ??= '#FA6400'
+
+  return data.gui_card
+}
+
+function getGuiCardField(params: EditorResult<any>, key: string) {
+  return ensureGuiCard(params.data)[key]
+}
+
+function setGuiCardField(params: EditorResult<any>, key: string, value: any) {
+  const nextValue = typeof value === 'string' ? value.trim() : value
+  if (nextValue === '' || nextValue == null) {
+    return
+  }
+
+  ensureGuiCard(params.data)[key] = nextValue
+}
+
 export function buildExportCodeConfig(props: Props) {
 
   const mode = config.getFrontendMode()
@@ -66,17 +94,10 @@ export function buildExportCodeConfig(props: Props) {
           type: 'colorPicker',
           value: {
             get({ data }: EditorResult<any>) {
-              if (!data.gui_card) {
-                data.gui_card = {
-                  title: '欢迎使用',
-                  titleHighlight: 'AI 助手',
-                  subtitle: '你可以向我提问'
-                }
-              }
-              return data.gui_card?.colorPrimary || '#FA6400';
+              return ensureGuiCard(data).colorPrimary
             },
-            set({ data }: EditorResult<any>, value) {
-              data.gui_card.colorPrimary = value;
+            set(params: EditorResult<any>, value) {
+              setGuiCardField(params, 'colorPrimary', value)
             }
           }
         },
@@ -85,50 +106,34 @@ export function buildExportCodeConfig(props: Props) {
           type: 'text',
           value: {
             get(params) {
-              if (!params.data.gui_card) {
-                params.data.gui_card = {
-                  title: '欢迎使用',
-                  titleHighlight: 'AI 助手',
-                  subtitle: '你可以向我提问'
-                }
-              }
-
-              return params.data.gui_card.title
+              return getGuiCardField(params, 'title')
             },
             set(params, value) {
-              const trimValue = value.trim()
-              if (trimValue) {
-                params.data.gui_card = {
-                  ...params.data.gui_card,
-                  title: trimValue
-                }
-              }
+              setGuiCardField(params, 'title', value)
             }
           }
         },
         {
-          title: '图标',
+          title: '助手标题',
           type: 'text',
           value: {
             get(params) {
-              if (!params.data.gui_card) {
-                params.data.gui_card = {
-                  title: '欢迎使用',
-                  titleHighlight: 'AI 助手',
-                  subtitle: '你可以向我提问'
-                }
-              }
-
-              return params.data.gui_card.icon
+              return getGuiCardField(params, 'assistantTitle')
             },
             set(params, value) {
-              const trimValue = value.trim()
-              if (trimValue) {
-                params.data.gui_card = {
-                  ...params.data.gui_card,
-                  icon: trimValue
-                }
-              }
+              setGuiCardField(params, 'assistantTitle', value)
+            }
+          }
+        },
+        {
+          title: '图片',
+          type: 'text',
+          value: {
+            get(params) {
+              return getGuiCardField(params, 'icon')
+            },
+            set(params, value) {
+              setGuiCardField(params, 'icon', value)
             }
           }
         },
@@ -138,16 +143,10 @@ export function buildExportCodeConfig(props: Props) {
           description: '主标题中高亮展示的部分',
           value: {
             get(params) {
-              return params.data.gui_card.titleHighlight
+              return getGuiCardField(params, 'titleHighlight')
             },
             set(params, value) {
-              const trimValue = value.trim()
-              if (trimValue) {
-                params.data.gui_card = {
-                  ...params.data.gui_card,
-                  titleHighlight: trimValue
-                }
-              }
+              setGuiCardField(params, 'titleHighlight', value)
             }
           },
         },
@@ -162,18 +161,16 @@ export function buildExportCodeConfig(props: Props) {
           },
           value: {
             get(params) {
-              if (params.data?.gui_card?.groups) {
-                return JSON.stringify(params.data?.gui_card?.groups, null, 2)
+              const groups = getGuiCardField(params, 'groups')
+              if (groups) {
+                return JSON.stringify(groups, null, 2)
               }
               return
             },
             set(params, value) {
-              const trimValue = value.trim()
+              const trimValue = typeof value === 'string' ? value.trim() : ''
               if (trimValue) {
-                params.data.gui_card = {
-                  ...params.data.gui_card,
-                  groups: JSON.parse(decodeURIComponent(trimValue))
-                }
+                setGuiCardField(params, 'groups', JSON.parse(decodeURIComponent(trimValue)))
               }
             }
           }
@@ -183,16 +180,10 @@ export function buildExportCodeConfig(props: Props) {
           type: 'text',
           value: {
             get(params) {
-              return params.data.gui_card.subtitle
+              return getGuiCardField(params, 'subtitle')
             },
             set(params, value) {
-              const trimValue = value.trim()
-              if (trimValue) {
-                params.data.gui_card = {
-                  ...params.data.gui_card,
-                  subtitle: trimValue
-                }
-              }
+              setGuiCardField(params, 'subtitle', value)
             }
           }
         },
