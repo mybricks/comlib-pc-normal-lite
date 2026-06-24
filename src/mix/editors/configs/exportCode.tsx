@@ -56,15 +56,10 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
 export function buildExportCodeConfig(props: Props) {
   const expand: any[] = []
 
-  return [
-    {
-      title: '',
-      type: 'editorRender',
-      options: {
-        render: () => <ProjectActionsBar comId={props.id} props={props} />,
-      },
-    },
-    {
+  const mode = config.getFrontendMode()
+
+  if (mode !== 'gui_card') {
+    expand.push({
       title: 'Figma',
       type: 'figma',
       value: {
@@ -74,6 +69,16 @@ export function buildExportCodeConfig(props: Props) {
             onSync: (items: FigmaImportItem[], rootEl?: Element | null) => {}
           };
         },
+      },
+    })
+  }
+
+  return [
+    {
+      title: '',
+      type: 'editorRender',
+      options: {
+        render: () => <ProjectActionsBar comId={props.id} props={props} />,
       },
     },
     ...expand
