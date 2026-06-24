@@ -61,7 +61,8 @@ const runtime = (props: CreateMyBricksProps) => {
 
   const comRef = (Component) => {
     return (props) => {
-      return <Component {...props} />
+      const pageContext = useContext(PageContext)
+      return <Component {...props} popupNode={pageContext.container}/>
     }
   }
 
