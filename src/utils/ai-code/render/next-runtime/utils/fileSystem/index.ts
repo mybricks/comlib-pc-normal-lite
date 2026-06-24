@@ -503,7 +503,7 @@ class FileSystem {
 
     const resolvedFilename = entry.file.filename
 
-    if (isJsxModule(resolvedFilename)) {
+    if (isJsxModule(resolvedFilename) || matchfile(resolvedFilename, this.params.entryFile)) {
       const module = this.loadModule({
         filename: resolvedFilename,
         compiled: decodeURIComponent(entry.file.compiled),
@@ -876,7 +876,7 @@ class FileSystem {
         runtime: null
       }
 
-      if (isJsxModule(dependentFilename)) {
+      if (isJsxModule(dependentFilename) || matchfile(dependentFilename, this.params.entryFile)) {
         // 如果依赖者是 JSX 组件,触发其 forceUpdate
         // 重新加载该组件模块(清除缓存)
         const reloadedModule = this.loadModule({
