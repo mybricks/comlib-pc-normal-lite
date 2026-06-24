@@ -70,6 +70,43 @@ export function buildPagePanel(props: Props) {
             }
           },
           {
+            title: '高亮文字',
+            type: 'text',
+            description: '主标题中高亮展示的部分',
+            value: {
+              get(params) {
+                return getGuiCardField(params, 'titleHighlight')
+              },
+              set(params, value) {
+                setGuiCardField(params, 'titleHighlight', value)
+              }
+            },
+          },
+          {
+            title: '副标题',
+            type: 'text',
+            value: {
+              get(params) {
+                return getGuiCardField(params, 'subtitle')
+              },
+              set(params, value) {
+                setGuiCardField(params, 'subtitle', value)
+              }
+            }
+          },
+          {
+            title: '输入提示',
+            type: 'text',
+            value: {
+              get(params) {
+                return getGuiCardField(params, 'placeholder')
+              },
+              set(params, value) {
+                setGuiCardField(params, 'placeholder', value)
+              }
+            }
+          },
+          {
             title: '助手标题',
             type: 'text',
             value: {
@@ -82,7 +119,7 @@ export function buildPagePanel(props: Props) {
             }
           },
           {
-            title: '图片',
+            title: '助手 Logo',
             type: 'text',
             value: {
               get(params) {
@@ -92,19 +129,6 @@ export function buildPagePanel(props: Props) {
                 setGuiCardField(params, 'icon', value)
               }
             }
-          },
-          {
-            title: '高亮文字',
-            type: 'text',
-            description: '主标题中高亮展示的部分',
-            value: {
-              get(params) {
-                return getGuiCardField(params, 'titleHighlight')
-              },
-              set(params, value) {
-                setGuiCardField(params, 'titleHighlight', value)
-              }
-            },
           },
           {
             title: '默认场景',
@@ -128,18 +152,6 @@ export function buildPagePanel(props: Props) {
                 if (trimValue) {
                   setGuiCardField(params, 'groups', JSON.parse(decodeURIComponent(trimValue)))
                 }
-              }
-            }
-          },
-          {
-            title: '副标题',
-            type: 'text',
-            value: {
-              get(params) {
-                return getGuiCardField(params, 'subtitle')
-              },
-              set(params, value) {
-                setGuiCardField(params, 'subtitle', value)
               }
             }
           },

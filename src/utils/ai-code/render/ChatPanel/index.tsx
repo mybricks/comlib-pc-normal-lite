@@ -48,6 +48,8 @@ export interface EmptyGuideConfig {
   header?: ChatHeaderConfig | false
   /** 助手标题，用于 Header 标题和 Copilot 名称 */
   assistantTitle?: string
+  /** 输入框占位提示 */
+  placeholder?: string
 }
 
 interface AIChatPanelProps {
@@ -518,6 +520,7 @@ const AIChatPanel = ({
           agent={agent}
           header={false}
           disabled={disabled}
+          placeholder={guiCard.placeholder}
           scrollWithSender
           renderEmpty={() => (
             <EmptyGuide
