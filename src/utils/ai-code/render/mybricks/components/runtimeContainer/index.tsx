@@ -11,7 +11,7 @@ interface Props extends PropsWithChildren {
 
 const RuntimeContainer = (props: Props) => {
   return (
-    <div className={css.runtimeContainer} style={props.style}>
+    <div id={'runtime-container'} className={css.runtimeContainer} style={props.style}>
       {props.children}
     </div>
   )
