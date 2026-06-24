@@ -121,7 +121,7 @@ export function createRequireComRefRule(fileName?: string): {
                   ruleId: RULE_ID,
                   severity: 2,
                   message:
-                    `[组件规范] 变量声明 "${name}" 是函数组件但未使用 comRef() 或 popupRef() 包裹，请改为：const ${name} = comRef(() => { ... }) 或 const ${name} = popupRef(() => { ... })`,
+                    `[组件规范] "${name}" 返回了 JSX，已被识别为 React 组件，但必须用 comRef() 或 popupRef() 包裹才能正常注册。请将声明改为：const ${name} = comRef(() => { ... }) 或 const ${name} = popupRef(() => { ... })，函数体内容保持不变。`,
                   line: loc?.start?.line ?? 1,
                   column: loc?.start?.column ?? 0,
                   endLine: loc?.end?.line,
