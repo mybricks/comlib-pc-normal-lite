@@ -136,4 +136,49 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  position: relative;
+
+  // pin 按钮常驻显示
+  &:hover .pinBtn:not(.pinBtnActive) {
+    // opacity 由 pinBtn 自身控制，此处无需覆盖
+  }
+}
+
+// ─── Pin button ───────────────────────────────────────────────────────────────
+
+.pinBtn {
+  position: absolute;
+  top: 16px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #bbb;
+  opacity: 1;
+  transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+  z-index: 99;
+
+  &:hover {
+    color: var(--mybricks-color-primary, #FA6400);
+    background: rgba(0, 0, 0, 0.04);
+  }
+}
+
+// 已 pin：图钉高亮，常驻显示
+.pinBtnActive {
+  opacity: 1;
+  color: var(--mybricks-color-primary, #FA6400);
+
+  &:hover {
+    color: #bbb;
+    background: rgba(0, 0, 0, 0.04);
+  }
 }

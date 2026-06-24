@@ -10,6 +10,14 @@ type ToolResult = any
 
 export const SHOW_CARD_TOOL_NAME = "show_ui_card";
 
+// ─── Pin 回调接口 ─────────────────────────────────────────────────────────────
+
+interface PinCallbacks {
+  onPin: (name: string, props: Record<string, any>) => void
+  onUnPin: (pinKey: string) => void
+  isPinned: (name: string, props: Record<string, any>) => boolean
+}
+
 // ─── createShowCardTool ────────────────────────────────────────────────────────
 
 /**
@@ -19,9 +27,10 @@ export const SHOW_CARD_TOOL_NAME = "show_ui_card";
  * execute 本身只做参数校验并返回渲染状态，实际渲染由 UI 层
  * 监听 tool call 后通过 `CardRender` 组件完成。
  *
- * @param groups  卡片分组列表（在调用方构造后传入）
+ * @param groups    卡片分组列表（在调用方构造后传入）
+ * @param pinCbs    pin 能力回调（可选），不传则卡片不显示图钉按钮
  */
-export function createShowCardTool(groups: CardGroup[]): Tool {
+export function createShowCardTool(groups: CardGroup[], pinCbs?: PinCallbacks): Tool {
   const allCards = groups.flatMap((g) => g.cards);
   const cardNames = allCards.map((c) => c.name);
 
@@ -76,7 +85,7 @@ export function createShowCardTool(groups: CardGroup[]): Tool {
 cardId: ${id}
 可通过 call_ui_card_api 调用以下查询类 API 获取卡片数据（仅用于查询，不触发任何操作）：
 ${apisDesc}
-注意：当用户要求重新执行某个动作（如“再试一次”、“重新查询”等），应重新调用 show_ui_card 渲染新卡片，而非调用 call_ui_card_api。`,
+注意：当用户要求重新执行某个动作（如"再试一次"、"重新查询"等），应重新调用 show_ui_card 渲染新卡片，而非调用 call_ui_card_api。`,
         metadata: {
           id,
           success: true,
@@ -86,17 +95,26 @@ ${apisDesc}
       };
     },
     render: (tool) => {
-      const { name, props } = tool?.args ?? {};
       const loading = tool?.status === 'pending';
-      return <CardRender groups={groups} name={name} props={props ?? {}} loading={loading} cardId={tool?.result?.metadata?.id} />
+      const cardId = tool?.result?.metadata?.id;
+      const toolName = tool?.args?.name ?? '';
+      const toolProps = tool?.args?.props ?? {};
+
+      return (
+        <CardRender
+          groups={groups}
+          name={toolName}
+          props={toolProps}
+          loading={loading}
+          cardId={cardId}
+          isPinned={pinCbs?.isPinned(toolName, toolProps) ?? false}
+          onPin={pinCbs ? (n, p) => pinCbs.onPin(n, p) : undefined}
+          onUnPin={pinCbs?.onUnPin}
+        />
+      )
     }
   };
 }
-
-// 工具
-// 1. 调用方法
-
-// 2. 
 
 // ─── buildAvailableCardsSection ───────────────────────────────────────────────
 

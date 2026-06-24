@@ -1,4 +1,6 @@
 import React, { useRef, useMemo } from "react";
+import { PushpinFilled, PushpinOutlined } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 import { CardContext } from "../../../mybricks/hooks";
 import cardClass from '../card';
 import type { CardGroup } from "./types";
@@ -8,11 +10,6 @@ import css from "./card.less";
 
 /**
  * LoadingCard — 骨架屏 loading 状态。
- *
- * 用法：
- * ```tsx
- * <LoadingCard />
- * ```
  */
 export function LoadingCard() {
   return (
@@ -46,11 +43,6 @@ export function LoadingCard() {
 
 /**
  * NotFoundCard — 未找到卡片时的兜底展示。
- *
- * 用法：
- * ```tsx
- * <NotFoundCard name="some-card" />
- * ```
  */
 export function NotFoundCard({ name }: { name?: string }) {
   return (
@@ -87,6 +79,12 @@ export interface CardRenderProps {
   loading?: boolean;
   /** 卡片实例，唯一ID */
   cardId: string;
+  /** 当前卡片是否已 pin */
+  isPinned?: boolean;
+  /** pin 回调，点击图钉时触发 */
+  onPin?: (name: string, props: Record<string, any>) => void;
+  /** unpin 回调，已 pin 时点击图钉触发 */
+  onUnPin?: (pinKey: string) => void;
 }
 
 /**
@@ -95,16 +93,18 @@ export interface CardRenderProps {
  * 三种状态：
  * 1. `loading=true`  → 骨架屏 LoadingCard
  * 2. 找不到对应 card → NotFoundCard 兜底
- * 3. 正常            → 渲染对应卡片，包裹在统一宽度容器中
- *
- * 用法：
- * ```tsx
- * <CardRender groups={myGroups} name={toolCall.args.name} props={toolCall.args.props} />
- * <CardRender groups={myGroups} name="unknown" />         // 兜底
- * <CardRender groups={myGroups} name="xxx" loading />     // 骨架屏
- * ```
+ * 3. 正常            → 渲染对应卡片，右上角叠加图钉 pin 按钮
  */
-export function CardRender({ groups, name, props = {}, loading = false, cardId }: CardRenderProps) {
+export function CardRender({
+  groups,
+  name,
+  props = {},
+  loading = false,
+  cardId,
+  isPinned = false,
+  onPin,
+  onUnPin,
+}: CardRenderProps) {
   // ── Hooks 必须在最顶部，不能在条件之后 ──────────────────────────────────
   const card = useMemo(
     () => groups.flatMap((g) => g.cards).find((c) => c.name === name),
@@ -128,25 +128,41 @@ export function CardRender({ groups, name, props = {}, loading = false, cardId }
     return <LoadingCard />;
   }
 
-  console.log('[groups]', groups)
-  console.log('props', {
-    name,
-    props,
-    loading,
-    cardId
-  })
-
   // ── 未找到兜底 ────────────────────────────────────────────────────────────
   if (!card) {
     return <NotFoundCard name={name} />;
   }
 
+  // ── Pin 按钮点击处理 ──────────────────────────────────────────────────────
+  const handlePinClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isPinned) {
+      // pinKey = name::JSON.stringify(props)
+      onUnPin?.(`${name}::${JSON.stringify(props)}`)
+    } else {
+      onPin?.(name, props)
+    }
+  }
+
   // ── 正常渲染 ──────────────────────────────────────────────────────────────
   const Render = card.render;
+  const hasPinCallback = !!(onPin || onUnPin)
 
   return (
     <div className={css.wrapper}>
       <div className={css.cardWrapper} data-card-name={card.name}>
+        {hasPinCallback && (
+          <Tooltip title={isPinned ? '取消关注' : '关注此卡片'}>
+            <button
+              type="button"
+              className={[css.pinBtn, isPinned ? css.pinBtnActive : ''].join(' ').trim()}
+              aria-label={isPinned ? '取消关注' : '关注此卡片'}
+              onClick={handlePinClick}
+            >
+              {isPinned ? <PushpinFilled /> : <PushpinOutlined />}
+            </button>
+          </Tooltip>
+        )}
         <CardContext.Provider value={cardValueRef.current}>
           <Render {...props}/>
         </CardContext.Provider>
