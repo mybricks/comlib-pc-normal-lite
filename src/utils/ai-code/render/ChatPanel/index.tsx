@@ -49,7 +49,10 @@ export interface EmptyGuideConfig {
 }
 
 interface AIChatPanelProps {
-  getCardsGroups: () => any
+  /** 卡片列表 */
+  cards?: any[]
+  /** 工具列表 */
+  tools?: any[]
   /** gui_card 完整配置 */
   config?: EmptyGuideConfig
   disabled?: boolean
@@ -199,7 +202,8 @@ function ChatHeader({ icon, title, disabled, onExport, onClear }: ChatHeaderProp
  *           点击 cases 中的条目会直接向 AI 发送对应消息
  */
 const AIChatPanel = ({
-  getCardsGroups,
+  cards = [],
+  tools = [],
   config,
   disabled = false
 }: AIChatPanelProps) => {
@@ -235,8 +239,9 @@ const AIChatPanel = ({
 **绝对不要**为了获取已有卡片的数据而重新渲染一张新卡片。`,
         get tools() {
           return [
-            createShowCardTool(getCardsGroups()),
-            createCallCardApiTool()
+            createShowCardTool(cards),
+            createCallCardApiTool(),
+            ...tools
           ]
         },
         getAttachmentContextMessages: () => {
@@ -244,7 +249,7 @@ const AIChatPanel = ({
           const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
           const weekDay = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()]
           const dateSection = `<current_date>\n当前日期：${dateStr} 星期${weekDay}\n</current_date>`
-          return [dateSection, buildAvailableCardsSection(getCardsGroups())]
+          return [dateSection, buildAvailableCardsSection(cards)]
         },
         disabledModes: ["plan"]
       })

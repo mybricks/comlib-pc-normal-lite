@@ -21,7 +21,8 @@ const VALID_NAMES = new Set([
   '_refreshPopups',
   'DataSource',
   'defineConfig',
-  'useCardApis'
+  'useCardApis',
+  'defineTool'
 ])
 
 // ── 校验器实现 ────────────────────────────────────────────────────────────────

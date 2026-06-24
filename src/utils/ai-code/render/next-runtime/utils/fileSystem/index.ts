@@ -77,9 +77,6 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
         comRef: (Component, params = {}) => {
           return result.comRef(Component, { filename, ...params })
         },
-        defineConfig: (config) => {
-          return result.defineConfig(config, { filename })
-        }
       }
     }
 
@@ -107,13 +104,6 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     enrichedError.fileName = filename
     // throw enrichedError
     params.onRuntimeError(enrichedError)
-  }
-
-  if (typeof exports.default === 'function') {
-    dependencies.mybricks._registerCardConfig?.({
-      filename,
-      Component: exports.default
-    })
   }
 
   return exports

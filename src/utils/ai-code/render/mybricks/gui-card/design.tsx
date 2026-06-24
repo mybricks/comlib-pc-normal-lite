@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../../../../../mix/context'
-import { IS_CARD_CONFIG } from './constants'
+import { IS_TOOL, IS_CARD_CONFIG } from './constants'
 import AIChatPanel from '../../ChatPanel'
 import type { CreateMyBricksProps } from '../type'
 
@@ -116,7 +116,8 @@ const design = (props: CreateMyBricksProps) => {
           >
             <AIChatPanel
               disabled={true}
-              getCardsGroups={() => []}
+              cards={[]}
+              tools={[]}
               config={data.gui_card}
             />
           </Card>
@@ -150,11 +151,19 @@ const design = (props: CreateMyBricksProps) => {
     }
   }
 
+  const defineTool = (fn) => {
+    return {
+      createTool: fn,
+      [IS_TOOL]: IS_TOOL
+    }
+  }
+
   return {
     appRef,
     comRef,
     popupRef,
-    defineConfig
+    defineTool,
+    defineConfig,
   }
 }
 
