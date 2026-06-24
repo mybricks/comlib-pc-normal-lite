@@ -45,9 +45,42 @@ const dataCompatible = (props) => {
     const version = config.getVersion()
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 26 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 26
+    if (!data.version || data.version < 28 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 28
       data._componentRuntime.version = version
+      
+      const mode = config.getFrontendMode()
+      if (mode === 'gui_card' && !data._gui_card_version) {
+        const cardsPrefix = new Map()
+        data.files.forEach((file) => {
+          const splitPath = file.fileName.split('/')
+          if (splitPath[splitPath.length - 1] === 'index.config.ts' && !file.fileName.startsWith('frontend/cards')) {
+            cardsPrefix.set(splitPath.slice(0, 2).join('/'), true)
+          }
+        })
+
+        if (cardsPrefix.size) {
+          data.files.forEach((file) => {
+            const splitPath = file.fileName.split('/')
+            const prefix = splitPath.slice(0, 2).join('/')
+            if (cardsPrefix.has(prefix)) {
+              splitPath.splice(1, 0, 'cards')
+              file.fileName = splitPath.join('/')
+              // 文件层级多加了一层 cards，需将 source 中所有相对路径的 dataSource 引用多加一层 ../
+              // e.g. from '../../dataSource' → from '../../../dataSource'
+              if (file.source) {
+                let decoded = decodeURIComponent(file.source)
+                decoded = decoded.replace(
+                  /(from\s+['"])((?:\.\.\/)+)(dataSource['"])/g,
+                  '$1../$2$3'
+                )
+                file.source = encodeURIComponent(decoded)
+              }
+            }
+          })
+        }
+      }
+
       console.log('[com:update]', data)
       // 去除重复文件（以 fileName 为唯一键，保留最后出现的条目）
       const fileMap = new Map<string, any>();

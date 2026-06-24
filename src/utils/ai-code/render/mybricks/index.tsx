@@ -18,7 +18,6 @@ import {
   mergeLoggerBindings,
   type LoggerBindings,
 } from '../logger';
-import AIChatPanel from '../ChatPanel'
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
