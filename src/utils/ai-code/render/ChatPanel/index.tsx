@@ -403,7 +403,8 @@ const AIChatPanel = ({
   useEffect(() => {
     try {
       const agent = createAgent({
-        system: `你是一个可以渲染交互式 UI 卡片的 AI 助手。
+        system: cards.length > 0
+          ? `你是一个可以渲染交互式 UI 卡片的 AI 助手。
 
 ## 卡片渲染规则
 
@@ -423,17 +424,20 @@ const AIChatPanel = ({
 2. 调用 call_ui_card_api 查询这些卡片的数据
 3. 基于查询结果给出回答
 
-**绝对不要**为了获取已有卡片的数据而重新渲染一张新卡片。`,
+**绝对不要**为了获取已有卡片的数据而重新渲染一张新卡片。`
+          : `你是一个 AI 助手，能够理解并回答用户的问题。`,
         get tools() {
-          return [
-            createShowCardTool(cards, {
-              onPin: (name, props) => pinActionsRef.current.pin(name, props),
-              onUnPin: (pinKey) => pinActionsRef.current.unPin(pinKey),
-              isPinned: (name, props) => pinActionsRef.current.isPinned(name, props),
-            }),
-            createCallCardApiTool(),
-            ...tools
-          ]
+          const cardTools = cards.length > 0
+            ? [
+                createShowCardTool(cards, {
+                  onPin: (name, props) => pinActionsRef.current.pin(name, props),
+                  onUnPin: (pinKey) => pinActionsRef.current.unPin(pinKey),
+                  isPinned: (name, props) => pinActionsRef.current.isPinned(name, props),
+                }),
+                createCallCardApiTool(),
+              ]
+            : []
+          return [...cardTools, ...tools]
         },
         getAttachmentContextMessages: () => {
           const now = new Date()
