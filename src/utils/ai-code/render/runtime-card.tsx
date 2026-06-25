@@ -141,7 +141,7 @@ const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = 
   }, [])
 
   return (
-    <div className={css.tip}>
+    <div className={css.tip} data-zone-type='ai-fixed'>
       {/*<div className={css.title}>{title}</div>*/}
       <div className={css.content}>
         欢迎使用 {orgName} {title}，
@@ -152,6 +152,7 @@ const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = 
         return (
           <div
             className={css.example}
+            data-zone-type='ai-fixed'
             key={example}
             onClick={() => copy(example)}
           >
@@ -295,7 +296,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const renderSender = useMemo(() => {
       if ((window as any)._sandbox_?.helpers?.renders?.renderStartView) {
         return (
-          <div className={css.tip}>
+          <div className={css.tip} data-zone-type='ai-fixed'>
             {(window as any)._sandbox_.helpers.renders.renderStartView({ comId: id })}
           </div>
         )
@@ -359,7 +360,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         return <CompileErrorView title={errorInfo.title} desc={errorInfo.desc} errors={errorInfo.errors} comId={id} />;
       }
 
-      if (data.files.length) {
+      if (runtimeFiles.length) {
         return (
           <NextRuntime
             key={activeEnv + "_" + reload}
