@@ -67,7 +67,7 @@
   --mybricks-shadow-for-border: 0 0 0 1px rgba(0, 0, 0, 0.08);
   --mybricks-border-color-main: #D9D9D9;
   --mybricks-border-color-secondary: #EDEDED;
-  --chat-user-message-bg: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 20%, var(--mybricks-bg-color-main, #fff));
+  --chat-user-message-bg: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 12%, var(--mybricks-bg-color-main, #fff));
   --chat-user-message-border-color: transparent;
   --chat-sender-border-radius: 24px;
 }
@@ -125,34 +125,6 @@
   text-overflow: ellipsis;
 }
 
-.chatHeaderActions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.chatHeaderAction {
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #666;
-  background: transparent;
-  cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
-
-  &:hover {
-    color: var(--mybricks-color-primary, #FA6400);
-    background: transparent;
-  }
-}
-
 // ─── EmptyGuide ───────────────────────────────────────────────────────────────
 
 @empty-guide-body-font-size: 16px;
@@ -205,12 +177,12 @@
 
 .emptyGuideIcon {
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   animation: emptyFadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 
   img {
-    width: 100px;
-    height: 100px;
+    width: 40px;
+    height: 40px;
     object-fit: contain;
   }
 }

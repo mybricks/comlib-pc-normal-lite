@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ClearOutlined, ExportOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons'
-import { Tooltip } from 'antd'
+import { PushpinFilled } from '@ant-design/icons'
 import { createShowCardTool, buildAvailableCardsSection } from './tools/cards-manager'
 import { CardRender } from './tools/cards-manager/card'
 import { createCallCardApiTool } from './tools/callUiCardApi'
@@ -119,16 +118,6 @@ const renderImageLikeNode = (node: React.ReactNode, alt: string, className?: str
     return <img src={node} alt={alt} className={className} />
   }
   return node
-}
-
-const downloadJson = async ({ name, content }: { name: string; content: string }) => {
-  const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  URL.revokeObjectURL(url)
 }
 
 // ─── EmptyGuide Component ─────────────────────────────────────────────────────
@@ -326,35 +315,9 @@ function CollapsibleCard({ children, expanded, onToggleExpand }: CollapsibleCard
 
 // ─── ChatHeader ───────────────────────────────────────────────────────────────
 
-interface ChatHeaderProps extends ChatHeaderConfig {
-  onExport: () => void
-  onClear: () => void
-  disabled: boolean
-}
+type ChatHeaderProps = ChatHeaderConfig
 
-interface HeaderActionButtonProps {
-  tooltip: string
-  icon: React.ReactNode
-  disabled: boolean
-  onClick?: () => void
-}
-
-function HeaderActionButton({ tooltip, icon, disabled, onClick }: HeaderActionButtonProps) {
-  return (
-    <Tooltip title={tooltip}>
-      <button
-        type="button"
-        className={css.chatHeaderAction}
-        aria-label={tooltip}
-        onClick={disabled ? undefined : onClick}
-      >
-        {icon}
-      </button>
-    </Tooltip>
-  )
-}
-
-function ChatHeader({ icon, title, disabled, onExport, onClear }: ChatHeaderProps) {
+function ChatHeader({ icon, title }: ChatHeaderProps) {
   return (
     <div className={css.chatHeader}>
       <div className={css.chatHeaderBrand}>
@@ -362,10 +325,6 @@ function ChatHeader({ icon, title, disabled, onExport, onClear }: ChatHeaderProp
           {renderImageLikeNode(icon, 'logo', css.chatHeaderLogoImage)}
         </span>
         <span className={css.chatHeaderName}>{title}</span>
-      </div>
-      <div className={css.chatHeaderActions}>
-        <HeaderActionButton tooltip="导出会话记录" icon={<ExportOutlined />} disabled={disabled} onClick={onExport} />
-        <HeaderActionButton tooltip="清空会话记录" icon={<ClearOutlined />} disabled={disabled} onClick={onClear} />
       </div>
     </div>
   )
@@ -392,7 +351,6 @@ const AIChatPanel = ({
   const chatPanelRef = useRef(null)
 
   const [agent, setAgent] = useState<any>()
-  const [sessionKey, setSessionKey] = useState(0)
 
   // ── Pin 逻辑层 ────────────────────────────────────────────────────────────
   const pinActions = usePinCards()
@@ -458,33 +416,6 @@ const AIChatPanel = ({
     return
   }
 
-  const handleClearChat = async () => {
-    if (!agent || disabled) return
-    try {
-      await agent.clearHistory?.()
-      setSessionKey((key) => key + 1)
-    } catch (e) {
-      console.error('[AIChatPanel] clear history failed', e)
-    }
-  }
-
-  const handleExportChat = async () => {
-    if (!agent) return
-
-    try {
-      const content = {
-        agentKey: agent.key,
-        exportedAt: new Date().toISOString(),
-        turns: agent.getTurns?.() ?? [],
-        compactRecord: agent.getCompactRecord?.() ?? null,
-      }
-      const name = `chat-${Date.now()}.json`
-      await downloadJson({ name, content: JSON.stringify(content) })
-    } catch (e) {
-      console.error('[AIChatPanel] export history failed', e)
-    }
-  }
-
   const guiCard = config ?? {}
 
   const copilotConfig = {
@@ -508,16 +439,10 @@ const AIChatPanel = ({
       } as React.CSSProperties : undefined}
     >
       {headerConfig && (
-        <ChatHeader
-          {...headerConfig}
-          disabled={disabled}
-          onExport={handleExportChat}
-          onClear={handleClearChat}
-        />
+        <ChatHeader {...headerConfig} />
       )}
       <div className={css.chatBody} data-zone-type='ai-fixed'>
         <ChatPanel
-          key={sessionKey}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}

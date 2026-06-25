@@ -152,11 +152,11 @@ export function CardRender({
     <div className={css.wrapper}>
       <div className={css.cardWrapper} data-card-name={card.name}>
         {hasPinCallback && (
-          <Tooltip title={isPinned ? '取消关注' : '关注此卡片'}>
+          <Tooltip title={isPinned ? '从首页移除' : '钉到首页'}>
             <button
               type="button"
               className={[css.pinBtn, isPinned ? css.pinBtnActive : ''].join(' ').trim()}
-              aria-label={isPinned ? '取消关注' : '关注此卡片'}
+              aria-label={isPinned ? '从首页移除' : '钉到首页'}
               onClick={handlePinClick}
             >
               {isPinned ? <PushpinFilled /> : <PushpinOutlined />}
