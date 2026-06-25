@@ -518,13 +518,16 @@ const AIChatPanel = ({
       <div className={css.chatBody} data-zone-type='ai-fixed'>
         <ChatPanel
           key={sessionKey}
-          copilot={copilotConfig}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}
           header={false}
           disabled={disabled}
           placeholder={guiCard.placeholder}
+          markdownSkin={{
+            message: css.markdownSkinMessage,
+            plan: css.markdownSkinMessage,
+          }}
           scrollWithSender
           renderEmpty={() => (
             <EmptyGuide
