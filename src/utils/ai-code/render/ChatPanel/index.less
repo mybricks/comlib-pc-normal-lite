@@ -275,32 +275,8 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.07);
   box-sizing: border-box;
-  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
   position: relative;
   overflow: hidden;
-
-  // Top accent line using primary color
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(
-      90deg,
-      var(--mybricks-color-primary, #FA6400) 0%,
-      color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 50%, #fff) 100%
-    );
-    border-radius: 14px 14px 0 0;
-    opacity: 0.6;
-  }
-
-  &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07), 0 12px 32px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 20%, transparent);
-  }
 }
 
 .emptyGuideGroupTitle {
