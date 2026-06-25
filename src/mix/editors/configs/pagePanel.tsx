@@ -40,7 +40,6 @@ export function buildPagePanel(props: Props) {
   return {
     title: '页面',
     items: (pageProps: any, cate1: any) => {
-      console.log('[ageProps', pageProps)
       cate1.title = '页面';
 
       if (pageProps.focusArea.dataset.desnPage === 'GUI_AGENT') {
