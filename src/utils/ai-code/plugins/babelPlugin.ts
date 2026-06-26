@@ -19,6 +19,13 @@ import {
 } from "./utils";
 import { isInsideMapCallback } from './wrapCustomComponentPlugin'
 
+/** inline 文本类 HTML 标签集合：无 className 时也允许启用样式编辑（通过祖先路径选择器 + 内联 style 写入） */
+const INLINE_TEXT_TAGS = new Set([
+  'span', 'strong', 'em', 'b', 'i', 's', 'small', 'mark',
+  'label', 'del', 'ins', 'sub', 'sup', 'u',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p',
+]);
+
 /**
  * 从 JSXElement 的 path 向上找到最近的 `.map()` CallExpression，
  * 返回该 CallExpression 的代码行范围；找不到则返回 null。
@@ -248,6 +255,24 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
               // [观察下三方库的样式编辑问题]
               if (cnList.length > 0) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+              } else if (
+                source === 'html' &&
+                INLINE_TEXT_TAGS.has(tagName) &&
+                selectors.length > 0 &&
+                // 子节点中无三方库组件（如 antd）时才启用，避免给复杂容器 span 打标
+                !node.children.some((child: any) => {
+                  if (child.type !== 'JSXElement') return false;
+                  const childTag = getJSXElementNameString(child.openingElement.name)?.split('.')[0];
+                  if (!childTag) return false;
+                  return findRelyAndSource(childTag, importRelyMap).source !== 'html';
+                })
+              ) {
+                // 无 className 的 inline 文本元素（span / strong / em 等）：
+                // 用祖先路径 + 标签名拼成后代选择器（如 [".textTitle145 span"]），
+                // 使其能被样式编辑器的 [data-zone-selector] 配置识别并展示样式面板。
+                // 写入时 styleProxy 会走内联 style 注入路径，不会生成全局标签选择器规则。
+                const tagSelectors = selectors.map((s: string) => `${s} ${tagName}`);
+                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(tagSelectors));
               } else {
                 pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
               }

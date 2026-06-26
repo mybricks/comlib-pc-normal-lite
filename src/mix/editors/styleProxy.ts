@@ -3,7 +3,7 @@ import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
-import { patchJsxInlineStyle, patchDataStyleInfo } from './style/helpers/patchJsxInlineStyle'
+import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry } from './style/helpers/patchJsxInlineStyle'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
@@ -420,10 +420,109 @@ export function genStyleValue(props) {
         return;
       }
 
-      // 无 className 的元素（选择器为标签名如 h2 / div），不写 Less：
-      // 写入会产生全局性标签选择器规则，影响范围过宽，且此类元素的样式应全部由内联 style 承载。
-      // deletion 在这种情况下也跳过（Less 里本就没有对应规则，是 no-op）。
+      // 无 className 的元素（选择器末尾为 HTML 标签名，如 span / h2）：
+      // 不写 Less（会产生全局性标签选择器规则），改为向 JSX 源码注入/追加/删除内联 style。
       if (eleClassList.length === 0) {
+        // 仅处理选择器末尾是纯 HTML 标签名（如 ".parent span"）的情况
+        const selectorEndsWithTag = fullSelector && /\s[a-z][a-zA-Z0-9]*$/.test(fullSelector);
+        if (!selectorEndsWithTag) return;
+
+        // 需要删除的内联属性：deletions 中在 styleInfo 有静态偏移记录的 key
+        const inlineDeletions = (deletions || []).filter(
+          (key: string) => styleInfo !== null && (styleInfo as any)[key]?.kind === 'static',
+        );
+        const hasInlineDeletions = inlineDeletions.length > 0;
+
+        const propsToWrite: Record<string, string> = {};
+        Object.entries(lessValue).forEach(([k, v]) => {
+          if (v !== null && v !== undefined && v !== '') propsToWrite[k] = String(v);
+        });
+        const hasPropsToWrite = Object.keys(propsToWrite).length > 0;
+
+        if (!hasPropsToWrite && !hasInlineDeletions) return;
+
+        const jsxPathForInline: string | undefined = (() => {
+          const locRaw = (ele as HTMLElement | null)?.dataset?.loc;
+          if (!locRaw) return undefined;
+          try { return JSON.parse(locRaw)?.files?.jsx; } catch { return undefined; }
+        })();
+        if (!jsxPathForInline) return;
+
+        const jsxFileForInline = aiComParams.data.files?.find(
+          (f: { fileName: string; source: string }) => f.fileName === jsxPathForInline,
+        );
+        if (!jsxFileForInline) return;
+
+        const jsxPrevSource = decodeURIComponent(jsxFileForInline.source);
+
+        // ── 路径 D：删除内联属性 ──────────────────────────────────────────────
+        if (hasInlineDeletions && styleInfo !== null) {
+          const removeResult = removeFromInlineStyleAttr(
+            jsxPrevSource,
+            styleInfo as Record<string, StyleInfoEntry>,
+            inlineDeletions,
+          );
+          if (removeResult) {
+            const { newSource: jsxNewSource, newStyleInfo } = removeResult;
+            context.updateFile({ fileName: jsxPathForInline, content: jsxNewSource, type: undefined });
+            debouncedUpdateFile({
+              path: jsxPathForInline,
+              current: jsxNewSource,
+              previous: jsxPrevSource,
+              callback: () => { previousLess = null; },
+            });
+            if (ele) {
+              // newStyleInfo 为 null 表示 style 属性已被完全移除
+              (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
+            }
+          }
+          return;
+        }
+
+        if (styleInfo === null) {
+          // ── 路径 A：span 尚无 style 属性，直接注入 style={{ ... }} ────────────
+          // 若 element.style.cssText 非空，说明已有来自变量（如 style={someVar}）的内联样式，
+          // Babel 无法为变量生成 data-style-info，不能安全注入（会产生重复 style 属性），直接跳过。
+          if ((ele as HTMLElement | null)?.style?.cssText) return;
+          const locRaw = (ele as HTMLElement | null)?.dataset?.loc;
+          if (!locRaw) return;
+          let tagEnd: number | undefined;
+          try { tagEnd = JSON.parse(locRaw)?.tag?.end; } catch { return; }
+          if (tagEnd == null) return;
+
+          const injectResult = injectStyleAttrIntoJSX(jsxPrevSource, tagEnd, propsToWrite);
+          if (!injectResult) return;
+
+          const { newSource: jsxNewSource, styleInfo: injectedStyleInfo } = injectResult;
+          context.updateFile({ fileName: jsxPathForInline, content: jsxNewSource, type: undefined });
+          debouncedUpdateFile({
+            path: jsxPathForInline,
+            current: jsxNewSource,
+            previous: jsxPrevSource,
+            callback: () => { previousLess = null; },
+          });
+          if (ele) {
+            (ele as HTMLElement).dataset.styleInfo = JSON.stringify(injectedStyleInfo);
+          }
+        } else {
+          // ── 路径 B：span 已有 style={}，把新属性追加到已有 }} 之前 ──────────
+          const appendResult = appendToInlineStyleAttr(jsxPrevSource, styleInfo as Record<string, StyleInfoEntry>, propsToWrite);
+          if (!appendResult) return;
+
+          const { newSource: jsxNewSource, styleInfoUpdates } = appendResult;
+          context.updateFile({ fileName: jsxPathForInline, content: jsxNewSource, type: undefined });
+          debouncedUpdateFile({
+            path: jsxPathForInline,
+            current: jsxNewSource,
+            previous: jsxPrevSource,
+            callback: () => { previousLess = null; },
+          });
+          // 把新属性的偏移合并进 DOM 上的 data-style-info
+          if (ele) {
+            const mergedStyleInfo = { ...styleInfo, ...styleInfoUpdates };
+            (ele as HTMLElement).dataset.styleInfo = JSON.stringify(mergedStyleInfo);
+          }
+        }
         return;
       }
       // ─────────────────────────────────────────────────────────────
@@ -502,6 +601,42 @@ export function genStyleValue(props) {
       }
 
       if (deletions && deletions.length > 0) {
+        // 若被删除的属性在 data-style-info 里有静态内联偏移（如手写 style={{}} 的属性），
+        // 需同步从 JSX inline style 中移除，否则 Less 侧删了但内联覆盖依然生效
+        if (styleInfo !== null) {
+          const inlineDelsForClass = deletions.filter(
+            (key: string) => (styleInfo as any)[key]?.kind === 'static',
+          );
+          if (inlineDelsForClass.length > 0) {
+            const jsxPathForDel = cn.files?.jsx as string | undefined;
+            const jsxFileForDel = jsxPathForDel
+              ? aiComParams.data.files?.find(
+                  (f: { fileName: string; source: string }) => f.fileName === jsxPathForDel,
+                )
+              : undefined;
+            if (jsxFileForDel && jsxPathForDel) {
+              const jsxPrevForDel = decodeURIComponent(jsxFileForDel.source);
+              const removeResult = removeFromInlineStyleAttr(
+                jsxPrevForDel,
+                styleInfo as Record<string, StyleInfoEntry>,
+                inlineDelsForClass,
+              );
+              if (removeResult) {
+                const { newSource: jsxNewSrc, newStyleInfo } = removeResult;
+                context.updateFile({ fileName: jsxPathForDel, content: jsxNewSrc, type: undefined });
+                debouncedUpdateFile({
+                  path: jsxPathForDel,
+                  current: jsxNewSrc,
+                  previous: jsxPrevForDel,
+                  callback: () => { previousLess = null; },
+                });
+                if (ele) {
+                  (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
+                }
+              }
+            }
+          }
+        }
         const expandedDeletions = expandDeletions(deletions);
         expandedDeletions.forEach(key => delete cssObj[targetKey][key]);
       }
