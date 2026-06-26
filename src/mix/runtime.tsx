@@ -24,7 +24,7 @@ function createRuntimeLogger(mode: string, bindings: LoggerBindings = {}) {
       }
 
       return (...args: any[]) => {
-        if (mode === 'runtime') {
+        if (mode === 'runtime' || mode.includes('_runtime_')) {
           context.pushLog(prop, args, { bindings });
         }
       };
