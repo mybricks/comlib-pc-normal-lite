@@ -149,38 +149,54 @@
 
 .pinBtn {
   position: absolute;
-  top: 12px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
+  top: 0;
+  right: 0;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: none;
-  border-radius: 50%;
-  background: var(--mybricks-bg-color-active, rgba(0, 0, 0, 0.04));
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  color: #bbb;
+  color: rgba(0, 0, 0, 0.45);
+  --pin-corner-bg: #fff;
   opacity: 1;
-  transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+  transition: opacity 0.15s;
   z-index: 99;
 
   &:hover {
     color: var(--mybricks-color-primary, #FA6400);
-    background: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 10%, var(--mybricks-bg-color-main, #fff));
+    --pin-corner-bg: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 10%, #fff);
   }
 }
 
-// 已 pin：图钉高亮，常驻显示
+.pinIcon {
+  width: 38px;
+  height: 38px;
+  display: block;
+}
+
+.pinCorner {
+  fill: var(--pin-corner-bg, #fff);
+  transition: fill 0.15s;
+}
+
+.pinStar {
+  fill: currentColor;
+  transition: fill 0.15s;
+}
+
+// 已 pin：星标高亮，常驻显示
 .pinBtnActive {
   opacity: 1;
   color: var(--mybricks-color-primary, #FA6400);
-  background: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 12%, var(--mybricks-bg-color-main, #fff));
+  --pin-corner-bg: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 10%, #fff);
+  background: transparent;
 
   &:hover {
-    color: #bbb;
-    background: var(--mybricks-bg-color-active, rgba(0, 0, 0, 0.04));
+    background: transparent;
   }
 }

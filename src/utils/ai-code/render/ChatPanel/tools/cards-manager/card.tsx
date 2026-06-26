@@ -1,5 +1,4 @@
-import React, { useRef, useMemo } from "react";
-import { PushpinFilled, PushpinOutlined } from '@ant-design/icons'
+import React, { useRef, useMemo, useId } from "react";
 import { Tooltip } from 'antd'
 import { CardContext } from "../../../mybricks/hooks";
 import cardClass from '../card';
@@ -64,6 +63,69 @@ export function NotFoundCard({ name }: { name?: string }) {
       </div>
     </div>
   );
+}
+
+// ─── PinCollectionIcon ───────────────────────────────────────────────────────
+
+const pinCornerPath = "M8 0H38V30C37 28.5 34 28 28 28C26.5368 28 24.7167 28 22.8008 28C18.3198 28 16.0794 28 14.3681 27.1281C12.8628 26.3611 11.6389 25.1372 10.8719 23.6319C10 21.9206 10 19.6802 10 15.1992C10 13.2833 10 11.4632 10 10C10 4 9.5 1 8 0Z"
+const pinStarPath = "M25.3931 12.0822L23.9995 8.35538L22.606 12.0822L18.631 12.2559L21.7448 14.7328L20.6816 18.567L23.9995 16.371L27.3175 18.5669L26.2543 14.7328L29.3681 12.2559L25.3931 12.0822ZM21.9012 11.112L17.7858 11.2918C17.139 11.3201 16.8739 12.1359 17.3806 12.539L20.6043 15.1034L19.5036 19.0729C19.3306 19.6968 20.0246 20.201 20.5645 19.8437L23.9995 17.5702L27.4346 19.8437C27.9745 20.201 28.6685 19.6968 28.4955 19.0729L27.3948 15.1034L30.6185 12.539C31.1252 12.1359 30.8601 11.3201 30.2133 11.2918L26.0979 11.112L24.6552 7.25366C24.4284 6.64722 23.5706 6.64722 23.3439 7.25366L21.9012 11.112Z"
+
+function PinCollectionIcon() {
+  const id = useId().replace(/:/g, '')
+  const filterId = `${id}-pin-filter`
+  const maskId = `${id}-pin-mask`
+
+  return (
+    <svg
+      className={css.pinIcon}
+      fill="none"
+      viewBox="0 0 38 38"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <g filter={`url(#${filterId})`}>
+        <path className={css.pinCorner} d={pinCornerPath} />
+      </g>
+      <mask
+        id={maskId}
+        style={{ maskType: 'alpha' }}
+        maskUnits="userSpaceOnUse"
+        x="8"
+        y="0"
+        width="30"
+        height="30"
+      >
+        <path d={pinCornerPath} fill="#fff" />
+      </mask>
+      <g mask={`url(#${maskId})`}>
+        <path d="M-6.5 0.5V44.5H37.5" stroke="#000" strokeOpacity=".08" />
+      </g>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d={pinStarPath}
+        className={css.pinStar}
+      />
+      <defs>
+        <filter id={filterId} x="0" y="-4" width="46" height="46" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
+          <feOffset dy="4" />
+          <feGaussianBlur stdDeviation="4" />
+          <feComposite in2="hardAlpha" operator="out" />
+          <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0" />
+          <feBlend in2="BackgroundImageFix" result="effect1_dropShadow" />
+          <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
+          <feMorphology radius=".5" operator="dilate" in="SourceAlpha" result="effect2_dropShadow" />
+          <feOffset />
+          <feComposite in2="hardAlpha" operator="out" />
+          <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0" />
+          <feBlend in2="effect1_dropShadow" result="effect2_dropShadow" />
+          <feBlend in="SourceGraphic" in2="effect2_dropShadow" result="shape" />
+        </filter>
+      </defs>
+    </svg>
+  )
 }
 
 // ─── CardRender ──────────────────────────────────────────────────────────────
@@ -159,7 +221,7 @@ export function CardRender({
               aria-label={isPinned ? '从首页移除' : '钉到首页'}
               onClick={handlePinClick}
             >
-              {isPinned ? <PushpinFilled /> : <PushpinOutlined />}
+              <PinCollectionIcon />
             </button>
           </Tooltip>
         )}
