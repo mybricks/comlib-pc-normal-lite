@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { PushpinFilled } from '@ant-design/icons'
+import { ClearOutlined, PushpinFilled } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 import { createShowCardTool, buildAvailableCardsSection } from './tools/cards-manager'
 import { CardRender } from './tools/cards-manager/card'
 import { createCallCardApiTool } from './tools/callUiCardApi'
@@ -315,9 +316,12 @@ function CollapsibleCard({ children, expanded, onToggleExpand }: CollapsibleCard
 
 // ─── ChatHeader ───────────────────────────────────────────────────────────────
 
-type ChatHeaderProps = ChatHeaderConfig
+interface ChatHeaderProps extends ChatHeaderConfig {
+  onClear: () => void
+  clearDisabled?: boolean
+}
 
-function ChatHeader({ icon, title }: ChatHeaderProps) {
+function ChatHeader({ icon, title, onClear, clearDisabled }: ChatHeaderProps) {
   return (
     <div className={css.chatHeader}>
       <div className={css.chatHeaderBrand}>
@@ -325,6 +329,19 @@ function ChatHeader({ icon, title }: ChatHeaderProps) {
           {renderImageLikeNode(icon, 'logo', css.chatHeaderLogoImage)}
         </span>
         <span className={css.chatHeaderName}>{title}</span>
+      </div>
+      <div className={css.chatHeaderActions}>
+        <Tooltip title="清空会话记录">
+          <button
+            type="button"
+            className={css.chatHeaderAction}
+            aria-label="清空会话记录"
+            disabled={clearDisabled}
+            onClick={onClear}
+          >
+            <ClearOutlined />
+          </button>
+        </Tooltip>
       </div>
     </div>
   )
@@ -351,6 +368,7 @@ const AIChatPanel = ({
   const chatPanelRef = useRef(null)
 
   const [agent, setAgent] = useState<any>()
+  const [sessionKey, setSessionKey] = useState(0)
 
   // ── Pin 逻辑层 ────────────────────────────────────────────────────────────
   const pinActions = usePinCards()
@@ -416,6 +434,16 @@ const AIChatPanel = ({
     return
   }
 
+  const handleClearChat = async () => {
+    if (!agent || disabled) return
+    try {
+      await agent.clearHistory?.()
+      setSessionKey((key) => key + 1)
+    } catch (e) {
+      console.error('[AIChatPanel] clear history failed', e)
+    }
+  }
+
   const guiCard = config ?? {}
 
   const copilotConfig = {
@@ -439,10 +467,15 @@ const AIChatPanel = ({
       } as React.CSSProperties : undefined}
     >
       {headerConfig && (
-        <ChatHeader {...headerConfig} />
+        <ChatHeader
+          {...headerConfig}
+          onClear={handleClearChat}
+          clearDisabled={disabled}
+        />
       )}
       <div className={css.chatBody} data-zone-type='ai-fixed'>
         <ChatPanel
+          key={sessionKey}
           size={'large'}
           ref={chatPanelRef}
           agent={agent}
