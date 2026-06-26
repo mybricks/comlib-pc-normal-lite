@@ -33,7 +33,7 @@ const design = (props: CreateMyBricksProps) => {
           ...style,
         }}
         data-zone-type="page"
-        data-zone-kind="page"
+        data-zone-kind="agent-card"
         data-zone-title={config.title}
         data-desn-page={filename}
         {...rest}
