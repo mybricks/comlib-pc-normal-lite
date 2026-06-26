@@ -270,6 +270,22 @@ function extractRawLessValue(node: any): string {
   return '';
 }
 
+/**
+ * 递归展开 cssObj 中所有 "&" key（将其属性提升到同层），
+ * 用于消除 @font-face 等 at-rule 内部被 Less.js 包裹的根 Ruleset 层。
+ */
+function flattenAmpersandKeys(obj: CSSObj): CSSObj {
+  const result: CSSObj = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === '&' && typeof value === 'object' && value !== null) {
+      Object.assign(result, flattenAmpersandKeys(value));
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 class Parse {
 
   cssObj: CSSObj = {};
@@ -403,16 +419,22 @@ class Parse {
 
   handleAtRule(atRule: AtRule) {
     const name = atRule.name;
-    const value = atRule.value.toCSS();
+    const value = atRule.value?.toCSS?.() ?? '';
     const { cssObj, cssObjs } = this.handleRules(atRule.rules);
 
     const combined: CSSObj = { ...cssObj };
     cssObjs.forEach(({ key: k, value: v }) => {
-      combined[k] = v;
+      // Flatten "&" root declarations (e.g. @font-face body wrapped in a root Ruleset)
+      if (k === '&' && typeof v === 'object' && v !== null) {
+        Object.assign(combined, flattenAmpersandKeys(v));
+      } else {
+        combined[k] = v;
+      }
     });
 
     return {
-      key: `${name} ${value}`,
+      // Trim trailing space when value is empty (e.g. @font-face has no keyword value)
+      key: value ? `${name} ${value}` : name,
       value: combined,
     }
   }
@@ -430,18 +452,22 @@ export const parseLess = (code: string) => {
       if (error) {
         // console.error(error);
       } else {
-        const parse = new Parse(output);
-        const rawObj = parse.get();
-        // 将 & 隐式根属性展开
-        const flatObj: CSSObj = {};
-        Object.entries(rawObj).forEach(([key, value]) => {
-          if (key === "&") {
-            Object.assign(flatObj, value);
-          } else {
-            flatObj[key] = value;
-          }
-        });
-        cssObj = restoreGlobals(flatObj, globalMap);
+        try {
+          const parse = new Parse(output);
+          const rawObj = parse.get();
+          // 将 & 隐式根属性展开
+          const flatObj: CSSObj = {};
+          Object.entries(rawObj).forEach(([key, value]) => {
+            if (key === "&") {
+              Object.assign(flatObj, value);
+            } else {
+              flatObj[key] = value;
+            }
+          });
+          cssObj = restoreGlobals(flatObj, globalMap);
+        } catch (parseErr) {
+          // ignore
+        }
       }
     });
   } catch (error) {
