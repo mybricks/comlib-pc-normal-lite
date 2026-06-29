@@ -2,22 +2,22 @@ import './resourceLoader';
 import '../../utils/antd';
 import React from 'react';
 import context from '../context';
-import { buildFocusAreaConfigs } from './configs/focusArea';
-import { buildExportCodeConfig } from './configs/exportCode';
-import { buildPagePanel } from './configs/pagePanel';
-import { buildHooks } from './hooks';
-import { genStyleValue, genSvgResizer } from './styleProxy';
-import { buildImgEditorItems } from './configs/ImgEditor';
-import { buildSvgEditorItems } from './configs/SvgEditor';
-import { buildIconEditorItems } from './configs/IconEditor';
-import { aiSvgIcon5 } from './icons/ai-svg-5';
-import { aiImgIcon } from './icons/ai-img';
-import { AiEditPanel } from './components/AiEditPanel';
-import type { Props, Actions } from './types';
-import { registerResourcesCode } from './registerResourcesCode';
-import { getDataZoneTextEditable } from './getDataZoneTextEditable'
+import {buildFocusAreaConfigs} from './configs/focusArea';
+import {buildExportCodeConfig} from './configs/exportCode';
+import {buildPagePanel} from './configs/pagePanel';
+import {buildHooks} from './hooks';
+import {genStyleValue, genSvgResizer} from './styleProxy';
+import {buildImgEditorItems} from './configs/ImgEditor';
+import {buildSvgEditorItems} from './configs/SvgEditor';
+import {buildIconEditorItems} from './configs/IconEditor';
+import {aiSvgIcon5} from './icons/ai-svg-5';
+import {aiImgIcon} from './icons/ai-img';
+import {AiEditPanel} from './components/AiEditPanel';
+import type {Props, Actions} from './types';
+import {registerResourcesCode} from './registerResourcesCode';
+import {getDataZoneTextEditable} from './getDataZoneTextEditable'
 import undoRedo from './undoRedo';
-import { verify as eslintVerify } from '../eslint';
+import {verify as eslintVerify} from '../eslint';
 import setSegment from './setSegment';
 import setStyle from './style/setStyle'
 import resizer from './style/resizer'
@@ -36,7 +36,7 @@ export default function (props: Props, actions: Actions) {
     focusAreaConfigs[':root'].items.push(...exportCodeConfig);
   }
 
-  context.setComponent({ params: props, actions });
+  context.setComponent({params: props, actions});
 
   (window as any).__mybricksEslintVerify = () => eslintVerify(props.data.files);
 
@@ -48,6 +48,10 @@ export default function (props: Props, actions: Actions) {
     ...focusAreaConfigs,
     ...buildHooks(props),
     '[data-zone-type=page]': buildPagePanel(props),
+    '[data-zone-type=skill]': {
+      title: '技能',
+      items: [],
+    },
     '[data-zone-selector]': {
       style: [
         {
@@ -71,7 +75,7 @@ export default function (props: Props, actions: Actions) {
         title: aiSvgIcon5,
         desc: '通过AI创作图标',
         render(_data, {close}) {
-          return <AiEditPanel close={close} mode="SVG" />;
+          return <AiEditPanel close={close} mode="SVG"/>;
         }
       },
       items: buildIconEditorItems(comId),
@@ -82,7 +86,7 @@ export default function (props: Props, actions: Actions) {
         title: aiImgIcon,
         desc: '通过AI创作图片',
         render(_data, {close}) {
-          return <AiEditPanel close={close} mode="IMG" />;
+          return <AiEditPanel close={close} mode="IMG"/>;
         }
       },
       items: buildImgEditorItems(comId),
@@ -92,7 +96,7 @@ export default function (props: Props, actions: Actions) {
         title: aiSvgIcon5,
         desc: '通过AI创作图标',
         render(_data, {close}) {
-          return <AiEditPanel close={close} mode="SVG" />;
+          return <AiEditPanel close={close} mode="SVG"/>;
         }
       },
       style: [
