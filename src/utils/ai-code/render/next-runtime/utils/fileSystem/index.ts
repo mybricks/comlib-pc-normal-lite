@@ -167,6 +167,10 @@ const isCssModule = (filename: string): boolean => {
   return CSS_MODULE_EXTENSIONS.some(ext => filename.endsWith(ext))
 }
 
+const isMdModule = (filename: string): boolean => {
+  return filename.endsWith('.md')
+}
+
 const resolveFilename = (filename: string, filesMap: FilesMap, tempFilesMap: FilesMap) => {
   let entry = filesMap[filename] || tempFilesMap[filename]
   let resolvedFilename = filename
@@ -761,6 +765,31 @@ class FileSystem {
 
       if (refresh) {
         this.refreshDependents(filename)
+      }
+    } else if (isMdModule(filename)) {
+      if (entry) {
+        entry.file = file
+        entry.module = {
+          default: decodeURIComponent(file.source)
+        }
+      } else {
+        const tempModule = {
+          default: decodeURIComponent(file.source)
+        }
+        Object.defineProperty(tempModule, '__esModule', {
+          value: true
+        })
+        this.filesMap[filename] = {
+          file,
+          module: tempModule,
+          dependencies: new Set(),
+          dependedBy: new Set(),
+          forceUpdateSet: new Set<() => void>(),
+          currentImpl: () => null,
+          errors: {
+            runtime: null
+          }
+        }
       }
     }
 

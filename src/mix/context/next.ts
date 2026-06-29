@@ -49,6 +49,9 @@ class Context {
       lock: (id: string, focus: any) => () => void
       unlock: (id: string, focus: any) => void
       notifyChanged: (...params: any) => void
+
+      updatePages: (...params: any) => any
+      updateDocs: (...params: any) => any
     }
     /** 事件 */
     events: Events<{
@@ -316,6 +319,11 @@ class Context {
             }
           });
           aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+          const fileSystem = this.fileSystem
+          if (fileSystem) {
+            const file = files.find((f) => f.fileName === fileName);
+            fileSystem.update(fileName, {...file, filename: fileName })
+          }
           this.notifyChanged();
           break;
         default:

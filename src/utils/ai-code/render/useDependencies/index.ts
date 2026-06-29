@@ -5,6 +5,7 @@ import { createMyBricks } from '../mybricks'
 import { useCardApis } from '../mybricks/hooks/card'
 import createMyBricksForKdsWeb from '../mybricks/kds-web'
 import createMyBricksForGuiCard from '../mybricks/gui-card'
+import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
 import { config } from '../../../../mix/context'
 
 class EmptyDataSource {}
@@ -63,7 +64,7 @@ const useDependencies = (params: Params) => {
     if (frontendMode === 'kds_web') {
       mybricks = createMyBricksForKdsWeb(createMyBricksProps)
     } else if (frontendMode === 'gui_card') {
-      mybricks = createMyBricksForGuiCard(createMyBricksProps)
+      mybricks = createMyBricksForGuiCardNext(createMyBricksProps)
     } else  {
       mybricks = createMyBricks(createMyBricksProps);
     }
