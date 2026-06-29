@@ -164,9 +164,9 @@ const design = (props: CreateMyBricksProps) => {
               config={data.gui_card}
             />
           </Card>
-          {showSkills.map(({ cards }) => {
+          {showSkills.map(({ title, cards }) => {
             return (
-              <div data-zone-type='skill'>
+              <div data-zone-type='skill' data-zone-title={title}>
                 {cards.map(({ render: Render, filename, config }) => {
                   return (
                     <Card key={filename} config={config} filename={filename}>
