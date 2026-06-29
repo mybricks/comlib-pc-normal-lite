@@ -67,6 +67,10 @@ class Context {
       'vibing': boolean
       /** 打开dos面板 */
       'openDocs': any
+      /** 根据id渲染页面 */
+      'showPage': string
+      /** 根据id隐藏页面 */
+      'hidePage': string
     }>;
   } | null = null
 

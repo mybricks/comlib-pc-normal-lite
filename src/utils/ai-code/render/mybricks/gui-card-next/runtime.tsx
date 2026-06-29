@@ -49,34 +49,79 @@ const runtime = (props: CreateMyBricksProps) => {
     return () => {
       const filename = debugTarget.pageIndex
 
-      const [cards, setCards] = useState<any[] | null>(null)
+      const [skills, setSkills] = useState<any[] | null>(null)
       const [tools, setTools] = useState<any[]>([])
 
       useEffect(() => {
-        const cards: any = []
+        const skills: any = []
         const tools: any = []
+        
         Object.entries(context.fileSystem!.filesMap).forEach(([filename, file]) => {
-          const module = file.module.default
-          if (module?.[IS_CARD_CONFIG]) {
-            // 说明是卡片配置，找到对应的index.tsx
-            const cardFileName = filename.split('/').slice(0, -1).concat('index.tsx').join('/')
-            const runtime = context.fileSystem!.filesMap[cardFileName]
-            if (runtime) {
-              cards.push({
-                filename: cardFileName,
-                config: module,
-                render: runtime.module.default
+          if (filename.endsWith('/SKILL.md')) {
+            const md: string = file.module.default.trim()
+
+            // 解析 frontmatter（--- ... --- 之间的内容）
+            const frontmatter: Record<string, string> = {}
+            const match = md.match(/^---\s*\n([\s\S]*?)\n---/)
+            if (match) {
+              match[1].split('\n').forEach((line) => {
+                const colonIdx = line.indexOf(':')
+                if (colonIdx !== -1) {
+                  const key = line.slice(0, colonIdx).trim()
+                  const value = line.slice(colonIdx + 1).trim()
+                  frontmatter[key] = value
+                }
+              })
+
+              const skill: any = {
+                md,
+                id: filename,
+                type: '',
+                cards: [],
+                name: frontmatter.name,
+                title: frontmatter.title,
+                description: frontmatter.description,
+              }
+
+              skills.push(skill)
+
+              const dir = filename.split('/').slice(0, -1).join('/')
+
+              Object.entries(context.fileSystem!.filesMap).forEach(([filename, file]) => {
+                if (filename.endsWith('index.config.ts') && filename.startsWith(dir)) {
+                  const module = file.module.default
+                  if (module?.[IS_CARD_CONFIG] === IS_CARD_CONFIG) {
+                    // 找到对应的 index.tsx
+                    const cardFileName = filename.split('/').slice(0, -1).concat('index.tsx').join('/')
+                    const runtime = context.fileSystem!.filesMap[cardFileName]
+                    if (runtime) {
+                      skill.cards.push({
+                        filename: cardFileName,
+                        config: module,
+                        render: runtime.module.default
+                      })
+                    }
+                  }
+                }
               })
             }
-          } else if (module?.[IS_TOOL]) {
-            tools.push(module.createTool)
+          } else {
+            const module = file.module.default
+            if (module?.[IS_TOOL] === IS_TOOL && typeof module.createTool === 'function') {
+              console.log('[file]', file)
+              console.log('[module]', module)
+              tools.push(module.createTool)
+            }
           }
         })
+
+        setSkills(skills)
         setTools(tools)
-        setCards(cards)
+
+        console.log('[skills]', skills)
       }, [])
 
-      if (!cards) {
+      if (!skills) {
         return
       }
 
@@ -95,17 +140,17 @@ const runtime = (props: CreateMyBricksProps) => {
               }}
             >
               <AIChatPanel
-                cards={cards.length ? [{
-                  title: '通用分组',
-                  description: '通用卡片',
-                  cards: cards.map(({ config, render }) => {
-                    return {
-                      name: config.title,
-                      ...config,
-                      render
-                    }
-                  }),
-                }] : []}
+                cards={skills.map((skill) => {
+                  return {
+                    ...skill,
+                    cards: skill.cards.map(({ config, render }) => {
+                      return {
+                        ...config,
+                        render
+                      }
+                    })
+                  }
+                })}
                 tools={tools.map((createTool) => {
                   return createTool()
                 })}
@@ -116,19 +161,21 @@ const runtime = (props: CreateMyBricksProps) => {
         )
       }
 
-      const { config, render: Render } = cards.find((card) => card.filename === filename)
+      return <div>TODO: {filename}</div>
 
-      return (
-        <RuntimeContainer style={{...debugTarget.rootStyle}}>
-          <Card
-            config={config}
-            filename={filename}
-            style={debugTarget?.style}
-          >
-            <Render />
-          </Card>
-        </RuntimeContainer>
-      )
+      // const { config, render: Render } = cards.find((card) => card.filename === filename)
+
+      // return (
+      //   <RuntimeContainer style={{...debugTarget.rootStyle}}>
+      //     <Card
+      //       config={config}
+      //       filename={filename}
+      //       style={debugTarget?.style}
+      //     >
+      //       <Render />
+      //     </Card>
+      //   </RuntimeContainer>
+      // )
     }
   }
 

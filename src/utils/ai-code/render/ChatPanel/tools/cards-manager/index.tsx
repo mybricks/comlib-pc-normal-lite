@@ -143,15 +143,20 @@ export function buildAvailableCardsSection(groups: CardGroup[]): string {
   const groupBlocks = groups.map((group) => {
     const cardLines = group.cards.map((card) => {
       const propsStr =
-        card.props && Object.keys(card.props).length > 0
+        card.props && card.props.properties && Object.keys(card.props.properties).length > 0
           ? `\n  - props: ${JSON.stringify(card.props)}`
           : "";
+
+      // const apisStr =
+      //   card.apis && card.apis.length > 0
+      //     ? `\n  - apis:\n${card.apis.map((api) => `    - ${api.name}: ${api.description}`).join("\n")}`
+      //     : "";
 
       return `- name: \`${card.name}\`  title: ${card.title}  desc: ${card.description}${propsStr}`;
     });
 
-    return `## ${group.title}\n> ${group.description}\n\n可用的卡片如下：\n${cardLines.join("\n")}`;
+    return group.md + `\n\n# 可用卡片如下:\n` + cardLines.join("\n");
   });
 
-  return `<available_cards>\n当前可用的卡片分组如下，每一个分组下都有分组相关的卡片，你可以通过提供各类卡片来和用户完成交互。\n\n${groupBlocks.join("\n\n")}\n</available_cards>`;
+  return `<available_cards>\n当前可用的卡片分组如下，每一个分组下都有分组相关的卡片，你可以通过提供各类卡片来和用户完成交互。\n\n${groupBlocks.join("\n\n---\n\n")}\n</available_cards>`;
 }

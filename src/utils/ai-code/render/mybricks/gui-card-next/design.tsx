@@ -46,6 +46,7 @@ const design = (props: CreateMyBricksProps) => {
   const appRef = () => {
     return () => {
       const [skills, setSkills] = useState<any[]>([])
+      const [cards, setCards] = useState<any[]>([])
 
       useEffect(() => {
         const collectCards = () => {
@@ -53,7 +54,7 @@ const design = (props: CreateMyBricksProps) => {
 
           Object.entries(context.fileSystem!.filesMap).forEach(([filename, file]) => {
             if (filename.endsWith('/SKILL.md')) {
-              const md: string = file.module.default.trimStart()
+              const md: string = file.module.default.trim()
 
               // 解析 frontmatter（--- ... --- 之间的内容）
               const frontmatter: Record<string, string> = {}
@@ -126,21 +127,23 @@ const design = (props: CreateMyBricksProps) => {
         }
       }, [])
 
-      // useEffect(() => {
-      //   context.notifyChanged('gui_cards', 'update', {
-      //     docs: [],
-      //     events: [],
-      //     services: [],
-      //     state: [],
-      //     store: [],
-      //     configs: cards.map(({ config, filename }) => {
-      //       return {
-      //         refSelector: `[data-desn-page="${filename}"]`,
-      //         ...config
-      //       }
-      //     })
-      //   })
-      // }, [skills])
+      useEffect(() => {
+        const cards: any = []
+        if (data._showPages?.length) {
+          data._showPages.forEach((filename) => {
+            const skill = skills.find((skill) => skill.id === filename)
+            if (skill?.cards) {
+              cards.push(...skill.cards)
+            }
+          })
+        }
+        setCards(cards)
+        
+      }, [skills, data._showPages])
+
+      useEffect(() => {
+        context.component!.actions.loaded()
+      }, [cards])
 
       return (
         <>
@@ -162,13 +165,13 @@ const design = (props: CreateMyBricksProps) => {
               config={data.gui_card}
             />
           </Card>
-          {/* {cards.map(({ render: Render, filename, config }) => {
+          {cards.map(({ render: Render, filename, config }) => {
             return (
               <Card key={filename} config={config} filename={filename}>
                 <Render />
               </Card>
             )
-          })} */}
+          })}
         </>
       )
     }

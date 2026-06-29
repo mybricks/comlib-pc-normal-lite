@@ -50,4 +50,6 @@ export interface CardGroup {
   description: string;
   /** 该分组下的卡片列表 */
   cards: CardDef[];
+  /** SKILL.md */
+  md: string;
 }

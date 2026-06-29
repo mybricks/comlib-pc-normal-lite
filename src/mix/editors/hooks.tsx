@@ -285,5 +285,20 @@ export function buildHooks(props: Props) {
         events.emit('openDocs', () => {});
       }, 300)
     },
+
+    '@showPage'(id) {
+      const data = context.component!.params.data
+      if (!data._showPages) {
+        data._showPages = [id]
+      } else {
+        data._showPages = data._showPages.concat(id)
+      }
+    },
+    '@hidePage'(id) {
+      const data = context.component!.params.data
+      const index = data._showPages.find((item) => item === id)
+      data._showPages.split(index, 1)
+      data._showPages = [...data._showPages]
+    }
   };
 }
