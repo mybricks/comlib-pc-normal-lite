@@ -299,7 +299,7 @@ export function buildHooks(props: Props) {
     '@hidePage'(id) {
       const data = context.component!.params.data
       const index = data._showPages.find((item) => item === id)
-      data._showPages.split(index, 1)
+      data._showPages.splice(index, 1)
       data._showPages = [...data._showPages]
     }
   };

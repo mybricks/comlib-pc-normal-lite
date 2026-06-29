@@ -46,7 +46,7 @@ const design = (props: CreateMyBricksProps) => {
   const appRef = () => {
     return () => {
       const [skills, setSkills] = useState<any[]>([])
-      const [cards, setCards] = useState<any[]>([])
+      const [showSkills, setShowSkills] = useState<any[]>([])
 
       useEffect(() => {
         const collectCards = () => {
@@ -128,22 +128,21 @@ const design = (props: CreateMyBricksProps) => {
       }, [])
 
       useEffect(() => {
-        const cards: any = []
+        const showSkills: any = []
         if (data._showPages?.length) {
           data._showPages.forEach((filename) => {
             const skill = skills.find((skill) => skill.id === filename)
-            if (skill?.cards) {
-              cards.push(...skill.cards)
+            if (skill?.cards?.length) {
+              showSkills.push(skill)
             }
           })
         }
-        setCards(cards)
-        
+        setShowSkills(showSkills)
       }, [skills, data._showPages])
 
       useEffect(() => {
         context.component!.actions.loaded()
-      }, [cards])
+      }, [showSkills])
 
       return (
         <>
@@ -165,11 +164,17 @@ const design = (props: CreateMyBricksProps) => {
               config={data.gui_card}
             />
           </Card>
-          {cards.map(({ render: Render, filename, config }) => {
+          {showSkills.map(({ cards }) => {
             return (
-              <Card key={filename} config={config} filename={filename}>
-                <Render />
-              </Card>
+              <div data-zone-type='skill'>
+                {cards.map(({ render: Render, filename, config }) => {
+                  return (
+                    <Card key={filename} config={config} filename={filename}>
+                      <Render />
+                    </Card>
+                  )
+                })}
+              </div>
             )
           })}
         </>
