@@ -291,7 +291,9 @@ export function buildHooks(props: Props) {
       if (!data._showPages) {
         data._showPages = [id]
       } else {
-        data._showPages = data._showPages.concat(id)
+        if (!data._showPages.includes(id)) {
+          data._showPages = data._showPages.concat(id)
+        }
       }
     },
     '@hidePage'(id) {

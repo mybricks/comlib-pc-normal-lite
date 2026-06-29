@@ -108,8 +108,6 @@ const runtime = (props: CreateMyBricksProps) => {
           } else {
             const module = file.module.default
             if (module?.[IS_TOOL] === IS_TOOL && typeof module.createTool === 'function') {
-              console.log('[file]', file)
-              console.log('[module]', module)
               tools.push(module.createTool)
             }
           }
@@ -117,8 +115,6 @@ const runtime = (props: CreateMyBricksProps) => {
 
         setSkills(skills)
         setTools(tools)
-
-        console.log('[skills]', skills)
       }, [])
 
       if (!skills) {
@@ -161,21 +157,20 @@ const runtime = (props: CreateMyBricksProps) => {
         )
       }
 
-      return <div>TODO: {filename}</div>
+      const allCards = skills.flatMap((g) => g.cards);
+      const { config, render: Render } = allCards.find((card) => card.filename === filename)
 
-      // const { config, render: Render } = cards.find((card) => card.filename === filename)
-
-      // return (
-      //   <RuntimeContainer style={{...debugTarget.rootStyle}}>
-      //     <Card
-      //       config={config}
-      //       filename={filename}
-      //       style={debugTarget?.style}
-      //     >
-      //       <Render />
-      //     </Card>
-      //   </RuntimeContainer>
-      // )
+      return (
+        <RuntimeContainer style={{...debugTarget.rootStyle}}>
+          <Card
+            config={config}
+            filename={filename}
+            style={debugTarget?.style}
+          >
+            <Render />
+          </Card>
+        </RuntimeContainer>
+      )
     }
   }
 
