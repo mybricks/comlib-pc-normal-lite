@@ -164,9 +164,18 @@ const design = (props: CreateMyBricksProps) => {
               config={data.gui_card}
             />
           </Card>
-          {showSkills.map(({ title, cards }) => {
+          {showSkills.map(({ id, name, title, cards }) => {
             return (
-              <div data-zone-type='skill' data-zone-title={title}>
+              <div
+                data-zone-type='skill'
+                data-zone-title={title}
+                data-zone-chip={JSON.stringify({
+                  type: 'SKILL',
+                  label: `SKILL(${name})`,
+                  info: `- SKILL(${name})\n` + 
+                  ` - 相关代码：位于${id}`
+                })}
+              >
                 {cards.map(({ render: Render, filename, config }) => {
                   return (
                     <Card key={filename} config={config} filename={filename}>
