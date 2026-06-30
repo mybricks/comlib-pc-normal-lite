@@ -176,6 +176,7 @@ const design = (props: CreateMyBricksProps) => {
                   info: `- SKILL(${name})\n` + 
                   ` - 相关代码：位于${id}`
                 })}
+                data-skill-id={id}
               >
                 {cards.map(({ render: Render, filename, config }) => {
                   return (
