@@ -109,7 +109,8 @@ const design = (props: CreateMyBricksProps) => {
               id: skill.id,
               title: skill.title,
               type: skill.type,
-              pages: skill.cards
+              pages: skill.cards,
+              description: skill.md
             }
           }))
 
