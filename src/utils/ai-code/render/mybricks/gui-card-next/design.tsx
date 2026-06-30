@@ -154,8 +154,8 @@ const design = (props: CreateMyBricksProps) => {
             filename='GUI_AGENT'
             data-widget-name='GUI_AGENT'
             style={{
-              width: 800,
-              height: 900,
+              width: 414,
+              height: 896,
             }}
           >
             <AIChatPanel
