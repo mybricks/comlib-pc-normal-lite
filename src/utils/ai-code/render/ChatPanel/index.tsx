@@ -163,6 +163,17 @@ function EmptyGuide({
     return renderImageLikeNode(icon, 'icon')
   }
 
+  const questions = groups.reduce<string[]>((pre, item) => {
+    if (typeof item === 'string') {
+      pre.push(item)
+    } else if (Array.isArray(item.cases)) {
+      item.cases.forEach(({ label }) => {
+        pre.push(label)
+      })
+    }
+    return pre
+  }, [])
+
   return (
     <div className={css.emptyGuide}>
       {/* Icon */}
@@ -211,27 +222,42 @@ function EmptyGuide({
           </div>
         </div>
       ) : (
-        groups.length > 0 && (
-          <div className={css.emptyGuideGroups}>
-            {groups.map((group, gi) => (
-              <div key={gi} className={css.emptyGuideGroupCard}>
-                <div className={css.emptyGuideGroupTitle}>{group.title}</div>
-                {group.description && (
-                  <div className={css.emptyGuideGroupDesc}>{group.description}</div>
-                )}
-                <ul className={css.emptyGuideGroupCases}>
-                  {group.cases.map((c, ci) => (
-                    <li
-                      key={ci}
-                      className={[css.emptyGuideGroupCaseItem, disabled ? css.emptyGuideGroupCaseItemDisabled : ''].join(' ').trim()}
-                      onClick={() => handleCaseClick(c.label)}
-                    >
-                      {c.label}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+        // groups.length > 0 && (
+        //   <div className={css.emptyGuideGroups}>
+        //     {groups.map((group, gi) => (
+        //       <div key={gi} className={css.emptyGuideGroupCard}>
+        //         <div className={css.emptyGuideGroupTitle}>{group.title}</div>
+        //         {group.description && (
+        //           <div className={css.emptyGuideGroupDesc}>{group.description}</div>
+        //         )}
+        //         <ul className={css.emptyGuideGroupCases}>
+        //           {group.cases.map((c, ci) => (
+        //             <li
+        //               key={ci}
+        //               className={[css.emptyGuideGroupCaseItem, disabled ? css.emptyGuideGroupCaseItemDisabled : ''].join(' ').trim()}
+        //               onClick={() => handleCaseClick(c.label)}
+        //             >
+        //               {c.label}
+        //             </li>
+        //           ))}
+        //         </ul>
+        //       </div>
+        //     ))}
+        //   </div>
+        // )
+        questions.length > 0 && (
+          <div className={css['questions-wrap']}>
+            {questions.map((question, index) => {
+              return (
+                <li
+                  key={index}
+                  className={css['question-item']}
+                  onClick={() => handleCaseClick(question)}
+                >
+                  {question}
+                </li>
+              )
+            })}
           </div>
         )
       )}

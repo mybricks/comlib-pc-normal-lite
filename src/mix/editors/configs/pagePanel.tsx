@@ -130,7 +130,7 @@ export function buildPagePanel(props: Props) {
             }
           },
           {
-            title: '默认场景',
+            title: '推荐问题',
             type: 'code',
             options: {
               language: 'json',
