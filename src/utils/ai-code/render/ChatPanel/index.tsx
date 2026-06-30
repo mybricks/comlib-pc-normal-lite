@@ -254,7 +254,7 @@ function EmptyGuide({
                   className={css['question-item']}
                   onClick={() => handleCaseClick(question)}
                 >
-                  {question}
+                  <span className={css['question-text']}>{question}</span>
                 </li>
               )
             })}

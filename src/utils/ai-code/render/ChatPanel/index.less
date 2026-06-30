@@ -757,7 +757,8 @@
   flex-direction: column;
   gap: 6px;
   overflow: hidden;
-  width: 300px;
+  width: fit-content;
+  max-width: 300px;
   animation: emptyFadeUp 0.55s 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -770,11 +771,20 @@
   padding: 3px 10px 3px 22px;
   border-radius: 6px;
   position: relative;
-  transition: color 0.15s, background 0.15s, padding-left 0.15s;
+  transition: color 0.15s, background 0.15s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
+
+  .question-text {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+    transition: transform 0.15s;
+  }
 
   &::before {
     content: '›';
@@ -790,7 +800,10 @@
   &:hover {
     color: var(--mybricks-color-primary, #FA6400);
     background: color-mix(in srgb, var(--mybricks-color-primary, #FA6400) 7%, transparent);
-    padding-left: 26px;
+
+    .question-text {
+      transform: translateX(4px);
+    }
 
     &::before {
       transform: translateX(2px);
