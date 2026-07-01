@@ -27,7 +27,7 @@ import * as aiSvgIconCssNS from './icons/aiSvgIcon.lazy.less';
 import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 
 
-import context from '../context';
+import context, { config } from '../context';
 import type {Props} from './types';
 
 const errorSet = new Set();
@@ -208,11 +208,13 @@ export function buildHooks(props: Props) {
 
     '@debug'(params: any, stop: any) {
       const events = context.component!.events;
+      const onDebug = config.getOnDebug()
       if (stop) {
         events.emit('debugTarget', undefined);
+        onDebug(false)
         return;
       }
-
+      onDebug(true)
       const page = params.focusArea.ele.closest('[data-desn-page]');
       const pageIndex = page?.getAttribute('data-desn-page');
 

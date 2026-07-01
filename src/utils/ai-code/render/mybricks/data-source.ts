@@ -1,5 +1,5 @@
 import { deepCopy } from '../../../../utils'
-import context from '../../../../mix/context'
+import context, { config } from '../../../../mix/context'
 
 /** HTTP 方法列表 */
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch'])
@@ -56,7 +56,9 @@ export class DataSource {
   /** 每个实例独立的 axios 实例 */
   axios: any;
 
-  constructor() {
+  constructor(params) {
+    const frontendMode = config.getFrontendMode()
+    const prefix = frontendMode === 'gui_card' ? `/api/${params.id.replace('/dataSource.ts', '').replace(/^\//, '')}` : ''
     const axiosLib = typeof window !== 'undefined' ? (window as any).axios : undefined;
     const vsCodeMessage = typeof window !== 'undefined' ? (window as any).webViewMessageApi : undefined;
     // [TEMP] window['__IS_AICODE__'] 为过度兼容逻辑，应用上线后可删除
@@ -154,7 +156,8 @@ export class DataSource {
         return requestProxy
           .request({
             method,
-            url,
+            // url: `${prefix}${url}`,
+            url: prefix ? `${prefix}/${url.replace(/^\//, '')}` : url,
             headers: cfg.headers,
             data: body ?? cfg.data,
             params: cfg.params,

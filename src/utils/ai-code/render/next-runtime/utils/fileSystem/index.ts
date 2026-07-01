@@ -15,6 +15,7 @@ import type {
   Definitions,
   OnRuntimeError
 } from '../../types'
+import { DYNAMIC_MODULE } from '../../../../../../mix/context/config'
 
 interface LoadModuleParams {
   filename: string
@@ -53,8 +54,8 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       }, compiled)}
       //# sourceURL=_mybricks_ai/${filename}
     })`)(exports, (packageName: string) => {
+    const result = dependencies[packageName]
     if (packageName === 'mybricks') {
-      const result = dependencies[packageName]
       return {
         ...result,
         popupRef: (Component, params = {}) => {
@@ -77,10 +78,19 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
         comRef: (Component, params = {}) => {
           return result.comRef(Component, { filename, ...params })
         },
+        DataSource: class DataSource extends result.DataSource {
+          constructor() {
+            super({ id: filename })
+          }
+        }
       }
     }
 
-    return dependencies[packageName]
+    if (result[DYNAMIC_MODULE]) {
+      return result({ id: filename, logger: dependencies.mybricks.logger })
+    }
+
+    return result
   })
   } catch (e: any) {
     // console.log('[params]', params)
