@@ -10,14 +10,15 @@ const dataCompatible = (props) => {
     const mode = config.getFrontendMode()
 
     if (mode === 'gui_card' && !data.gui_card) {
-      data.gui_card = {
+      const modeConfig = config.getFrontendModeConfig()
+      data.gui_card = Object.assign({
         assistantTitle: '智能助手',
         icon: 'https://f2.eckwai.com/kos/nlav12333/aicode/logo/newlogo.png',
         title: '欢迎使用',
         titleHighlight: 'AI 助手',
         subtitle: '你可以向我提问',
         colorPrimary: '#FA6400'
-      }
+      }, modeConfig)
     }
 
     if (!data._componentRuntime) {

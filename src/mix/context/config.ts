@@ -76,6 +76,22 @@ class Config {
     }
   }
 
+  getFrontendModeConfig() {
+     const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return {}
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.[frontend.mode] || {}
+    } else {
+      return {}
+    }
+  }
+
   /** 配置mybricks文档 */
   getMyBricksUsage() {
     const componentRuntime = window._sandbox_.config.componentRuntime
