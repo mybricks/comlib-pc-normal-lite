@@ -74,6 +74,7 @@ const design = (props: CreateMyBricksProps) => {
                   id: filename,
                   type: '',
                   cards: [],
+                  tools: [],
                   name: frontmatter.name,
                   title: frontmatter.title,
                   description: frontmatter.description,
@@ -84,18 +85,27 @@ const design = (props: CreateMyBricksProps) => {
                 const dir = filename.split('/').slice(0, -1).join('/')
 
                 Object.entries(context.fileSystem!.filesMap).forEach(([filename, file]) => {
-                  if (filename.endsWith('index.config.ts') && filename.startsWith(dir)) {
-                    const module = file.module.default
-                    if (module?.[IS_CARD_CONFIG]) {
-                      // 找到对应的 index.tsx
-                      const cardFileName = filename.split('/').slice(0, -1).concat('index.tsx').join('/')
-                      const runtime = context.fileSystem!.filesMap[cardFileName]
-                      if (runtime) {
-                        skill.cards.push({
-                          filename: cardFileName,
-                          config: module,
-                          render: runtime.module.default
-                        })
+                  if (filename.startsWith(dir)) {
+                    if (filename.endsWith('index.config.ts')) {
+                      const module = file.module.default
+                      if (module?.[IS_CARD_CONFIG]) {
+                        // 找到对应的 index.tsx
+                        const cardFileName = filename.split('/').slice(0, -1).concat('index.tsx').join('/')
+                        const runtime = context.fileSystem!.filesMap[cardFileName]
+                        if (runtime) {
+                          skill.cards.push({
+                            filename: cardFileName,
+                            config: module,
+                            render: runtime.module.default
+                          })
+                        }
+                      }
+                    } else if (filename.endsWith('index.ts')) {
+                      const module = file.module.default
+                      if (module?.[IS_TOOL] && typeof module.createTool === 'function') {
+                        try {
+                          skill.tools.push(module.createTool())
+                        } catch {}
                       }
                     }
                   }
@@ -110,7 +120,8 @@ const design = (props: CreateMyBricksProps) => {
               title: skill.title,
               type: skill.type,
               pages: skill.cards,
-              description: skill.md
+              description: skill.md,
+              tools: skill.tools
             }
           }))
 

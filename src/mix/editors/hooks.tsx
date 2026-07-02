@@ -228,13 +228,14 @@ export function buildHooks(props: Props) {
         const paddingRight = parseFloat(rootComputedStyle.paddingRight || '0');
         const paddingTop = parseFloat(rootComputedStyle.paddingTop || '0');
         const borderLeft = parseFloat(rootComputedStyle.borderLeftWidth || '0');
+        const borderTop = parseFloat(rootComputedStyle.borderTopWidth || '0');
 
         const layoutWidth = rootEl.offsetWidth;
         events.emit('debugTarget', {
           type: 'page',
           pageIndex,
           style: {
-            transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, 0px)`,
+            transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, ${(pageBCR.top - rootBCR.top) / (rootBCR.width / layoutWidth) - borderTop - paddingTop}px)`,
             width: params.data?.frameStyle?.width ?? page.offsetWidth,
           },
           rootStyle: {

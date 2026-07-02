@@ -70,7 +70,9 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
                 resetKey: 1,
                 ErrorView,
                 // @ts-ignore 引擎特殊处理逻辑
-                _onError_() {}
+                _onError_(err) {
+                  console.error('[ErrorBoundary:_onError_]', err)
+                }
               }, children)
             }
           })
