@@ -28,6 +28,7 @@ const runtime = (props: CreateMyBricksProps) => {
 
     return (
       <div
+        id={'runtime-container'}
         ref={containerRef}
         data-zone-type='page'
         data-zone-kind='page'
