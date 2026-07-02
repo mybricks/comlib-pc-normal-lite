@@ -4,11 +4,13 @@ import type { MyBricksTesting } from './mybricks-testing'
 import { createMyBricks } from '../mybricks'
 import { useCardApis } from '../mybricks/hooks/card'
 import createMyBricksForKdsWeb from '../mybricks/kds-web'
-import createMyBricksForGuiCard from '../mybricks/gui-card'
 import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
 import { config } from '../../../../mix/context'
+import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 
-class EmptyDataSource {}
+class EmptyDataSource {
+  constructor(params) {}
+}
 
 /** 注入的外部依赖库(如 dayjs、antd 等) */
 type Dependencies = Record<string, any>
@@ -34,8 +36,8 @@ const useDependencies = (params: Params) => {
     const BaseDataSource = params.DataSource || EmptyDataSource;
     
     class DataSourceWithProxy extends BaseDataSource {
-      constructor() {
-        super();
+      constructor(params) {
+        super(params);
         return new Proxy(this, {
           get(target, key: string) {
             if (key === 'axios') {
@@ -69,11 +71,17 @@ const useDependencies = (params: Params) => {
       mybricks = createMyBricks(createMyBricksProps);
     }
 
-    const mybricksTesting = createMyBricksTesting({
-      env,
-      data,
-      activeEnv,
-    });
+    /**
+     * 'mybricks/testing' 支持多实例：每个文件（setup.ts）require 时各自获得独立的 EnvRunner，
+     * 避免多个 setup 文件共用同一 registry / spiedMethods 造成冲突。
+     * DYNAMIC_MODULE 标记让 fileSystem 在每次 require('mybricks/testing') 时调用此工厂函数，
+     * 传入 { id: filename, logger }，从而为每个文件创建隔离的实例。
+     */
+    function createMyBricksTestingModule(_params: { id: string; logger: any }) {
+      return createMyBricksTesting({ env, data, activeEnv });
+    }
+    (createMyBricksTestingModule as any)[DYNAMIC_MODULE] = true;
+
     const customDependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks }) || {}
     
     const dependencies: Dependencies = {
@@ -83,7 +91,7 @@ const useDependencies = (params: Params) => {
         return pre;
       }, {}),
       'mybricks': mybricks,
-      'mybricks/testing': mybricksTesting
+      'mybricks/testing': createMyBricksTestingModule
     }
 
     if (!dependencies.mybricks) {

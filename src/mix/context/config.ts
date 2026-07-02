@@ -4,6 +4,8 @@ import zhCN from 'antd/locale/zh_CN'
 import { isLoggerMethod } from '../../utils/ai-code/render/logger'
 import context from './index'
 
+export const DYNAMIC_MODULE = Symbol('DYNAMIC_MODULE')
+
 const DEFAULT_ENTRY_FILE = 'index.tsx'
 const MODULE_FRONTEND_TYPE = 'frontend'
 const DEFAULT_FRONTEND_MODE = 'default'
@@ -71,6 +73,22 @@ class Config {
       return frontend?.mode || DEFAULT_FRONTEND_MODE
     } else {
       return componentRuntime?.mode || DEFAULT_FRONTEND_MODE
+    }
+  }
+
+  getFrontendModeConfig() {
+     const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return {}
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.[frontend.mode] || {}
+    } else {
+      return {}
     }
   }
 
@@ -170,12 +188,28 @@ class Config {
       const { getDependencies, modules } = componentRuntime
       const transformDependencies = (dependencies) => {
         Object.entries(dependencies).forEach(([key, value]: any) => {
-          base[key] = {
-            get() {
-              return value.module
-            },
-            enumerable: true,
-            configurable: true,
+          if (value.dynamic) {
+            function getDynamicModule(params) {
+              return value.module(params)
+            }
+
+            getDynamicModule[DYNAMIC_MODULE] = true
+
+            base[key] = {
+              get() {
+                return getDynamicModule
+              },
+              enumerable: true,
+              configurable: true,
+            }
+          } else {
+            base[key] = {
+              get() {
+                return value.module
+              },
+              enumerable: true,
+              configurable: true,
+            }
           }
         })
       }
@@ -230,7 +264,7 @@ class Config {
 
       if (modules) {
         Object.entries(modules).forEach(([key, module]: any) => {
-          if (fileName.startsWith(key)) {
+          if (fileName.startsWith(key) || (module.pattern && module.pattern.test(fileName))) {
             const { getDependencies, type } = module
             if (typeof getDependencies === 'function') {
               transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
@@ -308,7 +342,7 @@ class Config {
 
       if (modules) {
         Object.entries(modules).forEach(([key, module]: any) => {
-          if (fileName.startsWith(key)) {
+          if (fileName.startsWith(key) || (module.pattern && module.pattern.test(fileName))) {
             const { getDependencies } = module
             if (typeof getDependencies === 'function') {
               transformDependencies(getDependencies({ logger: createRuntimeLogger() }))
@@ -358,6 +392,10 @@ class Config {
     }
 
     return effectiveLibraries
+  }
+
+  getOnDebug() {
+    return window._sandbox_?.config?.componentRuntime?.onDebug || (() => {})
   }
 }
 
