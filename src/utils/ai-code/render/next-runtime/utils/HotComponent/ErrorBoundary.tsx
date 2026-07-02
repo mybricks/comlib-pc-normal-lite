@@ -43,6 +43,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    * 捕获错误信息并进行错误上报
    */
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    console.error('ErrorBoundary:componentDidCatch', error, errorInfo)
     this.setState({
       hasError: true,
       error,

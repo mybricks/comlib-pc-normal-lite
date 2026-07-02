@@ -47,7 +47,9 @@ const genHotComponent = ({
           return <ErrorView error={error}/>
         }}
         // @ts-ignore 引擎特殊处理逻辑
-        _onError_={() => {}}
+        _onError_={(err) => {
+          console.error('[ErrorBoundary:_onError_]', err)
+        }}
       >
         <Impl {...props}/>
       </ErrorBoundary>
