@@ -181,6 +181,10 @@ interface AIRuntimeProps {
 export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper, logger}: AIRuntimeProps) =>
   ({env, data, id}: any) => {
 
+    useEffect(() => {
+      console.log(`[AI] 组件运行时初始化完成，组件 id: ${id}, env:`, env, ', data:', data)
+    })
+
     const containerRef = useRef<HTMLDivElement>(null);
     const files = Array.isArray(data.files) ? data.files : [];
     const runtimeFiles = files.filter((file: any) => !isAgentFile(file.fileName));
