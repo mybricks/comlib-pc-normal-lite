@@ -246,6 +246,7 @@ const changeOrder = (options) => {
     meta: {
       chips: [chip1, chip2],
     },
+    animation: true
   });
   // ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, extra: { source: '@updateSegment:changeOrder' } })
   return false
