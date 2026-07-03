@@ -164,7 +164,7 @@ const design = (props: CreateMyBricksProps) => {
             }}
             filename='GUI_AGENT'
             data-widget-name='GUI_AGENT'
-            data-zone-kind="agent-app"
+            // data-zone-kind="agent-app"
             style={{
               width: 414,
               height: 896,

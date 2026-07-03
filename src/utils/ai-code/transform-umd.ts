@@ -53,7 +53,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         styleAnalysisPlugin(),
         zoneIndexPlugin({ fileName }),
         zoneOrderEditablePlugin(),
-        wrapCustomComponentPlugin({ fileName }),
+        // wrapCustomComponentPlugin({ fileName }),
       ],
       retainLines: true,
     }
