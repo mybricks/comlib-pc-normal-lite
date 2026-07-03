@@ -82,7 +82,7 @@ const design = (props: CreateMyBricksProps) => {
 
                 skills.push(skill)
 
-                const dir = filename.split('/').slice(0, -1).join('/')
+                const dir = filename.split('/').slice(0, -1).join('/') + '/'
 
                 Object.entries(context.fileSystem!.filesMap).forEach(([filename, file]) => {
                   if (filename.startsWith(dir)) {
