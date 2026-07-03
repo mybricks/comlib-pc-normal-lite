@@ -4,6 +4,39 @@
   width: 100%;
   height: 100%;
   background-color: var(--mybricks-bg-color-main);
+  position: relative;
+}
+
+.file-operation-input {
+  display: none;
+}
+
+.file-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 120px;
+  padding: 4px;
+  border: 1px solid var(--mybricks-border-color-main);
+  border-radius: 6px;
+  background: var(--mybricks-bg-color-main);
+  box-shadow: var(--mybricks-shadow-main);
+}
+
+.file-context-menu-item {
+  width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mybricks-text-color-main);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+
+  &:hover {
+    background: var(--mybricks-bg-color-active);
+  }
 }
 
 .lowcode-view {
@@ -19,6 +52,16 @@
     overflow: auto;
     padding: 0px 10px 10px 10px;
     width: 250px;
+
+    .file-list-empty {
+      height: 100%;
+      color: var(--mybricks-text-color-disabled);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
 
     .file-item {
       border-radius: 6px;

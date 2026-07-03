@@ -81,6 +81,7 @@ type ItemProps = {
   leadingVisual: React.ReactNode; // [TODO] 引擎环境里这样使用，受rxui影响，非引擎环境用useSlots
   contentText: string; // [TODO] 引擎环境里这样使用，受rxui影响，非引擎环境用useSubTree
   onSelect?: () => void;
+  onContextMenu?: (event: React.MouseEvent<HTMLLIElement, MouseEvent>) => void;
   children: React.ReactNode;
 }
 
@@ -136,6 +137,7 @@ const Item = (props: ItemProps) => {
         className={css.item}
         aria-current={(current === props.id) ? 'true' : undefined}
         onClick={handleItemCLick}
+        onContextMenu={props.onContextMenu}
       >
         <div data-hasnot-subTree={props.hasSubTree ? undefined : true} className={css.itemContainer}>
           <div style={{height: "100%"}}>

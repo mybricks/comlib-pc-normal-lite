@@ -14,6 +14,7 @@ import { registerLowcodeViewMonacoContext } from '../eslint/monaco-language-serv
 import { undoRedoManager } from "../editors/undoRedo";
 import { isVSCodeEnv } from "../vscode/isVSCodeEnv";
 import { VSCODE_CODEEDITOR_ESLINT, VSCODE_CODEEDITOR_LOADER_CONFIG } from "../vscode/constants";
+import JSZip from "jszip";
 
 const css = getLazyCss(lazyCss)
 
@@ -30,6 +31,159 @@ interface Params {
 export const lowcodeViewEvents = new Events<{
   'viewCode': {fileName: string, codeLine?: [number, number]};
 }>();
+
+type LowcodeFile = { fileName: string; source: string; compiled?: string };
+type SelectFile = { path: string, source: string, fileName: string };
+type ContextMenuState = {
+  x: number;
+  y: number;
+  node: FileTreeNode;
+} | null;
+type PendingImport = {
+  mode: "file" | "directory";
+  node: FileTreeNode;
+} | null;
+type ImportedFile = { fileName: string; content: string };
+
+const SUPPORT_IMPORT_EXTENSIONS = new Set([
+  "tsx",
+  "jsx",
+  "ts",
+  "js",
+  "less",
+  "json",
+  "md",
+  "yaml",
+  "yml",
+  "txt",
+]);
+
+function safeDecodeSource(source?: string): string {
+  if (!source) return "";
+  try {
+    return decodeURIComponent(source);
+  } catch {
+    return source;
+  }
+}
+
+function normalizeFilePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/+/, "");
+}
+
+function joinFilePath(...parts: string[]): string {
+  return normalizeFilePath(parts.filter(Boolean).join("/"));
+}
+
+function getDirName(fileName: string): string {
+  const parts = normalizeFilePath(fileName).split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
+}
+
+function getBaseName(fileName: string): string {
+  const parts = normalizeFilePath(fileName).split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? fileName;
+}
+
+function getImportBaseDir(node: FileTreeNode): string {
+  return node.type === "directory" ? node.fileName : getDirName(node.fileName);
+}
+
+function isSupportedImportFile(fileName: string): boolean {
+  const ext = getBaseName(fileName).split(".").pop()?.toLowerCase() ?? "";
+  return SUPPORT_IMPORT_EXTENSIONS.has(ext);
+}
+
+function sanitizeUploadPath(path: string): string | null {
+  const normalized = normalizeFilePath(path);
+  const segments = normalized.split("/").filter(Boolean);
+  if (!segments.length || segments.some(seg => seg === "." || seg === "..")) return null;
+  return segments.join("/");
+}
+
+function readTextFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+function downloadBlob(fileName: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTextFile(fileName: string, content: string): void {
+  downloadBlob(getBaseName(fileName), new Blob([content], { type: "text/plain;charset=utf-8" }));
+}
+
+async function downloadZip(
+  folderName: string,
+  files: Array<{ fileName: string; content: string }>,
+  rootPath: string
+): Promise<void> {
+  const zip = new JSZip();
+  const normalizedRoot = normalizeFilePath(rootPath).replace(/\/$/, "");
+
+  files.forEach((file) => {
+    const normalizedFileName = normalizeFilePath(file.fileName);
+    const relativeName = normalizedRoot && normalizedFileName.startsWith(`${normalizedRoot}/`)
+      ? normalizedFileName.slice(normalizedRoot.length + 1)
+      : normalizedFileName;
+    zip.file(relativeName, file.content);
+  });
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  downloadBlob(`${getBaseName(folderName) || "files"}.zip`, blob);
+}
+
+function getNodeFiles(node: FileTreeNode, files: LowcodeFile[]): LowcodeFile[] {
+  if (node.type === "file") {
+    return files.filter(file => file.fileName === node.fileName);
+  }
+
+  if (!node.fileName) {
+    return files;
+  }
+
+  const prefix = `${normalizeFilePath(node.fileName).replace(/\/$/, "")}/`;
+  return files.filter(file => normalizeFilePath(file.fileName).startsWith(prefix));
+}
+
+async function readDirectoryHandleFiles(directoryHandle: any): Promise<ImportedFile[]> {
+  const importedFiles: ImportedFile[] = [];
+  const rootName = sanitizeUploadPath(directoryHandle?.name ?? "") ?? "";
+
+  async function walk(handle: any, prefix: string) {
+    for await (const [name, entry] of handle.entries()) {
+      const entryPath = joinFilePath(prefix, name);
+      if (entry.kind === "directory") {
+        await walk(entry, entryPath);
+        continue;
+      }
+      if (entry.kind !== "file" || !isSupportedImportFile(entryPath)) {
+        continue;
+      }
+      const file = await entry.getFile();
+      importedFiles.push({
+        fileName: entryPath,
+        content: await readTextFile(file),
+      });
+    }
+  }
+
+  await walk(directoryHandle, rootName);
+  return importedFiles;
+}
 
 // 从编辑器某一行的某列，提取相对路径引用（./xxx 或 ../xxx）
 // 返回 { importPath, startColumn, endColumn } 或 null
@@ -61,10 +215,14 @@ function LowcodeView(params: Params) {
 
   // 兼容老版本数据：data.files 不存在时，从旧字段迁移
   const data = params.data;
-  const files: Array<{ fileName: string; source: string; compiled?: string }> = data.files ?? [];
+  const files: LowcodeFile[] = data.files ?? [];
 
-  const [selectFile, setSelectFile] = useState<{ path: string, source: string, fileName: string } | null>(null);
+  const [selectFile, setSelectFile] = useState<SelectFile | null>(null);
   const [treeExpandIds, setTreeExpandIds] = useState<string[]>([]);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const pendingImportRef = useRef<PendingImport>(null);
 
   // 从 context 读取当前组件的调试状态（强制刷新用的 tick）
   const [, setTick] = useState(0);
@@ -95,6 +253,13 @@ function LowcodeView(params: Params) {
 
   // 用稳定的 key 字符串表示 files 快照，用于监听变化
   const filesKey = files.map((f) => `${f.fileName}:${f.source}`).join('|');
+  const treeNodes = useMemo(() => filesJsonToTree(files), [filesKey]);
+  const rootNode = useMemo<FileTreeNode>(() => ({
+    type: "directory",
+    name: componentId || "files",
+    fileName: "",
+    children: treeNodes,
+  }), [componentId, treeNodes]);
 
   // 监听 files 变化：刷新当前选中文件内容 / 处理文件被删除的情况
   const prevFilesKeyRef = useRef<string>('');
@@ -296,6 +461,219 @@ function LowcodeView(params: Params) {
       [selectFile.fileName]: value,
     }));
   }, [selectFile]);
+
+  const getFileContent = useCallback((file: LowcodeFile) => {
+    if (file.fileName in modifiedContent) {
+      return modifiedContent[file.fileName];
+    }
+    return safeDecodeSource(file.source);
+  }, [modifiedContent]);
+
+  const clearModifiedFiles = useCallback((fileNames: string[]) => {
+    setModifiedContent((prev) => {
+      const next = { ...prev };
+      fileNames.forEach(fileName => delete next[fileName]);
+      return next;
+    });
+  }, []);
+
+  const handleDeleteNode = useCallback((node: FileTreeNode) => {
+    const targetFiles = getNodeFiles(node, files);
+    if (!targetFiles.length) return;
+    const targetName = node.type === "directory" ? node.name : node.fileName;
+    const confirmed = window.confirm(`确认删除 ${targetName} 吗？`);
+    if (!confirmed) return;
+
+    const previousFiles = targetFiles.map(file => ({
+      fileName: file.fileName,
+      content: getFileContent(file),
+    }));
+    const fileNames = previousFiles.map(file => file.fileName);
+
+    clearModifiedFiles(fileNames);
+
+    undoRedoManager.execute({
+      execute() {
+        fileNames.forEach(fileName => {
+          context.updateFile({ fileName, type: "delete" });
+        });
+        context.saveManualVersion(fileNames);
+      },
+      undo() {
+        previousFiles.forEach(({ fileName, content }) => {
+          context.updateFile({ fileName, content, type: "update" });
+        });
+        context.saveManualVersion(fileNames);
+      },
+    });
+  }, [clearModifiedFiles, files, getFileContent]);
+
+  const applyImportedFiles = useCallback((node: FileTreeNode, importedFiles: ImportedFile[]) => {
+    if (!importedFiles.length) return;
+
+    const baseDir = getImportBaseDir(node);
+    const nextFiles = importedFiles
+      .map(file => ({
+        fileName: joinFilePath(baseDir, file.fileName),
+        content: file.content,
+      }))
+      .filter(file => file.fileName);
+
+    if (!nextFiles.length) return;
+
+    const filesMap = files.reduce((acc, file) => {
+      acc[file.fileName] = file;
+      return acc;
+    }, {} as Record<string, LowcodeFile>);
+    const previousFiles = nextFiles.map(file => {
+      const previous = filesMap[file.fileName];
+      return previous ? {
+        fileName: file.fileName,
+        content: getFileContent(previous),
+        existed: true,
+      } : {
+        fileName: file.fileName,
+        content: "",
+        existed: false,
+      };
+    });
+    const fileNames = nextFiles.map(file => file.fileName);
+
+    clearModifiedFiles(fileNames);
+
+    undoRedoManager.execute({
+      execute() {
+        nextFiles.forEach(({ fileName, content }) => {
+          context.updateFile({ fileName, content, type: "update" });
+        });
+        context.saveManualVersion(fileNames);
+      },
+      undo() {
+        previousFiles.forEach(({ fileName, content, existed }) => {
+          if (existed) {
+            context.updateFile({ fileName, content, type: "update" });
+          } else {
+            context.updateFile({ fileName, type: "delete" });
+          }
+        });
+        context.saveManualVersion(fileNames);
+      },
+    });
+
+    const firstFile = nextFiles[0];
+    setTreeExpandIds(prev => {
+      const next = new Set(prev);
+      fileNames.forEach(fileName => {
+        const segments = fileName.split("/").filter(Boolean);
+        for (let i = 1; i < segments.length; i++) {
+          next.add(segments.slice(0, i).join("/"));
+        }
+      });
+      return Array.from(next);
+    });
+    setSelectFile({
+      path: firstFile.fileName,
+      source: firstFile.content,
+      fileName: firstFile.fileName,
+    });
+  }, [clearModifiedFiles, files, getFileContent]);
+
+  const openImportPicker = useCallback((node: FileTreeNode, mode: "file" | "directory") => {
+    pendingImportRef.current = { node, mode };
+    const input = mode === "directory" ? folderInputRef.current : fileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }, []);
+
+  const handleImportNode = useCallback(async (node: FileTreeNode) => {
+    const showDirectoryPicker = (window as any).showDirectoryPicker;
+    if (typeof showDirectoryPicker === "function") {
+      try {
+        const directoryHandle = await showDirectoryPicker({ mode: "read" });
+        applyImportedFiles(node, await readDirectoryHandleFiles(directoryHandle));
+        return;
+      } catch (error: any) {
+        if (error?.name === "AbortError") return;
+      }
+    }
+    openImportPicker(node, "file");
+  }, [applyImportedFiles, openImportPicker]);
+
+  const handleImportInputChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const pending = pendingImportRef.current;
+    pendingImportRef.current = null;
+    const inputFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!pending || inputFiles.length === 0) return;
+
+    const importedFiles: ImportedFile[] = [];
+
+    for (const file of inputFiles) {
+      const rawPath = pending.mode === "directory"
+        ? ((file as any).webkitRelativePath || file.name)
+        : file.name;
+      const sanitizedPath = sanitizeUploadPath(rawPath);
+      if (!sanitizedPath || !isSupportedImportFile(sanitizedPath)) {
+        continue;
+      }
+      importedFiles.push({
+        fileName: sanitizedPath,
+        content: await readTextFile(file),
+      });
+    }
+
+    applyImportedFiles(pending.node, importedFiles);
+  }, [applyImportedFiles]);
+
+  const handleExportNode = useCallback(async (node: FileTreeNode) => {
+    const targetFiles = getNodeFiles(node, files);
+    if (!targetFiles.length) return;
+
+    if (node.type === "file") {
+      const file = targetFiles[0];
+      downloadTextFile(file.fileName, getFileContent(file));
+      return;
+    }
+
+    await downloadZip(
+      node.name,
+      targetFiles.map(file => ({
+        fileName: file.fileName,
+        content: getFileContent(file),
+      })),
+      node.fileName
+    );
+  }, [files, getFileContent]);
+
+  const handleContextMenu = useCallback((event: React.MouseEvent, node: FileTreeNode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      node,
+    });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const close = () => setContextMenu(null);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("contextmenu", close);
+    window.addEventListener("scroll", close, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("contextmenu", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
 
   // 保存所有有未保存修改的文件
   const handleSaveAll = useCallback(async () => {
@@ -536,7 +914,22 @@ function LowcodeView(params: Params) {
   const editorTheme = isDark ? 'vs-dark' : 'light';
 
   return (
-    <div className={css['lowcode-view-container']}>
+    <div className={css['lowcode-view-container']} onClick={closeContextMenu}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className={css['file-operation-input']}
+        onChange={handleImportInputChange}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        className={css['file-operation-input']}
+        onChange={handleImportInputChange}
+        {...({ webkitdirectory: "", directory: "" } as any)}
+      />
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div className={css['lowcode-view-toolbar-left']}>
@@ -575,24 +968,41 @@ function LowcodeView(params: Params) {
       </div>
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
-        {files.length === 0 ? (
-          <div className={css['code-empty']}>暂无代码文件</div>
-        ) : (
-          <>
-            <div className={css['file-list']}>
+        <>
+          <div
+            className={css['file-list']}
+            onContextMenu={(event) => {
+              if (event.target === event.currentTarget) {
+                handleContextMenu(event, rootNode);
+              }
+            }}
+          >
+            {files.length === 0 ? (
+              <div
+                className={css['file-list-empty']}
+                onContextMenu={(event) => handleContextMenu(event, rootNode)}
+              >
+                暂无代码文件
+              </div>
+            ) : (
               <TreeView
                 defaultCurrent={selectFile?.fileName ?? "index.tsx"}
                 expandIds={treeExpandIds}
                 isDark={isDark}
               >
                 <FilesTree
-                  nodes={filesJsonToTree(files)}
+                  nodes={treeNodes}
                   onSelect={(file) => {
                     setSelectFile(file)
                   }}
+                  onContextMenu={handleContextMenu}
                 />
               </TreeView>
-            </div>
+            )}
+          </div>
+          {files.length === 0 ? (
+            <div className={css['code-empty']}>暂无代码文件</div>
+          ) : (
             <div className={css['code-container']}>
               <Editor
                 ref={codeIns}
@@ -607,8 +1017,8 @@ function LowcodeView(params: Params) {
                 onMount={handleEditorMount}
               />
             </div>
-          </>
-        )}
+          )}
+        </>
       </div>
       {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}
       {isDebugging && (
@@ -625,6 +1035,46 @@ function LowcodeView(params: Params) {
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
         <VersionPanel render={bottomTab === 'version'} />
       </div>
+      {contextMenu ? (
+        <div
+          className={css['file-context-menu']}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            className={css['file-context-menu-item']}
+            onClick={() => {
+              handleDeleteNode(contextMenu.node);
+              closeContextMenu();
+            }}
+            style={{ display: contextMenu.node.fileName ? undefined : "none" }}
+          >
+            删除
+          </button>
+          <button
+            type="button"
+            className={css['file-context-menu-item']}
+            onClick={() => {
+              handleExportNode(contextMenu.node);
+              closeContextMenu();
+            }}
+          >
+            导出
+          </button>
+          <button
+            type="button"
+            className={css['file-context-menu-item']}
+            onClick={() => {
+              handleImportNode(contextMenu.node);
+              closeContextMenu();
+            }}
+          >
+            导入
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -648,10 +1098,12 @@ const FileIcon = <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" 
 
 const FilesTree = ({
   nodes,
-  onSelect
+  onSelect,
+  onContextMenu
 }: {
   nodes: FileTreeNode[];
-  onSelect: (params: { path: string; source: string; fileName: string }) => void;
+  onSelect: (params: SelectFile) => void;
+  onContextMenu: (event: React.MouseEvent, node: FileTreeNode) => void;
 }) => {
   return (
     <>
@@ -661,10 +1113,11 @@ const FilesTree = ({
           <TreeView.Item
             key={node.fileName}
             id={node.fileName}
+            onContextMenu={(event) => onContextMenu(event, node)}
             onSelect={isFile ? () => {
               onSelect({
                 path: node.name,
-                source: decodeURIComponent((node as any).source ?? ""),
+                source: safeDecodeSource((node as any).source),
                 fileName: (node as any).fileName,
               });
             } : undefined}
@@ -674,7 +1127,7 @@ const FilesTree = ({
           >
             {isFile ? null : (
               <TreeView.SubTree>
-                <FilesTree nodes={(node as any).children} onSelect={onSelect} />
+                <FilesTree nodes={(node as any).children} onSelect={onSelect} onContextMenu={onContextMenu} />
               </TreeView.SubTree>
             )}
           </TreeView.Item>
