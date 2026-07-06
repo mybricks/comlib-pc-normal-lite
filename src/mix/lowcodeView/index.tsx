@@ -1039,8 +1039,12 @@ function LowcodeView(params: Params) {
         <div
           className={css['file-context-menu']}
           style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
-          onContextMenu={(event) => event.preventDefault()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
         >
           <button
             type="button"
