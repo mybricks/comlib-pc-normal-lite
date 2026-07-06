@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useId } from "react";
+import React, { useRef, useMemo, useId, useCallback } from "react";
 import { Tooltip } from 'antd'
 import { CardContext } from "../../../mybricks/hooks";
 import cardClass from '../card';
@@ -177,11 +177,11 @@ export function CardRender({
   cardIdRef.current = cardId
 
   const cardValueRef = useRef({
-    register: (apis) => {
-      cardClass.register(cardIdRef.current, apis)
+    register: (slotKey: string, apis: any) => {
+      cardClass.register(cardIdRef.current, slotKey, apis)
     },
-    unregister: () => {
-      cardClass.unregister(cardIdRef.current)
+    unregister: (slotKey: string) => {
+      cardClass.unregister(cardIdRef.current, slotKey)
     }
   })
 

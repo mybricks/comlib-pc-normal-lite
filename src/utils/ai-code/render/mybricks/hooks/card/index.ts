@@ -1,8 +1,8 @@
-import { useContext, createContext, useEffect } from 'react'
+import { useContext, createContext, useEffect, useId } from 'react'
 
 export const CardContext = createContext<{
-  register: (apis: any) => void,
-  unregister: () => void
+  register: (slotKey: string, apis: any) => void,
+  unregister: (slotKey: string) => void
 }>({
   register: () => {},
   unregister: () => {}
@@ -10,10 +10,14 @@ export const CardContext = createContext<{
 
 export const useCardApis = (apis) => {
   const { register, unregister } = useContext(CardContext)
-  register(apis)
+  // 每个 useCardApis 调用有唯一的 slotKey，避免多个组件相互覆盖
+  const slotKey = useId()
+
+  register(slotKey, apis)
+
   useEffect(() => {
     return () => {
-      unregister()
+      unregister(slotKey)
     }
   }, [])
 }

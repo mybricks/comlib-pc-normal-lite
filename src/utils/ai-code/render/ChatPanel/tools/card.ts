@@ -1,38 +1,57 @@
 class Card {
-  _map: Map<string, any> = new Map();
+  /** cardId -> (slotKey -> apis) */
+  _map: Map<string, Map<string, any>> = new Map();
 
-  register(id, options) {
-    this._map.set(id, options);
+  register(id: string, slotKey: string, apis: any) {
+    if (!this._map.has(id)) {
+      this._map.set(id, new Map());
+    }
+    this._map.get(id)!.set(slotKey, apis);
   }
 
-  unregister(id) {
-    this._map.delete(id);
+  unregister(id: string, slotKey: string) {
+    const slots = this._map.get(id);
+    if (slots) {
+      slots.delete(slotKey);
+      if (slots.size === 0) {
+        this._map.delete(id);
+      }
+    }
   }
 
-  get(id) {
-    return this._map.get(id);
+  /** 合并同一 cardId 下所有 slot 的 apis，同名 API 以后注册的为准 */
+  getMergedApis(id: string): Record<string, any> | null {
+    const slots = this._map.get(id);
+    if (!slots || slots.size === 0) return null;
+    const merged: Record<string, any> = {};
+    for (const apis of slots.values()) {
+      for (const [key, fn] of Object.entries(apis)) {
+        merged[key] = fn;
+      }
+    }
+    return merged;
   }
 
-  callApis(id, apiNames) {
-    const card = this.get(id)
-    const results = {}
-    if (card) {
+  callApis(id: string, apiNames: string[]) {
+    const merged = this.getMergedApis(id);
+    const results: Record<string, any> = {};
+    if (merged) {
       apiNames.forEach((api) => {
-        const handler = card[api]
+        const handler = merged[api];
         if (!handler) {
-          results[api] = `[error] API "${name}" 不存在于卡片 "${id}" 中`
+          results[api] = `[error] API "${api}" 不存在于卡片 "${id}" 中`;
         } else {
           try {
-            results[api] = handler()
+            results[api] = handler();
           } catch (err) {
-            results[api] = `[error] ${err instanceof Error ? err.message : String(err)}`
+            results[api] = `[error] ${err instanceof Error ? err.message : String(err)}`;
           }
         }
-      })
+      });
     } else {
-      results['_error'] = `卡片 "${id}" 不存在`
+      results['_error'] = `卡片 "${id}" 不存在`;
     }
-    return results
+    return results;
   }
 }
 
