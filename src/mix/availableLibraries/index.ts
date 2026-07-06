@@ -101,9 +101,6 @@ export function getValidatorPlugins(
 function getLibraryUsage(library: { name: string; version: string; usage: string | (() => string); usagenext?: string }): string {
   // @ts-ignore [TODO] 临时usagenext
   if (library.name === 'mybricks') {
-    if (window._sandbox_?.config?.componentRuntime?.entryFile === 'app.config.ts') {
-      return library.usagenext
-    }
     const usage = config.getMyBricksUsage()
 
     if (usage) {
