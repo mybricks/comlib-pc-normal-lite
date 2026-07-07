@@ -105,19 +105,39 @@ export function transformLess(code, filename: string) {
               // 移除所有 @import 语句，避免浏览器环境下尝试通过 HTTP 加载文件
               src = src.replace(/@import\s+(?:(?:['"][^'"]*['"])|(?:\([^)]*\)\s*['"][^'"]*['"]))\s*;?/g, '')
 
-              // 在预处理阶段收集类名
-              // 先收集所有 :global(...) 和 :global { ... } 的范围，跳过其中的类名
+              // Step 1: 保护所有不应被类名替换影响的内容（字符串、注释、url()），
+              // 必须在 globalRanges 计算之前完成，确保偏移量基于同一字符串
+              const placeholders: string[] = []
+              const protect = (match: string) => {
+                const idx = placeholders.length
+                placeholders.push(match)
+                return `__LESS_PLACEHOLDER_${idx}__`
+              }
+              // 保护顺序：行注释 → 块注释 → 字符串（双引号/单引号）→ url()
+              let safeSrc = src
+                // 行注释 //...
+                .replace(/\/\/[^\n]*/g, protect)
+                // 块注释 /* ... */
+                .replace(/\/\*[\s\S]*?\*\//g, protect)
+                // 双引号字符串
+                .replace(/"(?:[^"\\]|\\.)*"/g, protect)
+                // 单引号字符串
+                .replace(/'(?:[^'\\]|\\.)*'/g, protect)
+                // url() 无引号形式（url 中不含括号）
+                .replace(/url\s*\([^)]*\)/gi, protect)
+
+              // Step 2: 在保护后的字符串上计算 :global 范围（偏移量一致）
               const globalRanges: Array<[number, number]> = []
 
               // :global(.a .b) 形式
               const parenRegex = /:global\s*\(/g
               let pm: RegExpExecArray | null
-              while ((pm = parenRegex.exec(src)) !== null) {
+              while ((pm = parenRegex.exec(safeSrc)) !== null) {
                 let depth = 1
                 let i = pm.index + pm[0].length
-                while (i < src.length && depth > 0) {
-                  if (src[i] === '(') depth++
-                  else if (src[i] === ')') depth--
+                while (i < safeSrc.length && depth > 0) {
+                  if (safeSrc[i] === '(') depth++
+                  else if (safeSrc[i] === ')') depth--
                   i++
                 }
                 globalRanges.push([pm.index, i])
@@ -126,12 +146,12 @@ export function transformLess(code, filename: string) {
               // :global { ... } 形式
               const braceRegex = /:global\s*\{/g
               let bm: RegExpExecArray | null
-              while ((bm = braceRegex.exec(src)) !== null) {
+              while ((bm = braceRegex.exec(safeSrc)) !== null) {
                 let depth = 1
                 let i = bm.index + bm[0].length
-                while (i < src.length && depth > 0) {
-                  if (src[i] === '{') depth++
-                  else if (src[i] === '}') depth--
+                while (i < safeSrc.length && depth > 0) {
+                  if (safeSrc[i] === '{') depth++
+                  else if (safeSrc[i] === '}') depth--
                   i++
                 }
                 globalRanges.push([bm.index, i])
@@ -140,7 +160,8 @@ export function transformLess(code, filename: string) {
               const isInGlobal = (index: number) =>
                 globalRanges.some(([start, end]) => index >= start && index < end)
 
-              let processed = src.replace(
+              // Step 3: 类名替换（在 safeSrc 上操作，偏移量与 globalRanges 一致）
+              let processed = safeSrc.replace(
                 /\.([a-zA-Z][a-zA-Z0-9_-]*)/g,
                 (match, className, offset) => {
                   if (!useCssModule) {
@@ -156,6 +177,9 @@ export function transformLess(code, filename: string) {
                   return `.${hashedName}`;
                 },
               )
+
+              // Step 4: 还原所有占位符
+              processed = processed.replace(/__LESS_PLACEHOLDER_(\d+)__/g, (_, idx) => placeholders[Number(idx)])
 
               // Remove :global(...) wrapper, keep inner content
               processed = processed.replace(/:global\s*\(([^)]*)\)/g, '$1')
