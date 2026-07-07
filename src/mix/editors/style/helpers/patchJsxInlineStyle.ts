@@ -1,4 +1,4 @@
-export type StyleInfoEntry = { kind: 'static'; valueStart: number; valueEnd: number };
+export type StyleInfoEntry = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number };
 
 /**
  * 向 JSX 源码中无 style 属性的开标签注入 `style={{ key: 'val', ... }}`。
@@ -73,14 +73,23 @@ export function appendToInlineStyleAttr(
 
   // 找到 existingStyleInfo 中最靠后的 valueEnd
   const entries = Object.values(existingStyleInfo).filter(
-    (e) => e.kind === 'static' && e.valueEnd != null,
+    (e): e is { kind: 'static'; valueStart: number; valueEnd: number } =>
+      e.kind === 'static' && e.valueStart != null && e.valueEnd != null,
   );
   if (!entries.length) return null;
   const lastValueEnd = entries.reduce((max, e) => (e.valueEnd > max ? e.valueEnd : max), 0);
   if (lastValueEnd <= 0 || lastValueEnd >= source.length) return null;
 
-  // 从 lastValueEnd 向后扫描，找到第一个 '}' 即为 '}}' 的起始位置
-  let insertPos = lastValueEnd;
+  return appendPropsAtStyleObjectEnd(source, lastValueEnd, filteredProps);
+}
+
+function appendPropsAtStyleObjectEnd(
+  source: string,
+  scanStart: number,
+  filteredProps: [string, string][],
+): { newSource: string; styleInfoUpdates: Record<string, StyleInfoEntry> } | null {
+  // 从 scanStart 向后扫描，找到第一个 '}' 即为 '}}' 的起始位置
+  let insertPos = scanStart;
   while (insertPos < source.length && source[insertPos] !== '}') insertPos++;
   if (insertPos >= source.length - 1 || source[insertPos] !== '}' || source[insertPos + 1] !== '}') {
     return null; // 没有找到 '}}' 结尾，偏移已失效
@@ -109,6 +118,34 @@ export function appendToInlineStyleAttr(
 }
 
 /**
+ * 向 JSX 源码中已有 `style={{ ... }}` 的元素追加新属性。
+ *
+ * 和 appendToInlineStyleAttr 不同，本函数不依赖已有静态 style 值的偏移。
+ * 适用于 `style={{ background: theme.tagBg, color: theme.tagText }}` 这类全部为动态表达式的对象。
+ */
+export function appendToInlineStyleAttrByTagRange(
+  source: string,
+  jsxStart: number,
+  tagEnd: number,
+  cssProps: Record<string, string | null | undefined>,
+): { newSource: string; styleInfoUpdates: Record<string, StyleInfoEntry> } | null {
+  const filteredProps = Object.entries(cssProps).filter(
+    (entry): entry is [string, string] => entry[1] != null && entry[1] !== '',
+  );
+  if (!filteredProps.length) return null;
+  if (jsxStart < 0 || tagEnd <= jsxStart || tagEnd > source.length) return null;
+
+  const openingTag = source.slice(jsxStart, tagEnd);
+  const styleAttrIndex = openingTag.search(/\sstyle\s*=\s*\{\s*\{/);
+  if (styleAttrIndex === -1) return null;
+
+  const styleObjectStartInTag = openingTag.indexOf('{{', styleAttrIndex);
+  if (styleObjectStartInTag === -1) return null;
+
+  return appendPropsAtStyleObjectEnd(source, jsxStart + styleObjectStartInTag + 2, filteredProps);
+}
+
+/**
  * 从 JSX 源码中已有的 `style={{ ... }}` 属性里移除指定属性。
  *
  * - 若移除后仍有剩余属性：重建 `style={{ remaining... }}`，并返回新的 styleInfo 偏移。
@@ -129,7 +166,10 @@ export function removeFromInlineStyleAttr(
 ): { newSource: string; newStyleInfo: Record<string, StyleInfoEntry> | null } | null {
   const removeSet = new Set(keysToRemove);
   const allEntries = Object.entries(existingStyleInfo).filter(
-    ([, e]) => e.kind === 'static' && e.valueStart != null && e.valueEnd != null,
+    (entry): entry is [string, { kind: 'static'; valueStart: number; valueEnd: number }] => {
+      const [, e] = entry
+      return e.kind === 'static' && e.valueStart != null && e.valueEnd != null
+    },
   );
   if (!allEntries.length) return null;
 

@@ -164,7 +164,7 @@ class Context {
   }
 
   /** 更新文件 */
-  updateFile({ fileName, content, type }: any) {
+  updateFile({ fileName, content, type, noUpdateFileSystem }: any) {
     // 现在只有 jsx、less、js 三种文件
     const aiCom = this.component!
 
@@ -209,10 +209,12 @@ class Context {
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file);
             
-            const fileSystem = this.fileSystem
-            if (fileSystem) {
-              const file = files.find((f) => f.fileName === fileName);
-              fileSystem.update(fileName, {...file, filename: fileName })
+            if (!noUpdateFileSystem) {
+              const fileSystem = this.fileSystem
+              if (fileSystem) {
+                const file = files.find((f) => f.fileName === fileName);
+                fileSystem.update(fileName, {...file, filename: fileName })
+              }
             }
           } catch (e: any) {
             // console.error("[@transformTsx error]", e);
