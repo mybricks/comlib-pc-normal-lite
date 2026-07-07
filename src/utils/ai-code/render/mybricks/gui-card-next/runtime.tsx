@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState, createContext, useContext } from 'react'
 import context from '../../../../../mix/context'
 import { IS_TOOL, IS_CARD_CONFIG } from './constants'
 import AIChatPanel from '../../ChatPanel'
@@ -8,6 +8,11 @@ import type { CreateMyBricksProps } from '../type'
 const runtime = (props: CreateMyBricksProps) => {
   const { data, env } = props
   const debugTarget: any = env._debugTarget
+  const PageContext = createContext<{
+    container: HTMLDivElement | null
+  }>({
+    container: null,
+  });
 
   const Card = ({
     config,
@@ -17,13 +22,15 @@ const runtime = (props: CreateMyBricksProps) => {
     ...rest
   }: any) => {
     const ref = useRef<HTMLDivElement>(null)
+     const [container, setContainer] = useState<HTMLDivElement>()
 
     useLayoutEffect(() => {
       const firstWidget = ref.current!.querySelector('[data-widget-name]')!
       if (firstWidget) {
         const widgetName = firstWidget.getAttribute('data-widget-name')!
-        ref.current?.setAttribute('data-widget-name', widgetName)
+        ref.current!.setAttribute('data-widget-name', widgetName)
       }
+      setContainer(ref.current!)
     }, [children])
 
     return (
@@ -40,7 +47,11 @@ const runtime = (props: CreateMyBricksProps) => {
         data-desn-page={filename}
         {...rest}
       >
-        {children}
+        {container && (
+          <PageContext.Provider value={{ container }}>
+            {children}
+          </PageContext.Provider>
+        )}
       </div>
     )
   }
@@ -132,6 +143,9 @@ const runtime = (props: CreateMyBricksProps) => {
               data-widget-name='GUI_AGENT'
               style={{
                 width: 414,
+                display: 'flex',
+                flexDirection: 'column',
+                transform: 'scale(1)',
                 height: 896,
               }}
             >
@@ -175,13 +189,16 @@ const runtime = (props: CreateMyBricksProps) => {
   }
 
   const comRef = (Component) => {
-    return Component
+    return (props) => {
+      const pageContext = useContext(PageContext)
+      return <Component {...props} popupNode={pageContext.container}/>
+    }
   }
 
-  const popupRef = () => {
-    console.log('[TODO:popupRef]')
-    return () => {
-      return null
+  const popupRef = (Component) => {
+    return (props) => {
+      const pageContext = useContext(PageContext)
+      return <Component {...props} popupNode={pageContext.container}/>
     }
   }
 
