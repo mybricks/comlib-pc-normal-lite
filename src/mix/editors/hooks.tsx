@@ -32,16 +32,9 @@ import type {Props} from './types';
 
 const errorSet = new Set();
 
-function getDisallowedDebugEnvs() {
-  // [TEMP] 临时兼容，后续只需从 componentRuntime 读取配置
-  const disallowedDebugEnvs = (window as any)._sandbox_?.config?.componentRuntime?.disallowedDebugEnvs || (window as any)._sandbox_?.config?.disallowedDebugEnvs;
-
-  return Array.isArray(disallowedDebugEnvs) ? disallowedDebugEnvs : [];
-}
-
 function getDebugEnvOptions(data: any) {
   const envNames: string[] = data?._debugEnvs ?? [];
-  const disallowedDebugEnvs = new Set(getDisallowedDebugEnvs());
+  const disallowedDebugEnvs = new Set(config.getDisallowedDebugEnvs());
   const debugEnvOptions: { label: string; value: string }[] = [];
 
   if (!disallowedDebugEnvs.has('prod')) {
@@ -62,7 +55,14 @@ function getDebugEnvOptions(data: any) {
 }
 
 function getDefaultDebugEnv(data: any) {
-  return getDebugEnvOptions(data)[0]?.value ?? 'prod';
+  const defaultDebugEnv = config.getDefaultDebugEnv()
+  const debugEnvOptions = getDebugEnvOptions(data)
+
+  if (defaultDebugEnv && debugEnvOptions.find((item: any) => item.value === defaultDebugEnv)) {
+    return defaultDebugEnv
+  }
+
+  return debugEnvOptions[0]?.value ?? 'prod';
 }
 
 export function buildHooks(props: Props) {
@@ -248,9 +248,11 @@ export function buildHooks(props: Props) {
       const data = context.component!.params?.data;
       const debugEnvOptions = getDebugEnvOptions(data);
       // 默认使用第一个可用环境
-      if (data) {
-        data._activeDebugEnv = getDefaultDebugEnv(data)
-      }
+      data._activeDebugEnv = getDefaultDebugEnv(data)
+      const defaultEnvIndex = debugEnvOptions.findIndex((item) => item.value === data._activeDebugEnv)
+      const defaultEnv = debugEnvOptions[defaultEnvIndex]
+      debugEnvOptions.splice(defaultEnvIndex, 1)
+      debugEnvOptions.unshift(defaultEnv)
 
       return debugEnvOptions;
     },
