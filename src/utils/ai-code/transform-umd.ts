@@ -113,18 +113,19 @@ export function transformLess(code, filename: string) {
                 placeholders.push(match)
                 return `__LESS_PLACEHOLDER_${idx}__`
               }
-              // 保护顺序：行注释 → 块注释 → 字符串（双引号/单引号）→ url()
+              // 保护顺序：块注释 → url()（含引号/无引号）→ 字符串（双引号/单引号）→ 行注释
+              // 注意：行注释必须最后处理，否则会误匹配字符串内的 // (如 url("http://..."))
               let safeSrc = src
-                // 行注释 //...
-                .replace(/\/\/[^\n]*/g, protect)
                 // 块注释 /* ... */
                 .replace(/\/\*[\s\S]*?\*\//g, protect)
+                // url() 含引号形式（优先整体保护，避免内部引号或 // 被提前替换）
+                .replace(/url\s*\(\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^)]*)\s*\)/gi, protect)
                 // 双引号字符串
                 .replace(/"(?:[^"\\]|\\.)*"/g, protect)
                 // 单引号字符串
                 .replace(/'(?:[^'\\]|\\.)*'/g, protect)
-                // url() 无引号形式（url 中不含括号）
-                .replace(/url\s*\([^)]*\)/gi, protect)
+                // 行注释 //...（必须在字符串和 url() 保护之后）
+                .replace(/\/\/[^\n]*/g, protect)
 
               // Step 2: 在保护后的字符串上计算 :global 范围（偏移量一致）
               const globalRanges: Array<[number, number]> = []
@@ -189,6 +190,8 @@ export function transformLess(code, filename: string) {
                 // Unwrap: remove the outer braces but keep the inner rules
                 return inner
               })
+
+              console.log('[processed]', processed)
 
               return processed
             },
