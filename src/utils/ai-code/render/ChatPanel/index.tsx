@@ -61,6 +61,7 @@ interface AIChatPanelProps {
   /** gui_card 完整配置 */
   config?: EmptyGuideConfig
   disabled?: boolean
+  history?: any
 }
 
 // ─── Pin Types ────────────────────────────────────────────────────────────────
@@ -389,7 +390,8 @@ const AIChatPanel = ({
   cards = [],
   tools = [],
   config,
-  disabled = false
+  disabled = false,
+  history
 }: AIChatPanelProps) => {
   const { createAgent, ChatPanel } = window._sandbox_.config.componentRuntime.chat
   const chatPanelRef = useRef(null)
@@ -406,6 +408,7 @@ const AIChatPanel = ({
   useEffect(() => {
     try {
       const agent = createAgent({
+        key: 'chat-panel',
         system: cards.length > 0
           ? systemPrompt
           : `你是一个 AI 助手，能够理解并回答用户的问题。`,
@@ -429,7 +432,8 @@ const AIChatPanel = ({
           const dateSection = `<current_date>\n当前日期：${dateStr} 星期${weekDay}\n</current_date>`
           return [dateSection, buildAvailableCardsSection(cards)]
         },
-        disabledModes: ["plan"]
+        disabledModes: ["plan"],
+        history
       })
       setAgent(agent)
     } catch (e) {

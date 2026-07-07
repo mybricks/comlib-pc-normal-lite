@@ -191,8 +191,6 @@ export function transformLess(code, filename: string) {
                 return inner
               })
 
-              console.log('[processed]', processed)
-
               return processed
             },
           })

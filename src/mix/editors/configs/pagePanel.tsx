@@ -131,26 +131,16 @@ export function buildPagePanel(props: Props) {
           },
           {
             title: '推荐问题',
-            type: 'code',
+            type: 'STRINGARRAY',
             options: {
-              language: 'json',
-              minimap: {
-                enabled: false
-              }
+              defaultValue: '点击编辑'
             },
             value: {
               get(params) {
-                const groups = getGuiCardField(params, 'groups')
-                if (groups) {
-                  return JSON.stringify(groups, null, 2)
-                }
-                return
+                return getGuiCardField(params, 'groups') || []
               },
               set(params, value) {
-                const trimValue = typeof value === 'string' ? value.trim() : ''
-                if (trimValue) {
-                  setGuiCardField(params, 'groups', JSON.parse(decodeURIComponent(trimValue)))
-                }
+                setGuiCardField(params, 'groups', value)
               }
             }
           },
