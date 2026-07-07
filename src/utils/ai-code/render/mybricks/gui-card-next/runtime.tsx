@@ -3,6 +3,8 @@ import context from '../../../../../mix/context'
 import { IS_TOOL, IS_CARD_CONFIG } from './constants'
 import AIChatPanel from '../../ChatPanel'
 import RuntimeContainer from '../components/runtimeContainer'
+import { DefaultToolCallHistory } from './default-tool-call-history'
+import { randomUUID } from '../../../../../mix/utils/uuid'
 import type { CreateMyBricksProps } from '../type'
 
 const runtime = (props: CreateMyBricksProps) => {
@@ -172,16 +174,89 @@ const runtime = (props: CreateMyBricksProps) => {
       }
 
       const allCards = skills.flatMap((g) => g.cards);
-      const { config, render: Render } = allCards.find((card) => card.filename === filename)
+      const card = allCards.find((card) => card.filename === filename)
+
+      // 构建 apis 说明文字：将卡片声明的 apis 列表格式化给 LLM
+      const apisDesc = card?.config?.apis?.length > 0
+        ? card.config.apis.map((api) => `  - ${api.name}: ${api.description}`).join('\n')
+        : '  （该卡片未声明任何 API）'
+      const id = randomUUID()
+      const initialHistory = new DefaultToolCallHistory({
+        toolName: 'show_ui_card',
+        toolTitle: '展示 UI 卡片',
+        toolArgs: {
+          name: card?.config?.name,
+          props: {
+            text: "Leon"
+          },
+        },
+        toolResult: {
+           output: `UI 卡片 "${card.title}" 已渲染。
+cardId: ${id}
+可通过 call_ui_card_api 调用以下查询类 API 获取卡片数据（仅用于查询，不触发任何操作）：
+${apisDesc}
+注意：当用户要求重新执行某个动作（如"再试一次"、"重新查询"等），应重新调用 show_ui_card 渲染新卡片，而非调用 call_ui_card_api。`,
+        metadata: {
+          id,
+          success: true,
+          name: card?.config?.name,
+          props: {},
+        },
+        },
+        userText: card?.config?.title,
+      })
+
+      console.log("[调试样式]", {
+        width: 414,
+        display: 'flex',
+        flexDirection: 'column',
+        transform: 'scale(1)',
+        height: 896,
+        ...debugTarget?.style
+      })
 
       return (
         <RuntimeContainer style={{...debugTarget.rootStyle}}>
-          <Card
+          {/* <Card
             config={config}
             filename={filename}
             style={debugTarget?.style}
           >
             <Render />
+          </Card> */}
+          <Card
+            config={{
+              title: 'Agent'
+            }}
+            filename='GUI_AGENT'
+            data-widget-name='GUI_AGENT'
+            style={{
+              width: 414,
+              display: 'flex',
+              flexDirection: 'column',
+              transform: 'scale(1)',
+              height: 896,
+              ...debugTarget?.style
+            }}
+          >
+            <AIChatPanel
+              cards={skills.map((skill) => {
+                return {
+                  ...skill,
+                  cards: skill.cards.map(({ config, render }) => {
+                    return {
+                      ...config,
+                      render
+                    }
+                  })
+                }
+              })}
+              tools={tools.map((createTool) => {
+                return createTool()
+              })}
+              config={data.gui_card}
+              history={initialHistory}
+            />
           </Card>
         </RuntimeContainer>
       )

@@ -274,8 +274,10 @@ const design = (props: CreateMyBricksProps) => {
   
         // 挂载时注册到收集器，卸载时移除
         useEffect(() => {
-          popupsCollection.push({ id: popupId, Component, props: currentProps, params })
-          forceUpdateApp?.()
+          if (!popupsCollection.find((p) => p.params.filename === params.filename)) {
+            popupsCollection.push({ id: popupId, Component, props: currentProps, params })
+            forceUpdateApp?.()
+          }
           return () => {
             const idx = popupsCollection.findIndex(p => p.id === popupId)
             if (idx !== -1) {
