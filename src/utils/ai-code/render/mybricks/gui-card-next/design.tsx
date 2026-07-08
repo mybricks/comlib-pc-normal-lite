@@ -245,15 +245,19 @@ const design = (props: CreateMyBricksProps) => {
                 })}
                 data-skill-id={id}
               >
-                {tools.map(({ title }) => {
-                  return (
-                    <div
-                      data-zone-type='agent-tool'
-                    >
-                      {title}
-                    </div>
-                  )
-                })}
+                {tools?.length ? (
+                  <div data-zone-type='tools'>
+                    {[{title: '工具1'}, { title: '工具2'}].map(({ title }) => {
+                      return (
+                        <div
+                          data-zone-type='agent-tool'
+                        >
+                          {title}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ): null}
                 {cards.map(({ render: Render, filename, config }) => {
                   return (
                     <Card
