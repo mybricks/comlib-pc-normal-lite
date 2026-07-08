@@ -169,7 +169,12 @@ const design = (props: CreateMyBricksProps) => {
               id: skill.id,
               title: skill.title,
               type: skill.type,
-              pages: skill.cards,
+              pages: skill.cards.map((config) => {
+                return {
+                  ...config,
+                  parameters: config.props
+                }
+              }),
               description: skill.md,
               tools: skill.tools
             }
@@ -194,7 +199,7 @@ const design = (props: CreateMyBricksProps) => {
         if (data._showPages?.length) {
           data._showPages.forEach((filename) => {
             const skill = skills.find((skill) => skill.id === filename)
-            if (skill?.cards?.length) {
+            if (skill) {
               showSkills.push(skill)
             }
           })
@@ -224,13 +229,14 @@ const design = (props: CreateMyBricksProps) => {
               config={data.gui_card}
             />
           </Card>
-          {showSkills.map(({ id, name, title, cards }) => {
+          {showSkills.map(({ id, name, title, cards, tools }) => {
             const prefix = id.replace(/SKILL\.md$/, '')
             const popups = popupsCollection.filter(popup => popup.params.filename.startsWith(prefix))
             return (
               <div
                 data-zone-type='skill'
                 data-zone-title={title}
+                data-zone-filename={id}
                 data-zone-chip={JSON.stringify({
                   type: 'SKILL',
                   label: `SKILL(${name})`,
@@ -239,9 +245,29 @@ const design = (props: CreateMyBricksProps) => {
                 })}
                 data-skill-id={id}
               >
+                {tools.map(({ title }) => {
+                  return (
+                    <div
+                      data-zone-type='agent-tool'
+                    >
+                      {title}
+                    </div>
+                  )
+                })}
                 {cards.map(({ render: Render, filename, config }) => {
                   return (
-                    <Card key={filename} config={config} filename={filename}>
+                    <Card
+                      key={filename}
+                      config={config}
+                      filename={filename}
+                      data-zone-filename={filename}
+                      data-zone-chip={JSON.stringify({
+                        type: 'SKILL_CARD',
+                        label: `SKILL_CARD(${name}_${config.name})`,
+                        info: `SKILL_CARD(${name}_${config.name})\n` + 
+                          ` - 相关代码：位于${filename}`
+                      })}
+                    >
                       <Render />
                     </Card>
                   )

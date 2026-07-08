@@ -269,7 +269,8 @@ export function buildHooks(props: Props) {
     },
 
     '@viewCode'(params: any) {
-      const dataLoc = params.focusArea.ele.closest('[data-loc]')?.getAttribute('data-loc');
+      const ele = params.focusArea.ele
+      const dataLoc = ele.closest('[data-loc]')?.getAttribute('data-loc');
       if (dataLoc) {
         const loc = JSON.parse(dataLoc);
         const {codeLine, files} = loc;
@@ -279,8 +280,13 @@ export function buildHooks(props: Props) {
         } else {
           // console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
         }
-      } else {
-        // console.error('[@viewCode] 未找到 data-loc', params);
+
+        return
+      }
+
+      const filename = ele.dataset.zoneFilename
+      if (filename) {
+        lowcodeViewEvents.emit('viewCode', {fileName: filename});
       }
     },
 
