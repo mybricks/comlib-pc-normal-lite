@@ -246,7 +246,7 @@ const design = (props: CreateMyBricksProps) => {
                 data-skill-id={id}
               >
                 {tools?.length ? (
-                  <div data-zone-type='tools'>
+                  <div data-zone-type='agent-tools'>
                     {tools.map(({ title }) => {
                       return (
                         <div
