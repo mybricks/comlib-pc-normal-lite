@@ -1,6 +1,11 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../../../../../mix/context'
-import { IS_TOOL, IS_CARD_CONFIG } from './constants'
+import {
+  IS_TOOL,
+  IS_CARD_CONFIG,
+  CARD_STYLE,
+  CONTAINER_STYLE
+} from './constants'
 import AIChatPanel from '../../ChatPanel'
 import { randomUUID } from '../../../../../mix/utils/uuid'
 import type { CreateMyBricksProps } from '../type'
@@ -33,8 +38,7 @@ const design = (props: CreateMyBricksProps) => {
       <div
         ref={ref}
         style={{
-          width: 414,
-          height: 'fit-content',
+          ...CARD_STYLE,
           ...style,
         }}
         data-zone-type="page"
@@ -74,13 +78,7 @@ const design = (props: CreateMyBricksProps) => {
           data-desn-page=''
           data-zone-title='弹窗'
           data-widge-name='弹窗'
-          style={{
-            width: 414,
-            display: 'flex',
-            flexDirection: 'column',
-            transform: 'scale(1)',
-            height: 896,
-          }}
+          style={CONTAINER_STYLE}
         >
           {container && <Component {...props} popupNode={container}/>}
         </div>
@@ -217,10 +215,7 @@ const design = (props: CreateMyBricksProps) => {
             filename='GUI_AGENT'
             data-widget-name='GUI_AGENT'
             data-zone-kind="agent-app"
-            style={{
-              width: 414,
-              height: 896,
-            }}
+            style={CONTAINER_STYLE}
           >
             <AIChatPanel
               disabled={true}
