@@ -40,23 +40,12 @@ const formatBindings = (bindings?: Record<string, any>) => {
 }
 
 export default function ConsoleLogPanel({ logs, sendToAgent }: ConsoleLogPanelProps) {
-  const handleClear = useCallback(() => {
-    context.clearComLogs();
-  }, []);
 
   const isDark = useDarkMode();
   const variant = isDark ? 'dark' : 'light';
 
   return (
     <div className={css['console-container']}>
-      <div className={css['console-toolbar']}>
-        <button
-          className={css['console-clear-btn']}
-          onClick={handleClear}
-        >
-          清空
-        </button>
-      </div>
       <div className={css['console-feed-wrapper']}>
         <Console
           logs={logs.map((log) => {

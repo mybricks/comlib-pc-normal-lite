@@ -933,6 +933,14 @@ function LowcodeView(params: Params) {
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div className={css['lowcode-view-toolbar-left']}>
+            {isDebugging && (
+              <div
+                className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'console' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+                onClick={() => setBottomTab('console')}
+              >
+                控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
+              </div>
+            )}
             <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('source')}
@@ -946,25 +954,28 @@ function LowcodeView(params: Params) {
               版本
             </div>
           </div>
-          <div className={css['lowcode-view-toolbar-right']}>
-            {isDebugging && (
-              <div
-                className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'console' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-                onClick={() => setBottomTab('console')}
-              >
-                控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
-              </div>
-            )}
-          </div>
         </div>
-        <button
-          type="button"
-          className={`${css['lowcode-view-toolbar-button']} ${hasUnsavedChanges ? css['lowcode-view-toolbar-button-nosave'] : css['lowcode-view-toolbar-button-disabled']}`}
-          onClick={handleSaveAll}
-          disabled={!hasUnsavedChanges}
-        >
-          保存
-        </button>
+        {bottomTab === 'source' ? (
+          <button
+            type="button"
+            className={`${css['lowcode-view-toolbar-button']} ${hasUnsavedChanges ? css['lowcode-view-toolbar-button-nosave'] : css['lowcode-view-toolbar-button-disabled']}`}
+            onClick={handleSaveAll}
+            disabled={!hasUnsavedChanges}
+          >
+            保存
+          </button>
+        ): null}
+        {bottomTab === 'console' ? (
+          <button
+            type="button"
+            className={`${css['lowcode-view-toolbar-button']}`}
+            onClick={() => {
+              context.clearComLogs();
+            }}
+          >
+            清空
+          </button>
+        ): null}
       </div>
       {/* source 面板：用 display 控制显隐，避免销毁 Editor */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'source' ? 'flex' : 'none' }}>
