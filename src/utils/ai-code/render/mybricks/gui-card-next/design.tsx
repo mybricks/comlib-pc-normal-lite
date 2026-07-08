@@ -250,10 +250,11 @@ const design = (props: CreateMyBricksProps) => {
                     data-zone-type='agent-tools'
                     data-zone-ignore='1'
                   >
-                    {tools.map(({ title }) => {
+                    {tools.map(({ name, title }) => {
                       return (
                         <div
                           data-zone-type='agent-tool'
+                          data-tool-name={name}
                         >
                           {title}
                         </div>
