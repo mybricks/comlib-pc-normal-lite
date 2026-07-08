@@ -212,7 +212,7 @@ const design = (props: CreateMyBricksProps) => {
         <>
           <Card
             config={{
-              title: 'Agent'
+              title: '智能体'
             }}
             filename='GUI_AGENT'
             data-widget-name='GUI_AGENT'

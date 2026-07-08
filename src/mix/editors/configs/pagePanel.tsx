@@ -38,11 +38,11 @@ export function buildPagePanel(props: Props) {
   const comId = props.model?.runtime?.id || props.id;
 
   return {
-    title: '页面',
-    items: (pageProps: any, cate1: any) => {
-      cate1.title = '页面';
+    items: (pageProps: any, cate1: any, cate2: any) => {
+      
 
       if (pageProps.focusArea.dataset.desnPage === 'GUI_AGENT') {
+        cate1.title = '智能体';
         cate1.items = [
           {
             title: '主题色',
@@ -144,10 +144,27 @@ export function buildPagePanel(props: Props) {
               }
             }
           },
+        ];
+
+        cate2.title = '提示词';
+        cate2.items = [
+          {
+            title: '系统提示词',
+            type: 'textarea',
+            value: {
+              get(params) {
+                return getGuiCardField(params, 'agentMd')
+              },
+              set(params, value) {
+                setGuiCardField(params, 'agentMd', value)
+              }
+            }
+          },
         ]
         return
       }
 
+      cate1.title = '页面';
       cate1.items = [
         {
           title: 'UI设计',
