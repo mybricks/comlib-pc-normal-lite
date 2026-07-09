@@ -17,7 +17,6 @@ import {
   extractRefFromVariableDeclarator,
   extractRefFromExportDefault,
 } from "./utils";
-import { isInsideMapCallback } from './wrapCustomComponentPlugin'
 
 /** inline 文本类 HTML 标签集合：无 className 时也允许启用样式编辑（通过祖先路径选择器 + 内联 style 写入） */
 const INLINE_TEXT_TAGS = new Set([
@@ -406,14 +405,6 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
   
               if (zoneType !== "page") {
                 pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
-              }
-              
-              if (isInsideMapCallback(path)) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-isMap", "true");
-                const mapCallLoc = getMapCallLoc(path);
-                if (mapCallLoc) {
-                  dataLocValueObject.mapCall = mapCallLoc;
-                }
               }
 
               // ── 可交换性标记 ────────────────────────────────────────────────

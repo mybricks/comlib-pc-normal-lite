@@ -6,9 +6,8 @@ import collectJsDocPlugin from './plugins/collectJsDocPlugin'
 import loggerPlugin from './plugins/loggerPlugin'
 import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
 import zoneIndexPlugin from './plugins/zoneIndexPlugin'
-import zoneOrderEditablePlugin from './plugins/zoneOrderEditablePlugin'
-import wrapCustomComponentPlugin from './plugins/wrapCustomComponentPlugin'
 import esmPreCheckPlugin from './plugins/esmPreCheckPlugin'
+import wrapThirdPartyPlugin from './plugins/wrapThirdPartyPlugin'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
@@ -51,9 +50,8 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         [collectJsDocPlugin, { result: jsDocMap, fileName }],
         loggerPlugin({ fileName }),
         styleAnalysisPlugin(),
-        zoneIndexPlugin({ fileName }),
-        zoneOrderEditablePlugin(),
-        // wrapCustomComponentPlugin({ fileName }),
+        // zoneIndexPlugin({ fileName }),
+        wrapThirdPartyPlugin()
       ],
       retainLines: true,
     }

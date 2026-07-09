@@ -534,9 +534,7 @@ export default function createSetStyleHandler(
         style = resolveStyle(getStyle(ctx, params), multiple)
 
         if (!isStart) {
-          console.log('[style]', style)
           const sourceEle = getEle(ctx, params)
-          console.log('[sourceEle]', sourceEle)
           ele = resolveTargetEle(sourceEle, style, multiple)
           initialInlineCssText = ele.style?.cssText ?? ''
           initialInlineStyleValues = {}
