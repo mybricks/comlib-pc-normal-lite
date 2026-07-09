@@ -51,6 +51,8 @@ export interface EmptyGuideConfig {
   assistantTitle?: string
   /** 输入框占位提示 */
   placeholder?: string
+  /** 系统提示词 */
+  agentMd?: string
 }
 
 interface AIChatPanelProps {
@@ -405,13 +407,21 @@ const AIChatPanel = ({
   const pinActionsRef = useRef(pinActions)
   pinActionsRef.current = pinActions
 
+  const guiCard = config ?? {}
+
+  let system = cards.length > 0 ? systemPrompt : `你是一个 AI 助手，能够理解并回答用户的问题。`
+  if (guiCard?.agentMd) {
+    system = system + `<system-reminder>
+${guiCard?.agentMd}
+</system-reminder>
+`;
+  }
+
   useEffect(() => {
     try {
       const agent = createAgent({
         key: 'chat-panel',
-        system: cards.length > 0
-          ? systemPrompt
-          : `你是一个 AI 助手，能够理解并回答用户的问题。`,
+        system,
         get tools() {
           const cardTools = cards.length > 0
             ? [
@@ -439,7 +449,7 @@ const AIChatPanel = ({
     } catch (e) {
       console.error(e)
     }
-  }, [])
+  }, [cards, createAgent, history, system, tools])
 
   if (!agent) {
     return
@@ -454,8 +464,6 @@ const AIChatPanel = ({
       console.error('[AIChatPanel] clear history failed', e)
     }
   }
-
-  const guiCard = config ?? {}
 
   const copilotConfig = {
     name: guiCard.assistantTitle,
