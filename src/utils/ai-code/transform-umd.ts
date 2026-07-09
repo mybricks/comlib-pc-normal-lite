@@ -8,12 +8,15 @@ import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
 import zoneIndexPlugin from './plugins/zoneIndexPlugin'
 import esmPreCheckPlugin from './plugins/esmPreCheckPlugin'
 import wrapThirdPartyPlugin from './plugins/wrapThirdPartyPlugin'
+import skillBoundaryPlugin from './render/mybricks/gui-card-next/skill-boundary-plugin'
+import config from '../../mix/context/config'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
   const constituency: any = [];
   const { fileName } = ctx
   const jsDocMap = new Map()
+  const frontendMode = config.getFrontendMode()
 
   try {
     const validatorPlugins = getValidatorPlugins({ fileName })
@@ -51,7 +54,8 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         loggerPlugin({ fileName }),
         styleAnalysisPlugin(),
         // zoneIndexPlugin({ fileName }),
-        wrapThirdPartyPlugin()
+        wrapThirdPartyPlugin(),
+        ...(frontendMode === 'gui_card' ? [skillBoundaryPlugin({ fileName })] : [])
       ],
       retainLines: true,
     }
