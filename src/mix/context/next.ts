@@ -5,6 +5,8 @@ import { transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/trans
 import { parseRequirement } from "../../utils/ai-code/md";
 import { randomUUID } from '../utils/uuid'
 import { getTimestamp } from "../../utils/time"
+import config from './config'
+import { validateSkillMd } from "../../utils/ai-code/render/mybricks/gui-card-next/validate-skill-md"
 
 const updateFileContent = ({ fileName, files, content }) => {
   const replaceFileName = fileName.replace(/^\//, '')
@@ -324,7 +326,18 @@ class Context {
               source: encodeURIComponent(content),
             }
           });
-          aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+
+          const frontendMode = config.getFrontendMode()
+          if (frontendMode === 'gui_card' && fileName.endsWith('/SKILL.md')) {
+            const skillMdErrors = validateSkillMd(fileName, content)
+            aiComParams.data._errors = [
+              ...aiComParams.data._errors.filter((err: any) => err.file !== fileName),
+              ...skillMdErrors,
+            ]
+          } else {
+            aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
+          }
+
           const fileSystem = this.fileSystem
           if (fileSystem) {
             const file = files.find((f) => f.fileName === fileName);
