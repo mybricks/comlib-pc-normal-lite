@@ -102,17 +102,19 @@ ${apisDesc}
       const toolProps = tool?.args?.props ?? {};
 
       return (
-        <CardRender
-          groups={groups}
-          name={toolName}
-          props={toolProps}
-          loading={loading}
-          cardId={cardId}
-          agent={pinCbs?.agent}
-          isPinned={pinCbs?.isPinned(toolName, toolProps) ?? false}
-          onPin={pinCbs ? (n, p) => pinCbs.onPin(n, p) : undefined}
-          onUnPin={pinCbs?.onUnPin}
-        />
+        <div style={{ marginBottom: 12 }}>
+          <CardRender
+            groups={groups}
+            name={toolName}
+            props={toolProps}
+            loading={loading}
+            cardId={cardId}
+            agent={pinCbs?.agent}
+            isPinned={pinCbs?.isPinned(toolName, toolProps) ?? false}
+            onPin={pinCbs ? (n, p) => pinCbs.onPin(n, p) : undefined}
+            onUnPin={pinCbs?.onUnPin}
+          />
+        </div>
       )
     }
   };

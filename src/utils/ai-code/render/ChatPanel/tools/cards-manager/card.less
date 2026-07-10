@@ -5,7 +5,6 @@
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-  overflow: visible;
 }
 
 // ─── Skeleton shimmer ─────────────────────────────────────────────────────────
@@ -130,18 +129,37 @@
 
 .cardWrapper {
   width: 100%;
-  padding: 0 0 12px;
   box-sizing: border-box;
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
+  border-radius: 16px;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
-  // pin 按钮常驻显示
-  &:hover .pinBtn:not(.pinBtnActive) {
-    // opacity 由 pinBtn 自身控制，此处无需覆盖
+  &:hover {
+    border-color: #D1D5DB;
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.07);
+  }
+}
+
+.cardContentLayer {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+}
+
+.cardWrapperHoverPin {
+  .pinBtn {
+    opacity: 0;
+  }
+
+  &:hover .pinBtn {
+    opacity: 1;
   }
 }
 
@@ -156,6 +174,7 @@
   padding: 0;
   border: none;
   border-radius: 0;
+  border-top-right-radius: 16px;
   background: transparent;
   cursor: pointer;
   display: inline-flex;
@@ -165,7 +184,7 @@
   --pin-corner-bg: #fff;
   opacity: 1;
   transition: opacity 0.15s;
-  z-index: 99;
+  z-index: 1;
 
   &:hover {
     color: var(--mybricks-color-primary, #FA6400);
