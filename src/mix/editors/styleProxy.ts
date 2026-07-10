@@ -227,12 +227,48 @@ function resolveTargetKey(params: {
 }
 
 /**
+ * 按顶层逗号拆分嵌套 key（如 "&:hover, &:focus" → ["&:hover", "&:focus"]），
+ * 忽略括号内的逗号（如 "&:not(a, b)"）。
+ */
+function splitTopLevelCommaKeys(key: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < key.length; i++) {
+    const ch = key[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(key.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(key.slice(start).trim());
+  return parts;
+}
+
+/**
  * 检测 fullSelector 是否命中 cssObj 中的嵌套伪类/伪元素规则（如 ".pageBtn" 下的 "&:disabled"），
  * 若命中则直接在原位写入样式，完全保留 Less 嵌套结构，并清理可能存在的历史孤儿复合规则。
  *
  * 背景：parseLess 会将 `&:disabled { ... }` 解析为父规则下的嵌套 key；
  * resolveTargetKey 只查顶层 key，导致 .pageBtn:disabled 匹配失败，退化成
  * 创建全路径孤立复合选择器（如 ".container ... .pageBtn:disabled"）。
+ *
+ * 逗号合并写法兼容：`&:hover, &:focus { ... }` 这种写法，parseLess（见
+ * less/index.ts 的 getRawSelector）会把两个逗号分支的选择器 join 成同一个
+ * key `"&:hover, &:focus"`，而不是拆成两条独立记录。若只精确匹配 `"&:focus"`
+ * 必然找不到，会误判为"未命中嵌套伪类"，退化成创建一条全路径的孤立规则——
+ * 这条新规则的 CSS 优先级比原有的 `.xxx:focus` 更高，会在视觉上覆盖/与原规则
+ * 冲突（典型现象：背景面板出现两个"同时生效"但实际只有一个可见的背景图层）。
+ * 因此这里精确匹配失败时，进一步在同层所有以 "&" 开头、含逗号的 key 里按顶层
+ * 逗号拆开找命中的分支，命中即视为找到同一条嵌套规则。
+ *
+ * 命中合并 key 后不会直接往共享块里写（那样会让 :hover/:focus 两个状态同时被改动，
+ * 编辑器里每个伪类 tab 理应能独立编辑）。而是先把合并 key 拆成各自独立的分支
+ * （如 "&:hover"、"&:focus"），每个分支先复制一份原共享样式作为初始值——这样
+ * 没被编辑的那个状态视觉效果不变——再只把这次的新值写入当前正在编辑的分支。
+ * 拆分后两个分支各自独立，后续编辑互不影响。
  *
  * 返回 true 表示已处理，调用方应跳过后续的 resolveTargetKey 流程；
  * 返回 false 表示未命中，继续走正常流程。
@@ -261,7 +297,23 @@ function tryWriteNestedPseudo(
     if (!cssObj[base] || typeof cssObj[base] !== 'object') continue;
 
     const nestedKey = '&' + pseudo;
-    if (cssObj[base][nestedKey] === undefined) continue;
+    const mergedKey = cssObj[base][nestedKey] === undefined
+      ? Object.keys(cssObj[base]).find(k =>
+          k.startsWith('&') && k.includes(',') && splitTopLevelCommaKeys(k).includes(nestedKey)
+        )
+      : undefined;
+    if (cssObj[base][nestedKey] === undefined && mergedKey === undefined) continue;
+
+    // 命中的是逗号合并块（且本身就有多个分支）：拆分成独立分支，各自继承原共享样式，
+    // 避免"编辑其中一个伪类，另一个未编辑的伪类也被联动修改"。
+    if (mergedKey !== undefined) {
+      const branches = splitTopLevelCommaKeys(mergedKey);
+      const sharedStyle = cssObj[base][mergedKey];
+      branches.forEach(branchKey => {
+        cssObj[base][branchKey] = { ...sharedStyle };
+      });
+      delete cssObj[base][mergedKey];
+    }
 
     // 找到嵌套伪类，直接在原位写入，保留 Less 嵌套结构
     const target = cssObj[base][nestedKey] as Record<string, any>;
@@ -639,6 +691,59 @@ export function genStyleValue(props) {
         }
         const expandedDeletions = expandDeletions(deletions);
         expandedDeletions.forEach(key => delete cssObj[targetKey][key]);
+
+        // ── 补充删除：扫描所有适用于当前元素但被遗漏的规则 ──────────────────────
+        // parseLess 直接解析 Less AST、保留嵌套结构（不经 less.render() 扁平化），
+        // 因此 `.radioCard { &.checked { box-shadow } }` 在 cssObj 中的形态为：
+        //   cssObj['.radioCard']['&.checked'] = { boxShadow: '...' }
+        // 而非顶层的 cssObj['.radioCard.checked']。
+        // resolveTargetKey 只扫描顶层 key，嵌套的 &.className 规则会被完全遗漏。
+        // 注意：CSS Modules 编译后 eleClassList 中的类名形如 "pages_xxx--originalClass"，
+        // 而 Less 里写的是原始短名（如 "radioCard"），需要兼容两种形态做匹配。
+        if (eleClassList.length > 0) {
+          const eleClassListFiltered = eleClassList.filter(c => c && c !== 'undefined');
+          // 兼容 CSS Modules 哈希：同时支持精确匹配和 "--originalClass" 后缀匹配
+          const elementHasClass = (cls: string): boolean =>
+            eleClassListFiltered.some(c => c === cls || c.endsWith('--' + cls));
+
+          Object.keys(cssObj).forEach(parentKey => {
+            if (parentKey === targetKey) return;
+            if (parentKey.includes(' ')) return; // 只处理无空格的父级选择器
+
+            // 确认元素拥有父级选择器的全部类（兼容 CSS Modules 哈希类名）
+            const parentClasses = (parentKey.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
+            if (parentClasses.length === 0 || !parentClasses.every(elementHasClass)) return;
+
+            const parentValue = cssObj[parentKey];
+            if (!parentValue || typeof parentValue !== 'object') return;
+
+            // 1. 处理 parseLess 保留的嵌套 &.className 规则
+            //    例：.radioCard { &.checked { box-shadow: ... } }
+            //    → cssObj['.radioCard']['&.checked'] = { boxShadow: '...' }
+            Object.keys(parentValue).forEach(nestedKey => {
+              if (!nestedKey.startsWith('&')) return;
+              if (typeof parentValue[nestedKey] !== 'object') return;
+              const nestedSuffix = nestedKey.slice(1); // "&.checked" → ".checked"
+              if (!nestedSuffix.startsWith('.')) return; // 只处理 &.class，跳过 &:pseudo
+              const nestedClasses = (nestedSuffix.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
+              if (nestedClasses.length === 0 || !nestedClasses.every(elementHasClass)) return;
+              expandedDeletions.forEach(k => { delete parentValue[nestedKey][k]; });
+              if (Object.keys(parentValue[nestedKey]).length === 0) {
+                delete parentValue[nestedKey];
+              }
+            });
+
+            // 2. 处理顶层的复合类选择器（无空格、多类，如 .radioCard.checked）
+            //    resolveTargetKey 通过 endsWith(' .checked') 匹配到后代选择器后，
+            //    不含空格的复合选择器会被跳过。
+            if (parentClasses.length >= 2) {
+              expandedDeletions.forEach(k => { delete cssObj[parentKey][k]; });
+              if (Object.keys(cssObj[parentKey] || {}).length === 0) {
+                delete cssObj[parentKey];
+              }
+            }
+          });
+        }
       }
 
       if (Object.keys(cssObj[targetKey] || {}).length === 0) {
