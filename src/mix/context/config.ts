@@ -408,6 +408,10 @@ class Config {
   getDefaultDebugEnv() {
     return (window as any)._sandbox_?.config?.componentRuntime?.defaultDebugEnv
   }
+
+  getWorkSpace() {
+    return (window as any)._sandbox_?.config?.componentRuntime?.workspace
+  }
 }
 
 export default new Config()

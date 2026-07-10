@@ -16,11 +16,9 @@
  *   </div>
  */
 
-/**
- * 判断 import source 是否为三方库（非相对路径）
- */
+/** 判断 import source 是否为三方库（非相对路径） */
 function isThirdPartyImport(source: string): boolean {
-  return !source.startsWith('.') && !source.startsWith('/');
+  return !source.startsWith('.') && !source.startsWith('/') && source !== 'mybricks';
 }
 
 export default function wrapThirdPartyPlugin() {

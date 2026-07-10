@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Editor, { HandlerType, Monaco, StandaloneCodeEditor } from "@mybricks/coder/dist/umd";
-import context from "../context";
+import context, { config } from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
 import * as lazyCss from "./index.lazy.less";
@@ -871,7 +871,8 @@ function LowcodeView(params: Params) {
 
     const onCopy = (e: ClipboardEvent) => {
       const codeContent = e.clipboardData?.getData('text/plain')
-      window._sandbox_.config.componentRuntime?.workspace?.onCodeEditorCopy({ filename: selectFileRef.current?.fileName, code: codeContent })
+      const workspace = config.getWorkSpace()
+      workspace?.onCodeEditorCopy?.({ filename: selectFileRef.current?.fileName, code: codeContent })
     }
 
     editor.getDomNode()?.addEventListener('copy', onCopy)
@@ -1024,6 +1025,7 @@ function LowcodeView(params: Params) {
                 wrapperClassName={css['coder']}
                 loaderConfig={CODEEDITOR_LOADER_CONFIG}
                 eslint={CODEEDITOR_ESLINT}
+                {...config.getWorkSpace()?.coder}
                 onChange={handleEditorChange}
                 onMount={handleEditorMount}
               />
