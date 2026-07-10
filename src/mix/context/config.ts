@@ -3,6 +3,7 @@ import echartsForReact from '../../utils/echarts-for-react'
 import zhCN from 'antd/locale/zh_CN'
 import { isLoggerMethod } from '../../utils/ai-code/render/logger'
 import context from './index'
+import dayjs from "dayjs";
 
 export const DYNAMIC_MODULE = Symbol('DYNAMIC_MODULE')
 
@@ -231,6 +232,7 @@ class Config {
     if (!Object.keys(base).length) {
       [
         ['antd', antd],
+        ['dayjs', dayjs],
         ['echarts-for-react', echartsForReact],
         ['antd/locale/zh_CN', zhCN]
       ].forEach(([key, module]) => {
@@ -299,6 +301,7 @@ class Config {
         'react',
         'react-dom',
         'antd',
+        'dayjs',
         'echarts-for-react',
         '@ant-design/icons',
       ]
