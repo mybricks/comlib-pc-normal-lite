@@ -1,193 +1,252 @@
-/**
- * Babel 插件：识别所有三方依赖组件，在其外层包裹一个透明 div 容器。
- *
- * 处理规则：
- * - 三方组件：通过非相对路径（不以 `.` 开头）导入的大写字母开头的组件
- * - 包裹容器：`<div style={{ display: 'contents' }}>`，透明容器不影响布局
- * - data 属性：与三方组件上挂载的 data-* 属性完全一致（同步镜像）
- *
- * 示例：
- *   import { Button } from 'antd';
- *   // 输入：
- *   <Button type="primary" data-loc="...">click</Button>
- *   // 输出：
- *   <div style={{ display: 'contents' }} data-loc="...">
- *     <Button type="primary" data-loc="...">click</Button>
- *   </div>
- */
+function isInternalOrLocalSource(source: string) {
+  return (
+    !source ||
+    source === "html" ||
+    source === "mybricks" ||
+    source.startsWith(".") ||
+    source.startsWith("/") ||
+    source.startsWith("@mybricks/")
+  );
+}
 
-/** 判断 import source 是否为三方库（非相对路径） */
-function isThirdPartyImport(source: string): boolean {
-  return !source.startsWith('.') && !source.startsWith('/') && source !== 'mybricks';
+function isThirdPartySource(source: string) {
+  return !isInternalOrLocalSource(source);
+}
+
+function cloneNode<T>(node: T): T {
+  return JSON.parse(JSON.stringify(node));
+}
+
+function createReactCreateElementCallee() {
+  return {
+    type: "MemberExpression",
+    object: { type: "Identifier", name: "React" },
+    property: { type: "Identifier", name: "createElement" },
+    computed: false,
+  };
+}
+
+function createReactCreateElementCall(tag: any, props: any, children: any[] = []) {
+  return {
+    type: "CallExpression",
+    callee: createReactCreateElementCallee(),
+    arguments: [tag, props, ...children],
+    leadingComments: [{ type: "CommentBlock", value: "#__PURE__" }],
+  };
+}
+
+function isReactCreateElementCall(node: any) {
+  return (
+    node?.type === "CallExpression" &&
+    node.callee?.type === "MemberExpression" &&
+    node.callee.object?.type === "Identifier" &&
+    node.callee.object.name === "React" &&
+    node.callee.property?.type === "Identifier" &&
+    node.callee.property.name === "createElement"
+  );
+}
+
+function getRootIdentifierName(node: any): string | null {
+  if (!node) return null;
+
+  if (node.type === "Identifier") {
+    return node.name;
+  }
+
+  if (node.type === "MemberExpression") {
+    return getRootIdentifierName(node.object);
+  }
+
+  return null;
+}
+
+function getJSXRuntimeTagSource(tag: any, importRelyMap: Map<string, string>) {
+  if (!tag || tag.type === "StringLiteral") {
+    return "html";
+  }
+
+  if (tag.type === "Identifier") {
+    return importRelyMap.get(tag.name) || "html";
+  }
+
+  if (tag.type === "MemberExpression") {
+    const rootName = getRootIdentifierName(tag);
+    return rootName ? importRelyMap.get(rootName) || "html" : "html";
+  }
+
+  return "html";
+}
+
+function getObjectPropertyName(property: any): string | null {
+  const key = property?.key;
+  if (!key) return null;
+
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+
+  if (key.type === "StringLiteral") {
+    return key.value;
+  }
+
+  return null;
+}
+
+function isDataObjectProperty(property: any) {
+  return (
+    property?.type === "ObjectProperty" &&
+    typeof getObjectPropertyName(property) === "string" &&
+    getObjectPropertyName(property)!.startsWith("data-")
+  );
+}
+
+function getDataObjectProperties(props: any) {
+  if (props?.type !== "ObjectExpression") {
+    return [];
+  }
+
+  return props.properties.filter(isDataObjectProperty).map(cloneNode);
+}
+
+function createDisplayContentsProps(originalProps: any) {
+  return {
+    type: "ObjectExpression",
+    properties: [
+      {
+        type: "ObjectProperty",
+        key: { type: "Identifier", name: "style" },
+        value: {
+          type: "ObjectExpression",
+          properties: [
+            {
+              type: "ObjectProperty",
+              key: { type: "Identifier", name: "display" },
+              value: { type: "StringLiteral", value: "contents" },
+              computed: false,
+              shorthand: false,
+            },
+          ],
+        },
+        computed: false,
+        shorthand: false,
+      },
+      ...getDataObjectProperties(originalProps),
+    ],
+  };
+}
+
+function createRequireSourceFromExpression(expression: any): string | null {
+  if (
+    expression?.type === "CallExpression" &&
+    expression.callee?.type === "Identifier" &&
+    expression.callee.name === "require" &&
+    expression.arguments?.[0]?.type === "StringLiteral"
+  ) {
+    return expression.arguments[0].value;
+  }
+
+  if (
+    expression?.type === "CallExpression" &&
+    expression.arguments?.[0]
+  ) {
+    return createRequireSourceFromExpression(expression.arguments[0]);
+  }
+
+  return null;
+}
+
+function collectImportDeclaration(path: any, importRelyMap: Map<string, string>) {
+  const source = path.node.source?.value;
+  if (typeof source !== "string") return;
+
+  for (const specifier of path.node.specifiers || []) {
+    const localName = specifier.local?.name;
+    if (localName) {
+      importRelyMap.set(localName, source);
+    }
+  }
+}
+
+function collectVariableDeclarator(path: any, importRelyMap: Map<string, string>) {
+  const { id, init } = path.node;
+
+  if (id?.type === "Identifier") {
+    const requireSource = createRequireSourceFromExpression(init);
+    if (requireSource) {
+      importRelyMap.set(id.name, requireSource);
+      return;
+    }
+  }
+
+  if (id?.type === "ObjectPattern") {
+    const requireSource = createRequireSourceFromExpression(init);
+    if (!requireSource) return;
+
+    for (const property of id.properties || []) {
+      if (property?.type !== "ObjectProperty") continue;
+      const localName = property.value?.type === "Identifier" ? property.value.name : null;
+      if (localName) {
+        importRelyMap.set(localName, requireSource);
+      }
+    }
+    return;
+  }
+
+  if (
+    id?.type === "Identifier" &&
+    init?.type === "MemberExpression" &&
+    init.object?.type === "Identifier"
+  ) {
+    importRelyMap.set(id.name, init.object.name);
+  }
+}
+
+function wrapCreateElementCall(path: any, importRelyMap: Map<string, string>) {
+  const node = path.node;
+  if (!isReactCreateElementCall(node)) return;
+
+  const [tag, props] = node.arguments || [];
+  const source = getJSXRuntimeTagSource(tag, importRelyMap);
+  if (!isThirdPartySource(source)) return;
+
+  path.replaceWith(
+    createReactCreateElementCall(
+      { type: "StringLiteral", value: "div" },
+      createDisplayContentsProps(props),
+      [cloneNode(node)],
+    ),
+  );
+  path.skip();
 }
 
 export default function wrapThirdPartyPlugin() {
-  return function ({ types: t }: { types: any }) {
-    /** 收集三方库导入的组件名（本地变量名集合） */
-    const thirdPartyComponents = new Set<string>();
+  return function () {
+    let importRelyMap: Map<string, string>;
 
     return {
+      pre() {
+        importRelyMap = new Map();
+      },
       visitor: {
-        ImportDeclaration(path: any) {
-          try {
-            const { node } = path;
-            const source: string = node.source.value;
-
-            // 只处理三方库（非相对路径）
-            if (!isThirdPartyImport(source)) return;
-
-            node.specifiers.forEach((specifier: any) => {
-              if (
-                specifier.type === 'ImportSpecifier' ||
-                specifier.type === 'ImportDefaultSpecifier' ||
-                specifier.type === 'ImportNamespaceSpecifier'
-              ) {
-                thirdPartyComponents.add(specifier.local.name);
-              }
-            });
-          } catch {
-            // 静默处理
-          }
+        ImportDeclaration(path) {
+          collectImportDeclaration(path, importRelyMap);
         },
-
-        JSXElement: {
-          enter(path: any) {
-            try {
-              const { node } = path;
-              const openingElement = node.openingElement;
-              const nameNode = openingElement.name;
-
-              // 获取 JSX 标签的根对象名
-              let tagName: string | null = null;
-              if (nameNode.type === 'JSXIdentifier') {
-                tagName = nameNode.name;
-              } else if (nameNode.type === 'JSXMemberExpression') {
-                // 如 <Modal.Footer>，取根对象名 "Modal"
-                let cur = nameNode;
-                while (cur.type === 'JSXMemberExpression') {
-                  cur = cur.object;
-                }
-                if (cur.type === 'JSXIdentifier') {
-                  tagName = cur.name;
-                }
-              }
-
-              if (!tagName) return;
-
-              // 只处理大写字母开头的三方库组件（排除 html 原生标签）
-              if (!/^[A-Z]/.test(tagName)) return;
-              if (!thirdPartyComponents.has(tagName)) return;
-
-              // 防止重复包裹：如果父节点已经是我们生成的透明 div 包裹层，则跳过
-              const parentPath = path.parentPath;
-              if (parentPath?.isJSXElement?.()) {
-                const parentOpeningEl = parentPath.node.openingElement;
-                if (_isWrapperDiv(parentOpeningEl)) return;
-              }
-
-              // 收集三方组件上所有的 data-* 属性，复制到外层 div
-              const dataAttrs: any[] = openingElement.attributes.filter((attr: any) => {
-                if (attr.type !== 'JSXAttribute') return false;
-                const attrName: string =
-                  typeof attr.name?.name === 'string' ? attr.name.name : '';
-                return attrName.startsWith('data-');
-              });
-
-              // 构建 style={{ display: 'contents' }} 属性
-              const styleAttr = t.jsxAttribute(
-                t.jsxIdentifier('style'),
-                t.jsxExpressionContainer(
-                  t.objectExpression([
-                    t.objectProperty(
-                      t.identifier('display'),
-                      t.stringLiteral('contents')
-                    ),
-                  ])
-                )
-              );
-
-              // 深拷贝 data-* 属性到 div，避免引用共享
-              const clonedDataAttrs = dataAttrs.map((attr: any) => _cloneJSXAttr(t, attr));
-
-              // 构建包裹 div
-              const wrapperOpeningEl = t.jsxOpeningElement(
-                t.jsxIdentifier('div'),
-                [styleAttr, ...clonedDataAttrs],
-                false
-              );
-              const wrapperClosingEl = t.jsxClosingElement(t.jsxIdentifier('div'));
-              const wrapperElement = t.jsxElement(
-                wrapperOpeningEl,
-                wrapperClosingEl,
-                [node],
-                false
-              );
-
-              // 标记为已生成的包裹层，防止重复处理
-              (wrapperOpeningEl as any).__isThirdPartyWrapper = true;
-
-              path.replaceWith(wrapperElement);
-              // 替换后，babel 会重新访问新节点，需要跳过子路径以避免死循环
-              path.skip();
-            } catch {
-              // 静默处理
-            }
+        VariableDeclarator(path) {
+          collectVariableDeclarator(path, importRelyMap);
+        },
+        Program: {
+          exit(path) {
+            path.traverse({
+              VariableDeclarator(variablePath) {
+                collectVariableDeclarator(variablePath, importRelyMap);
+              },
+              CallExpression(callPath) {
+                wrapCreateElementCall(callPath, importRelyMap);
+              },
+            });
           },
         },
       },
     };
   };
-}
-
-/**
- * 判断一个 JSXOpeningElement 是否是我们生成的透明 div 包裹层
- */
-function _isWrapperDiv(openingEl: any): boolean {
-  if (!openingEl) return false;
-  if (openingEl.__isThirdPartyWrapper) return true;
-  // 二次检测：div + 含 style={{ display: 'contents' }} 属性
-  const name = openingEl.name?.name;
-  if (name !== 'div') return false;
-  return openingEl.attributes?.some((attr: any) => {
-    if (attr.type !== 'JSXAttribute' || attr.name?.name !== 'style') return false;
-    const expr = attr.value?.expression;
-    if (!expr || expr.type !== 'ObjectExpression') return false;
-    return expr.properties?.some((prop: any) => {
-      return (
-        prop.key?.name === 'display' &&
-        prop.value?.value === 'contents'
-      );
-    });
-  }) ?? false;
-}
-
-/**
- * 深拷贝一个 JSXAttribute 节点，避免引用共享（同一 AST 节点不能出现在两处）
- */
-function _cloneJSXAttr(t: any, attr: any): any {
-  try {
-    const nameName: string = attr.name?.name ?? '';
-    const attrName = t.jsxIdentifier(nameName);
-
-    if (!attr.value) {
-      return t.jsxAttribute(attrName, null);
-    }
-
-    // StringLiteral
-    if (attr.value.type === 'StringLiteral') {
-      return t.jsxAttribute(attrName, t.stringLiteral(attr.value.value));
-    }
-
-    // JSXExpressionContainer
-    if (attr.value.type === 'JSXExpressionContainer') {
-      // 对表达式做浅拷贝：直接复用同一 expression 节点
-      // （data-* 属性通常是字符串字面量，表达式形式极少出现）
-      return t.jsxAttribute(attrName, t.jsxExpressionContainer(attr.value.expression));
-    }
-
-    // fallback：尝试直接复用 value
-    return t.jsxAttribute(attrName, attr.value);
-  } catch {
-    return attr;
-  }
 }
