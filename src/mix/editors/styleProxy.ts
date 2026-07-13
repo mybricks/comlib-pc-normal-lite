@@ -376,15 +376,422 @@ export function genStyleValue(props) {
   );
 
   let previousLess: string | null = null
+  type AIStylePayload = {
+    jsxFileName?: string;
+    lineStart?: number;
+    lineEnd?: number;
+    codeSnippet?: string;
+    focusTitle?: string;
+    focusComName?: string;
+    domSummary?: string;
+    styleValue: Record<string, any>;
+    deletions: string[];
+  };
+  const tryParseJSON = <T = any>(raw: string | null | undefined, fallback: T): T => {
+    if (!raw) return fallback;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+  const pickLocFromDomChain = (startEle: Element | null): any => {
+    let cur = startEle as HTMLElement | null;
+    while (cur) {
+      const loc = tryParseJSON<any>(cur.dataset?.loc, null);
+      if (loc && typeof loc === 'object' && Object.keys(loc).length > 0) return loc;
+      cur = cur.parentElement;
+    }
+    return {};
+  };
+  const buildDomSummary = (startEle: Element | null): string => {
+    if (!startEle) return '';
+    const lines: string[] = [];
+    const walk = (node: Element, depth: number) => {
+      if (depth > 2) return;
+      const tag = node.tagName.toLowerCase();
+      const cls = Array.from(node.classList || []).slice(0, 3).join('.');
+      const role = node.getAttribute('role') || '';
+      const text = Array.from(node.childNodes)
+        .filter((n) => n.nodeType === Node.TEXT_NODE)
+        .map((n) => (n.textContent || '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .slice(0, 20);
+      lines.push(`${'  '.repeat(depth)}${tag}${cls ? `(.${cls})` : ''}${role ? ` [role=${role}]` : ''}${text ? ` "${text}"` : ''}`);
+      Array.from(node.children).slice(0, 6).forEach((child) => walk(child, depth + 1));
+    };
+    walk(startEle, 0);
+    return lines.join('\n').slice(0, 380);
+  };
+  const buildDomIdentity = (startEle: Element | null): string => {
+    if (!startEle) return 'unknown';
+    const node = startEle as HTMLElement;
+    const tag = node.tagName.toLowerCase();
+    const role = node.getAttribute('role') || '';
+    const cls = Array.from(node.classList || []).slice(0, 2).join('.');
+    const text = (node.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 18);
+    const path: string[] = [];
+    let cur: HTMLElement | null = node;
+    let depth = 0;
+    while (cur && depth < 4) {
+      const parent = cur.parentElement;
+      if (!parent) break;
+      const siblings = Array.from(parent.children);
+      const idx = siblings.indexOf(cur);
+      path.push(`${cur.tagName.toLowerCase()}:${idx}`);
+      cur = parent as HTMLElement;
+      depth++;
+    }
+    return `${tag}|${role}|${cls}|${text}|${path.join('>')}`;
+  };
+  let pendingAIPayload: AIStylePayload | null = null;
+  let lastAISignature = '';
+  const debouncedAIStyleRequest = debounce(() => {
+    const payload = pendingAIPayload;
+    pendingAIPayload = null;
+    if (!payload) return;
+
+    const { jsxFileName, lineStart, lineEnd, codeSnippet, styleValue, deletions, focusTitle, focusComName, domSummary } = payload;
+    const styleDesc = Object.entries(styleValue)
+      .filter(([, v]) => v !== null && v !== undefined && v !== '')
+      .map(([key, v]) => `${convertCamelToHyphen(key)}: ${String(v)}`)
+      .join('；');
+    const deletionDesc = deletions.length > 0
+      ? deletions.map((k) => convertCamelToHyphen(k)).join('、')
+      : '';
+    const signature = JSON.stringify({
+      jsxFileName,
+      lineStart,
+      lineEnd,
+      styleValue,
+      deletions: [...deletions].sort(),
+    });
+    if (signature === lastAISignature) return;
+    lastAISignature = signature;
+
+    const message = [
+      `你正在处理“三方组件内部 DOM”的样式调整需求，这类样式通常应通过组件 props、外层 className 或 JSX style 在源码中实现，而不是依赖直接改内部 DOM。`,
+      styleDesc
+        ? `目标样式：${styleDesc}。`
+        : `用户执行的是样式删除操作。`,
+      deletionDesc ? `需要删除的样式属性：${deletionDesc}。` : '',
+      `请基于下方聚焦上下文定位实际源码入口，修改后确保视觉结果与目标样式一致。优先做最小改动，不要影响其它实例。`,
+      focusComName ? `聚焦组件名：${focusComName}` : '',
+      focusTitle ? `聚焦标题：${focusTitle}` : '',
+      jsxFileName
+        ? `优先修改文件：\`${jsxFileName}\`${lineStart && lineEnd ? `（重点查看第 ${lineStart}~${lineEnd} 行附近）` : ''}。`
+        : '',
+      codeSnippet ? `\n相关代码片段（用于定位）：\n\`\`\`tsx\n${codeSnippet}\n\`\`\`` : '',
+      domSummary ? `\n聚焦 DOM 摘要（用于辅助定位）：\n${domSummary}` : '',
+      `请直接返回可执行的代码修改结果。`,
+    ].filter(Boolean).join('\n');
+
+    const plugins = context.plugins as any;
+    plugins?.showAIDialog?.();
+    plugins?.aiService?.request({
+      message,
+      mentionFocus: true,
+      attachments: [],
+    });
+  }, 700);
+
+  type PreviewOriginal = { hadValue: boolean; value: string; priority: string };
+  type TargetSnapshot = {
+    targetKey: string;
+    jsxFileName?: string;
+    lineStart?: number;
+    lineEnd?: number;
+    codeSnippet?: string;
+    focusTitle?: string;
+    focusComName?: string;
+    domSummary?: string;
+    stylePatch: Record<string, any>;
+    deletions: Set<string>;
+  };
+  let batchEnabled = false;
+  let batchSubmitting = false;
+  const batchTargets = new Map<string, TargetSnapshot>();
+  const previewOriginals = new Map<HTMLElement, Map<string, PreviewOriginal>>();
+  const batchInstanceId = `style_batch_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+  type BatchMeta = { enabled: boolean; dirtyCount: number; submitting: boolean };
+  type BatchBridgeEntry = {
+    commit: () => void;
+    discard: () => void;
+    getMeta: () => BatchMeta;
+  };
+
+  const ensureGlobalBatchBridge = () => {
+    const win = window as any;
+    if (!(win.__mybricks_style_batch_registry instanceof Map)) {
+      win.__mybricks_style_batch_registry = new Map<string, BatchBridgeEntry>();
+    }
+    const registry = win.__mybricks_style_batch_registry as Map<string, BatchBridgeEntry>;
+    const aggregateMeta = (): BatchMeta => {
+      let enabled = false;
+      let dirtyCount = 0;
+      let submitting = false;
+      registry.forEach((entry) => {
+        const meta = entry.getMeta?.() ?? { enabled: false, dirtyCount: 0, submitting: false };
+        const dirty = Number(meta.dirtyCount || 0);
+        dirtyCount += dirty;
+        enabled = enabled || !!meta.enabled || dirty > 0;
+        submitting = submitting || !!meta.submitting;
+      });
+      return { enabled, dirtyCount, submitting };
+    };
+    win.__mybricks_style_batch_bridge = {
+      commit: () => {
+        registry.forEach((entry) => {
+          const meta = entry.getMeta?.();
+          if ((meta?.dirtyCount || 0) > 0 || meta?.enabled) {
+            entry.commit?.();
+          }
+        });
+      },
+      discard: () => {
+        registry.forEach((entry) => {
+          const meta = entry.getMeta?.();
+          if ((meta?.dirtyCount || 0) > 0 || meta?.enabled) {
+            entry.discard?.();
+          }
+        });
+      },
+      getMeta: () => aggregateMeta(),
+    };
+    return registry;
+  };
+
+  const toTargetContext = (params: any, value: Record<string, any>, deletions: string[]) => {
+    const locRaw = params.focusArea?.dataset?.loc;
+    const cn = tryParseJSON<any>(locRaw, {});
+    const ele: Element | null = params.focusArea?.ele ?? null;
+    const chainLoc = pickLocFromDomChain(ele);
+    const mergedLoc = {
+      ...chainLoc,
+      ...cn,
+      files: { ...(chainLoc?.files || {}), ...(cn?.files || {}) },
+      codeLine: { ...(chainLoc?.codeLine || {}), ...(cn?.codeLine || {}) },
+      jsx: { ...(chainLoc?.jsx || {}), ...(cn?.jsx || {}) },
+    };
+    const jsxFileName: string | undefined = mergedLoc.files?.jsx;
+    const locCodeLine = mergedLoc.codeLine ?? {};
+    const lineStart: number | undefined = typeof locCodeLine.start === 'number' ? locCodeLine.start : undefined;
+    const lineEnd: number | undefined = typeof locCodeLine.end === 'number' ? locCodeLine.end : undefined;
+    let codeSnippet = '';
+    const aiComParams = context.component?.params;
+    if (jsxFileName) {
+      const jsxFile = aiComParams?.data?.files?.find((f: { fileName: string; source: string }) => f.fileName === jsxFileName);
+      if (jsxFile) {
+        const source = decodeURIComponent(jsxFile.source);
+        if (lineStart && lineEnd) {
+          const lines = source.split('\n');
+          codeSnippet = lines
+            .slice(Math.max(0, lineStart - 3), Math.min(lines.length, lineEnd + 2))
+            .join('\n');
+        } else if (mergedLoc?.jsx?.start != null && mergedLoc?.jsx?.end != null) {
+          codeSnippet = source.slice(mergedLoc.jsx.start, mergedLoc.jsx.end);
+        }
+      }
+    }
+    const focusComName = ele?.closest?.('[data-com-name]')?.getAttribute?.('data-com-name') || '';
+    const focusTitle = ele?.closest?.('[data-zone-title]')?.getAttribute?.('data-zone-title') || '';
+    const domSummary = buildDomSummary(ele);
+    const domIdentity = buildDomIdentity(ele);
+    const selector = params.selector || '';
+    const targetKey = `${jsxFileName || 'unknown'}::${selector}::${focusComName || focusTitle || 'focus'}::${domIdentity}`;
+    return {
+      targetKey,
+      ele: ele as HTMLElement | null,
+      jsxFileName,
+      lineStart,
+      lineEnd,
+      codeSnippet,
+      focusTitle,
+      focusComName,
+      domSummary,
+      styleValue: { ...(value || {}) },
+      deletions,
+    };
+  };
+
+  const ensurePreviewOriginal = (ele: HTMLElement, cssProp: string) => {
+    let eleMap = previewOriginals.get(ele);
+    if (!eleMap) {
+      eleMap = new Map<string, PreviewOriginal>();
+      previewOriginals.set(ele, eleMap);
+    }
+    if (!eleMap.has(cssProp)) {
+      const currentValue = ele.style.getPropertyValue(cssProp);
+      const currentPriority = ele.style.getPropertyPriority(cssProp);
+      eleMap.set(cssProp, {
+        hadValue: currentValue !== '',
+        value: currentValue,
+        priority: currentPriority,
+      });
+    }
+  };
+
+  const applyPreviewPatch = (ele: HTMLElement | null, styleValue: Record<string, any>, deletions: string[]) => {
+    if (!ele) return;
+    Object.entries(styleValue).forEach(([key, val]) => {
+      const cssProp = convertCamelToHyphen(key);
+      ensurePreviewOriginal(ele, cssProp);
+      if (val === null || val === undefined || val === '') {
+        ele.style.removeProperty(cssProp);
+      } else {
+        ele.style.setProperty(cssProp, String(val), 'important');
+      }
+    });
+    deletions.forEach((key) => {
+      const cssProp = convertCamelToHyphen(key);
+      ensurePreviewOriginal(ele, cssProp);
+      ele.style.removeProperty(cssProp);
+    });
+  };
+
+  const getDirtyCount = () => {
+    let total = 0;
+    batchTargets.forEach((target) => {
+      total += Object.keys(target.stylePatch).length + target.deletions.size;
+    });
+    return total;
+  };
+
+  const restorePreviewStyles = () => {
+    previewOriginals.forEach((styleMap, ele) => {
+      styleMap.forEach((origin, cssProp) => {
+        if (origin.hadValue) {
+          ele.style.setProperty(cssProp, origin.value, origin.priority || '');
+        } else {
+          ele.style.removeProperty(cssProp);
+        }
+      });
+    });
+    previewOriginals.clear();
+  };
+
+  const clearBatchState = () => {
+    batchTargets.clear();
+    restorePreviewStyles();
+    batchSubmitting = false;
+    batchEnabled = false;
+  };
+
+  const sendBatchAIRequest = () => {
+    if (batchSubmitting) return;
+    const dirtyCount = getDirtyCount();
+    if (dirtyCount === 0) return;
+    batchSubmitting = true;
+    const grouped = new Map<string, TargetSnapshot[]>();
+    batchTargets.forEach((target) => {
+      const fileKey = target.jsxFileName || 'unknown-file';
+      if (!grouped.has(fileKey)) grouped.set(fileKey, []);
+      grouped.get(fileKey)!.push(target);
+    });
+    const detailBlocks: string[] = [];
+    grouped.forEach((targets, fileKey) => {
+      detailBlocks.push(`文件: ${fileKey}`);
+      targets.forEach((target, idx) => {
+        const styleDesc = Object.entries(target.stylePatch)
+          .map(([k, v]) => `- ${convertCamelToHyphen(k)}: ${String(v)}`)
+          .join('\n');
+        const deletionDesc = target.deletions.size > 0
+          ? Array.from(target.deletions).map((k) => `- 删除 ${convertCamelToHyphen(k)}`).join('\n')
+          : '';
+        detailBlocks.push([
+          `目标 ${idx + 1}${target.lineStart && target.lineEnd ? `（${target.lineStart}~${target.lineEnd} 行）` : ''}:`,
+          target.focusComName ? `组件: ${target.focusComName}` : '',
+          target.focusTitle ? `标题: ${target.focusTitle}` : '',
+          styleDesc ? `样式修改:\n${styleDesc}` : '',
+          deletionDesc ? `样式删除:\n${deletionDesc}` : '',
+          target.codeSnippet ? `代码片段:\n\`\`\`tsx\n${target.codeSnippet}\n\`\`\`` : '',
+          target.domSummary ? `DOM摘要:\n${target.domSummary}` : '',
+        ].filter(Boolean).join('\n'));
+      });
+    });
+    const message = [
+      `请一次性完成以下三方组件内部 DOM 样式改造，按每个目标的“最终状态”修改源码（不要保留中间过程值）。`,
+      `优先通过组件 props、外层 className 或 JSX style 调整，确保视觉结果与目标一致，并避免影响其他实例。`,
+      ...detailBlocks,
+      `请直接返回可执行的代码修改结果。`,
+    ].join('\n\n');
+    const plugins = context.plugins as any;
+    plugins?.showAIDialog?.();
+    plugins?.aiService?.request({
+      message,
+      mentionFocus: true,
+      attachments: [],
+    });
+    clearBatchState();
+  };
+
+  const upsertBatchSnapshot = (params: any, value: Record<string, any>, deletions: string[]) => {
+    const ctxInfo = toTargetContext(params, value || {}, deletions);
+    const existing = batchTargets.get(ctxInfo.targetKey) ?? {
+      targetKey: ctxInfo.targetKey,
+      jsxFileName: ctxInfo.jsxFileName,
+      lineStart: ctxInfo.lineStart,
+      lineEnd: ctxInfo.lineEnd,
+      codeSnippet: ctxInfo.codeSnippet,
+      focusTitle: ctxInfo.focusTitle,
+      focusComName: ctxInfo.focusComName,
+      domSummary: ctxInfo.domSummary,
+      stylePatch: {},
+      deletions: new Set<string>(),
+    };
+    Object.entries(ctxInfo.styleValue).forEach(([key, val]) => {
+      if (val === null || val === undefined || val === '') {
+        delete existing.stylePatch[key];
+        existing.deletions.add(key);
+      } else {
+        existing.stylePatch[key] = val;
+        existing.deletions.delete(key);
+      }
+    });
+    ctxInfo.deletions.forEach((key) => {
+      delete existing.stylePatch[key];
+      existing.deletions.add(key);
+    });
+    batchTargets.set(ctxInfo.targetKey, existing);
+    applyPreviewPatch(ctxInfo.ele, ctxInfo.styleValue, ctxInfo.deletions);
+  };
+
+  const syncBatchBridge = () => {
+    const registry = ensureGlobalBatchBridge();
+    registry.set(batchInstanceId, {
+      commit: () => sendBatchAIRequest(),
+      discard: () => clearBatchState(),
+      getMeta: () => ({
+        enabled: batchEnabled,
+        dirtyCount: getDirtyCount(),
+        submitting: batchSubmitting,
+      }),
+    });
+  };
 
   return {
     set(params: any, value: any) {
-      const loc = params.focusArea?.dataset.loc;
-      const cn = JSON.parse(loc);
+      const locRaw = params.focusArea?.dataset?.loc;
+      const cn = tryParseJSON<any>(locRaw, {});
       const lessPath = cn.files?.less ?? 'style.less';
 
       const deletions: string[] | null = (window as any).__mybricks_style_deletions;
       const aiComParams = context.component?.params;
+      const ele: Element | null = params.focusArea?.ele ?? null;
+      const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
+      const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
+      const isAIOnlyNode = !!ele && !hasDataZoneSelector;
+      batchEnabled = isAIOnlyNode;
+      syncBatchBridge();
+
+      if (isAIOnlyNode) {
+        // 三方内部 DOM 在批量会话模式下只做“最终态快照 + 实时预览”，不自动提交 AI
+        upsertBatchSnapshot(params, value || {}, (deletions || []).slice());
+        return;
+      }
+
       const lessFile = lessPath
         ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
         : undefined;
@@ -395,9 +802,6 @@ export function genStyleValue(props) {
       const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
 
       const fullSelector = params.selector;
-
-      const ele: Element | null = params.focusArea?.ele ?? null;
-      const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
 
       // ── 内联样式优先路径 ──────────────────────────────────────────
       // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
@@ -762,6 +1166,30 @@ export function genStyleValue(props) {
           previousLess = null
         }
       });
+    },
+    previewBatch(params: any, value: any) {
+      const deletions: string[] = ((window as any).__mybricks_style_deletions || []).slice();
+      const hasDataZoneSelector = !!(params.focusArea?.ele as HTMLElement | null)?.dataset?.zoneSelector;
+      const isAIOnlyNode = !!params.focusArea?.ele && !hasDataZoneSelector;
+      batchEnabled = isAIOnlyNode;
+      syncBatchBridge();
+      if (!isAIOnlyNode) {
+        return this.set(params, value);
+      }
+      upsertBatchSnapshot(params, value || {}, deletions);
+    },
+    commitBatch() {
+      sendBatchAIRequest();
+    },
+    discardBatch() {
+      clearBatchState();
+    },
+    getBatchMeta() {
+      return {
+        enabled: batchEnabled,
+        dirtyCount: getDirtyCount(),
+        submitting: batchSubmitting,
+      };
     },
   };
 }
