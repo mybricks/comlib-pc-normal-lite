@@ -16,6 +16,7 @@ interface PinCallbacks {
   onPin: (name: string, props: Record<string, any>) => void
   onUnPin: (pinKey: string) => void
   isPinned: (name: string, props: Record<string, any>) => boolean
+  agent: any
 }
 
 // ─── createShowCardTool ────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ ${apisDesc}
           props={toolProps}
           loading={loading}
           cardId={cardId}
+          agent={pinCbs?.agent}
           isPinned={pinCbs?.isPinned(toolName, toolProps) ?? false}
           onPin={pinCbs ? (n, p) => pinCbs.onPin(n, p) : undefined}
           onUnPin={pinCbs?.onUnPin}

@@ -216,6 +216,7 @@ function EmptyGuide({
                       props={pinned.props}
                       loading={false}
                       cardId={pinned.pinKey}
+                      agent={agent}
                       isPinned={true}
                       onPin={onPin}
                       onUnPin={onUnPin}
@@ -406,7 +407,7 @@ const AIChatPanel = ({
   // ref 桥接：让 createShowCardTool 的 render 闭包始终拿到最新的 pin 状态
   const pinActionsRef = useRef(pinActions)
   pinActionsRef.current = pinActions
-
+  const agentRef = useRef<any>(null)
   const guiCard = config ?? {}
 
   let system = cards.length > 0 ? systemPrompt : `你是一个 AI 助手，能够理解并回答用户的问题。`
@@ -429,6 +430,9 @@ ${guiCard?.agentMd}
                   onPin: (name, props) => pinActionsRef.current.pin(name, props),
                   onUnPin: (pinKey) => pinActionsRef.current.unPin(pinKey),
                   isPinned: (name, props) => pinActionsRef.current.isPinned(name, props),
+                  get agent() {
+                    return agentRef.current
+                  }
                 }),
                 createCallCardApiTool(),
               ]
@@ -445,6 +449,7 @@ ${guiCard?.agentMd}
         disabledModes: ["plan"],
         history
       })
+      agentRef.current = agent
       setAgent(agent)
     } catch (e) {
       console.error(e)

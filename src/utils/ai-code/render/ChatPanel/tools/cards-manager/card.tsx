@@ -147,6 +147,8 @@ export interface CardRenderProps {
   onPin?: (name: string, props: Record<string, any>) => void;
   /** unpin 回调，已 pin 时点击图钉触发 */
   onUnPin?: (pinKey: string) => void;
+  /** AI agent 实例，透传给 CardContext 供 useCardAction 使用 */
+  agent?: any;
 }
 
 /**
@@ -166,6 +168,7 @@ export function CardRender({
   isPinned = false,
   onPin,
   onUnPin,
+  agent,
 }: CardRenderProps) {
   // ── Hooks 必须在最顶部，不能在条件之后 ──────────────────────────────────
   const card = useMemo(
@@ -176,7 +179,12 @@ export function CardRender({
 
   cardIdRef.current = cardId
 
-  const cardValueRef = useRef({
+  const cardValueRef = useRef<{
+    agent: any
+    register: (slotKey: string, apis: any) => void
+    unregister: (slotKey: string) => void
+  }>({
+    agent,
     register: (slotKey: string, apis: any) => {
       cardClass.register(cardIdRef.current, slotKey, apis)
     },
@@ -184,6 +192,9 @@ export function CardRender({
       cardClass.unregister(cardIdRef.current, slotKey)
     }
   })
+
+  // 每次 render 时同步最新的 agent，确保 useCardAction 拿到最新引用
+  cardValueRef.current.agent = agent
 
   // ── Loading 状态 ──────────────────────────────────────────────────────────
   if (loading) {

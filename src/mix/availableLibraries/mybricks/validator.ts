@@ -22,6 +22,7 @@ const VALID_NAMES = new Set([
   'DataSource',
   'defineConfig',
   'useCardApis',
+  'useCardAction',
   'defineTool'
 ])
 
