@@ -186,7 +186,9 @@ const transformNewFormatForNotifyChanged = (
          *        dom  classSelector
          */
 
-        const refSelector = `${fileSelector}${widgetSelector}${classSelector}` +
+        const refSelector = classname === 'root' ? 
+          `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
+          `${fileSelector}${widgetSelector}${classSelector}` +
           `, ${fileSelector}${widgetSelector} ${classSelector}` + 
           `, ${fileSelector} ${widgetSelector}${classSelector}` + 
           `, ${fileSelector} ${widgetSelector} ${classSelector}`
