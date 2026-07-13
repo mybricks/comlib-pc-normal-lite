@@ -203,6 +203,7 @@ const AIChatPanel = ({
               onUnPin={pinActions.unPin}
             />
           )}
+          messagesRenderVariant="line"
         />
       </div>
     </div>
