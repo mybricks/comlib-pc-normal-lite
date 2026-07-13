@@ -408,7 +408,13 @@ class Parse {
 
     const value: CSSObj = { ...cssObj };
     cssObjs.forEach(({ key: k, value: v }) => {
-      value[k] = v;
+      // 与 handleAtRule 保持一致：media 内部若出现裸 "&" 包裹层，直接拍平合并。
+      // 否则 parse/stringify 循环会把 "@media { & { ... } }" 继续累积成 "&" 套娃。
+      if (k === '&' && typeof v === 'object' && v !== null) {
+        Object.assign(value, flattenAmpersandKeys(v));
+      } else {
+        value[k] = v;
+      }
     });
 
     return {
