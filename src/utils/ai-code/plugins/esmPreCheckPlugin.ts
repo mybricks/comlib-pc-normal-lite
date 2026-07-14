@@ -22,7 +22,7 @@
  *       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
  */
 
-export default function esmPreCheckPlugin() {
+export default function esmPreCheckPlugin(onError?: (error: Error) => void) {
   return function ({ types: t }: { types: any }) {
     // 收集所有带代码帧的错误对象，遍历结束后统一抛出
     const errors: Error[] = [];
@@ -102,6 +102,13 @@ export default function esmPreCheckPlugin() {
 
         // 将所有代码帧错误拼接成一条信息一起抛出
         const detail = errors.map((e) => e.message).join('\n\n');
+        if (onError) {
+          onError(new SyntaxError(
+            `[ESM 语义校验] 发现 ${errors.length} 个错误：\n\n${detail}`
+          ));
+          return;
+        }
+
         throw new SyntaxError(
           `[ESM 语义校验] 发现 ${errors.length} 个错误：\n\n${detail}`
         );

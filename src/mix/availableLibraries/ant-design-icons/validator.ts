@@ -62,7 +62,16 @@ const validator: LibraryValidator = {
    * 1. 静态 import：import { FakeIcon } from '@ant-design/icons'
    * 2. 动态字符串字面量：Icons['FakeIcon']（import * as Icons from '@ant-design/icons'）
    */
-  validatePlugin(_ctx: ValidateContext) {
+  validatePlugin(ctx: ValidateContext) {
+    const onError = ctx.onError
+    const reportError = (error: Error) => {
+      if (onError) {
+        onError(error)
+        return
+      }
+      throw error
+    }
+
     return function iconValidatorPlugin(_babel: any) {
       return {
         visitor: {
@@ -77,9 +86,9 @@ const validator: LibraryValidator = {
               const name: string = spec.imported?.name ?? spec.imported?.value ?? '';
               if (!name || VALID_ICON_NAMES.has(name)) return;
 
-              throw path.buildCodeFrameError(
+              reportError(path.buildCodeFrameError(
                 `[icon 校验] 不存在的 @ant-design/icons 图标：${name}\n修正建议：${buildFixHint(name)}`
-              );
+              ));
             });
           },
 
@@ -102,9 +111,9 @@ const validator: LibraryValidator = {
             ) {
               const name: string = path.node.property.value;
               if (!VALID_ICON_NAMES.has(name)) {
-                throw path.buildCodeFrameError(
+                reportError(path.buildCodeFrameError(
                   `[icon 校验] 动态访问了不存在的 @ant-design/icons 图标：${objectName}['${name}']\n修正建议：${buildFixHint(name)}`
-                );
+                ));
               }
             }
           },

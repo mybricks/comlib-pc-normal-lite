@@ -15,15 +15,21 @@ import config from '../../mix/context/config'
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
   let transformCode
   const constituency: any = [];
+  const errors: Error[] = []
+  const onError = (error: Error) => {
+    if (error) {
+      errors.push(error)
+    }
+  }
   const { fileName } = ctx
   const jsDocMap = new Map()
   const frontendMode = config.getFrontendMode()
 
   try {
-    const validatorPlugins = getValidatorPlugins({ fileName })
+    const validatorPlugins = getValidatorPlugins({ ...ctx, fileName, onError })
 
     const babelPlugins = window._sandbox_.config.componentRuntime?.babelPlugins?.map((babelPlugin) => {
-      return babelPlugin({ filename: fileName })
+      return babelPlugin({ filename: fileName, onError })
     }) || []
 
     const options = {
@@ -38,8 +44,8 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         'react'
       ],
       plugins: [
-        eslintCheckPlugin(code),
-        esmPreCheckPlugin(),
+        eslintCheckPlugin(code, onError),
+        esmPreCheckPlugin(onError),
         ['proposal-decorators', {legacy: true}],
         'proposal-class-properties',
         [
@@ -57,7 +63,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         loggerPlugin({ fileName }),
         styleAnalysisPlugin(),
         // zoneIndexPlugin({ fileName }),
-        ...(frontendMode === 'gui_card' ? [skillBoundaryPlugin({ fileName })] : [])
+        ...(frontendMode === 'gui_card' ? [skillBoundaryPlugin({ fileName, onError })] : [])
       ],
       retainLines: true,
     }
@@ -67,6 +73,10 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
       throw new Error('当前环境 BaBel编译器 未准备好')
     } else {
       transformCode = window.Babel.transform(code, options).code
+      if (errors.length > 0) {
+        const detail = errors.map((e) => e.message).join('\n\n')
+        throw new SyntaxError(`当前文件共发现 ${errors.length} 个错误：\n\n${detail}`)
+      }
     }
 
   } catch (error) {

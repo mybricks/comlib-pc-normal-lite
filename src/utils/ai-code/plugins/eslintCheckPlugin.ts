@@ -9,7 +9,7 @@ import eslint from '../../../mix/eslint'
 
 type EslintPathMap = Map<number, Map<string, any[]>>
 
-export default function eslintCheckPlugin(sourceCode: string) {
+export default function eslintCheckPlugin(sourceCode: string, onError?: (error: Error) => void) {
   return function () {
     const pathMap: EslintPathMap = new Map()
 
@@ -38,7 +38,7 @@ export default function eslintCheckPlugin(sourceCode: string) {
         Program: {
           exit() {
             const jsCode = transformTypeScriptOnly(sourceCode)
-            runEslintCheck(jsCode, pathMap)
+            runEslintCheck(jsCode, pathMap, onError)
           },
         },
       },
@@ -64,7 +64,8 @@ function transformTypeScriptOnly(sourceCode: string): string {
 
 export function runEslintCheck(
   jsCode: string,
-  pathMap: EslintPathMap
+  pathMap: EslintPathMap,
+  onError?: (error: Error) => void
 ) {
   const linter = eslint.getLinter()
   if (!linter || !jsCode) return
@@ -114,6 +115,13 @@ export function runEslintCheck(
   if (errors.length === 0) return
 
   const detail = errors.map((e) => e.message).join('\n\n')
+  if (onError) {
+    onError(new SyntaxError(
+      `[ESLint 校验] 发现 ${errors.length} 个错误：\n\n${detail}`
+    ))
+    return
+  }
+
   throw new SyntaxError(
     `[ESLint 校验] 发现 ${errors.length} 个错误：\n\n${detail}`
   )

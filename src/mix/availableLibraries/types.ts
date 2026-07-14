@@ -45,6 +45,12 @@ export interface LibraryResource {
 export interface ValidateContext {
   fileName: string;
   relatedFiles?: Record<string, string>;
+  /**
+   * Babel 校验插件错误上报回调。
+   * 插件内发现可聚合的校验错误时，应优先调用该回调而不是直接 throw，
+   * 由 transformTsx 在本次编译结束后统一抛出全部错误。
+   */
+  onError?: (error: Error) => void;
 }
 
 // ── 错误类型 ─────────────────────────────────────────────────────────────────
@@ -90,7 +96,8 @@ export interface LibraryValidator {
    * 和 babelPlugin 共享同一次 Babel parse/transform，精确且零额外开销。
    *
    * 在 plugin 内部可通过 ctx 访问多文件上下文（当前文件名、相关文件内容等）。
-   * 错误处理：使用 path.buildCodeFrameError(msg) 抛出，与编译错误体验完全一致。
+   * 错误处理：优先调用 ctx.onError 上报校验错误，由 transformTsx 聚合后统一抛出；
+   * 未提供 onError 时可回退为 throw path.buildCodeFrameError(msg)，与编译错误体验保持兼容。
    *
    * @param ctx 文件上下文，含 fileName 和可选的 relatedFiles
    * @returns 标准 Babel plugin factory：(babel) => { visitor: { ... } }
