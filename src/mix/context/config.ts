@@ -194,7 +194,7 @@ class Config {
               return value.module(params)
             }
 
-            getDynamicModule[DYNAMIC_MODULE] = true
+            getDynamicModule[DYNAMIC_MODULE] = DYNAMIC_MODULE
 
             base[key] = {
               get() {

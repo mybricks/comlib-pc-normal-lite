@@ -88,7 +88,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       }
     }
 
-    if (result[DYNAMIC_MODULE]) {
+    if (result[DYNAMIC_MODULE] === DYNAMIC_MODULE) {
       return result({ id: filename, logger: dependencies.mybricks.logger })
     }
 
