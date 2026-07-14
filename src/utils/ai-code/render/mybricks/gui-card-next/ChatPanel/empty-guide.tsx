@@ -26,6 +26,8 @@ export interface ChatHeaderConfig {
 }
 
 export interface EmptyGuideConfig {
+  /** 智能体名称，透传给 createAgent */
+  name?: string
   /** 顶部图标，支持 URL 字符串或任意 ReactNode */
   icon?: React.ReactNode
   /** 主标题普通文字部分，如 "欢迎使用" */
@@ -44,6 +46,10 @@ export interface EmptyGuideConfig {
   assistantTitle?: string
   /** 输入框占位提示 */
   placeholder?: string
+  /** 人格提示词，透传给 createAgent */
+  soulMd?: string
+  /** 智能体操作手册提示词，透传给 createAgent */
+  agentsMd?: string
   /** 系统提示词 */
   agentMd?: string
 }

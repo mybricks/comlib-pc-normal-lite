@@ -1,10 +1,11 @@
 import './resourceLoader';
 import '../../utils/antd';
 import React from 'react';
-import context from '../context';
+import context, { config } from '../context';
 import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
+import { buildGuiCardPromptItems } from './configs/guiCard';
 import { buildHooks } from './hooks';
 import { genStyleValue, genSvgResizer } from './styleProxy';
 import { buildImgEditorItems } from './configs/ImgEditor';
@@ -29,11 +30,20 @@ export default function (props: Props, actions: Actions) {
   const comId = props.id;
   const focusAreaConfigs = buildFocusAreaConfigs(props.data, comId);
   const exportCodeConfig = buildExportCodeConfig(props);
+  const rootItems = config.getFrontendMode() === 'gui_card'
+    ? [
+        {
+          title: '提示词',
+          items: buildGuiCardPromptItems(),
+        },
+        ...exportCodeConfig,
+      ]
+    : exportCodeConfig;
 
   if (!focusAreaConfigs[':root']) {
-    focusAreaConfigs[':root'] = { items: [...exportCodeConfig] };
+    focusAreaConfigs[':root'] = { items: [...rootItems] };
   } else {
-    focusAreaConfigs[':root'].items.push(...exportCodeConfig);
+    focusAreaConfigs[':root'].items.push(...rootItems);
   }
 
   context.setComponent({ params: props, actions });

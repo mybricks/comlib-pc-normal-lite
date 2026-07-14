@@ -1,46 +1,13 @@
 import context from '../../context';
 import { syncFromFigmaJson } from '../figma-to-dom/sync';
 import type { Props, FigmaComponentPatch, FigmaImportItem } from '../types';
-
-function ensureGuiCard(data: any) {
-  if (!data.gui_card) {
-    data.gui_card = {}
-  }
-
-  data.gui_card.assistantTitle ??= '智能助手'
-  data.gui_card.icon ??= 'https://f2.eckwai.com/kos/nlav12333/aicode/logo/newlogo.png'
-  data.gui_card.title ??= '欢迎使用'
-  data.gui_card.titleHighlight ??= 'AI 助手'
-  data.gui_card.subtitle ??= '你可以向我提问'
-  data.gui_card.colorPrimary ??= '#FA6400'
-
-  return data.gui_card
-}
-
-function getGuiCardField(params: EditorResult<any>, key: string) {
-  return ensureGuiCard(params.data)[key]
-}
-
-function setGuiCardField(params: EditorResult<any>, key: string, value: any) {
-  const nextValue = typeof value === 'string' ? value.trim() : value
-  if (nextValue === '' || nextValue == null) {
-    return
-  }
-
-  const guiCard = ensureGuiCard(params.data)
-  params.data.gui_card = {
-    ...guiCard,
-    [key]: nextValue
-  }
-}
+import { ensureGuiCard, getGuiCardField, setGuiCardField } from './guiCard';
 
 export function buildPagePanel(props: Props) {
   const comId = props.model?.runtime?.id || props.id;
 
   return {
-    items: (pageProps: any, cate1: any, cate2: any) => {
-      
-
+    items: (pageProps: any, cate1: any, _cate2: any) => {
       if (pageProps.focusArea.dataset.desnPage === 'GUI_AGENT') {
         cate1.title = '智能体';
         cate1.items = [
@@ -145,22 +112,6 @@ export function buildPagePanel(props: Props) {
             }
           },
         ];
-
-        cate2.title = '提示词';
-        cate2.items = [
-          {
-            title: '系统提示词',
-            type: 'textarea',
-            value: {
-              get(params) {
-                return getGuiCardField(params, 'agentMd')
-              },
-              set(params, value) {
-                setGuiCardField(params, 'agentMd', value)
-              }
-            }
-          },
-        ]
         return
       }
 

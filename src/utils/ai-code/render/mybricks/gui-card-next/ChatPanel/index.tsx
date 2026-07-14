@@ -110,11 +110,11 @@ const AIChatPanel = ({
             : []
           return [...cardTools, ...tools]
         },
-        getAttachmentContextMessages: () => {
-          return [buildAvailableCardsSection(cards)]
-        },
-        disabledModes: ["plan"],
-        history
+        history,
+        businessSkills: cards,
+        name: guiCard?.name,
+        soulMd: guiCard?.soulMd,
+        agentsMd: guiCard?.agentsMd,
       })
       agentRef.current = agent
       setAgent(agent)
