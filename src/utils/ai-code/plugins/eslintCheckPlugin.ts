@@ -1,15 +1,18 @@
 /**
  * eslint 校验
- *  - eslintCheckPlugin babel编译阶段收集 ast 节点
- *  - runEslintCheck 调用 linter.verify，匹配 ast 节点抛出错误
+ *  - eslintCheckPlugin 在 Babel 编译阶段内部执行校验
+ *  - 校验对象为“仅剥离 TypeScript 类型后的产物”，避免完整编译产物导致行列偏移
+ *  - 错误定位仍使用当前 Babel path.buildCodeFrameError，保证报错指向原始源码
  */
 
 import eslint from '../../../mix/eslint'
 
-export type EslintPathMap = Map<number, Map<string, any[]>>
+type EslintPathMap = Map<number, Map<string, any[]>>
 
-export default function eslintCheckPlugin(pathMap: EslintPathMap) {
-  return function ({ types: t }: { types: any }) {
+export default function eslintCheckPlugin(sourceCode: string) {
+  return function () {
+    const pathMap: EslintPathMap = new Map()
+
     return {
       visitor: {
         Identifier(path: any) {
@@ -23,17 +26,40 @@ export default function eslintCheckPlugin(pathMap: EslintPathMap) {
           if (!pathMap.has(line)) {
             pathMap.set(line, new Map())
           }
+
           const lineMap = pathMap.get(line)!
-          // 同名同行按出现顺序全部收集
+          // 同名同行按出现顺序全部收集，后续按照 ESLint 报错顺序依次消费
           if (!lineMap.has(name)) {
             lineMap.set(name, [path])
           } else {
             lineMap.get(name)!.push(path)
           }
         },
+        Program: {
+          exit() {
+            const jsCode = transformTypeScriptOnly(sourceCode)
+            runEslintCheck(jsCode, pathMap)
+          },
+        },
       },
     }
   }
+}
+
+function transformTypeScriptOnly(sourceCode: string): string {
+  return window.Babel.transform(sourceCode, {
+    plugins: [
+      ['proposal-decorators', { legacy: true }],
+      'proposal-class-properties',
+      [
+        'transform-typescript',
+        {
+          isTSX: true,
+        },
+      ],
+    ],
+    retainLines: true,
+  }).code
 }
 
 export function runEslintCheck(
@@ -47,6 +73,9 @@ export function runEslintCheck(
     parserOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      ecmaFeatures: {
+        jsx: true,
+      },
     },
     env: {
       node: true,
@@ -63,22 +92,23 @@ export function runEslintCheck(
   })
 
   const errors: Error[] = lintMessages
-    .filter((msg) => msg.severity === 2 && pathMap.has(msg.line))
+    .filter((msg) => msg.severity === 2)
     .map((msg) => {
       // ESLint message: "'varName' is not defined."
       // 提取变量名，用于在 pathMap 中按（行 + 变量名）定位原始 Babel path
       const varName = msg.message.match(/'([^']+)'/)?.[1]
       const lineMap = pathMap.get(msg.line)
       const paths = varName ? lineMap?.get(varName) : undefined
-      // 同名多次出现时，按 ESLint 报错顺序依次消费（shift），使每条错误指向对应的节点
       const nodePath = paths?.shift()
 
       if (nodePath) {
         return nodePath.buildCodeFrameError(msg.message, SyntaxError)
       }
+
+      return new SyntaxError(`${msg.message} (${msg.line}:${msg.column})`)
     })
     .filter((error) => {
-      return !!error 
+      return !!error
     })
 
   if (errors.length === 0) return

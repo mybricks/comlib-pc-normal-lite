@@ -9,7 +9,7 @@ import zoneIndexPlugin from './plugins/zoneIndexPlugin'
 import esmPreCheckPlugin from './plugins/esmPreCheckPlugin'
 import wrapThirdPartyPlugin from './plugins/wrapThirdPartyPlugin'
 import skillBoundaryPlugin from './render/mybricks/gui-card-next/skill-boundary-plugin'
-import eslintCheckPlugin, { runEslintCheck, EslintPathMap } from './plugins/eslintCheckPlugin'
+import eslintCheckPlugin from './plugins/eslintCheckPlugin'
 import config from '../../mix/context/config'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
@@ -26,9 +26,6 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
       return babelPlugin({ filename: fileName })
     }) || []
 
-    // 收集 path 映射，供 ESLint 校验阶段定位错误
-    const eslintPathMap: EslintPathMap = new Map()
-
     const options = {
       filename: fileName,
       presets: [
@@ -41,7 +38,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         'react'
       ],
       plugins: [
-        eslintCheckPlugin(eslintPathMap),
+        eslintCheckPlugin(code),
         esmPreCheckPlugin(),
         ['proposal-decorators', {legacy: true}],
         'proposal-class-properties',
@@ -70,7 +67,6 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
       throw new Error('当前环境 BaBel编译器 未准备好')
     } else {
       transformCode = window.Babel.transform(code, options).code
-      runEslintCheck(transformCode, eslintPathMap)
     }
 
   } catch (error) {
