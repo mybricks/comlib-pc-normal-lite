@@ -1012,10 +1012,10 @@ function LowcodeView(params: Params) {
               </TreeView>
             )}
           </div>
-          {files.length === 0 ? (
-            <div className={css['code-empty']}>暂无代码文件</div>
-          ) : (
-            <div className={css['code-container']}>
+          <>
+            {files.length === 0 && <div className={css['code-empty']}>暂无代码文件</div>}
+            {/* 提前加载eslint */}
+            <div className={css['code-container']} style={{ display: files.length > 0 ? 'flex' : 'none'}}>
               <Editor
                 ref={codeIns}
                 value={code}
@@ -1030,7 +1030,7 @@ function LowcodeView(params: Params) {
                 onMount={handleEditorMount}
               />
             </div>
-          )}
+          </>
         </>
       </div>
       {/* console 面板：用 display 控制显隐，保持 console-feed 状态 */}

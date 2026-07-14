@@ -191,8 +191,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const [reload, setReload] = useState(0)
     const [vibing, setVibing] = useState(false);
 
-    const [showChatPanel, setShowChatPanel] = useState(false)
-
     useLayoutEffect(() => {
       const events = context.component!.events;
       const cancelListenVibing = events.on('vibing', setVibing);
@@ -294,8 +292,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       DataSource
     })
 
-    const shouldRenderSender = !!(window as any)._sandbox_?.helpers?.renders?.renderStartView;
-
     const renderSender = useMemo(() => {
       if ((window as any)._sandbox_?.helpers?.renders?.renderStartView) {
         return (
@@ -304,7 +300,9 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           </div>
         )
       }
-    }, [shouldRenderSender])
+
+      return <IdlePlaceholder title={title} orgName={orgName} examples={examples} />
+    }, [])
 
     const LoadingView = useMemo(() => {
       const LoadingView = (window as any)._sandbox_.helpers.renders.renderLoadingView || (({ tip }) => tip)
@@ -397,10 +395,6 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
                   filename: file.fileName
                 }
               }))
-
-              if (window._sandbox_.config.componentRuntime?.chat) {
-                setShowChatPanel(true)
-              }
             }}
             onRuntimeError={(error) => {
               context.component!.events.emit('runtimeError', error)
@@ -433,7 +427,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         )
       }
 
-      return shouldRenderSender ? renderSender : <IdlePlaceholder title={title} orgName={orgName} examples={examples} />;
+      return renderSender;
     })();
 
     return (
