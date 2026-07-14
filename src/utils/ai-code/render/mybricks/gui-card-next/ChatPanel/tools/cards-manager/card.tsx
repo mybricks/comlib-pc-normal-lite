@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useId } from "react";
 import { Tooltip } from 'antd'
-import { CardContext } from "../../../mybricks/hooks";
+import { CardContext } from "../../../hooks/card";
 import { makePinKey } from '../../pin-card-utils'
 import cardClass from '../card';
 import type { CardGroup } from "./types";

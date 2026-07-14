@@ -1,7 +1,7 @@
 import runtime from './runtime'
 import design from './design'
 import createLogger from '../utils/createLogger'
-import { useCardApis, useCardAction } from '../../mybricks/hooks/card'
+import { useCardApis, useCardAction } from './hooks/card'
 import type { CreateMyBricksProps } from '../type'
 
 const createMyBricks = (props: CreateMyBricksProps) => {

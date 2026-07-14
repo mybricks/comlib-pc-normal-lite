@@ -1,4 +1,3 @@
-import React from "react";
 import cardClass from '../card'
 
 type Tool = any

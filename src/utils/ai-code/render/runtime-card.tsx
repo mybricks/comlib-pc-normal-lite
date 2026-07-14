@@ -14,7 +14,6 @@ import { DataSource } from './mybricks/data-source'
 import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
 import { createRuntimeMode } from '../runtimeMode'
-import AIChatPanel from './ChatPanel';
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
 export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {

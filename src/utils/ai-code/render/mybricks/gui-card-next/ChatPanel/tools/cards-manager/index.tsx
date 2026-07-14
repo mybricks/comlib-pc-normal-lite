@@ -1,6 +1,6 @@
 import React from "react";
 import { CardRender } from './card'
-import { randomUUID } from '../../../../../../mix/utils/uuid'
+import { randomUUID } from '../../../../../../../../mix/utils/uuid'
 import type { CardGroup } from "./types";
 
 type Tool = any

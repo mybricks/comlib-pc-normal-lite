@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, createContext, useContext } from 'react'
 import context from '../../../../../mix/context'
 import { IS_TOOL, IS_CARD_CONFIG, CONTAINER_STYLE } from './constants'
-import AIChatPanel from '../../ChatPanel'
+import AIChatPanel from './ChatPanel'
 import RuntimeContainer from '../components/runtimeContainer'
 import { DefaultToolCallHistory } from './default-tool-call-history'
 import { randomUUID } from '../../../../../mix/utils/uuid'

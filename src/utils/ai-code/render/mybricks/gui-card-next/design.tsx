@@ -6,7 +6,7 @@ import {
   CARD_STYLE,
   CONTAINER_STYLE
 } from './constants'
-import AIChatPanel from '../../ChatPanel'
+import AIChatPanel from './ChatPanel'
 import { randomUUID } from '../../../../../mix/utils/uuid'
 import type { CreateMyBricksProps } from '../type'
 
