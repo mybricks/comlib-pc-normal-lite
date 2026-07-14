@@ -707,7 +707,7 @@ export function genStyleValue(props) {
           styleDesc ? `样式修改:\n${styleDesc}` : '',
           deletionDesc ? `样式删除:\n${deletionDesc}` : '',
           target.codeSnippet ? `代码片段:\n\`\`\`tsx\n${target.codeSnippet}\n\`\`\`` : '',
-          target.domSummary ? `DOM摘要:\n${target.domSummary}` : '',
+          target.domSummary ? `注意仅修改其中这个dom的样式:\n${target.domSummary}` : '',
         ].filter(Boolean).join('\n'));
       });
     });
@@ -717,13 +717,21 @@ export function genStyleValue(props) {
       ...detailBlocks,
       `请直接返回可执行的代码修改结果。`,
     ].join('\n\n');
-    const plugins = context.plugins as any;
-    plugins?.showAIDialog?.();
-    plugins?.aiService?.request({
+    const requestPayload = {
       message,
       mentionFocus: true,
       attachments: [],
-    });
+    };
+    const plugins = context.plugins as any;
+    const appendToSender = (window as any)?._sandbox_?.helpers?.appendToSender;
+    const componentId = context.component?.params?.id;
+    if (typeof appendToSender === 'function' && componentId) {
+      plugins?.showAIDialog?.();
+      appendToSender(componentId, requestPayload);
+    } else {
+      plugins?.showAIDialog?.();
+      plugins?.aiService?.request(requestPayload);
+    }
     clearBatchState();
   };
 
@@ -2008,4 +2016,63 @@ export function patchIconSizeInTsx(params: any, size: { width: number; height: n
       context.saveManualVersion([jsxPath]);
     },
   });
+}
+
+/**
+ * 将任意聚焦元素替换为上传的图片（<img>）或 SVG 内联图标，通过 AI 完成替换。
+ * SVG 分支：读取文件内容后交给 AI 生成替换代码。
+ * 图片分支：先上传获取 URL，再交给 AI 生成替换代码。
+ */
+export function genElementReplacer() {
+  return {
+    set(params: any) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,.svg,image/svg+xml';
+      input.onchange = async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+
+        const plugins = context.plugins as any;
+        const isSvg =
+          file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+
+        if (isSvg) {
+          const rawSvg = await file.text();
+          plugins?.showAIDialog?.();
+          plugins?.aiService?.request({
+            message: `将当前聚焦的元素替换为 svg 图标，SVG 内容如下：\n${rawSvg}`,
+            mentionFocus: true,
+            attachments: [],
+          });
+          return;
+        }
+
+        // 图片路径：先上传获取 URL，再让 AI 替换
+        const uploadFn = params.env?.uploadFile;
+        let url: string;
+        if (typeof uploadFn === 'function') {
+          const res = await uploadFn([file]);
+          url = res?.url ?? '';
+        } else {
+          url = await new Promise<string>(resolve => {
+            const fr = new FileReader();
+            fr.readAsDataURL(file);
+            fr.onload = ev =>
+              resolve((ev.currentTarget as FileReader).result as string);
+          });
+        }
+
+        if (!url) return;
+
+        plugins?.showAIDialog?.();
+        plugins?.aiService?.request({
+          message: `将当前聚焦的元素替换为 img 标签，图片地址：${url}`,
+          mentionFocus: true,
+          attachments: [{ url }],
+        });
+      };
+      input.click();
+    },
+  };
 }
