@@ -4,6 +4,7 @@ import { extractMissingFiles } from "../../../utils/ai-code/render/next-runtime/
 import type { LintMessage } from '../../eslint';
 import type { LogEntry } from '../../context/debugLogs';
 import { formatRuntimeModeLabel, parseRuntimeMode } from '../../../utils/ai-code/runtimeMode';
+import { config } from '../../context'
 
 type LogListQuery = {
   page?: number;
@@ -160,6 +161,32 @@ export class Project {
   }
 
   async exportDesignerToMessage(): Promise<string> {
+
+    const mode = config.getFrontendMode()
+
+    if (mode === 'gui_card') {
+      const errors = this.config.getErrors?.() ?? [];
+      const runtimeError: string[] = []
+      const compileError: string[] = []
+
+      errors.forEach((error) => {
+        if (error instanceof Error) {
+          runtimeError.push(`  ${runtimeError.length + 1}. ${error.message}，${error.stack?.split("\n").slice(0, 2).join("\n")}`)
+        } else if (error.type === 'compile') {
+          compileError.push(`  ${compileError.length + 1}. ${error.message}`)
+        }
+      })
+
+      let errorInfo = ''
+      if (runtimeError.length) {
+        errorInfo = '\n\n## 运行时错误\n' + runtimeError.join('\n')
+      }
+      if (compileError.length) {
+        errorInfo += '\n\n## 编译时错误\n' + compileError.join('\n')
+      }
+      return '# 状态' + (errorInfo || '\n无异常')
+    }
+
     const designModeKnowledge = `
 ## 页面渲染：
 通过 Route 注册的组件统一定义为页面；
