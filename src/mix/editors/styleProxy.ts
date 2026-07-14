@@ -192,6 +192,58 @@ function tryResolveCSSModulesHashedSelector(
   return undefined;
 }
 
+/**
+ * 检查 cssObj 中是否存在"标签选择器参与组合"的规则，会以更高优先级覆盖同一属性。
+ * 典型场景：th/td 等语义元素被 `.tableHeadRow th { color: #555 }` (0,1,1) 命中，
+ * 而样式编辑器写出的 `.colIndustry { color: xxx }` 仅有 (0,1,0)，永远被压制。
+ *
+ * 判断条件：
+ * 1. targetKey 是纯单类选择器（如 ".colIndustry"）——多类/复合选择器不在此处理
+ * 2. cssObj 中存在另一个 key，其选择器某一段以 tagName 开头（如 "th"/"th:hover"/"th.foo"）
+ * 3. 该 key 的属性对象包含正在写入的同名属性
+ */
+function hasTagBasedCompetingRule(
+  cssObj: Record<string, any>,
+  targetKey: string,
+  tagName: string,
+  propKey: string,
+): boolean {
+  if (!tagName || !/^\.[\w-]+$/.test(targetKey)) return false;
+  const tag = tagName.toLowerCase();
+
+  // parseLess 使用 AST 模式，保留嵌套结构。
+  // 例如 .tableHeadRow { th { color: #555 } } 解析后 th 是 .tableHeadRow 值里的嵌套 key，
+  // 必须递归扫描才能发现。
+  function scanNested(obj: Record<string, any>): boolean {
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val !== 'object' || val === null) continue;
+      const segments = key.trim().split(/\s+/);
+      const hasTag = segments.some(
+        seg => seg === tag || seg.startsWith(tag + ':') ||
+               seg.startsWith(tag + '.') || seg.startsWith(tag + '['),
+      );
+      if (hasTag && propKey in val) return true;
+      if (scanNested(val)) return true;
+    }
+    return false;
+  }
+
+  for (const key of Object.keys(cssObj)) {
+    if (key === targetKey) continue;
+    const val = cssObj[key];
+    if (typeof val !== 'object' || val === null) continue;
+    const segments = key.trim().split(/\s+/);
+    const hasTag = segments.some(
+      seg => seg === tag || seg.startsWith(tag + ':') ||
+             seg.startsWith(tag + '.') || seg.startsWith(tag + '['),
+    );
+    if (hasTag && propKey in val) return true;
+    if (scanNested(val)) return true;
+  }
+  return false;
+}
+
 // 根据选择器获取对应的css对象key
 function resolveTargetKey(params: {
   cssObj: Record<string, any>;
@@ -1036,6 +1088,7 @@ export function genStyleValue(props) {
       }
 
       const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
+      const eleTagName = ele ? (ele as HTMLElement).tagName : '';
 
       Object.entries(lessValue).forEach(([key, val]) => {
         const existing = cssObj[targetKey]?.[key];
@@ -1049,7 +1102,22 @@ export function genStyleValue(props) {
           if (!computedVal) return;
           if (normalizeCSSValue(computedVal) === normalizeCSSValue(String(val ?? ''))) return;
         }
-        cssObj[targetKey][key] = val;
+
+        // 当 th/td 等语义标签存在同属性的更高优先级标签选择器规则时（如 .tableHeadRow th），
+        // 纯类选择器（.colIndustry）的优先级低于"类+标签"组合，写入不会生效。
+        // 检测到此竞争关系时自动追加 !important 确保生效。
+        let writeVal = val;
+        if (
+          writeVal !== null &&
+          writeVal !== undefined &&
+          eleTagName &&
+          !String(writeVal).includes('!important') &&
+          hasTagBasedCompetingRule(cssObj, targetKey, eleTagName, key)
+        ) {
+          writeVal = String(writeVal) + ' !important';
+        }
+
+        cssObj[targetKey][key] = writeVal;
       });
 
       // 若写入了 background-image: none（表示用户切换到纯色背景），
