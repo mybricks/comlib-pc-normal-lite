@@ -24,7 +24,7 @@ function getSvgComputedColor(el: Element | null): string | undefined {
   return style.getPropertyValue('color') || undefined;
 }
 
-/** 从 SVG HTML 字符串或 DOM 元素读取 width/height（整数 px） */
+/** 从 SVG HTML 字符串或 DOM 元素读取 width/height */
 function readSvgSize(svgHtml: string, el: SVGElement | null): { w: number; h: number } {
   // 优先从 HTML 属性字符串解析
   const wMatch = svgHtml.match(/\bwidth="([^"]+)"/);
@@ -32,19 +32,19 @@ function readSvgSize(svgHtml: string, el: SVGElement | null): { w: number; h: nu
   const wAttr = parseFloat(wMatch?.[1] ?? '');
   const hAttr = parseFloat(hMatch?.[1] ?? '');
   if (!isNaN(wAttr) && wAttr > 0 && !isNaN(hAttr) && hAttr > 0) {
-    return { w: Math.round(wAttr), h: Math.round(hAttr) };
+    return { w: wAttr, h: hAttr };
   }
   // fallback 1：offsetWidth/offsetHeight（Shadow DOM 内可读）
   if (el) {
     const ow = (el as unknown as HTMLElement).offsetWidth;
     const oh = (el as unknown as HTMLElement).offsetHeight;
-    if (ow > 0 && oh > 0) return { w: Math.round(ow), h: Math.round(oh) };
+    if (ow > 0 && oh > 0) return { w: ow, h: oh };
   }
   // fallback 2：getBoundingClientRect
   if (el) {
     const rect = el.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
-      return { w: Math.round(rect.width), h: Math.round(rect.height) };
+      return { w: rect.width, h: rect.height };
     }
   }
   return { w: 0, h: 0 };
