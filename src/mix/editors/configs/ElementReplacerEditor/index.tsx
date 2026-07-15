@@ -18,6 +18,11 @@ function ElementReplacerPanel({ editConfig, comId }: { editConfig: any; comId: s
     return null;
   }
 
+  // 仅允许替换无子元素的通用文本容器，避免在复杂容器上重复展示操作入口
+  if (!['div', 'span'].includes(tag || '') || ele?.childElementCount) {
+    return null;
+  }
+
   const syntheticParams = {
     focusArea: ele,
     id: comId,
@@ -28,11 +33,11 @@ function ElementReplacerPanel({ editConfig, comId }: { editConfig: any; comId: s
     <button
       type="button"
       className={css.btn}
-      data-mybricks-tip="上传图片或 SVG 文件，AI 帮你替换当前选中的元素"
+      data-mybricks-tip="支持上传图片 / SVG 图标，AI 将其替换为当前选中的元素"
       onClick={() => elementReplacer.set(syntheticParams)}
     >
       <AiBlingblingIcon style={{ flexShrink: 0, marginRight: 4, transform: 'rotate(180deg)' }} />
-      替换为图片/SVG
+      上传图标并替换当前元素
     </button>
   );
 }
