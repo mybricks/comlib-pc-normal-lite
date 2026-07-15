@@ -79,7 +79,7 @@ const useDependencies = (params: Params) => {
     function createMyBricksTestingModule(_params: { id: string; logger: any }) {
       return createMyBricksTesting({ env, data, activeEnv });
     }
-    (createMyBricksTestingModule as any)[DYNAMIC_MODULE] = true;
+    (createMyBricksTestingModule as any)[DYNAMIC_MODULE] = DYNAMIC_MODULE;
 
     const customDependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks }) || {}
     
