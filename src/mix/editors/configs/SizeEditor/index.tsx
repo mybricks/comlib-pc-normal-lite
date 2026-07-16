@@ -31,10 +31,15 @@ function SizeField({ label, value, onCommit }: { label: string; value: number; o
       <span className={css.sizeLabel} {...dragLabelProps}>{label}</span>
       <input
         className={css.sizeField}
-        type="number"
-        min={1}
+        type="text"
+        inputMode="decimal"
+        pattern="[0-9]*[.]?[0-9]*"
         value={draft}
-        onChange={e => setDraft(e.target.value)}
+        onChange={e => {
+          // 中文输入法或部分数字键盘会输入全角句点/逗号，统一为小数点。
+          const nextDraft = e.target.value.replace(/[，。]/g, '.');
+          if (/^\d*\.?\d*$/.test(nextDraft)) setDraft(nextDraft);
+        }}
         onFocus={() => setFocused(true)}
         onBlur={() => {
           setFocused(false);
@@ -51,6 +56,10 @@ function SizeField({ label, value, onCommit }: { label: string; value: number; o
 }
 
 // ─── SizeEditor ───────────────────────────────────────────────────────────────
+
+function roundToTwoDecimals(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 export interface SizeEditorProps {
   size: { w: number; h: number };
@@ -87,9 +96,9 @@ export function SizeEditor({ size: initialSize, onCommit, disableLock = false }:
 
   const handleWCommit = useCallback(
     (val: number) => {
-      const newW = Math.max(1, Math.round(val));
+      const newW = Math.max(1, val);
       if (locked && ratioRef.current > 0) {
-        const newH = Math.max(1, Math.round(newW * ratioRef.current));
+        const newH = Math.max(1, roundToTwoDecimals(newW * ratioRef.current));
         setW(newW);
         setH(newH);
         commit(newW, newH);
@@ -103,9 +112,9 @@ export function SizeEditor({ size: initialSize, onCommit, disableLock = false }:
 
   const handleHCommit = useCallback(
     (val: number) => {
-      const newH = Math.max(1, Math.round(val));
+      const newH = Math.max(1, val);
       if (locked && ratioRef.current > 0) {
-        const newW = Math.max(1, Math.round(newH / ratioRef.current));
+        const newW = Math.max(1, roundToTwoDecimals(newH / ratioRef.current));
         setW(newW);
         setH(newH);
         commit(newW, newH);

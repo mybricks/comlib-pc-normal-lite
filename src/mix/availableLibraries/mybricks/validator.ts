@@ -31,7 +31,16 @@ const VALID_NAMES = new Set([
 const validator: LibraryValidator = {
   libraryName: LIBRARY_NAME,
 
-  validatePlugin(_ctx: ValidateContext) {
+  validatePlugin(ctx: ValidateContext) {
+    const onError = ctx.onError
+    const reportError = (error: Error) => {
+      if (onError) {
+        onError(error)
+        return
+      }
+      throw error
+    }
+
     return function mybricksValidatorPlugin(_babel: any) {
       return {
         visitor: {
@@ -45,9 +54,9 @@ const validator: LibraryValidator = {
               const name: string = spec.imported?.name ?? spec.imported?.value ?? '';
               if (!name || VALID_NAMES.has(name)) return;
 
-              throw path.buildCodeFrameError(
+              reportError(path.buildCodeFrameError(
                 `[mybricks 校验] 导入无效依赖，mybricks 未提供 '${name}'`
-              );
+              ));
             });
           },
         },

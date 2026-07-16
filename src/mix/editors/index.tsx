@@ -11,6 +11,7 @@ import { genStyleValue, genSvgResizer } from './styleProxy';
 import { buildImgEditorItems } from './configs/ImgEditor';
 import { buildSvgEditorItems } from './configs/SvgEditor';
 import { buildIconEditorItems } from './configs/IconEditor';
+import { buildElementReplacerItems } from './configs/ElementReplacerEditor';
 import { aiSvgIcon5 } from './icons/ai-svg-5';
 import { aiImgIcon } from './icons/ai-img';
 import { AiEditPanel } from './components/AiEditPanel';
@@ -103,6 +104,7 @@ export default function (props: Props, actions: Actions) {
           ],
         },
       ],
+      items: buildElementReplacerItems(comId),
     },
     'img': {
       '@ai': {

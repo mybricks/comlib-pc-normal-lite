@@ -366,3 +366,22 @@ export async function verify(
 
   return results;
 }
+
+class ESLint {
+  linter: import('eslint').Linter | null = null
+  
+  constructor() {}
+
+  getLinter() {
+    if (!this.linter) {
+      try {
+        if (window.eslint?.Linter) {
+          this.linter = new window.eslint.Linter();
+        }
+      } catch {}
+    }
+    return this.linter;
+  }
+}
+
+export default new ESLint()

@@ -192,6 +192,160 @@ function tryResolveCSSModulesHashedSelector(
   return undefined;
 }
 
+/**
+ * 访问平台的 shadow DOM（样式注入在其中），等同于 editors-pc-common 的 getDocument()。
+ */
+function getShadowDoc(): Document | ShadowRoot {
+  return (document.getElementById('_mybricks-geo-webview_') as HTMLElement | null)?.shadowRoot
+    ?? (document as unknown as ShadowRoot);
+}
+
+/**
+ * 简易 CSS 特指度分值（用于与纯单类 targetKey 做大小比较，不需要精确三元组）。
+ * - `:where()` 贡献 0 特指度
+ * - ID 选择器 #xxx：100
+ * - 类/属性/伪类 .cls / [attr] / :hover：10
+ * - 元素标签 div / th：1
+ */
+function simpleSpecificity(selector: string): number {
+  const s = selector.replace(/:where\([^)]*\)/g, '');
+  const ids = (s.match(/#[\w-]+/g) ?? []).length * 100;
+  const classes = (s.match(/\.[\w-]+|\[[\w\s=^$*|~"']+\]/g) ?? []).length * 10;
+  const tagMatches = (s.match(/(?:^|[\s>+~,])([a-z][a-z0-9-]*)(?=[.#:[\s>+~,{]|$)/g) ?? [])
+    .map(m => m.trim())
+    .filter(t => !['not', 'is', 'has', 'where', 'matches', 'nth', 'child', 'type', 'last', 'first', 'only', 'root', 'any'].includes(t));
+  return ids + classes + tagMatches.length;
+}
+
+/**
+ * `background` 简写属性展开后会影响的所有 longhand（连字符格式）。
+ * antd 写 `background: #1677ff` 时，浏览器会隐式将 background-image 等 reset 为初始值。
+ */
+const BACKGROUND_LONGHAND_PROPS = [
+  'background-color', 'background-image', 'background-size',
+  'background-repeat', 'background-position', 'background-origin',
+  'background-clip', 'background-attachment',
+];
+
+/**
+ * 扫描 shadow DOM 内的 CSSOM，收集"匹配 ele 且特指度高于 targetKey"的所有竞争规则
+ * 所设置的 CSS 属性（hyphen 格式）。
+ *
+ * 解决场景：antd 等外部库的复合类选择器（如 `.css-xxx.ant-btn-variant-solid`，特指度 0,2,0）
+ * 会覆盖组件自身的单类选择器（`.headerStockInBtn`，0,1,0），而 cssObj 扫描看不到外部样式表。
+ * `background` 简写展开处理：竞争规则设置了 `background` 时，视为同时影响所有 background-* 子属性。
+ * `element.matches()` 天然过滤 `:hover/:focus` 等非激活伪类规则，不受点击时 hover 状态影响。
+ *
+ * @returns 被更高优先级规则覆盖的 hyphen 属性名集合
+ */
+// 提取 CSS 选择器末尾的交互伪类（如 :hover、:focus）
+const PSEUDO_TAIL_RE = /:(hover|focus|active|visited|disabled|checked|focus-within|focus-visible|placeholder-shown|indeterminate|enabled|read-only|read-write)\s*$/i;
+
+function collectCSSOMOverriddenProps(
+  ele: Element,
+  targetKey: string,
+): Set<string> {
+  const result = new Set<string>();
+
+  // 提取 targetKey 中的伪类尾缀（如 '.addBtn:hover' → ':hover'）
+  const pseudoMatch = targetKey.match(PSEUDO_TAIL_RE);
+  const targetPseudo = pseudoMatch ? pseudoMatch[0].trim() : null;
+  const targetBase   = targetPseudo
+    ? targetKey.slice(0, targetKey.lastIndexOf(targetPseudo)).trim()
+    : targetKey;
+
+  // 非伪类情况：仅处理简单单类选择器
+  if (!targetPseudo && !/^\.[\w-]+$/.test(targetKey)) return result;
+  // 伪类情况：base 部分必须包含类名
+  if (targetPseudo && !targetBase) return result;
+
+  const targetSpec = simpleSpecificity(targetKey);
+
+  try {
+    const shadowDoc = getShadowDoc();
+    for (const sheet of Array.from(shadowDoc.styleSheets)) {
+      try {
+        for (const rule of Array.from(sheet.cssRules || [])) {
+          if (!(rule instanceof CSSStyleRule)) continue;
+
+          if (targetPseudo) {
+            // 伪类模式：规则必须以相同伪类结尾，再用 base selector 验证 ele
+            const rulePseudoM = rule.selectorText.match(PSEUDO_TAIL_RE);
+            const rulePseudo  = rulePseudoM ? rulePseudoM[0].trim() : null;
+            if (!rulePseudo || rulePseudo.toLowerCase() !== targetPseudo.toLowerCase()) continue;
+            const ruleBase = rule.selectorText.slice(0, rule.selectorText.lastIndexOf(rulePseudo)).trim();
+            try { if (!ruleBase || !ele.matches(ruleBase)) continue; } catch { continue; }
+          } else {
+            // 普通模式：直接 element.matches（天然过滤未激活的 :hover 等）
+            try { if (!ele.matches(rule.selectorText)) continue; } catch { continue; }
+          }
+
+          if (simpleSpecificity(rule.selectorText) <= targetSpec) continue;
+
+          const st = rule.style;
+          for (let i = 0; i < st.length; i++) {
+            result.add(st[i]);
+          }
+          // background 简写会隐式覆盖所有 background-* longhand
+          if (st.getPropertyValue('background')) {
+            BACKGROUND_LONGHAND_PROPS.forEach(p => result.add(p));
+          }
+        }
+      } catch { /* 跨域样式表 SecurityError，跳过 */ }
+    }
+  } catch { /* shadowDoc 访问异常，兜底 */ }
+
+  return result;
+}
+
+/**
+ * 检查 cssObj 中是否存在"标签选择器参与组合"的规则，会以更高优先级覆盖同一属性。
+ * 典型场景：th/td 等语义元素被 `.tableHeadRow th { color: #555 }` (0,1,1) 命中，
+ * 而样式编辑器写出的 `.colIndustry { color: xxx }` 仅有 (0,1,0)，永远被压制。
+ * 注意：仅扫描组件自身的 cssObj，外部样式表（如 antd）由 collectCSSOMOverriddenProps 负责。
+ */
+function hasTagBasedCompetingRule(
+  cssObj: Record<string, any>,
+  targetKey: string,
+  tagName: string,
+  propKey: string,
+): boolean {
+  if (!tagName || !/^\.[\w-]+$/.test(targetKey)) return false;
+  const tag = tagName.toLowerCase();
+
+  // parseLess 使用 AST 模式，保留嵌套结构。
+  // 例如 .tableHeadRow { th { color: #555 } } 解析后 th 是 .tableHeadRow 值里的嵌套 key，
+  // 必须递归扫描才能发现。
+  function scanNested(obj: Record<string, any>): boolean {
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val !== 'object' || val === null) continue;
+      const segments = key.trim().split(/\s+/);
+      const hasTag = segments.some(
+        seg => seg === tag || seg.startsWith(tag + ':') ||
+               seg.startsWith(tag + '.') || seg.startsWith(tag + '['),
+      );
+      if (hasTag && propKey in val) return true;
+      if (scanNested(val)) return true;
+    }
+    return false;
+  }
+
+  for (const key of Object.keys(cssObj)) {
+    if (key === targetKey) continue;
+    const val = cssObj[key];
+    if (typeof val !== 'object' || val === null) continue;
+    const segments = key.trim().split(/\s+/);
+    const hasTag = segments.some(
+      seg => seg === tag || seg.startsWith(tag + ':') ||
+             seg.startsWith(tag + '.') || seg.startsWith(tag + '['),
+    );
+    if (hasTag && propKey in val) return true;
+    if (scanNested(val)) return true;
+  }
+  return false;
+}
+
 // 根据选择器获取对应的css对象key
 function resolveTargetKey(params: {
   cssObj: Record<string, any>;
@@ -707,7 +861,7 @@ export function genStyleValue(props) {
           styleDesc ? `样式修改:\n${styleDesc}` : '',
           deletionDesc ? `样式删除:\n${deletionDesc}` : '',
           target.codeSnippet ? `代码片段:\n\`\`\`tsx\n${target.codeSnippet}\n\`\`\`` : '',
-          target.domSummary ? `DOM摘要:\n${target.domSummary}` : '',
+          target.domSummary ? `注意仅修改其中这个dom的样式:\n${target.domSummary}` : '',
         ].filter(Boolean).join('\n'));
       });
     });
@@ -717,13 +871,21 @@ export function genStyleValue(props) {
       ...detailBlocks,
       `请直接返回可执行的代码修改结果。`,
     ].join('\n\n');
-    const plugins = context.plugins as any;
-    plugins?.showAIDialog?.();
-    plugins?.aiService?.request({
+    const requestPayload = {
       message,
       mentionFocus: true,
       attachments: [],
-    });
+    };
+    const plugins = context.plugins as any;
+    const appendToSender = (window as any)?._sandbox_?.helpers?.appendToSender;
+    const componentId = context.component?.params?.id;
+    if (typeof appendToSender === 'function' && componentId) {
+      plugins?.showAIDialog?.();
+      appendToSender(componentId, requestPayload);
+    } else {
+      plugins?.showAIDialog?.();
+      plugins?.aiService?.request(requestPayload);
+    }
     clearBatchState();
   };
 
@@ -983,6 +1145,29 @@ export function genStyleValue(props) {
       }
       // ─────────────────────────────────────────────────────────────
 
+      // 嵌套伪类写入前：检测是否存在更高特指度的外部规则（如 antd hover），
+      // 若有竞争则给 lessValue 中对应属性追加 !important，确保写入值能生效。
+      const _pseudoTailM = fullSelector.match(PSEUDO_TAIL_RE);
+      if (_pseudoTailM && ele) {
+        const _segs = fullSelector.trim().split(/\s+/).filter(Boolean);
+        // 取最后一段（如 '.addBtn:hover'）作为 targetKey，特指度与组件自身规则对齐
+        const _pseudoTargetKey = _segs[_segs.length - 1];
+        const _cssomOverriddenForPseudo = collectCSSOMOverriddenProps(ele as Element, _pseudoTargetKey);
+        if (_cssomOverriddenForPseudo.size > 0) {
+          Object.keys(lessValue).forEach(key => {
+            const hyphenKey = convertCamelToHyphen(key);
+            if (
+              _cssomOverriddenForPseudo.has(hyphenKey) &&
+              lessValue[key] !== null &&
+              lessValue[key] !== undefined &&
+              !String(lessValue[key]).includes('!important')
+            ) {
+              lessValue[key] = String(lessValue[key]) + ' !important';
+            }
+          });
+        }
+      }
+
       // 嵌套伪类快速路径：直接写入 &:disabled 等嵌套位置，保留 Less 原有结构
       if (tryWriteNestedPseudo(cssObj, fullSelector, lessValue, deletions)) {
         const cssStr = stringifyLess(cssObj);
@@ -1028,6 +1213,13 @@ export function genStyleValue(props) {
       }
 
       const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
+      const eleTagName = ele ? (ele as HTMLElement).tagName : '';
+
+      // 扫描 CSSOM（shadow DOM）中匹配 ele 且特指度高于 targetKey 的竞争规则（如 antd 复合类）。
+      // 每次写入动作扫描一次，供下方 forEach 使用，避免重复扫描。
+      const cssomOverriddenProps: Set<string> = ele
+        ? collectCSSOMOverriddenProps(ele as Element, targetKey)
+        : new Set();
 
       Object.entries(lessValue).forEach(([key, val]) => {
         const existing = cssObj[targetKey]?.[key];
@@ -1041,7 +1233,24 @@ export function genStyleValue(props) {
           if (!computedVal) return;
           if (normalizeCSSValue(computedVal) === normalizeCSSValue(String(val ?? ''))) return;
         }
-        cssObj[targetKey][key] = val;
+
+        // 检测到以下任一竞争场景时，自动追加 !important 确保写入值生效：
+        // 1. cssObj 内部规则：th/td 等标签选择器组合（如 .tableHeadRow th > .colTag）
+        // 2. 外部样式表规则：antd 复合类选择器（如 .css-xxx.ant-btn-variant-solid > .headerStockInBtn）
+        let writeVal = val;
+        const hyphenKey = convertCamelToHyphen(key);
+        const hasInternalConflict = eleTagName && hasTagBasedCompetingRule(cssObj, targetKey, eleTagName, key);
+        const hasExternalConflict = cssomOverriddenProps.has(hyphenKey);
+        if (
+          writeVal !== null &&
+          writeVal !== undefined &&
+          !String(writeVal).includes('!important') &&
+          (hasInternalConflict || hasExternalConflict)
+        ) {
+          writeVal = String(writeVal) + ' !important';
+        }
+
+        cssObj[targetKey][key] = writeVal;
       });
 
       // 若写入了 background-image: none（表示用户切换到纯色背景），
@@ -1953,15 +2162,15 @@ export function readIconSizeFromJsx(params: any): { w: number; h: number } {
   // fontSize 优先（antd 等方形图标）
   const fontSizeMatch = snippet.match(/\bfontSize\s*:\s*(\d+(?:\.\d+)?)/);
   if (fontSizeMatch) {
-    const size = Math.round(parseFloat(fontSizeMatch[1]));
+    const size = parseFloat(fontSizeMatch[1]);
     if (size > 0) return { w: size, h: size };
   }
 
   // 非方形：读 width / height
   const widthMatch = snippet.match(/\bwidth\s*:\s*(\d+(?:\.\d+)?)/);
   const heightMatch = snippet.match(/\bheight\s*:\s*(\d+(?:\.\d+)?)/);
-  const w = widthMatch ? Math.round(parseFloat(widthMatch[1])) : 0;
-  const h = heightMatch ? Math.round(parseFloat(heightMatch[1])) : 0;
+  const w = widthMatch ? parseFloat(widthMatch[1]) : 0;
+  const h = heightMatch ? parseFloat(heightMatch[1]) : 0;
   if (w > 0 && h > 0) return { w, h };
   if (w > 0) return { w, h: w };
   if (h > 0) return { w: h, h };
@@ -2008,4 +2217,63 @@ export function patchIconSizeInTsx(params: any, size: { width: number; height: n
       context.saveManualVersion([jsxPath]);
     },
   });
+}
+
+/**
+ * 将任意聚焦元素替换为上传的图片（<img>）或 SVG 内联图标，通过 AI 完成替换。
+ * SVG 分支：读取文件内容后交给 AI 生成替换代码。
+ * 图片分支：先上传获取 URL，再交给 AI 生成替换代码。
+ */
+export function genElementReplacer() {
+  return {
+    set(params: any) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,.svg,image/svg+xml';
+      input.onchange = async (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+
+        const plugins = context.plugins as any;
+        const isSvg =
+          file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+
+        if (isSvg) {
+          const rawSvg = await file.text();
+          plugins?.showAIDialog?.();
+          plugins?.aiService?.request({
+            message: `将当前聚焦的元素替换为 svg 图标，SVG 内容如下：\n${rawSvg}`,
+            mentionFocus: true,
+            attachments: [],
+          });
+          return;
+        }
+
+        // 图片路径：先上传获取 URL，再让 AI 替换
+        const uploadFn = params.env?.uploadFile;
+        let url: string;
+        if (typeof uploadFn === 'function') {
+          const res = await uploadFn([file]);
+          url = res?.url ?? '';
+        } else {
+          url = await new Promise<string>(resolve => {
+            const fr = new FileReader();
+            fr.readAsDataURL(file);
+            fr.onload = ev =>
+              resolve((ev.currentTarget as FileReader).result as string);
+          });
+        }
+
+        if (!url) return;
+
+        plugins?.showAIDialog?.();
+        plugins?.aiService?.request({
+          message: `将当前聚焦的元素替换为 img 标签，图片地址：${url}`,
+          mentionFocus: true,
+          attachments: [{ url }],
+        });
+      };
+      input.click();
+    },
+  };
 }

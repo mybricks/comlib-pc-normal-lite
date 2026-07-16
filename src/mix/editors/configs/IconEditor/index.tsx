@@ -39,25 +39,25 @@ function readIconDomSize(ele: Element | null): { w: number; h: number } {
   // 直接读 ele 本身
   const elW = (ele as HTMLElement).offsetWidth;
   const elH = (ele as HTMLElement).offsetHeight;
-  if (elW > 0 && elH > 0) return { w: Math.round(elW), h: Math.round(elH) };
+  if (elW > 0 && elH > 0) return { w: elW, h: elH };
 
   // 内部 SVG
   const svgEl = ele.querySelector('svg') as HTMLElement | null;
   if (svgEl) {
     const w = svgEl.offsetWidth;
     const h = svgEl.offsetHeight;
-    if (w > 0 && h > 0) return { w: Math.round(w), h: Math.round(h) };
+    if (w > 0 && h > 0) return { w, h };
 
     const rect = svgEl.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
-      return { w: Math.round(rect.width), h: Math.round(rect.height) };
+      return { w: rect.width, h: rect.height };
     }
   }
 
   // ele 的 getBoundingClientRect
   const rect = ele.getBoundingClientRect();
   if (rect.width > 0 && rect.height > 0) {
-    return { w: Math.round(rect.width), h: Math.round(rect.height) };
+    return { w: rect.width, h: rect.height };
   }
 
   return { w: 0, h: 0 };
@@ -70,7 +70,7 @@ function readSvgHtmlSize(svgHtml: string): { w: number; h: number } {
   const w = parseFloat(wMatch?.[1] ?? '');
   const h = parseFloat(hMatch?.[1] ?? '');
   return !isNaN(w) && w > 0 && !isNaN(h) && h > 0
-    ? { w: Math.round(w), h: Math.round(h) }
+    ? { w, h }
     : { w: 0, h: 0 };
 }
 

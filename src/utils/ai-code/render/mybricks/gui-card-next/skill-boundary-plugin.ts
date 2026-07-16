@@ -82,7 +82,7 @@ function findSkillRoot(fileName: string, files: Array<{ fileName: string }>): st
   return null
 }
 
-export default function skillBoundaryPlugin({ fileName }: { fileName: string;}) {
+export default function skillBoundaryPlugin({ fileName, onError }: { fileName: string; onError?: (error: Error) => void }) {
   return function (_babel: any) {
     const skillRoot = findSkillRoot(fileName, context.component!.params.data.files)
     if (!skillRoot) {
@@ -135,6 +135,13 @@ export default function skillBoundaryPlugin({ fileName }: { fileName: string;}) 
       post() {
         if (errors.length === 0) return
         const detail = errors.map((e) => e.message).join('\n\n')
+        if (onError) {
+          onError(new SyntaxError(
+            `[Skill 边界校验] 发现 ${errors.length} 个跨边界 import：\n\n${detail}`
+          ))
+          return
+        }
+
         throw new SyntaxError(
           `[Skill 边界校验] 发现 ${errors.length} 个跨边界 import：\n\n${detail}`
         )
