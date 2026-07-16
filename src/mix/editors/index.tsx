@@ -35,10 +35,10 @@ export default function (props: Props, actions: Actions) {
 
   if (config.getFrontendMode() === 'gui_card') {
     const projectItems = [
-      {
-        title: '提示词',
-        items: buildGuiCardPromptItems(),
-      },
+      // {
+      //   title: '提示词',
+      //   items: buildGuiCardPromptItems(),
+      // },
     ]
     // const uiItems = [
     //   ...exportCodeConfig,
