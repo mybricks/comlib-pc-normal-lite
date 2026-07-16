@@ -244,7 +244,18 @@ const getRuleNumericStyleValue = (sheet: CSSStyleSheet, selector: string, key: s
 
 const getSelectorMatchedElements = (selector: string, shadowRoot: ShadowRoot): HTMLElement[] | null => {
   try {
-    return Array.from(shadowRoot.querySelectorAll(selector)).filter((matchedEle): matchedEle is HTMLElement => matchedEle instanceof HTMLElement)
+    // 如果是同一段代码产生的 dom 元素，认为是一个
+    const matchedElements = Array.from(shadowRoot.querySelectorAll(selector)).filter((matchedEle): matchedEle is HTMLElement => matchedEle instanceof HTMLElement)
+    let elements: HTMLElement[] = [];
+    let locMap = new Map()
+    matchedElements.forEach((ele) => {
+      const loc = ele.dataset.loc
+      if (loc && !locMap.has(loc)) {
+         elements.push(ele)
+         locMap.set(loc, 1)
+      }
+    })
+    return elements
   } catch {
     return null
   }
@@ -521,7 +532,8 @@ export default function createSetStyleHandler(
   let styleKeyRoutes: Record<string, StyleKeyRoute> = {}
 
   return function handler(ctx: any, params: any) {
-    const { state, multiple } = params
+    const { state } = params
+    const multiple = params.multiple || params.ignoreFirst
     /**
      * multiple
      *  - true 批量修改样式
