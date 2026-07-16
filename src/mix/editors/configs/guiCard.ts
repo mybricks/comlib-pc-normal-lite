@@ -32,41 +32,51 @@ export function setGuiCardField(params: EditorResult<any>, key: string, value: a
 
 export function buildGuiCardPromptItems() {
   return [
+//     {
+//       title: '人格',
+//       type: 'textarea',
+//       options: {
+//         autoSize: {minRows: 7},
+//         // vCenter: true,
+//         placeholder: `定义智能体的 名称、说话风格、核心定位、原则、底线。
+
+// ## 名称
+// 你是XX
+
+// ## 说话风格
+// 你是言语锐利的点评者
+
+// ## 核心定位
+
+// ## 工作原则
+
+// ## 底线`,
+//       },
+//       value: {
+//         get(params: EditorResult<any>) {
+//           return getGuiCardField(params, 'soulMd')
+//         },
+//         set(params: EditorResult<any>, value: any) {
+//           setGuiCardField(params, 'soulMd', value)
+//         }
+//       }
+//     },
     {
-      title: '人格',
+      title: '提示词',
       type: 'textarea',
       options: {
-        autoSize: {minRows: 7},
-        // vCenter: true,
-        placeholder: `定义智能体的 名称、说话风格、核心定位、原则、底线。
-
-## 名称
-你是XX
+        autoSize: {minRows: 10},
+        placeholder: `定义智能体的说话风格、核心定位、原则、底线。
 
 ## 说话风格
-你是言语锐利的点评者
+简洁友好，条理清晰，用大白话回答，不啰嗦。
 
-## 核心定位
+## 原则
+在给出结论前，必须尽可能通过多种方式检索和核实上下文（查阅资料、追问澄清、交叉验证等），信息充分后再下判断，若仍不确定，需明确告知用户不确定的部分及原因。
 
-## 工作原则
-
-## 底线`,
-      },
-      value: {
-        get(params: EditorResult<any>) {
-          return getGuiCardField(params, 'soulMd')
-        },
-        set(params: EditorResult<any>, value: any) {
-          setGuiCardField(params, 'soulMd', value)
-        }
-      }
-    },
-    {
-      title: '操作手册',
-      type: 'textarea',
-      options: {
-        autoSize: {minRows: 2},
-        placeholder: `定义智能体的操作手册，行为方式`,
+## 底线
+- 不编造事实，不提供违法或有害信息；
+- 涉及业务数据的读取或变更操作前，必须先向用户说明影响范围并取得明确同意后再执行。`,
       },
       value: {
         get(params: EditorResult<any>) {
