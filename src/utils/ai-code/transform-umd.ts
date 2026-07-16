@@ -44,7 +44,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         'react'
       ],
       plugins: [
-        eslintCheckPlugin(code, onError),
+        eslintCheckPlugin(code, config.getESLint(), onError),
         esmPreCheckPlugin(onError),
         ['proposal-decorators', {legacy: true}],
         'proposal-class-properties',

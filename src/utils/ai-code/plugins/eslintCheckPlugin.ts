@@ -9,7 +9,7 @@ import eslint from '../../../mix/eslint'
 
 type EslintPathMap = Map<number, Map<string, any[]>>
 
-export default function eslintCheckPlugin(sourceCode: string, onError?: (error: Error) => void) {
+export default function eslintCheckPlugin(sourceCode: string, eslintConfig: any, onError?: (error: Error) => void) {
   return function () {
     const pathMap: EslintPathMap = new Map()
 
@@ -38,7 +38,12 @@ export default function eslintCheckPlugin(sourceCode: string, onError?: (error: 
         Program: {
           exit() {
             const jsCode = transformTypeScriptOnly(sourceCode)
-            runEslintCheck(jsCode, pathMap, onError)
+            runEslintCheck({
+              jsCode,
+              pathMap,
+              onError,
+              eslintConfig
+            })
           },
         },
       },
@@ -62,11 +67,12 @@ function transformTypeScriptOnly(sourceCode: string): string {
   }).code
 }
 
-export function runEslintCheck(
-  jsCode: string,
-  pathMap: EslintPathMap,
-  onError?: (error: Error) => void
-) {
+export function runEslintCheck({
+  jsCode,
+  pathMap,
+  onError,
+  eslintConfig
+}) {
   const linter = eslint.getLinter()
   if (!linter || !jsCode) return
 
@@ -86,6 +92,7 @@ export function runEslintCheck(
     globals: {
       // React 不默认导入
       React: 'readonly',
+      ...eslintConfig?.globals
     },
     rules: {
       'no-undef': 'error',

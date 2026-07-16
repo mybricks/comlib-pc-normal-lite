@@ -415,6 +415,10 @@ class Config {
   getWorkSpace() {
     return (window as any)._sandbox_?.config?.componentRuntime?.workspace
   }
+
+  getESLint() {
+    return (window as any)._sandbox_?.config?.componentRuntime?.eslint
+  }
 }
 
 export default new Config()
