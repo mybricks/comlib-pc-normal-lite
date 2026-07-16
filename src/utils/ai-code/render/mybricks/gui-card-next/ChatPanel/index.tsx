@@ -110,6 +110,9 @@ const AIChatPanel = ({
             : []
           return [...cardTools, ...tools]
         },
+        getAttachmentContextMessages: () => {
+          return []
+        },
         history,
         businessSkills: cards,
         name: guiCard?.name,
