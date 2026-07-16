@@ -31,20 +31,51 @@ export default function (props: Props, actions: Actions) {
   const comId = props.id;
   const focusAreaConfigs = buildFocusAreaConfigs(props.data, comId);
   const exportCodeConfig = buildExportCodeConfig(props);
-  const rootItems = config.getFrontendMode() === 'gui_card'
-    ? [
-        {
-          title: '提示词',
-          items: buildGuiCardPromptItems(),
-        },
-        ...exportCodeConfig,
-      ]
-    : exportCodeConfig;
 
-  if (!focusAreaConfigs[':root']) {
-    focusAreaConfigs[':root'] = { items: [...rootItems] };
+
+  if (config.getFrontendMode() === 'gui_card') {
+    const projectItems = [
+      {
+        title: '提示词',
+        items: buildGuiCardPromptItems(),
+      },
+    ]
+    // const uiItems = [
+    //   ...exportCodeConfig,
+    // ]
+    // // 应用没配置
+    // if (!focusAreaConfigs[':root']) {
+    //   focusAreaConfigs[':root'] = 
+    // }
+
+    // focusAreaConfigs[':root']= ({}, cate0, cate1, cate2) => {
+    //   cate0.title = ''
+    //   cate0.items = [
+    //     {
+    //       items: projectItems,
+    //     },
+    //   ]
+
+    //   cate1.title = 'UI',
+    //   cate1.items = [
+    //     {
+    //       items: uiItems
+    //     }
+    //   ]
+    // }
+
+    if (!focusAreaConfigs[':root']) {
+      focusAreaConfigs[':root'] = { items: [...projectItems] };
+    } else {
+      focusAreaConfigs[':root'].items.push(...projectItems);
+    }
   } else {
-    focusAreaConfigs[':root'].items.push(...rootItems);
+    const rootItems = exportCodeConfig;
+    if (!focusAreaConfigs[':root']) {
+      focusAreaConfigs[':root'] = { items: [...rootItems] };
+    } else {
+      focusAreaConfigs[':root'].items.push(...rootItems);
+    }
   }
 
   context.setComponent({ params: props, actions });

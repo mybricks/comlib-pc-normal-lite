@@ -36,7 +36,21 @@ export function buildGuiCardPromptItems() {
       title: '人格',
       type: 'textarea',
       options: {
-        autoSize: {minRows: 7}
+        autoSize: {minRows: 7},
+        // vCenter: true,
+        placeholder: `定义智能体的 名称、说话风格、核心定位、原则、底线。
+
+## 名称
+你是XX
+
+## 说话风格
+你是言语锐利的点评者
+
+## 核心定位
+
+## 工作原则
+
+## 底线`,
       },
       value: {
         get(params: EditorResult<any>) {
@@ -51,7 +65,8 @@ export function buildGuiCardPromptItems() {
       title: '操作手册',
       type: 'textarea',
       options: {
-        autoSize: {minRows: 7}
+        autoSize: {minRows: 2},
+        placeholder: `定义智能体的操作手册，行为方式`,
       },
       value: {
         get(params: EditorResult<any>) {
