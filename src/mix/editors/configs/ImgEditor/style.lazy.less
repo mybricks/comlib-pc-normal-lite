@@ -3,15 +3,19 @@
   width: 100%;
   height: 26px;
   border-radius: 6px;
-  border: 1px solid var(--mybricks-border-color-main);
-  background-color: var(--mybricks-bg-color-main);
+  border: 1px solid var(--mybricks-border-color-main, #ddd);
+  background-color: var(--mybricks-bg-color-main, #fff);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--mybricks-text-color-main);
+  color: var(--mybricks-text-color-main, #333) !important;
   font-size: 12px;
   padding: 0;
   box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  box-shadow: none;
 
   &:hover {
     opacity: 0.8;
