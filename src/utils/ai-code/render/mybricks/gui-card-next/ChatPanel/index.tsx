@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ClearOutlined } from '@ant-design/icons'
 import { Tooltip } from 'antd'
-import { createShowCardTool, buildAvailableCardsSection } from './tools/cards-manager'
+import { createShowCardTool } from './tools/cards-manager'
 import { createCallCardApiTool } from './tools/callUiCardApi'
+import { createCallCanvasComponentApiTool } from './tools/callCanvasComponentApi'
+import { createRenderCanvasTool } from './tools/render-canvas'
 import type { CardGroup } from './tools/cards-manager/types'
 import {
   EmptyGuide,
@@ -97,15 +99,30 @@ const AIChatPanel = ({
         get tools() {
           const cardTools = cards.length > 0
             ? [
-                createShowCardTool(cards, {
-                  onPin: (name, props) => pinActionsRef.current.pin(name, props),
-                  onUnPin: (pinKey) => pinActionsRef.current.unPin(pinKey),
-                  isPinned: (name, props) => pinActionsRef.current.isPinned(name, props),
+                // createShowCardTool(cards, {
+                //   onPin: (name, props) => pinActionsRef.current.pin(name, props),
+                //   onUnPin: (pinKey) => pinActionsRef.current.unPin(pinKey),
+                //   isPinned: (name, props) => pinActionsRef.current.isPinned(name, props),
+                //   get agent() {
+                //     return agentRef.current
+                //   }
+                // }),
+                createRenderCanvasTool({
+                  components: cards.reduce((pre, { cards }) => {
+                    cards.forEach(({ name, render, apis }) => {
+                      pre[name] = {
+                        apis,
+                        render
+                      }
+                    })
+                    return pre
+                  }, {}),
                   get agent() {
                     return agentRef.current
                   }
                 }),
-                createCallCardApiTool(),
+                createCallCanvasComponentApiTool(),
+                // createCallCardApiTool(),
               ]
             : []
           return [...cardTools, ...tools]

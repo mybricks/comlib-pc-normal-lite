@@ -140,27 +140,31 @@ const runtime = (props: CreateMyBricksProps) => {
         const apisDesc = card?.config?.apis?.length > 0
           ? card.config.apis.map((api) => `  - ${api.name}: ${api.description}`).join('\n')
           : '  （该卡片未声明任何 API）'
-        const id = randomUUID()
-        initialHistory = new DefaultToolCallHistory({
-          toolName: 'show_ui_card',
-          toolTitle: '展示 UI 卡片',
-          toolArgs: {
-            name: card?.config?.name,
-            props: {
-              text: "Leon"
+        const canvasId = randomUUID()
+        const params = {
+          components: [
+            {
+              id: 'root',
+              component: card?.config?.name,
+              props: {},
             },
-          },
+          ],
+        }
+        initialHistory = new DefaultToolCallHistory({
+          toolName: 'render_canvas',
+          toolTitle: '渲染画布',
+          toolArgs: params,
           toolResult: {
-            output: `UI 卡片 "${card.title}" 已渲染。
-cardId: ${id}
-可通过 call_ui_card_api 调用以下查询类 API 获取卡片数据（仅用于查询，不触发任何操作）：
+            output: `画布已渲染。
+canvasId: ${canvasId}
+可通过 call_canvas_component_api 调用以下组件 API：
+  - componentId: root, component: ${card?.config?.name}
 ${apisDesc}
-注意：当用户要求重新执行某个动作（如"再试一次"、"重新查询"等），应重新调用 show_ui_card 渲染新卡片，而非调用 call_ui_card_api。`,
+注意：componentId 对应 render_canvas 入参 components 中的 id；调用 API 前请使用上述 canvasId。`,
           metadata: {
-            id,
+            canvasId,
+            params,
             success: true,
-            name: card?.config?.name,
-            props: {},
           },
           },
           userText: card?.config?.title,
