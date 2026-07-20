@@ -33,7 +33,7 @@ function ElementReplacerPanel({ editConfig, comId }: { editConfig: any; comId: s
     <button
       type="button"
       className={css.btn}
-      data-mybricks-tip="支持上传图片 / SVG 图标，AI 将其替换为当前选中的元素"
+      data-mybricks-tip="支持将当前元素替换为图片/SVG"
       onClick={() => elementReplacer.set(syntheticParams)}
     >
       <AiBlingblingIcon style={{ flexShrink: 0, marginRight: 4, transform: 'rotate(180deg)' }} />
