@@ -222,7 +222,7 @@ interface VersionRecord {
   id: string;
   turnId: string;
   label: string;
-  type: 'ai' | 'manual' | 'rollback';
+  type: 'ai' | 'manual' | 'rollback' | 'init';
   createdAt: number;
   summary?: string;
 }
@@ -230,7 +230,195 @@ interface VersionRecord {
 type SandboxHistory = {
   listVersions: (params: { pageSize: number, pageNum: number }) => Promise<{ list: VersionRecord[], total: number }>;
   addVersion: (record: VersionRecord, files: VersionFile[]) => Promise<void>;
+  updateVersion: (versionId: string, patch: Partial<VersionRecord>) => Promise<void>;
+  getVersion: (versionId: string) => Promise<VersionRecord | undefined>;
+  getVersionFiles: (versionId: string) => Promise<VersionFile[]>;
 };
+
+type VersionDiffChangeType = 'added' | 'deleted' | 'modified';
+
+interface VersionDiffCodeBlock {
+  type: VersionDiffChangeType;
+  beforeStartLine: number;
+  beforeEndLine: number;
+  afterStartLine: number;
+  afterEndLine: number;
+  before: string;
+  after: string;
+}
+
+interface VersionFileDiff {
+  path: string;
+  type: VersionDiffChangeType;
+  before: string;
+  after: string;
+  blocks: VersionDiffCodeBlock[];
+}
+
+interface VersionPairDiff {
+  oldVersionId: string;
+  newVersionId: string;
+  files: VersionFileDiff[];
+}
+
+interface VersionDiffResult {
+  versionIds: string[];
+  diffs: VersionPairDiff[];
+}
+
+function normalizeVersionFiles(files: VersionFile[] = []): VersionFile[] {
+  return files.map((file: any) => ({
+    path: typeof file?.path === 'string' ? file.path : file?.fileName ?? '',
+    content: typeof file?.content === 'string' ? file.content : file?.source ?? '',
+  })).filter((file) => file.path);
+}
+
+function createVersionFileMap(files: VersionFile[]): Map<string, string> {
+  return new Map(normalizeVersionFiles(files).map((file) => [file.path, file.content]));
+}
+
+function splitCodeLines(content: string): string[] {
+  if (!content) return [];
+  return content.split('\n');
+}
+
+function createWholeFileBlock(type: VersionDiffChangeType, before: string, after: string): VersionDiffCodeBlock[] {
+  const beforeLines = splitCodeLines(before);
+  const afterLines = splitCodeLines(after);
+  return [{
+    type,
+    beforeStartLine: beforeLines.length ? 1 : 0,
+    beforeEndLine: beforeLines.length,
+    afterStartLine: afterLines.length ? 1 : 0,
+    afterEndLine: afterLines.length,
+    before,
+    after,
+  }];
+}
+
+function buildLineDiffBlocks(before: string, after: string): VersionDiffCodeBlock[] {
+  const beforeLines = splitCodeLines(before);
+  const afterLines = splitCodeLines(after);
+
+  const beforeLength = beforeLines.length;
+  const afterLength = afterLines.length;
+  const lcs: number[][] = Array.from({ length: beforeLength + 1 }, () => Array(afterLength + 1).fill(0));
+
+  for (let i = beforeLength - 1; i >= 0; i--) {
+    for (let j = afterLength - 1; j >= 0; j--) {
+      lcs[i][j] = beforeLines[i] === afterLines[j]
+        ? lcs[i + 1][j + 1] + 1
+        : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  const blocks: VersionDiffCodeBlock[] = [];
+  let i = 0;
+  let j = 0;
+  let pendingBeforeStart = -1;
+  let pendingAfterStart = -1;
+  let pendingBeforeLines: string[] = [];
+  let pendingAfterLines: string[] = [];
+
+  const appendDelete = () => {
+    if (pendingBeforeStart < 0) pendingBeforeStart = i;
+    if (pendingAfterStart < 0) pendingAfterStart = j;
+    pendingBeforeLines.push(beforeLines[i]);
+    i++;
+  };
+
+  const appendAdd = () => {
+    if (pendingBeforeStart < 0) pendingBeforeStart = i;
+    if (pendingAfterStart < 0) pendingAfterStart = j;
+    pendingAfterLines.push(afterLines[j]);
+    j++;
+  };
+
+  const flush = () => {
+    if (pendingBeforeStart < 0 && pendingAfterStart < 0) return;
+
+    const beforeCount = pendingBeforeLines.length;
+    const afterCount = pendingAfterLines.length;
+    const type: VersionDiffChangeType = beforeCount === 0 ? 'added' : afterCount === 0 ? 'deleted' : 'modified';
+    blocks.push({
+      type,
+      beforeStartLine: beforeCount ? pendingBeforeStart + 1 : pendingBeforeStart,
+      beforeEndLine: beforeCount ? pendingBeforeStart + beforeCount : pendingBeforeStart,
+      afterStartLine: afterCount ? pendingAfterStart + 1 : pendingAfterStart,
+      afterEndLine: afterCount ? pendingAfterStart + afterCount : pendingAfterStart,
+      before: pendingBeforeLines.join('\n'),
+      after: pendingAfterLines.join('\n'),
+    });
+
+    pendingBeforeStart = -1;
+    pendingAfterStart = -1;
+    pendingBeforeLines = [];
+    pendingAfterLines = [];
+  };
+
+  while (i < beforeLength || j < afterLength) {
+    if (i < beforeLength && j < afterLength && beforeLines[i] === afterLines[j]) {
+      flush();
+      i++;
+      j++;
+    } else if (j < afterLength && (i >= beforeLength || lcs[i][j + 1] >= lcs[i + 1][j])) {
+      appendAdd();
+    } else if (i < beforeLength) {
+      appendDelete();
+    }
+  }
+  flush();
+
+  return blocks;
+}
+
+function diffVersionFiles(oldVersionId: string, newVersionId: string, oldFiles: VersionFile[], newFiles: VersionFile[]): VersionPairDiff {
+  const oldFileMap = createVersionFileMap(oldFiles);
+  const newFileMap = createVersionFileMap(newFiles);
+  const paths = Array.from(new Set([...oldFileMap.keys(), ...newFileMap.keys()])).sort();
+  const files: VersionFileDiff[] = [];
+
+  for (const path of paths) {
+    const hasOldFile = oldFileMap.has(path);
+    const hasNewFile = newFileMap.has(path);
+    const before = oldFileMap.get(path) ?? '';
+    const after = newFileMap.get(path) ?? '';
+
+    if (hasOldFile && hasNewFile && before === after) {
+      continue;
+    }
+
+    const type: VersionDiffChangeType = !hasOldFile ? 'added' : !hasNewFile ? 'deleted' : 'modified';
+    files.push({
+      path,
+      type,
+      before,
+      after,
+      blocks: type === 'modified' ? buildLineDiffBlocks(before, after) : createWholeFileBlock(type, before, after),
+    });
+  }
+
+  return {
+    oldVersionId,
+    newVersionId,
+    files,
+  };
+}
+
+async function diffVersions(history: SandboxHistory, ...versionIds: string[]): Promise<VersionDiffResult> {
+  if (versionIds.length < 2) {
+    throw new Error('diff 至少需要传入 2 个连续版本 ID');
+  }
+
+  const versionFiles = await Promise.all(versionIds.map((versionId) => history.getVersionFiles(versionId)));
+  return {
+    versionIds,
+    diffs: versionIds.slice(0, -1).map((oldVersionId, index) => {
+      const newVersionId = versionIds[index + 1];
+      return diffVersionFiles(oldVersionId, newVersionId, versionFiles[index], versionFiles[index + 1]);
+    }),
+  };
+}
 
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
@@ -631,7 +819,7 @@ export async function registerSandbox(comId: string): Promise<void> {
 
         (window as any).__vibeCodingCallbacks__?.onComplete?.();
 
-        loadingRef.current?.dispose(turn);
+        loadingRef.current?.dispose();
         loadingRef.current = null;
 
         context.component?.events.emit('vibing', false);
@@ -751,6 +939,7 @@ export async function registerSandbox(comId: string): Promise<void> {
 
   context.rollback = rollbackToVersion
   context.history = history;
+  context.diff = (...versionIds: string[]) => diffVersions(history, ...versionIds);
 
   context.events.emit('ready', true);
 }
