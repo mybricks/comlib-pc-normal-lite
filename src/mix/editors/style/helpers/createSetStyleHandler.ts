@@ -104,6 +104,43 @@ const resolveStyle = (style: Record<string, number>, multiple?: boolean) => {
   }, {})
 }
 
+/**
+ * 拖拽引擎在单元素模式下返回的 gap 类样式值 = 实际 margin + parent gap，
+ * 因此需要从原始样式值中减去 parent 的 gap，得到真正应写入的 margin 值。
+ * - 横向（columnGap）减去 parent 的 column-gap
+ * - 纵向（rowGap）减去 parent 的 row-gap
+ * - 简写 gap 展开为 rowGap/columnGap 分别减去对应分量
+ *
+ * 仅在 multiple=false 时需要处理（multiple 模式下直接写 parent 的 gap 属性，值本身是正确的）。
+ */
+const subtractParentGapFromStyle = (
+  rawStyle: Record<string, number>,
+  sourceEle: HTMLElement | null,
+): Record<string, number> => {
+  if (!sourceEle?.parentElement) return rawStyle
+  if (!hasGapStyle(rawStyle)) return rawStyle
+
+  const parent = sourceEle.parentElement
+  const computed = window.getComputedStyle(parent)
+  const colGap = parseFloat(computed.columnGap) || 0
+  const rowGap = parseFloat(computed.rowGap) || 0
+
+  if (colGap === 0 && rowGap === 0) return rawStyle
+
+  const result = { ...rawStyle }
+  if ('columnGap' in result) result.columnGap = result.columnGap - colGap
+  if ('rowGap' in result) result.rowGap = result.rowGap - rowGap
+  if ('gap' in result) {
+    // gap 同时覆盖两个方向：展开为 rowGap/columnGap 后分别减去对应 parent gap
+    const gapVal = result.gap
+    delete result.gap
+    result.rowGap = gapVal - rowGap
+    result.columnGap = gapVal - colGap
+  }
+
+  return result
+}
+
 type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number }
 type InitialInlineStyleValue = {
   hadInitialValue: boolean;
@@ -543,8 +580,12 @@ export default function createSetStyleHandler(
       if (state === 'start') {
 
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
-        style = resolveStyle(getStyle(ctx, params), multiple)
-
+        style = resolveStyle(
+          multiple
+            ? getStyle(ctx, params)
+            : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
+          multiple,
+        )
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
@@ -752,7 +793,13 @@ export default function createSetStyleHandler(
         ctx.css.set(SETSTYLE_CSS_ID, cssText)
       } else if (state === 'finish') {
         isStart = false
-        style = resolveStyle(getStyle(ctx, params) || style, multiple)
+        const rawFinishStyle = getStyle(ctx, params) || style
+        style = resolveStyle(
+          multiple
+            ? rawFinishStyle
+            : subtractParentGapFromStyle(rawFinishStyle, ele),
+          multiple,
+        )
 
         if (!multiple) {
           const lessStyle: LessStyleMap = new Map()
