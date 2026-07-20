@@ -37,7 +37,7 @@ function ElementReplacerPanel({ editConfig, comId }: { editConfig: any; comId: s
       onClick={() => elementReplacer.set(syntheticParams)}
     >
       <AiBlingblingIcon style={{ flexShrink: 0, marginRight: 4, transform: 'rotate(180deg)' }} />
-      上传图标并替换当前元素
+      替换为图片元素
     </button>
   );
 }
