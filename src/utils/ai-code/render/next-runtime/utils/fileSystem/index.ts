@@ -82,7 +82,7 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
         },
         DataSource: class DataSource extends result.DataSource {
           constructor() {
-            super({ id: filename })
+            super({ path: filename })
           }
         }
       }

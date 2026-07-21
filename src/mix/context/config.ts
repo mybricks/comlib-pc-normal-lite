@@ -419,6 +419,23 @@ class Config {
   getESLint() {
     return (window as any)._sandbox_?.config?.componentRuntime?.eslint
   }
+
+  getFrontEndDataSouce() {
+    const componentRuntime = window._sandbox_.config.componentRuntime
+
+    if (!componentRuntime) {
+      return
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.DataSource
+    } else {
+      return componentRuntime?.DataSource
+    }
+  }
 }
 
 export default new Config()

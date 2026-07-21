@@ -58,7 +58,7 @@ export class DataSource {
 
   constructor(params) {
     const frontendMode = config.getFrontendMode()
-    const prefix = frontendMode === 'gui_card' ? `/api/${params.id.replace('/dataSource.ts', '').replace(/^\//, '')}` : ''
+    const prefix = frontendMode === 'gui_card' ? `/api/${params.path.replace('/dataSource.ts', '').replace(/^\//, '')}` : ''
     const axiosLib = typeof window !== 'undefined' ? (window as any).axios : undefined;
     const vsCodeMessage = typeof window !== 'undefined' ? (window as any).webViewMessageApi : undefined;
     // [TEMP] window['__IS_AICODE__'] 为过度兼容逻辑，应用上线后可删除
