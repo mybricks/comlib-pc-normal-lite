@@ -45,6 +45,8 @@ const design = (props: CreateMyBricksProps) => {
         data-zone-kind="agent-card"
         data-zone-title={config.title}
         data-desn-page={filename}
+        data-show-type={'pc'}
+        data-zone-show-type={'pc'}
         {...rest}
       >
         {children}
@@ -169,10 +171,12 @@ const design = (props: CreateMyBricksProps) => {
               id: skill.id,
               title: skill.title,
               type: skill.type,
+              showType: 'mobile',
               pages: skill.cards.map((config) => {
                 return {
                   ...config,
-                  parameters: config.props
+                  parameters: config.props,
+                  showType: 'mobile',
                 }
               }),
               description: skill.md,

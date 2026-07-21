@@ -312,6 +312,9 @@ export function buildHooks(props: Props) {
       const index = data._showPages.find((item) => item === id)
       data._showPages.splice(index, 1)
       data._showPages = [...data._showPages]
+    },
+    'switchPageShowType'(params) {
+      console.log('switchPageShowType', params)
     }
   };
 }
