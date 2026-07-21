@@ -282,6 +282,202 @@ function splitCodeLines(content: string): string[] {
   return content.split('\n');
 }
 
+function isCssLikePath(path: string): boolean {
+  return /\.(css|less|scss|sass|styl)$/i.test(path);
+}
+
+function lineNumberAtOffset(content: string, offset: number): number {
+  if (offset <= 0) return 1;
+  let line = 1;
+  const end = Math.min(offset, content.length);
+  for (let i = 0; i < end; i++) {
+    if (content[i] === '\n') line += 1;
+  }
+  return line;
+}
+
+type CssRuleUnit = {
+  key: string;
+  selector: string;
+  full: string;
+  body: string;
+  startLine: number;
+  endLine: number;
+};
+
+function normalizeCssSelector(selector: string): string {
+  return selector.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeCssBody(body: string): string {
+  return body.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 拆分顶层 CSS 规则（含 @media / @keyframes 整块）。
+ * 行级 LCS 在格式化/重排后会把无关规则错配成 modified，样式文件改走选择器匹配。
+ */
+function parseTopLevelCssRules(content: string): CssRuleUnit[] {
+  if (!content) return [];
+
+  const rules: CssRuleUnit[] = [];
+  let i = 0;
+  const len = content.length;
+
+  const skipWhitespaceAndComments = () => {
+    while (i < len) {
+      if (/\s/.test(content[i])) {
+        i += 1;
+        continue;
+      }
+      if (content[i] === '/' && content[i + 1] === '*') {
+        i += 2;
+        while (i < len - 1 && !(content[i] === '*' && content[i + 1] === '/')) {
+          i += 1;
+        }
+        i += 2;
+        continue;
+      }
+      if (content[i] === '/' && content[i + 1] === '/') {
+        i += 2;
+        while (i < len && content[i] !== '\n') i += 1;
+        continue;
+      }
+      break;
+    }
+  };
+
+  while (i < len) {
+    skipWhitespaceAndComments();
+    if (i >= len) break;
+
+    const selectorStart = i;
+    while (i < len && content[i] !== '{') {
+      const ch = content[i];
+      if (ch === '"' || ch === "'") {
+        const quote = ch;
+        i += 1;
+        while (i < len && content[i] !== quote) {
+          if (content[i] === '\\') i += 1;
+          i += 1;
+        }
+        i += 1;
+        continue;
+      }
+      i += 1;
+    }
+    if (i >= len) break;
+
+    const selector = content.slice(selectorStart, i).trim();
+    const openIdx = i;
+    i += 1;
+    let depth = 1;
+    while (i < len && depth > 0) {
+      const ch = content[i];
+      if (ch === '"' || ch === "'") {
+        const quote = ch;
+        i += 1;
+        while (i < len && content[i] !== quote) {
+          if (content[i] === '\\') i += 1;
+          i += 1;
+        }
+        i += 1;
+        continue;
+      }
+      if (ch === '/' && content[i + 1] === '*') {
+        i += 2;
+        while (i < len - 1 && !(content[i] === '*' && content[i + 1] === '/')) {
+          i += 1;
+        }
+        i += 2;
+        continue;
+      }
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+      i += 1;
+    }
+
+    const closeIdx = i - 1;
+    if (!selector || depth !== 0) continue;
+
+    const body = content.slice(openIdx + 1, closeIdx);
+    const full = content.slice(selectorStart, closeIdx + 1);
+    rules.push({
+      key: normalizeCssSelector(selector),
+      selector,
+      full: full.trim(),
+      body,
+      startLine: lineNumberAtOffset(content, selectorStart),
+      endLine: lineNumberAtOffset(content, closeIdx),
+    });
+  }
+
+  return rules;
+}
+
+/** 按选择器对齐的 CSS diff，避免行级 LCS 错配无关规则 */
+function buildCssRuleDiffBlocks(before: string, after: string): VersionDiffCodeBlock[] {
+  const beforeRules = parseTopLevelCssRules(before);
+  const afterRules = parseTopLevelCssRules(after);
+
+  const afterByKey = new Map<string, CssRuleUnit[]>();
+  for (const rule of afterRules) {
+    const list = afterByKey.get(rule.key) ?? [];
+    list.push(rule);
+    afterByKey.set(rule.key, list);
+  }
+
+  const usedAfter = new Set<CssRuleUnit>();
+  const blocks: VersionDiffCodeBlock[] = [];
+
+  for (const oldRule of beforeRules) {
+    const candidates = afterByKey.get(oldRule.key) ?? [];
+    const match = candidates.find((item) => !usedAfter.has(item));
+    if (!match) {
+      blocks.push({
+        type: 'deleted',
+        beforeStartLine: oldRule.startLine,
+        beforeEndLine: oldRule.endLine,
+        afterStartLine: 0,
+        afterEndLine: 0,
+        before: oldRule.full,
+        after: '',
+      });
+      continue;
+    }
+
+    usedAfter.add(match);
+    if (normalizeCssBody(oldRule.body) === normalizeCssBody(match.body)) {
+      continue;
+    }
+
+    blocks.push({
+      type: 'modified',
+      beforeStartLine: oldRule.startLine,
+      beforeEndLine: oldRule.endLine,
+      afterStartLine: match.startLine,
+      afterEndLine: match.endLine,
+      before: oldRule.full,
+      after: match.full,
+    });
+  }
+
+  for (const newRule of afterRules) {
+    if (usedAfter.has(newRule)) continue;
+    blocks.push({
+      type: 'added',
+      beforeStartLine: 0,
+      beforeEndLine: 0,
+      afterStartLine: newRule.startLine,
+      afterEndLine: newRule.endLine,
+      before: '',
+      after: newRule.full,
+    });
+  }
+
+  return blocks;
+}
+
 function createWholeFileBlock(type: VersionDiffChangeType, before: string, after: string): VersionDiffCodeBlock[] {
   const beforeLines = splitCodeLines(before);
   const afterLines = splitCodeLines(after);
@@ -394,7 +590,12 @@ function diffVersionFiles(oldVersionId: string, newVersionId: string, oldFiles: 
       type,
       before,
       after,
-      blocks: type === 'modified' ? buildLineDiffBlocks(before, after) : createWholeFileBlock(type, before, after),
+      blocks:
+        type === 'modified'
+          ? isCssLikePath(path)
+            ? buildCssRuleDiffBlocks(before, after)
+            : buildLineDiffBlocks(before, after)
+          : createWholeFileBlock(type, before, after),
     });
   }
 
@@ -407,7 +608,7 @@ function diffVersionFiles(oldVersionId: string, newVersionId: string, oldFiles: 
 
 async function diffVersions(history: SandboxHistory, ...versionIds: string[]): Promise<VersionDiffResult> {
   if (versionIds.length < 2) {
-    throw new Error('diff 至少需要传入 2 个连续版本 ID');
+    throw new Error('diff 至少需要传入 2 个版本 ID');
   }
 
   const versionFiles = await Promise.all(versionIds.map((versionId) => history.getVersionFiles(versionId)));

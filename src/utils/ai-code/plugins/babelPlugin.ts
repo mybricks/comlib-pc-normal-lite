@@ -103,7 +103,7 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
             // less 路径解析必须独立于 specifiers：
             // html-to-appref 等场景是副作用导入 `import './index.less'`（无 local 绑定），
             // 若只在 forEach(specifiers) 内处理，lessMap 永远为空，
-            // 样式写入会 fallback 到默认的 style.less。
+            // 样式写入会走 resolveLessFilePath：入口 less import → 文件名兜底。
             if (node.source.value.endsWith('.less') && fileName) {
               let currentPath = fileName.split('/');
               currentPath = currentPath.slice(0, currentPath.length - 1);

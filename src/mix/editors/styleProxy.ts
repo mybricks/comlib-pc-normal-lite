@@ -1,9 +1,10 @@
-import context from '../context';
+import context, { config } from '../context';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry } from './style/helpers/patchJsxInlineStyle'
+import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
@@ -937,10 +938,14 @@ export function genStyleValue(props) {
     set(params: any, value: any) {
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
-      const lessPath = cn.files?.less ?? 'style.less';
-
       const deletions: string[] | null = (window as any).__mybricks_style_deletions;
       const aiComParams = context.component?.params;
+      // 子目录 tsx 未 import less 时：先看入口文件的 less import，再按文件名兜底
+      const lessPath = resolveLessFilePath(
+        cn.files?.less,
+        aiComParams?.data?.files,
+        config.getEntryFile(),
+      );
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;

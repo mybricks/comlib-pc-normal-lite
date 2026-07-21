@@ -1,5 +1,5 @@
 import { calculate, compare } from 'specificity';
-import context from '../../../context'
+import context, { config } from '../../../context'
 import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
@@ -11,6 +11,7 @@ import {
   patchJsxInlineStyle,
   StyleInfoEntry,
 } from './patchJsxInlineStyle'
+import { resolveLessFilePath } from './resolveLessFilePath'
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
@@ -281,18 +282,7 @@ const getRuleNumericStyleValue = (sheet: CSSStyleSheet, selector: string, key: s
 
 const getSelectorMatchedElements = (selector: string, shadowRoot: ShadowRoot): HTMLElement[] | null => {
   try {
-    // 如果是同一段代码产生的 dom 元素，认为是一个
-    const matchedElements = Array.from(shadowRoot.querySelectorAll(selector)).filter((matchedEle): matchedEle is HTMLElement => matchedEle instanceof HTMLElement)
-    let elements: HTMLElement[] = [];
-    let locMap = new Map()
-    matchedElements.forEach((ele) => {
-      const loc = ele.dataset.loc
-      if (loc && !locMap.has(loc)) {
-         elements.push(ele)
-         locMap.set(loc, 1)
-      }
-    })
-    return elements
+    return Array.from(shadowRoot.querySelectorAll(selector)).filter((matchedEle): matchedEle is HTMLElement => matchedEle instanceof HTMLElement)
   } catch {
     return null
   }
@@ -569,8 +559,7 @@ export default function createSetStyleHandler(
   let styleKeyRoutes: Record<string, StyleKeyRoute> = {}
 
   return function handler(ctx: any, params: any) {
-    const { state } = params
-    const multiple = params.multiple || params.ignoreFirst
+    const { state, multiple } = params
     /**
      * multiple
      *  - true 批量修改样式
@@ -580,6 +569,7 @@ export default function createSetStyleHandler(
       if (state === 'start') {
 
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
+        style = resolveStyle(getStyle(ctx, params), multiple)
         style = resolveStyle(
           multiple
             ? getStyle(ctx, params)
@@ -604,7 +594,11 @@ export default function createSetStyleHandler(
           // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
           const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
           const loc = locRaw ? (() => { try { return JSON.parse(locRaw) } catch { return null } })() : null
-          const lessFile: string = loc?.files?.less ?? 'style.less'
+          const lessFile: string = resolveLessFilePath(
+            loc?.files?.less,
+            context.component?.params?.data?.files,
+            config.getEntryFile(),
+          )
           const styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           const shadowRoot = getShadowRoot()
           const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement | null
