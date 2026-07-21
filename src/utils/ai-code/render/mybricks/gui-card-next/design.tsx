@@ -93,6 +93,7 @@ const design = (props: CreateMyBricksProps) => {
           data-desn-page=''
           data-zone-title='弹窗'
           data-widge-name='弹窗'
+          data-zone-filename={params.filename}
           style={MOBILE_CONTAINER_STYLE}
         >
           {container && <Component {...props} popupNode={container}/>}
