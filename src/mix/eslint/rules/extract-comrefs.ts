@@ -3,7 +3,7 @@ import {
   extractRefFromVariableDeclarator,
   extractRefFromExportDefault,
 } from '../../../utils/ai-code/plugins/utils/comRef';
-import { extractCssClassNames } from '../../../utils/ai-code/plugins/utils/css';
+import { extractCssClassNamesFromJSXElement } from '../../../utils/ai-code/plugins/utils/css';
 
 export const RULE_ID = 'extract-comrefs';
 
@@ -51,21 +51,8 @@ function toArrayRecord(record: Record<string, Set<string>>): Record<string, stri
 }
 
 function getClassNamesFromJSXElement(node: any): string[] {
-  const classNameAttr = node?.openingElement?.attributes?.find((attr: any) => attr?.name?.name === 'className');
-  if (!classNameAttr) return [];
-
-  if (classNameAttr.value?.type === 'StringLiteral') {
-    return classNameAttr.value.value
-      .split(/\s+/)
-      .map((name: string) => name.trim())
-      .filter(Boolean);
-  }
-
-  const expression = classNameAttr.value?.type === 'JSXExpressionContainer'
-    ? classNameAttr.value.expression
-    : null;
-
-  return extractCssClassNames(expression)
+  // 与 babel 打标共用提取逻辑，覆盖 className="foo" 与 className={css.foo}
+  return extractCssClassNamesFromJSXElement(node)
     .map(item => item.name)
     .filter(Boolean);
 }

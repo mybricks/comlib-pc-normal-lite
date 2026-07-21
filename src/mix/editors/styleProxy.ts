@@ -1403,6 +1403,13 @@ export function genStyleValue(props) {
   };
 }
 
+let _imgAppliedCallback: ((src: string) => void) | null = null;
+
+/** ImgPreview 组件注册回调，替换成功后立即更新预览 */
+export function registerImgAppliedCallback(cb: ((src: string) => void) | null): void {
+  _imgAppliedCallback = cb;
+}
+
 export function genImgSrcReplacer() {
   return {
     get(params: any) {
@@ -1441,6 +1448,8 @@ export function genImgSrcReplacer() {
           });
         }
 
+        if (!newSrc) return;
+
         const snippet = source.slice(loc.jsx.start, loc.jsx.end);
 
         if (STATIC_SRC_RE.test(snippet)) {
@@ -1466,6 +1475,8 @@ export function genImgSrcReplacer() {
             attachments: [{ url: newSrc }],
           });
         }
+
+        _imgAppliedCallback?.(newSrc);
 
         // context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
         // context.saveManualVersion(comId, [jsxPath]);

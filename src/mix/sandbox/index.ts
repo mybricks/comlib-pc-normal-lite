@@ -697,8 +697,7 @@ export async function registerSandbox(comId: string): Promise<void> {
   const projectRef = getProjectRef(comId);
   refreshProjectBaseline(comId, projectRef);
 
-  const { history } = connectToAI(comId, {
-    designer: {
+  const designerFs = {
       // ── 文件系统 ──────────────────────────────────────────────────────────
 
       async getFiles() {
@@ -784,8 +783,11 @@ export async function registerSandbox(comId: string): Promise<void> {
       // loading(focusArea: any, opts?: DesignerLoadingOptions) {
       //   return createDesignerLoading(comId, focusArea, opts);
       // },
-    },
+  };
 
+  // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
+  const { history } = connectToAI(comId, {
+    designer: designerFs,
     hooks: {
       async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
@@ -862,6 +864,21 @@ export async function registerSandbox(comId: string): Promise<void> {
       },
     },
   }) ?? {};
+
+  // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）
+  const sandboxHelpers = (window as any)._sandbox_?.helpers;
+  if (sandboxHelpers && typeof sandboxHelpers.updateFiles !== 'function') {
+    sandboxHelpers.getDesigner = () => designerFs;
+    sandboxHelpers.updateFiles = (files: Array<{ path: string; content: string }>) =>
+      designerFs.updateFiles(files);
+    sandboxHelpers.getFiles = () => designerFs.getFiles();
+    sandboxHelpers.deleteFiles = (paths: string[]) => designerFs.deleteFiles(paths);
+  }
+  // 与 context.diff 同源，供页面工具栏等宿主侧调用
+  if (sandboxHelpers && history) {
+    sandboxHelpers.diff = (...versionIds: string[]) =>
+      diffVersions(history, ...versionIds);
+  }
 
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────
 

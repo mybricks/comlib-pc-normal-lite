@@ -4,7 +4,7 @@ import {
   pushDataAttr,
   pushDataAttrExpression,
   getCssSelectorForJSXPath,
-  extractCssClassNames,
+  extractCssClassNamesFromJSXElement,
   findRelyAndSource,
   getComRefForJSXPath,
   getPageRefForJSXPath,
@@ -99,28 +99,33 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
       visitor: {
         ImportDeclaration(path) {
           try {
-            const { node } = path;     
+            const { node } = path;
+            // less 路径解析必须独立于 specifiers：
+            // html-to-appref 等场景是副作用导入 `import './index.less'`（无 local 绑定），
+            // 若只在 forEach(specifiers) 内处理，lessMap 永远为空，
+            // 样式写入会 fallback 到默认的 style.less。
+            if (node.source.value.endsWith('.less') && fileName) {
+              let currentPath = fileName.split('/');
+              currentPath = currentPath.slice(0, currentPath.length - 1);
+              const targetPath = node.source.value.split('/');
+              targetPath.forEach((seg) => {
+                if (seg === '.') {
+                  // keep
+                } else if (seg === '..') {
+                  currentPath.pop();
+                } else {
+                  currentPath.push(seg);
+                }
+              });
+              lessMap.set('less', currentPath.join('/'));
+            }
+
             node.specifiers.forEach((specifier) => {
               if (types.isImportSpecifier(specifier) || types.isImportDefaultSpecifier(specifier)) {
                 importRelyMap.set(specifier.local.name, node.source.value);
 
                 if (node.source.value.endsWith('.less')) {
                   cssModuleNames.add(specifier.local.name);
-                }
-                if (node.source.value.endsWith('.less') && fileName) {
-                  let currentPath = fileName.split('/');
-                  currentPath = currentPath.slice(0, currentPath.length - 1)
-                  const targetPath = node.source.value.split('/');
-                  targetPath.forEach((path) => {
-                    if (path === ".") {
-                    } else if (path === "..") {
-                      currentPath.pop();
-                    } else {
-                      currentPath.push(path)
-                    }
-                  })
-                  const lessFilePath = currentPath.join('/');
-                  lessMap.set("less", lessFilePath);
                 }
               }
             })
@@ -212,11 +217,9 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                   less: lessMap.get("less")
                 }
               };
-              const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
-              const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
-              // extractCssClassNames 现在返回 CssClassName[]，这里提取 .name 并去重
+              // 同时支持 className="foo" 字符串字面量 与 className={css.foo} CSS Module
               // 保持 cnList 为 string[]，data-loc 和 constituency.className 的下游消费者无需改动
-              const cnList = [...new Set(extractCssClassNames(classNameExpr, false, cssModuleNames).map(c => c.name))];
+              const cnList = [...new Set(extractCssClassNamesFromJSXElement(node, cssModuleNames).map(c => c.name))];
               pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(','));
               const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
               // fullComponentName 保留完整 JSX 组件名（如 "Input.Search"），用于 data-figma-props 变体库匹配

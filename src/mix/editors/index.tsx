@@ -130,7 +130,7 @@ export default function (props: Props, actions: Actions) {
           ],
         },
       ],
-      items: buildElementReplacerItems(comId),
+      // items: buildElementReplacerItems(comId),
     },
     'img': {
       '@ai': {
