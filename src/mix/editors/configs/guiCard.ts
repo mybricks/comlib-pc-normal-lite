@@ -10,6 +10,7 @@ export function ensureGuiCard(data: any) {
   data.gui_card.subtitle ??= '你可以向我提问'
   data.gui_card.colorPrimary ??= '#FA6400'
   data.gui_card.homePins ??= []
+  data.gui_card.showTypeMap ??= {}
 
   return data.gui_card
 }
@@ -89,4 +90,18 @@ export function buildGuiCardPromptItems() {
       }
     },
   ]
+}
+
+export function buildGuiCardHooks() {
+  return {
+    '@switchPageShowType'(params) {
+      const desnPage = params.focusArea.dataset.desnPage
+      const showTypeMap = getGuiCardField(params, 'showTypeMap')
+      if (!showTypeMap[desnPage]) {
+        showTypeMap[desnPage] = 'pc'
+      } else {
+        showTypeMap[desnPage] = showTypeMap[desnPage] === 'mobile' ? 'pc' : 'mobile'
+      }
+    }
+  }
 }

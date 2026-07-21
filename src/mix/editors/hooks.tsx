@@ -1,4 +1,5 @@
 import React from 'react';
+import { buildGuiCardHooks } from './configs/guiCard';
 import LowcodeView, {lowcodeViewEvents} from '../lowcodeView';
 import lowcodeViewCss from '../lowcodeView/index.lazy.less';
 import consoleViewCss from '../lowcodeView/console/index.lazy.less';
@@ -313,8 +314,6 @@ export function buildHooks(props: Props) {
       data._showPages.splice(index, 1)
       data._showPages = [...data._showPages]
     },
-    '@switchPageShowType'(params) {
-      console.log('switchPageShowType', params)
-    }
+    ...buildGuiCardHooks()
   };
 }
