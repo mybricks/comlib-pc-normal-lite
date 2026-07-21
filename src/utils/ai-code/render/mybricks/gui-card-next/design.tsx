@@ -222,9 +222,11 @@ const design = (props: CreateMyBricksProps) => {
         setShowSkills(showSkills)
       }, [skills, data._showPages])
 
-      useEffect(() => {
-        context.component!.actions.loaded()
-      }, [showSkills, tick])
+      // useEffect(() => {
+      //   context.component!.actions.loaded()
+      // }, [showSkills, tick])
+
+      context.component!.actions.loaded()
 
       const { showType, cardStyle } = getShowTypeAndAgentStyle('GUI_AGENT')
 
