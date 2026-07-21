@@ -275,6 +275,7 @@ const design = (props: CreateMyBricksProps) => {
                         info: `SKILL_CARD(${name}_${config.name})\n` + 
                           ` - 相关代码：位于${filename}`
                       })}
+                      data-zone-name={config.name}
                     >
                       <Render />
                     </Card>

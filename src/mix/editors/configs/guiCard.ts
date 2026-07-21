@@ -9,6 +9,7 @@ export function ensureGuiCard(data: any) {
   data.gui_card.titleHighlight ??= 'AI 助手'
   data.gui_card.subtitle ??= '你可以向我提问'
   data.gui_card.colorPrimary ??= '#FA6400'
+  data.gui_card.homePins ??= []
 
   return data.gui_card
 }

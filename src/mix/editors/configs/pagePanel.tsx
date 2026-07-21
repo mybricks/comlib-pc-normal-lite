@@ -1,10 +1,11 @@
-import context from '../../context';
+import context, { config } from '../../context';
 import { syncFromFigmaJson } from '../figma-to-dom/sync';
 import type { Props, FigmaComponentPatch, FigmaImportItem } from '../types';
 import { ensureGuiCard, getGuiCardField, setGuiCardField } from './guiCard';
 
 export function buildPagePanel(props: Props) {
   const comId = props.model?.runtime?.id || props.id;
+  const frontendMode = config.getFrontendMode();
 
   return {
     items: (pageProps: any, cate1: any, _cate2: any) => {
@@ -115,8 +116,8 @@ export function buildPagePanel(props: Props) {
         return
       }
 
-      cate1.title = '页面';
-      cate1.items = [
+      let title = '页面'
+      const items: any[] = [
         {
           title: 'UI设计',
           items: [
@@ -141,32 +142,87 @@ export function buildPagePanel(props: Props) {
                 },
               },
             },
-            // {
-            //   title: '下载Figma插件',
-            //   type: 'editorRender',
-            //   options: {
-            //     render: () => <DownloadFigmaPlugin buttonStyle={figmaUiButtonStyle} />,
-            //   },
-            // },
-            // {
-            //   type: 'themes',
-            //   value: {
-            //     get(params: any) {
-            //       if (params.data._themesModified) {
-            //         return params.data.themes;
-            //       }
-            //       const projectThemes = context.projectConfig.themes;
-            //       return (projectThemes && projectThemes.length > 0) ? projectThemes : params.data.themes;
-            //     },
-            //     set(params: any, themes: any) {
-            //       params.data._themesModified = true;
-            //       params.data.themes = themes;
-            //     },
-            //   },
-            // },
           ],
         },
-      ];
+      ]
+
+       if (frontendMode === 'gui_card') {
+        title = '卡片'
+        const getHomePinName = (params: EditorResult<any>) => params.focusArea.dataset.zoneName
+        const getHomePin = (params: EditorResult<any>) => {
+          const pins = getGuiCardField(params, 'homePins') || []
+          const name = getHomePinName(params)
+          return pins.find((pin: any) => pin.name === name)
+        }
+        const setHomePin = (params: EditorResult<any>, nextPin: any) => {
+          const pins = getGuiCardField(params, 'homePins') || []
+          const index = pins.findIndex((pin: any) => pin.name === nextPin.name)
+          const nextPins = [...pins]
+
+          if (index === -1) {
+            nextPins.push(nextPin)
+          } else {
+            nextPins[index] = {
+              ...nextPins[index],
+              ...nextPin
+            }
+          }
+
+          setGuiCardField(params, 'homePins', nextPins)
+        }
+
+        items.push({
+          title: '默认收藏',
+          description: '将卡片默认收藏到首页',
+          type: 'switch',
+          value: {
+            get(params) {
+              return getHomePin(params)?.enabled === true
+            },
+            set(params, value) {
+              const name = getHomePinName(params)
+              const pin = getHomePin(params)
+
+              setHomePin(params, {
+                name,
+                props: pin?.props || encodeURIComponent("{}"),
+                enabled: value === true
+              })
+            }
+          }
+        }, {
+          title: '参数',
+          type: 'code',
+          description: '请查看配置文件了解参数信息',
+          ifVisible(params) {
+            return getHomePin(params)?.enabled === true
+          },
+          options: {
+            language: 'json',
+            minimap: {
+              enabled: false
+            },
+          },
+          value: {
+            get(params) {
+              return getHomePin(params)?.props
+            },
+            set(params, value) {
+              const name = getHomePinName(params)
+              const pin = getHomePin(params)
+
+              setHomePin(params, {
+                name,
+                enabled: pin?.enabled === true,
+                props: value
+              })
+            }
+          }
+        })
+      }
+
+      cate1.title = title;
+      cate1.items = items;
       return;
     },
   };
