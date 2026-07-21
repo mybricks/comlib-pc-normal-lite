@@ -130,6 +130,14 @@ function createDisplayContentsProps(originalProps: any) {
         computed: false,
         shorthand: false,
       },
+      // Mark this wrapper div so refSelector queries can exclude it via :not([data-wrap-container])
+      {
+        type: "ObjectProperty",
+        key: { type: "StringLiteral", value: "data-wrap-container" },
+        value: { type: "StringLiteral", value: "true" },
+        computed: false,
+        shorthand: false,
+      },
       ...getDataObjectProperties(originalProps),
     ],
   };

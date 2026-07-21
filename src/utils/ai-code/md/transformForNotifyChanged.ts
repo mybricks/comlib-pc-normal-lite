@@ -30,7 +30,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
           services.push({
             title: api,
             type: 'up',
-            refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
+            refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}:not([data-wrap-container]), ${widgetSelector} ${classSelector}:not([data-wrap-container])`,
             description: desc || ""
           })
         })
@@ -44,7 +44,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
         const classSelector = `[data-zone-classnames*="${id}"]`
 
         handlers.forEach(({ handler, title, mermaid, relations }) => {
-          const refSelector = `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`
+          const refSelector = `${widgetSelector}${classSelector}:not([data-wrap-container]), ${widgetSelector} ${classSelector}:not([data-wrap-container])`
           const result: any = {
             refSelector,
             title: handler,
@@ -55,7 +55,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
           if (relations && relations.length > 0) {
             result.relations = relations.map(r => ({
               type: r.type,
-              refSelector: `[data-widget-name="${r.name}"]`,
+              refSelector: `[data-widget-name="${r.name}"]:not([data-wrap-container])`,
             }))
           }
 
@@ -72,7 +72,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
 
           store.push({
             field,
-            refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}, ${widgetSelector} ${classSelector}`,
+            refSelector: classname === 'root' ? widgetSelector : `${widgetSelector}${classSelector}:not([data-wrap-container]), ${widgetSelector} ${classSelector}:not([data-wrap-container])`,
             description: desc || ""
           })
         })
@@ -101,6 +101,17 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
 export { transformForNotifyChanged }
 
 // ─── New JSON format transformer ─────────────────────────────────────────────
+
+/**
+ * 给 refSelector 中每个子选择器追加 :not([data-wrap-container])，
+ * 从而排除 wrapThirdPartyPlugin 注入的外层包裹 div（该 div 带有 data-wrap-container="true"）。
+ */
+function excludeWrapContainer(refSelector: string): string {
+  return refSelector
+    .split(',')
+    .map(s => `${s.trim()}:not([data-wrap-container])`)
+    .join(', ')
+}
 
 /** 新版 JSON 数据格式中每个组件/页面的结构 */
 export type NewSummaryItem = {
@@ -152,12 +163,14 @@ const transformNewFormatForNotifyChanged = (
         Object.entries(apis).forEach(([apiName, { desc }]) => {
           const classSelector = `[data-zone-classnames*="${classname}"]`
 
-          const refSelector = classname === 'root' ? 
-            `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
-            `${fileSelector}${widgetSelector}${classSelector}` +
-            `, ${fileSelector}${widgetSelector} ${classSelector}` + 
-            `, ${fileSelector} ${widgetSelector}${classSelector}` + 
-            `, ${fileSelector} ${widgetSelector} ${classSelector}`
+          const refSelector = excludeWrapContainer(
+            classname === 'root' ? 
+              `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
+              `${fileSelector}${widgetSelector}${classSelector}` +
+              `, ${fileSelector}${widgetSelector} ${classSelector}` + 
+              `, ${fileSelector} ${widgetSelector}${classSelector}` + 
+              `, ${fileSelector} ${widgetSelector} ${classSelector}`
+          )
 
           services.push({
             title: apiName,
@@ -186,12 +199,14 @@ const transformNewFormatForNotifyChanged = (
          *        dom  classSelector
          */
 
-        const refSelector = classname === 'root' ? 
-          `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
-          `${fileSelector}${widgetSelector}${classSelector}` +
-          `, ${fileSelector}${widgetSelector} ${classSelector}` + 
-          `, ${fileSelector} ${widgetSelector}${classSelector}` + 
-          `, ${fileSelector} ${widgetSelector} ${classSelector}`
+        const refSelector = excludeWrapContainer(
+          classname === 'root' ? 
+            `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
+            `${fileSelector}${widgetSelector}${classSelector}` +
+            `, ${fileSelector}${widgetSelector} ${classSelector}` + 
+            `, ${fileSelector} ${widgetSelector}${classSelector}` + 
+            `, ${fileSelector} ${widgetSelector} ${classSelector}`
+        )
 
         Object.entries(handlers).forEach(([eventName, { title, mermaid, relations }]) => {
           const result: any = {
@@ -204,7 +219,7 @@ const transformNewFormatForNotifyChanged = (
             result.relations = Object.entries(relations).map(([name, { type }]) => {
               return {
                 type,
-                refSelector: `[data-widget-name="${name}"]`,
+                refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
               }
             })
           }
@@ -217,12 +232,14 @@ const transformNewFormatForNotifyChanged = (
     if (info.state) {
       Object.entries(info.state).forEach(([classname, fields]) => {
         const classSelector = `[data-zone-classnames*="${classname}"]`
-        const refSelector = classname === 'root' ? 
-          `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
-          `${fileSelector}${widgetSelector}${classSelector}` +
-          `, ${fileSelector}${widgetSelector} ${classSelector}` + 
-          `, ${fileSelector} ${widgetSelector}${classSelector}` + 
-          `, ${fileSelector} ${widgetSelector} ${classSelector}`
+        const refSelector = excludeWrapContainer(
+          classname === 'root' ? 
+            `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
+            `${fileSelector}${widgetSelector}${classSelector}` +
+            `, ${fileSelector}${widgetSelector} ${classSelector}` + 
+            `, ${fileSelector} ${widgetSelector}${classSelector}` + 
+            `, ${fileSelector} ${widgetSelector} ${classSelector}`
+        )
 
         Object.entries(fields).forEach(([field, { desc }]) => {
           state.push({
@@ -237,7 +254,8 @@ const transformNewFormatForNotifyChanged = (
     if (type !== 'app') {
       // 当前仅处理组件
       docs.push({
-        refSelector: `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}`,
+        refSelector: excludeWrapContainer(`${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}`),
+
         name,
         title,
         summary,
