@@ -313,7 +313,7 @@ export function buildHooks(props: Props) {
       data._showPages.splice(index, 1)
       data._showPages = [...data._showPages]
     },
-    'switchPageShowType'(params) {
+    '@switchPageShowType'(params) {
       console.log('switchPageShowType', params)
     }
   };
