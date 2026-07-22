@@ -369,10 +369,12 @@ function resolveTargetKey(params: {
 
   const compoundMatchKey = eleClassList.length > 0 ? findCompoundClassKey(cssObj, eleClassList) : undefined;
 
-  // 逗号分隔选择器兼容
+  // 逗号分隔选择器兼容（用顶层逗号拆分，避免 :not(a, b) 被误拆）
   const commaMatchKey = Object.keys(cssObj).find(k => {
     if (!k.includes(',')) return false;
-    return k.split(',').map(s => s.trim()).some(s => s === fullSelector || s.endsWith(' ' + fullSelector));
+    return splitTopLevelCommaKeys(k).some(
+      s => s === fullSelector || s.endsWith(' ' + fullSelector),
+    );
   });
 
   // 第 5 策略：CSS Modules 哈希复合类名反推（前 4 策略均失败时才触发）
@@ -399,7 +401,116 @@ function splitTopLevelCommaKeys(key: string): string[] {
     }
   }
   parts.push(key.slice(start).trim());
-  return parts;
+  return parts.filter(Boolean);
+}
+
+/** 取选择器末尾 class token（如 ".a .b.c" → ".c"） */
+function getSelectorLastClassToken(selectorPart: string): string {
+  const lastSegment = selectorPart.trim().split(/\s+/).pop() || selectorPart;
+  const classTokens = lastSegment.split('.').filter(Boolean);
+  return classTokens.length > 0 ? '.' + classTokens[classTokens.length - 1] : lastSegment;
+}
+
+/**
+ * 判断逗号分支是否对应当前正在编辑的选择器末段。
+ * 兼容：精确匹配、作用域后缀、CSS Modules 哈希（- / --）。
+ */
+function commaBranchMatchesSelector(branch: string, fullSelector: string): boolean {
+  const selectorLastSeg = fullSelector.trim().split(/\s+/).pop() || fullSelector;
+  const selectorLastToken = getSelectorLastClassToken(fullSelector);
+  const selClass = selectorLastToken.replace(/^\./, '');
+
+  if (branch === fullSelector || branch.endsWith(' ' + fullSelector)) return true;
+  if (branch === selectorLastSeg || branch.endsWith(' ' + selectorLastSeg)) return true;
+
+  const branchLastToken = getSelectorLastClassToken(branch);
+  if (branchLastToken === selectorLastToken) return true;
+
+  const branchClass = branchLastToken.replace(/^\./, '');
+  return !!selClass && (
+    branchClass === selClass ||
+    branchClass.endsWith('-' + selClass) ||
+    branchClass.endsWith('--' + selClass)
+  );
+}
+
+/**
+ * 删除时：若属性落在顶层逗号合并规则（如 ".resetBtn, .queryBtn { min-width }"）中，
+ * 先拆成独立分支（其它分支保留共享样式），再只从匹配当前编辑选择器的分支删除属性。
+ * 与 tryWriteNestedPseudo 对 "&:hover, &:focus" 的拆分策略一致。
+ */
+function deleteFromCommaMergedTopLevelRules(
+  cssObj: Record<string, any>,
+  fullSelector: string,
+  expandedDeletions: string[],
+): void {
+  const commaKeys = Object.keys(cssObj).filter(k => k.includes(','));
+  for (const commaKey of commaKeys) {
+    const branches = splitTopLevelCommaKeys(commaKey);
+    if (branches.length < 2) continue;
+    if (!branches.some(b => commaBranchMatchesSelector(b, fullSelector))) continue;
+
+    const sharedStyle = cssObj[commaKey];
+    if (!sharedStyle || typeof sharedStyle !== 'object' || Array.isArray(sharedStyle)) continue;
+
+    // 拆分：各分支先继承共享样式；已有同名 key 时不覆盖其已有属性
+    for (const branch of branches) {
+      const existing = cssObj[branch];
+      if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+        cssObj[branch] = { ...sharedStyle, ...existing };
+      } else {
+        cssObj[branch] = { ...sharedStyle };
+      }
+    }
+    delete cssObj[commaKey];
+
+    // 只从当前编辑分支删除
+    for (const branch of branches) {
+      if (!commaBranchMatchesSelector(branch, fullSelector)) continue;
+      if (!cssObj[branch] || typeof cssObj[branch] !== 'object') continue;
+      expandedDeletions.forEach(k => { delete cssObj[branch][k]; });
+      if (Object.keys(cssObj[branch]).length === 0) {
+        delete cssObj[branch];
+      }
+    }
+  }
+}
+
+/**
+ * 删除时：属性实际写在更短的后缀选择器上（如 `.resetBtn { min-width }`），
+ * 而 resolveTargetKey 命中了更长路径（如 `.contentArea ... .resetBtn`）时，
+ * 需要把 deletions 同步落到所有 fullSelector 的后缀候选 key 上。
+ *
+ * 只取路径后缀（segments.slice(i)），不会误伤中间祖先（如单独的 .formActions）。
+ */
+function deleteFromShorterMatchingRules(
+  cssObj: Record<string, any>,
+  fullSelector: string,
+  targetKey: string,
+  expandedDeletions: string[],
+): void {
+  const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
+  const candidates = new Set<string>();
+
+  for (let i = 0; i < segments.length; i++) {
+    const candidate = segments.slice(i).join(' ');
+    if (candidate) candidates.add(candidate);
+  }
+
+  const lastToken = getSelectorLastClassToken(fullSelector);
+  if (lastToken) candidates.add(lastToken);
+
+  for (const key of candidates) {
+    if (key === targetKey) continue;
+    if (key.includes(',')) continue; // 逗号合并由 deleteFromCommaMergedTopLevelRules 处理
+    const styleObj = cssObj[key];
+    if (!styleObj || typeof styleObj !== 'object' || Array.isArray(styleObj)) continue;
+
+    expandedDeletions.forEach(k => { delete styleObj[k]; });
+    if (Object.keys(styleObj).length === 0) {
+      delete cssObj[key];
+    }
+  }
 }
 
 /**
@@ -1309,6 +1420,16 @@ export function genStyleValue(props) {
         }
         const expandedDeletions = expandDeletions(deletions);
         expandedDeletions.forEach(key => delete cssObj[targetKey][key]);
+
+        // ── 逗号合并规则拆分删除 ──────────────────────────────────────────────
+        // 例：.resetBtn, .queryBtn { min-width: 80px } 与更长路径的 .queryBtn 规则并存时，
+        // resolveTargetKey 会命中长路径，delete 落不到逗号块。这里拆分后只删当前分支。
+        deleteFromCommaMergedTopLevelRules(cssObj, fullSelector, expandedDeletions);
+
+        // ── 短后缀选择器补充删除 ──────────────────────────────────────────────
+        // 例：长路径 .contentArea ... .resetBtn 与短规则 .resetBtn { min-width } 并存时，
+        // targetKey 是长路径，需同步删掉短规则上的同名属性。
+        deleteFromShorterMatchingRules(cssObj, fullSelector, targetKey, expandedDeletions);
 
         // ── 补充删除：扫描所有适用于当前元素但被遗漏的规则 ──────────────────────
         // parseLess 直接解析 Less AST、保留嵌套结构（不经 less.render() 扁平化），
