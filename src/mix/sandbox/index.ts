@@ -629,7 +629,7 @@ export async function registerSandbox(comId: string): Promise<void> {
           dispose: typeof loadingRef.current?.dispose
         });
 
-        (window as any).__vibeCodingCallbacks__?.onComplete?.();
+        (window as any).__vibeCodingCallbacks__?.onComplete?.(turn);
 
         loadingRef.current?.dispose(turn);
         loadingRef.current = null;
