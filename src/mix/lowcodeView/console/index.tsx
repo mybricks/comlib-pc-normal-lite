@@ -95,7 +95,7 @@ const LogAction = ({ data, method, action, sendToAgent }) => {
             })
           }}
         >
-          <AiFix size={14}/>
+          <AiFix size={16}/>
         </div>
       )}
       <div
@@ -108,7 +108,7 @@ const LogAction = ({ data, method, action, sendToAgent }) => {
           });
         }}
       >
-        <ViewCode size={14}/>
+        <ViewCode size={16}/>
       </div>
     </div>
   )
