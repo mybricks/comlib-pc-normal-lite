@@ -4,7 +4,7 @@ import type { MyBricksTesting } from './mybricks-testing'
 import { createMyBricks } from '../mybricks'
 import createMyBricksForKdsWeb from '../mybricks/kds-web'
 import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
-import { config } from '../../../../mix/context'
+import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 
 class EmptyDataSource {
@@ -32,11 +32,12 @@ const useDependencies = (params: Params) => {
   const reload = params.activeEnv + "_" + params.reload
 
   return useMemo(() => {
-    const BaseDataSource = params.DataSource || EmptyDataSource;
+    const frontEndDataSouce = config.getFrontEndDataSouce()
+    const BaseDataSource = frontEndDataSouce || params.DataSource || EmptyDataSource;
     
     class DataSourceWithProxy extends BaseDataSource {
       constructor(params) {
-        super(params);
+        super({...params, pushLog: (method, data) => context.pushLog(method, data)});
         return new Proxy(this, {
           get(target, key: string) {
             if (key === 'axios') {

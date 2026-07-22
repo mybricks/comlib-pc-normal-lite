@@ -1,15 +1,27 @@
-import { findRelyAndSource, getJSXElementNameString } from "./rely";
-
 export interface CssClassName {
   name: string;
   /** 是否来自条件表达式（ConditionalExpression 的分支 或 LogicalExpression 的 right） */
   conditional: boolean;
 }
 
+/** 将空格分隔的 class 字符串拆成 CssClassName[] */
+function splitClassNames(value: string, isConditional: boolean): CssClassName[] {
+  if (!value) return [];
+  return value
+    .split(/\s+/)
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => ({ name, conditional: isConditional }));
+}
+
 /**
- * 从 className 表达式中提取所有 styles.xxx / css.xxx 等 CSS Module 成员访问，并标记是否为条件性 class。
- * 支持任意导入别名，如 `import styles from './index.less'` 后使用 `styles.button`、
- * `import css from './style.less'` 后使用 `css.button`，以及模板字符串、条件表达式等。
+ * 从 className 表达式中提取 class 名，并标记是否为条件性 class。
+ *
+ * 支持：
+ * - CSS Module 成员访问：`styles.button` / `css.button` / `styles['button']`
+ * - 字符串字面量：`"foo bar"` / `'foo'`（html-to-appref 等全局 class 场景）
+ * - 模板字符串（含静态段与表达式插值）
+ * - 条件 / 逻辑表达式等
  *
  * @param node          - AST 节点
  * @param isConditional - 当前节点是否处于条件分支上下文中（由父节点递归传入）
@@ -18,6 +30,16 @@ export interface CssClassName {
 export function extractCssClassNames(node: any, isConditional = false, cssModuleNames?: Set<string>): CssClassName[] {
   const result: CssClassName[] = [];
   if (!node) return result;
+
+  // className="foo bar" 经 JSXExpressionContainer 包一层后的字符串，或 className={"foo"}
+  if (node.type === "StringLiteral") {
+    return splitClassNames(node.value || "", isConditional);
+  }
+
+  // 部分解析器会把 JSX 属性字符串标成 Literal
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return splitClassNames(node.value, isConditional);
+  }
 
   if (node.type === "MemberExpression") {
     const obj = node.object;
@@ -44,7 +66,12 @@ export function extractCssClassNames(node: any, isConditional = false, cssModule
   }
 
   if (node.type === "TemplateLiteral") {
-    // 模板字符串本身不改变 conditional 语义，透传父级的 isConditional
+    // 静态段：`foo ${x} bar` 中的 "foo " / " bar"
+    for (const quasi of node.quasis || []) {
+      const cooked = quasi.value?.cooked ?? quasi.value?.raw ?? "";
+      result.push(...splitClassNames(cooked, isConditional));
+    }
+    // 插值表达式：css.xxx / 条件表达式等
     for (const expr of node.expressions || []) {
       result.push(...extractCssClassNames(expr, isConditional, cssModuleNames));
     }
@@ -70,6 +97,32 @@ export function extractCssClassNames(node: any, isConditional = false, cssModule
 }
 
 /**
+ * 从 JSXElement 的 className 属性提取 class 列表。
+ * 同时支持：
+ * - className="foo bar"（属性值为 StringLiteral）
+ * - className={css.foo} / className={`a ${css.b}`}（JSXExpressionContainer）
+ */
+export function extractCssClassNamesFromJSXElement(
+  node: any,
+  cssModuleNames?: Set<string>,
+): CssClassName[] {
+  if (!node || node.type !== "JSXElement") return [];
+  const classNameAttr = node.openingElement?.attributes?.find(
+    (a: any) => a.name?.name === "className",
+  );
+  if (!classNameAttr?.value) return [];
+
+  const value = classNameAttr.value;
+  if (value.type === "StringLiteral" || (value.type === "Literal" && typeof value.value === "string")) {
+    return extractCssClassNames(value, false, cssModuleNames);
+  }
+  if (value.type === "JSXExpressionContainer") {
+    return extractCssClassNames(value.expression, false, cssModuleNames);
+  }
+  return [];
+}
+
+/**
  * 从单个 JSX 元素节点得到「选择器片段」列表。
  *
  * 处理规则：
@@ -81,10 +134,8 @@ export function extractCssClassNames(node: any, isConditional = false, cssModule
  */
 export function getSelectorSegment(node: any, importRelyMap: any, cssModuleNames?: Set<string>): string[] {
   if (!node || node.type !== "JSXElement") return [];
-  const classNameAttr = node.openingElement.attributes.find((a) => a.name?.name === "className");
-  const classNameExpr = classNameAttr?.value?.type === "JSXExpressionContainer" ? classNameAttr.value.expression : null;
 
-  const raw = extractCssClassNames(classNameExpr, false, cssModuleNames);
+  const raw = extractCssClassNamesFromJSXElement(node, cssModuleNames);
 
   // 按 name 去重，保留第一次出现的条目
   const seen = new Set<string>();

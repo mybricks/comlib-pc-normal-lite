@@ -11,7 +11,7 @@
     "@ant-design/icons": "^6.1.0",
     "@antv/g2plot": "^2.4.35",
     "@mybricks/coder": "^0.0.91",
-    "@mybricks/console-feed": "0.0.2",
+    "@mybricks/console-feed": "0.0.3",
     "antd": "^5.22.2",
     "classnames": "^2.5.1",
     "dayjs": "^1.11.20",

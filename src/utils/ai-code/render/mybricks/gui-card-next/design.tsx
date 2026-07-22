@@ -3,8 +3,10 @@ import context from '../../../../../mix/context'
 import {
   IS_TOOL,
   IS_CARD_CONFIG,
-  CARD_STYLE,
-  CONTAINER_STYLE
+  MOBILE_CARD_STYLE,
+  PC_CARD_STYLE,
+  MOBILE_CONTAINER_STYLE,
+  PC_CONTAINER_STYLE,
 } from './constants'
 import AIChatPanel from './ChatPanel'
 import { randomUUID } from '../../../../../mix/utils/uuid'
@@ -12,6 +14,22 @@ import type { CreateMyBricksProps } from '../type'
 
 const design = (props: CreateMyBricksProps) => {
   const { data } = props
+
+  const getShowTypeAndCardStyle = (filename: string) => {
+    const showType = data.gui_card.showTypeMap?.[filename] || 'mobile'
+    return {
+      showType,
+      cardStyle: showType === 'mobile' ? MOBILE_CARD_STYLE : PC_CARD_STYLE
+    }
+  }
+
+  const getShowTypeAndAgentStyle = (filename: string) => {
+    const showType = data.gui_card.showTypeMap?.[filename] || 'mobile'
+    return {
+      showType,
+      cardStyle: showType === 'mobile' ? MOBILE_CONTAINER_STYLE : PC_CONTAINER_STYLE
+    }
+  }
 
   // 弹窗注册表，存储通过 popupRef 包装的组件实例
   const popupsCollection: Array<{ id: string; Component: React.ComponentType<any>; props: any; params: { widgetName: string; filename: string }} > = []
@@ -37,10 +55,7 @@ const design = (props: CreateMyBricksProps) => {
     return (
       <div
         ref={ref}
-        style={{
-          ...CARD_STYLE,
-          ...style,
-        }}
+        style={style}
         data-zone-type="page"
         data-zone-kind="agent-card"
         data-zone-title={config.title}
@@ -78,7 +93,8 @@ const design = (props: CreateMyBricksProps) => {
           data-desn-page=''
           data-zone-title='弹窗'
           data-widge-name='弹窗'
-          style={CONTAINER_STYLE}
+          data-zone-filename={params.filename}
+          style={MOBILE_CONTAINER_STYLE}
         >
           {container && <Component {...props} popupNode={container}/>}
         </div>
@@ -172,7 +188,7 @@ const design = (props: CreateMyBricksProps) => {
               pages: skill.cards.map((config) => {
                 return {
                   ...config,
-                  parameters: config.props
+                  parameters: config.props,
                 }
               }),
               description: skill.md,
@@ -207,9 +223,13 @@ const design = (props: CreateMyBricksProps) => {
         setShowSkills(showSkills)
       }, [skills, data._showPages])
 
-      useEffect(() => {
-        context.component!.actions.loaded()
-      }, [showSkills, tick])
+      // useEffect(() => {
+      //   context.component!.actions.loaded()
+      // }, [showSkills, tick])
+
+      context.component!.actions.loaded()
+
+      const { showType, cardStyle } = getShowTypeAndAgentStyle('GUI_AGENT')
 
       return (
         <>
@@ -220,7 +240,8 @@ const design = (props: CreateMyBricksProps) => {
             filename='GUI_AGENT'
             data-widget-name='GUI_AGENT'
             data-zone-kind="agent-app"
-            style={CONTAINER_STYLE}
+            data-zone-show-type={showType}
+            style={cardStyle}
           >
             <AIChatPanel
               disabled={true}
@@ -263,6 +284,7 @@ const design = (props: CreateMyBricksProps) => {
                   </div>
                 ): null}
                 {cards.map(({ render: Render, filename, config }) => {
+                  const { showType, cardStyle } = getShowTypeAndCardStyle(filename)
                   return (
                     <Card
                       key={filename}
@@ -275,6 +297,9 @@ const design = (props: CreateMyBricksProps) => {
                         info: `SKILL_CARD(${name}_${config.name})\n` + 
                           ` - 相关代码：位于${filename}`
                       })}
+                      data-zone-name={config.name}
+                      data-zone-show-type={showType}
+                      style={cardStyle}
                     >
                       <Render />
                     </Card>

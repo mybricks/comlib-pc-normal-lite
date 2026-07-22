@@ -378,6 +378,9 @@ class Context {
   /** 注册的回滚方法 */
   rollback: any
 
+  /** 注册的版本 diff 方法 */
+  diff: any
+
   /** 版本 */
   version!: Version
 

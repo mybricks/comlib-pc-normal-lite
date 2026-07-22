@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, createContext, useContext } from 'react'
 import context from '../../../../../mix/context'
-import { IS_TOOL, IS_CARD_CONFIG, CONTAINER_STYLE } from './constants'
+import { IS_TOOL, IS_CARD_CONFIG, MOBILE_CONTAINER_STYLE, PC_CONTAINER_STYLE } from './constants'
 import AIChatPanel from './ChatPanel'
 import RuntimeContainer from '../components/runtimeContainer'
 import { DefaultToolCallHistory } from './default-tool-call-history'
@@ -10,6 +10,15 @@ import type { CreateMyBricksProps } from '../type'
 const runtime = (props: CreateMyBricksProps) => {
   const { data, env } = props
   const debugTarget: any = env._debugTarget
+
+  const getShowTypeAndAgentStyle = (filename: string) => {
+    const showType = data.gui_card.showTypeMap?.[filename] || 'mobile'
+    return {
+      showType,
+      cardStyle: showType === 'mobile' ? MOBILE_CONTAINER_STYLE : PC_CONTAINER_STYLE
+    }
+  }
+
   const PageContext = createContext<{
     container: HTMLDivElement | null
   }>({
@@ -171,6 +180,8 @@ ${apisDesc}
         })
       }
 
+      const { cardStyle } = getShowTypeAndAgentStyle(filename)
+      
       return (
         <RuntimeContainer style={{...debugTarget.rootStyle}}>
           <Card
@@ -180,9 +191,9 @@ ${apisDesc}
             filename='GUI_AGENT'
             data-widget-name='GUI_AGENT'
             style={{
-              ...CONTAINER_STYLE,
+              ...cardStyle,
               ...debugTarget?.style,
-              width: CONTAINER_STYLE.width,
+              width: cardStyle.width,
             }}
           >
             <AIChatPanel

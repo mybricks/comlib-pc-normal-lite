@@ -222,7 +222,7 @@ interface VersionRecord {
   id: string;
   turnId: string;
   label: string;
-  type: 'ai' | 'manual' | 'rollback';
+  type: 'ai' | 'manual' | 'rollback' | 'init';
   createdAt: number;
   summary?: string;
 }
@@ -230,7 +230,396 @@ interface VersionRecord {
 type SandboxHistory = {
   listVersions: (params: { pageSize: number, pageNum: number }) => Promise<{ list: VersionRecord[], total: number }>;
   addVersion: (record: VersionRecord, files: VersionFile[]) => Promise<void>;
+  updateVersion: (versionId: string, patch: Partial<VersionRecord>) => Promise<void>;
+  getVersion: (versionId: string) => Promise<VersionRecord | undefined>;
+  getVersionFiles: (versionId: string) => Promise<VersionFile[]>;
 };
+
+type VersionDiffChangeType = 'added' | 'deleted' | 'modified';
+
+interface VersionDiffCodeBlock {
+  type: VersionDiffChangeType;
+  beforeStartLine: number;
+  beforeEndLine: number;
+  afterStartLine: number;
+  afterEndLine: number;
+  before: string;
+  after: string;
+}
+
+interface VersionFileDiff {
+  path: string;
+  type: VersionDiffChangeType;
+  before: string;
+  after: string;
+  blocks: VersionDiffCodeBlock[];
+}
+
+interface VersionPairDiff {
+  oldVersionId: string;
+  newVersionId: string;
+  files: VersionFileDiff[];
+}
+
+interface VersionDiffResult {
+  versionIds: string[];
+  diffs: VersionPairDiff[];
+}
+
+function normalizeVersionFiles(files: VersionFile[] = []): VersionFile[] {
+  return files.map((file: any) => ({
+    path: typeof file?.path === 'string' ? file.path : file?.fileName ?? '',
+    content: typeof file?.content === 'string' ? file.content : file?.source ?? '',
+  })).filter((file) => file.path);
+}
+
+function createVersionFileMap(files: VersionFile[]): Map<string, string> {
+  return new Map(normalizeVersionFiles(files).map((file) => [file.path, file.content]));
+}
+
+function splitCodeLines(content: string): string[] {
+  if (!content) return [];
+  return content.split('\n');
+}
+
+function isCssLikePath(path: string): boolean {
+  return /\.(css|less|scss|sass|styl)$/i.test(path);
+}
+
+function lineNumberAtOffset(content: string, offset: number): number {
+  if (offset <= 0) return 1;
+  let line = 1;
+  const end = Math.min(offset, content.length);
+  for (let i = 0; i < end; i++) {
+    if (content[i] === '\n') line += 1;
+  }
+  return line;
+}
+
+type CssRuleUnit = {
+  key: string;
+  selector: string;
+  full: string;
+  body: string;
+  startLine: number;
+  endLine: number;
+};
+
+function normalizeCssSelector(selector: string): string {
+  return selector.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeCssBody(body: string): string {
+  return body.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 拆分顶层 CSS 规则（含 @media / @keyframes 整块）。
+ * 行级 LCS 在格式化/重排后会把无关规则错配成 modified，样式文件改走选择器匹配。
+ */
+function parseTopLevelCssRules(content: string): CssRuleUnit[] {
+  if (!content) return [];
+
+  const rules: CssRuleUnit[] = [];
+  let i = 0;
+  const len = content.length;
+
+  const skipWhitespaceAndComments = () => {
+    while (i < len) {
+      if (/\s/.test(content[i])) {
+        i += 1;
+        continue;
+      }
+      if (content[i] === '/' && content[i + 1] === '*') {
+        i += 2;
+        while (i < len - 1 && !(content[i] === '*' && content[i + 1] === '/')) {
+          i += 1;
+        }
+        i += 2;
+        continue;
+      }
+      if (content[i] === '/' && content[i + 1] === '/') {
+        i += 2;
+        while (i < len && content[i] !== '\n') i += 1;
+        continue;
+      }
+      break;
+    }
+  };
+
+  while (i < len) {
+    skipWhitespaceAndComments();
+    if (i >= len) break;
+
+    const selectorStart = i;
+    while (i < len && content[i] !== '{') {
+      const ch = content[i];
+      if (ch === '"' || ch === "'") {
+        const quote = ch;
+        i += 1;
+        while (i < len && content[i] !== quote) {
+          if (content[i] === '\\') i += 1;
+          i += 1;
+        }
+        i += 1;
+        continue;
+      }
+      i += 1;
+    }
+    if (i >= len) break;
+
+    const selector = content.slice(selectorStart, i).trim();
+    const openIdx = i;
+    i += 1;
+    let depth = 1;
+    while (i < len && depth > 0) {
+      const ch = content[i];
+      if (ch === '"' || ch === "'") {
+        const quote = ch;
+        i += 1;
+        while (i < len && content[i] !== quote) {
+          if (content[i] === '\\') i += 1;
+          i += 1;
+        }
+        i += 1;
+        continue;
+      }
+      if (ch === '/' && content[i + 1] === '*') {
+        i += 2;
+        while (i < len - 1 && !(content[i] === '*' && content[i + 1] === '/')) {
+          i += 1;
+        }
+        i += 2;
+        continue;
+      }
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+      i += 1;
+    }
+
+    const closeIdx = i - 1;
+    if (!selector || depth !== 0) continue;
+
+    const body = content.slice(openIdx + 1, closeIdx);
+    const full = content.slice(selectorStart, closeIdx + 1);
+    rules.push({
+      key: normalizeCssSelector(selector),
+      selector,
+      full: full.trim(),
+      body,
+      startLine: lineNumberAtOffset(content, selectorStart),
+      endLine: lineNumberAtOffset(content, closeIdx),
+    });
+  }
+
+  return rules;
+}
+
+/** 按选择器对齐的 CSS diff，避免行级 LCS 错配无关规则 */
+function buildCssRuleDiffBlocks(before: string, after: string): VersionDiffCodeBlock[] {
+  const beforeRules = parseTopLevelCssRules(before);
+  const afterRules = parseTopLevelCssRules(after);
+
+  const afterByKey = new Map<string, CssRuleUnit[]>();
+  for (const rule of afterRules) {
+    const list = afterByKey.get(rule.key) ?? [];
+    list.push(rule);
+    afterByKey.set(rule.key, list);
+  }
+
+  const usedAfter = new Set<CssRuleUnit>();
+  const blocks: VersionDiffCodeBlock[] = [];
+
+  for (const oldRule of beforeRules) {
+    const candidates = afterByKey.get(oldRule.key) ?? [];
+    const match = candidates.find((item) => !usedAfter.has(item));
+    if (!match) {
+      blocks.push({
+        type: 'deleted',
+        beforeStartLine: oldRule.startLine,
+        beforeEndLine: oldRule.endLine,
+        afterStartLine: 0,
+        afterEndLine: 0,
+        before: oldRule.full,
+        after: '',
+      });
+      continue;
+    }
+
+    usedAfter.add(match);
+    if (normalizeCssBody(oldRule.body) === normalizeCssBody(match.body)) {
+      continue;
+    }
+
+    blocks.push({
+      type: 'modified',
+      beforeStartLine: oldRule.startLine,
+      beforeEndLine: oldRule.endLine,
+      afterStartLine: match.startLine,
+      afterEndLine: match.endLine,
+      before: oldRule.full,
+      after: match.full,
+    });
+  }
+
+  for (const newRule of afterRules) {
+    if (usedAfter.has(newRule)) continue;
+    blocks.push({
+      type: 'added',
+      beforeStartLine: 0,
+      beforeEndLine: 0,
+      afterStartLine: newRule.startLine,
+      afterEndLine: newRule.endLine,
+      before: '',
+      after: newRule.full,
+    });
+  }
+
+  return blocks;
+}
+
+function createWholeFileBlock(type: VersionDiffChangeType, before: string, after: string): VersionDiffCodeBlock[] {
+  const beforeLines = splitCodeLines(before);
+  const afterLines = splitCodeLines(after);
+  return [{
+    type,
+    beforeStartLine: beforeLines.length ? 1 : 0,
+    beforeEndLine: beforeLines.length,
+    afterStartLine: afterLines.length ? 1 : 0,
+    afterEndLine: afterLines.length,
+    before,
+    after,
+  }];
+}
+
+function buildLineDiffBlocks(before: string, after: string): VersionDiffCodeBlock[] {
+  const beforeLines = splitCodeLines(before);
+  const afterLines = splitCodeLines(after);
+
+  const beforeLength = beforeLines.length;
+  const afterLength = afterLines.length;
+  const lcs: number[][] = Array.from({ length: beforeLength + 1 }, () => Array(afterLength + 1).fill(0));
+
+  for (let i = beforeLength - 1; i >= 0; i--) {
+    for (let j = afterLength - 1; j >= 0; j--) {
+      lcs[i][j] = beforeLines[i] === afterLines[j]
+        ? lcs[i + 1][j + 1] + 1
+        : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  const blocks: VersionDiffCodeBlock[] = [];
+  let i = 0;
+  let j = 0;
+  let pendingBeforeStart = -1;
+  let pendingAfterStart = -1;
+  let pendingBeforeLines: string[] = [];
+  let pendingAfterLines: string[] = [];
+
+  const appendDelete = () => {
+    if (pendingBeforeStart < 0) pendingBeforeStart = i;
+    if (pendingAfterStart < 0) pendingAfterStart = j;
+    pendingBeforeLines.push(beforeLines[i]);
+    i++;
+  };
+
+  const appendAdd = () => {
+    if (pendingBeforeStart < 0) pendingBeforeStart = i;
+    if (pendingAfterStart < 0) pendingAfterStart = j;
+    pendingAfterLines.push(afterLines[j]);
+    j++;
+  };
+
+  const flush = () => {
+    if (pendingBeforeStart < 0 && pendingAfterStart < 0) return;
+
+    const beforeCount = pendingBeforeLines.length;
+    const afterCount = pendingAfterLines.length;
+    const type: VersionDiffChangeType = beforeCount === 0 ? 'added' : afterCount === 0 ? 'deleted' : 'modified';
+    blocks.push({
+      type,
+      beforeStartLine: beforeCount ? pendingBeforeStart + 1 : pendingBeforeStart,
+      beforeEndLine: beforeCount ? pendingBeforeStart + beforeCount : pendingBeforeStart,
+      afterStartLine: afterCount ? pendingAfterStart + 1 : pendingAfterStart,
+      afterEndLine: afterCount ? pendingAfterStart + afterCount : pendingAfterStart,
+      before: pendingBeforeLines.join('\n'),
+      after: pendingAfterLines.join('\n'),
+    });
+
+    pendingBeforeStart = -1;
+    pendingAfterStart = -1;
+    pendingBeforeLines = [];
+    pendingAfterLines = [];
+  };
+
+  while (i < beforeLength || j < afterLength) {
+    if (i < beforeLength && j < afterLength && beforeLines[i] === afterLines[j]) {
+      flush();
+      i++;
+      j++;
+    } else if (j < afterLength && (i >= beforeLength || lcs[i][j + 1] >= lcs[i + 1][j])) {
+      appendAdd();
+    } else if (i < beforeLength) {
+      appendDelete();
+    }
+  }
+  flush();
+
+  return blocks;
+}
+
+function diffVersionFiles(oldVersionId: string, newVersionId: string, oldFiles: VersionFile[], newFiles: VersionFile[]): VersionPairDiff {
+  const oldFileMap = createVersionFileMap(oldFiles);
+  const newFileMap = createVersionFileMap(newFiles);
+  const paths = Array.from(new Set([...oldFileMap.keys(), ...newFileMap.keys()])).sort();
+  const files: VersionFileDiff[] = [];
+
+  for (const path of paths) {
+    const hasOldFile = oldFileMap.has(path);
+    const hasNewFile = newFileMap.has(path);
+    const before = oldFileMap.get(path) ?? '';
+    const after = newFileMap.get(path) ?? '';
+
+    if (hasOldFile && hasNewFile && before === after) {
+      continue;
+    }
+
+    const type: VersionDiffChangeType = !hasOldFile ? 'added' : !hasNewFile ? 'deleted' : 'modified';
+    files.push({
+      path,
+      type,
+      before,
+      after,
+      blocks:
+        type === 'modified'
+          ? isCssLikePath(path)
+            ? buildCssRuleDiffBlocks(before, after)
+            : buildLineDiffBlocks(before, after)
+          : createWholeFileBlock(type, before, after),
+    });
+  }
+
+  return {
+    oldVersionId,
+    newVersionId,
+    files,
+  };
+}
+
+async function diffVersions(history: SandboxHistory, ...versionIds: string[]): Promise<VersionDiffResult> {
+  if (versionIds.length < 2) {
+    throw new Error('diff 至少需要传入 2 个版本 ID');
+  }
+
+  const versionFiles = await Promise.all(versionIds.map((versionId) => history.getVersionFiles(versionId)));
+  return {
+    versionIds,
+    diffs: versionIds.slice(0, -1).map((oldVersionId, index) => {
+      const newVersionId = versionIds[index + 1];
+      return diffVersionFiles(oldVersionId, newVersionId, versionFiles[index], versionFiles[index + 1]);
+    }),
+  };
+}
 
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
@@ -509,8 +898,7 @@ export async function registerSandbox(comId: string): Promise<void> {
   const projectRef = getProjectRef(comId);
   refreshProjectBaseline(comId, projectRef);
 
-  const { history } = connectToAI(comId, {
-    designer: {
+  const designerFs = {
       // ── 文件系统 ──────────────────────────────────────────────────────────
 
       async getFiles() {
@@ -596,8 +984,11 @@ export async function registerSandbox(comId: string): Promise<void> {
       // loading(focusArea: any, opts?: DesignerLoadingOptions) {
       //   return createDesignerLoading(comId, focusArea, opts);
       // },
-    },
+  };
 
+  // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
+  const { history } = connectToAI(comId, {
+    designer: designerFs,
     hooks: {
       async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
@@ -631,7 +1022,7 @@ export async function registerSandbox(comId: string): Promise<void> {
 
         (window as any).__vibeCodingCallbacks__?.onComplete?.(turn);
 
-        loadingRef.current?.dispose(turn);
+        loadingRef.current?.dispose();
         loadingRef.current = null;
 
         context.component?.events.emit('vibing', false);
@@ -674,6 +1065,21 @@ export async function registerSandbox(comId: string): Promise<void> {
       },
     },
   }) ?? {};
+
+  // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）
+  const sandboxHelpers = (window as any)._sandbox_?.helpers;
+  if (sandboxHelpers && typeof sandboxHelpers.updateFiles !== 'function') {
+    sandboxHelpers.getDesigner = () => designerFs;
+    sandboxHelpers.updateFiles = (files: Array<{ path: string; content: string }>) =>
+      designerFs.updateFiles(files);
+    sandboxHelpers.getFiles = () => designerFs.getFiles();
+    sandboxHelpers.deleteFiles = (paths: string[]) => designerFs.deleteFiles(paths);
+  }
+  // 与 context.diff 同源，供页面工具栏等宿主侧调用
+  if (sandboxHelpers && history) {
+    sandboxHelpers.diff = (...versionIds: string[]) =>
+      diffVersions(history, ...versionIds);
+  }
 
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────
 
@@ -751,6 +1157,7 @@ export async function registerSandbox(comId: string): Promise<void> {
 
   context.rollback = rollbackToVersion
   context.history = history;
+  context.diff = (...versionIds: string[]) => diffVersions(history, ...versionIds);
 
   context.events.emit('ready', true);
 }
