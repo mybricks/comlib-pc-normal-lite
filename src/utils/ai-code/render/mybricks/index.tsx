@@ -802,6 +802,18 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           let totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
+            mixContext.component?.actions.updatePages?.([], [
+              {
+                id: 'desktop',
+                label: 'PC端',
+                width: 1440,
+              },
+              {
+                id: 'mobile',
+                label: '移动端',
+                width: 414,
+              },
+            ])
           }
         }, [])
 
