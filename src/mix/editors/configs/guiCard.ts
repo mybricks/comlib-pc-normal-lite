@@ -94,14 +94,10 @@ export function buildGuiCardPromptItems() {
 
 export function buildGuiCardHooks() {
   return {
-    '@switchPageShowType'(params) {
+    '@switchPageShowType'(params, value) {
       const desnPage = params.focusArea.dataset.desnPage
       const showTypeMap = getGuiCardField(params, 'showTypeMap')
-      if (!showTypeMap[desnPage]) {
-        showTypeMap[desnPage] = 'pc'
-      } else {
-        showTypeMap[desnPage] = showTypeMap[desnPage] === 'mobile' ? 'pc' : 'mobile'
-      }
+      showTypeMap[desnPage] = value
     }
   }
 }
