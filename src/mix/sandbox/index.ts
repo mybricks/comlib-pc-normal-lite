@@ -17,6 +17,7 @@ import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
 import { undoRedoManager } from '../editors/undoRedo';
+import { parseLess, stringifyLess } from '../utils/transform/less';
 
 const VERIFY_CONFIG = {
   rules: {
@@ -1066,21 +1067,6 @@ export async function registerSandbox(comId: string): Promise<void> {
     },
   }) ?? {};
 
-  // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）
-  const sandboxHelpers = (window as any)._sandbox_?.helpers;
-  if (sandboxHelpers && typeof sandboxHelpers.updateFiles !== 'function') {
-    sandboxHelpers.getDesigner = () => designerFs;
-    sandboxHelpers.updateFiles = (files: Array<{ path: string; content: string }>) =>
-      designerFs.updateFiles(files);
-    sandboxHelpers.getFiles = () => designerFs.getFiles();
-    sandboxHelpers.deleteFiles = (paths: string[]) => designerFs.deleteFiles(paths);
-  }
-  // 与 context.diff 同源，供页面工具栏等宿主侧调用
-  if (sandboxHelpers && history) {
-    sandboxHelpers.diff = (...versionIds: string[]) =>
-      diffVersions(history, ...versionIds);
-  }
-
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────
 
   async function rollbackToVersion(versionId: string): Promise<void> {
@@ -1129,7 +1115,9 @@ export async function registerSandbox(comId: string): Promise<void> {
       content: decodeURIComponent(f.source),
     }));
 
-  // 初始化版本
+  // 初始化版本（必须在暴露 updateFiles 之前完成）。
+  // 否则 mhtml 还原会在 listVersions await 期间先 notifyExternalVersion 推高 total，
+  // 随后这里 new Version(0) 把计数冲掉，手动保存又会再写一个 V0。
   const { list } = await history.listVersions({ pageSize: 1, pageNum: 1 })
   if (!list.length) {
     // 没有版本
@@ -1158,6 +1146,69 @@ export async function registerSandbox(comId: string): Promise<void> {
   context.rollback = rollbackToVersion
   context.history = history;
   context.diff = (...versionIds: string[]) => diffVersions(history, ...versionIds);
+
+  // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）
+  // 注意：必须在 context.version 初始化之后再挂 updateFiles，避免还原与版本初始化竞态
+  const sandboxHelpers = (window as any)._sandbox_?.helpers;
+  if (sandboxHelpers && typeof sandboxHelpers.updateFiles !== 'function') {
+    sandboxHelpers.getDesigner = () => designerFs;
+    sandboxHelpers.updateFiles = (files: Array<{ path: string; content: string }>) =>
+      designerFs.updateFiles(files);
+    sandboxHelpers.getFiles = () => designerFs.getFiles();
+    sandboxHelpers.deleteFiles = (paths: string[]) => designerFs.deleteFiles(paths);
+  }
+  // 与 context.diff 同源，供页面工具栏等宿主侧调用
+  if (sandboxHelpers && history) {
+    sandboxHelpers.diff = (...versionIds: string[]) =>
+      diffVersions(history, ...versionIds);
+  }
+  /**
+   * mhtml 还原落 V0 前：less 走与样式编辑器相同的 parseLess → stringifyLess，
+   * 避免 Prettier/原始 less 与首次改样式后的整文件重排产生格式化 diff。
+   */
+  if (sandboxHelpers) {
+    sandboxHelpers.normalizeRestoreFiles = (
+      files: Array<{ path: string; content: string }>,
+    ) => {
+      return (files ?? []).map((file) => {
+        const ext = file.path.split('.').pop()?.toLowerCase()
+        if (ext !== 'less' && ext !== 'css') return file
+        if (!file.content?.trim()) return file
+        try {
+          const normalized = stringifyLess(parseLess(file.content))
+          return { ...file, content: normalized }
+        } catch (error) {
+          console.warn('[normalizeRestoreFiles] less 规范化失败，保留原文', file.path, error)
+          return file
+        }
+      })
+    }
+  }
+  /**
+   * SPA 侧（如 mhtml 还原）通过 ServerHistory 写入版本后调用：
+   * 1) 推进 context.version.total，避免后续手动/AI 保存仍从 V0 起号
+   * 2) 立刻 notifyVersionsChange，让版本面板不必等 list 轮询
+   */
+  if (sandboxHelpers) {
+    sandboxHelpers.notifyExternalVersion = (record: VersionRecord) => {
+      if (!context.version) {
+        context.version = new Version(0)
+      }
+      const n = parseInt(String(record?.label ?? '').replace(/^V/i, ''), 10)
+      if (!Number.isNaN(n)) {
+        context.version.total = Math.max(context.version.total, n + 1)
+      } else {
+        context.version.total = Math.max(context.version.total, 1)
+      }
+      // 写入 list，供版本面板首次挂载 / listVersions 尚未返回时做乐观展示
+      const prevList = Array.isArray(context.version.list) ? context.version.list : []
+      context.version.list = [
+        record,
+        ...prevList.filter((item) => item.id !== record.id),
+      ]
+      context.notifyVersionsChange(record)
+    }
+  }
 
   context.events.emit('ready', true);
 }

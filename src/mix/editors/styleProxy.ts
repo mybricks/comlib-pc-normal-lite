@@ -124,6 +124,38 @@ function expandDeletions(deletions: string[]): string[] {
   return Array.from(toDelete);
 }
 
+function kebabToCamelProp(str: string) {
+  return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/**
+ * expandDeletions 会把 longhand 删除连带上简写（如删 backgroundImage → 也删 background）。
+ * 同批 value 正在写入的属性必须排除，否则「写入 background + 删除旧 backgroundImage」
+ * 会在落盘时把刚写入的 background 立刻删掉，表现为编辑器有值但 less 未更新。
+ */
+function filterExpandedDeletions(
+  deletions: string[] | null | undefined,
+  value: Record<string, any> | null | undefined,
+): string[] {
+  const expanded = expandDeletions(deletions || []);
+  if (!value || typeof value !== 'object') return expanded;
+
+  const protectedKeys = new Set<string>();
+  Object.keys(value).forEach((key) => {
+    if (value[key] === null || value[key] === undefined) return;
+    protectedKeys.add(key);
+    protectedKeys.add(camelToKebab(key));
+    protectedKeys.add(kebabToCamelProp(key));
+  });
+
+  return expanded.filter(
+    (key) =>
+      !protectedKeys.has(key) &&
+      !protectedKeys.has(kebabToCamelProp(key)) &&
+      !protectedKeys.has(camelToKebab(key)),
+  );
+}
+
 function findCompoundClassKey(cssObj: Record<string, any>, eleClassList: string[]): string | undefined {
   const validClasses = new Set(eleClassList.filter(c => c && c !== 'undefined'));
   let best: string | undefined;
@@ -586,8 +618,12 @@ function tryWriteNestedPseudo(
     Object.entries(value).forEach(([k, v]) => { target[k] = v; });
 
     if (deletions && deletions.length > 0) {
-      const expandedDeletions = expandDeletions(deletions);
-      expandedDeletions.forEach(k => delete target[k]);
+      const expandedDeletions = filterExpandedDeletions(deletions, value);
+      expandedDeletions.forEach(k => {
+        delete target[k];
+        delete target[kebabToCamelProp(k)];
+        delete target[camelToKebab(k)];
+      });
     }
 
     // 嵌套块变为空时删除该嵌套 key
@@ -1418,8 +1454,12 @@ export function genStyleValue(props) {
             }
           }
         }
-        const expandedDeletions = expandDeletions(deletions);
-        expandedDeletions.forEach(key => delete cssObj[targetKey][key]);
+        const expandedDeletions = filterExpandedDeletions(deletions, value);
+        expandedDeletions.forEach(key => {
+          delete cssObj[targetKey][key];
+          delete cssObj[targetKey][kebabToCamelProp(key)];
+          delete cssObj[targetKey][camelToKebab(key)];
+        });
 
         // ── 逗号合并规则拆分删除 ──────────────────────────────────────────────
         // 例：.resetBtn, .queryBtn { min-width: 80px } 与更长路径的 .queryBtn 规则并存时，

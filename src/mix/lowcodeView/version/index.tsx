@@ -181,16 +181,26 @@ function VersionItem({
   );
 }
 
-export default function ({ render }) {
-  const [show, setShow] = useState(false)
+export default function ({ render: _render }) {
+  // history/version 在 registerSandbox 结束后才就绪；就绪后立刻挂载（不必等用户点「版本」），
+  // 才能收到 SPA 还原等外部写入的 notifyVersionsChange。显隐仍由外层 display 控制。
+  const [ready, setReady] = useState(
+    () => !!(context.history && context.version),
+  )
 
   useEffect(() => {
-    if (render) {
-      setShow(true)
-    }
-  }, [render])
+    if (ready) return
+    const timer = window.setInterval(() => {
+      if (context.history && context.version) {
+        setReady(true)
+        window.clearInterval(timer)
+      }
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [ready])
 
-  return show && <VersionPanel2 />
+  if (!ready) return null
+  return <VersionPanel2 />
 }
 
 function VersionPanel2() {
@@ -295,7 +305,10 @@ export function useVersions(options: UseVersionsOptions) {
   } = options;
   
   const [loading, setLoading] = useState(false);
-  const [versions, setVersions] = useState<VersionRecord[]>([]);
+  // 可能已有 SPA/外部写入的乐观版本（如 mhtml 还原的 V0）
+  const [versions, setVersions] = useState<VersionRecord[]>(() =>
+    Array.isArray(version.list) ? version.list.slice() : [],
+  );
   const [total, setTotal] = useState(version.total);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -333,6 +346,23 @@ export function useVersions(options: UseVersionsOptions) {
           seen.add(v.id)
           return true
         })
+
+        // reset 时合并尚未被服务端返回的乐观版本（addVersion 上传大文件可能需十余秒）
+        if (reset) {
+          const optimistic = [
+            ...(Array.isArray(version.list) ? version.list : []),
+            ...prev,
+          ]
+          for (const local of optimistic) {
+            if (!local?.id || seen.has(local.id)) continue
+            // 仅保留近 2 分钟内的本地乐观项，避免永久脏数据
+            if (Date.now() - (local.createdAt || 0) > 2 * 60 * 1000) continue
+            seen.add(local.id)
+            versions.push(local)
+          }
+          versions.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        }
+
         version.list = versions
 
         setHasMore(version.list.length < version.total)
