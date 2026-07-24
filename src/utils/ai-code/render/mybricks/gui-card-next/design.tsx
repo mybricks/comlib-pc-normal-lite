@@ -198,12 +198,12 @@ const design = (props: CreateMyBricksProps) => {
             breakpoints: [
               {
                 id: 'pc',
-                label: 'PC端',
+                label: 'PC',
                 width: 1200,
               },
               {
                 id: 'mobile',
-                label: '移动端',
+                label: '手机',
                 width: 480,
               },
             ]
