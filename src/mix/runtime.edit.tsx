@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useMemo, useState, useRef, useEffect } from 're
 import Runtime from './runtime';
 import context, { config } from './context';
 import { registerSandbox } from './sandbox';
+import { parseFrameSize } from '../utils/ai-code/render/mybricks/utils'
 
 const dataCompatible = (props) => {
   try {
@@ -60,8 +61,8 @@ const dataCompatible = (props) => {
     const version = config.getVersion()
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 34 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 34
+    if (!data.version || data.version < 37 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 37
       data._componentRuntime.version = version
       
       // const mode = config.getFrontendMode()
@@ -107,6 +108,60 @@ const dataCompatible = (props) => {
       // if (readme?.source) {
       //   context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
       // }
+
+      if (data.files.length && mode === 'prototype') {
+        if (!fileMap.has('app.config.ts')) {
+          let maxWidth = 0
+          data.files.forEach((file) => {
+            if (file.source && file.fileName.endsWith('.less')) {
+              const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+              const { width } = parseFrameSize(lessCode);
+              if (width) {
+                const numberWidth = parseInt(width)
+                if (numberWidth > maxWidth) {
+                  maxWidth = numberWidth
+                }
+              }
+            }
+          })
+
+          if (!maxWidth) {
+            maxWidth = 1440
+          }
+
+          const id = maxWidth > 414 ? 'pc': 'mobile'
+          const label = maxWidth > 414 ? 'PC端' : '移动端'
+
+          context.updateFile({ fileName: 'app.config.ts', content: `export default defineAppConfig({
+  viewports: [
+    {
+      id: '${id}',
+      label: '${label}',
+      width: ${maxWidth},
+    },
+  ],
+  breakpoints: [],
+});
+` })
+
+          data.files.unshift({
+            fileName: "app.config.ts",
+            content: `export default {
+  "name": "项目名称",
+  "title": "页面标题",
+  "width": ${maxWidth}
+}`
+          })
+        }
+      }
+      
+
+      // const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
+      // const style: React.CSSProperties = {
+      //   width: canvasWidth,
+      //   height: canvasHeight
+      // }
+      // const { width, height } = parseFrameSize(lessCode);
 
       data.files.forEach((file) => {
         if (/(?<!\.module)\.less$/.test(file.fileName)) {

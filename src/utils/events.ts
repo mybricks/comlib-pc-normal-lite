@@ -49,6 +49,13 @@ class Events<TMap extends object> {
     event.cache = value;
     event.handles.forEach((handle) => handle(value));
   }
+
+  offAll() {
+    this.events.forEach((event) => {
+      event.cache = EMPTY_CACHE;
+      event.handles.clear();
+    });
+  }
 }
 
 export { Events };

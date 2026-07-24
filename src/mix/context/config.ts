@@ -394,7 +394,7 @@ class Config {
       }
     }
 
-    return effectiveLibraries
+    return effectiveLibraries.filter((item) => !item.excludeFromPrompt)
   }
 
   getOnDebug() {

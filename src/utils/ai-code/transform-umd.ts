@@ -93,7 +93,8 @@ export function transformLess(code, filename: string) {
   const cssModule: any = {
     cssContent: "",
     classMap: {},
-    imports: []
+    imports: [],
+    mediaQueries: []
   }
 
   if (!code || code.length === 0) {
@@ -217,11 +218,114 @@ export function transformLess(code, filename: string) {
       // console.error(error)
       throw new Error(`Less 代码编译失败: ${error.message}`)
     } else {
-      cssModule.cssContent = result?.css
+      const { cssContent, mediaQueries } = extractMediaQueries(result?.css || '')
+      cssModule.cssContent = cssContent
+      cssModule.mediaQueries = mediaQueries
     }
   })
 
   return cssModule;
+}
+
+function extractMediaQueries(css: string): {
+  cssContent: string
+  mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }>
+} {
+  const mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }> = []
+
+  if (!css) {
+    return { cssContent: '', mediaQueries }
+  }
+
+  if (typeof document !== 'undefined') {
+    try {
+      const style = document.createElement('style')
+      style.textContent = css
+      document.head.appendChild(style)
+
+      try {
+        const sheet = style.sheet as CSSStyleSheet | null
+        const cssRules = Array.from(sheet?.cssRules || [])
+        const normalRules: string[] = []
+
+        cssRules.forEach((rule) => {
+          if (rule instanceof CSSMediaRule) {
+            const placeholder = `/* __MYBRICKS_AI_MEDIA_QUERY_${mediaQueries.length}__ */`
+            normalRules.push(placeholder)
+            mediaQueries.push({
+              conditionText: rule.conditionText,
+              cssText: Array.from(rule.cssRules || []).map((innerRule) => innerRule.cssText).join('\n'),
+              placeholder
+            })
+          } else {
+            normalRules.push(rule.cssText)
+          }
+        })
+
+        return {
+          cssContent: normalRules.join('\n'),
+          mediaQueries
+        }
+      } finally {
+        style.remove()
+      }
+    } catch (error) {
+      console.warn('[extractMediaQueries] CSSOM parse failed, fallback to text parser', error)
+    }
+  }
+
+  return extractMediaQueriesByText(css)
+}
+
+function extractMediaQueriesByText(css: string): {
+  cssContent: string
+  mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }>
+} {
+  const mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }> = []
+  const ranges: Array<[number, number, string]> = []
+  const mediaRegex = /@media\s*([^{}]+)\{/g
+  let match: RegExpExecArray | null
+
+  while ((match = mediaRegex.exec(css)) !== null) {
+    let depth = 1
+    let i = mediaRegex.lastIndex
+    const contentStart = i
+
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') {
+        depth++
+      } else if (css[i] === '}') {
+        depth--
+      }
+      i++
+    }
+
+    if (depth === 0) {
+      const contentEnd = i - 1
+      const placeholder = `/* __MYBRICKS_AI_MEDIA_QUERY_${mediaQueries.length}__ */`
+      mediaQueries.push({
+        conditionText: match[1].trim(),
+        cssText: css.slice(contentStart, contentEnd).trim(),
+        placeholder
+      })
+      ranges.push([match.index, i, placeholder])
+      mediaRegex.lastIndex = i
+    }
+  }
+
+  let cssContent = ''
+  let lastIndex = 0
+  ranges.forEach(([start, end, placeholder]) => {
+    cssContent += css.slice(lastIndex, start)
+    cssContent += placeholder
+    lastIndex = end
+  })
+  cssContent += css.slice(lastIndex)
+
+  return {
+    cssContent: cssContent.trim(),
+    mediaQueries
+  }
 }
 
 function extractFrameStyle(css: string): { width?: number } | undefined {

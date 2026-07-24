@@ -142,7 +142,7 @@ const loadCssModule = (params: LoadCssParams) => {
   const { file, css, dependencies } = params;
   const compiled = decodeURIComponent(file.compiled)
   const cssModule = JSON.parse(compiled);
-  const { cssContent, classMap, imports } = cssModule;
+  const { cssContent, classMap, imports, mediaQueries } = cssModule;
   const importModules: any = []
   if (imports) {
     imports.forEach((path) => {
@@ -162,13 +162,15 @@ const loadCssModule = (params: LoadCssParams) => {
 
   const module = {
     default: proxy,
-    classMap
+    classMap,
+    cssContent,
+    mediaQueries
   }
   Object.defineProperty(module, '__esModule', {
     value: true
   })
 
-  css.set(file.filename, cssContent)
+  css.set(file.filename, cssContent, mediaQueries)
 
   return { module }
 }

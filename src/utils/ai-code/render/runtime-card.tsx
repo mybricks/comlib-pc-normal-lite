@@ -373,19 +373,20 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
               )
             }}
             dependencies={dependencies}
-            css={{
-              set(filename, css) {
-                const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
-                // 替换编译时注入的值，使用where防止提升权重
-                const myContent = css.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
-                  .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
-                // 组件id + 文件路径，保证唯一性
-                env.canvas.css.set(`${id}_${filename}`.replace(/\./g, '__').replace(/\//g, '_'), myContent)
-              },
-              remove() {
-                env.canvas.css.remove(id)
-              }
-            }}
+            css={dependencies._css}
+            // css={{
+            //   set(filename, css) {
+            //     const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+            //     // 替换编译时注入的值，使用where防止提升权重
+            //     const myContent = css.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
+            //       .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
+            //     // 组件id + 文件路径，保证唯一性
+            //     env.canvas.css.set(`${id}_${filename}`.replace(/\./g, '__').replace(/\//g, '_'), myContent)
+            //   },
+            //   remove() {
+            //     env.canvas.css.remove(id)
+            //   }
+            // }}
             vibing={vibing}
             onMount={({ fileSystem }) => {
               context.fileSystem = fileSystem

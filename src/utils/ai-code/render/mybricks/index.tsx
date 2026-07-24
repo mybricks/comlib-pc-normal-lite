@@ -18,6 +18,71 @@ import {
   mergeLoggerBindings,
   type LoggerBindings,
 } from '../logger';
+import prototype from './prototype';
+
+const useBreakpoints = (path) => {
+  const [breakpoint, setBreakpoint] = useState<any>(null)
+
+  useLayoutEffect(() => {
+    if (!path) {
+      return
+    }
+
+    const data = mixContext.component?.params.data
+    if (!data.prototype) {
+      data.prototype = {}
+    }
+
+    const getViewports = () => {
+      const event = prototype.events.getEvent('appConfig')
+      return Array.isArray(event.cache?.viewports) ? event.cache.viewports : []
+    }
+
+    const getMaxBreakpoint = (viewports) => {
+      return viewports.reduce((max, item) => {
+        const maxWidth = Number(max?.width ?? -Infinity)
+        const itemWidth = Number(item?.width ?? -Infinity)
+        return itemWidth > maxWidth ? item : max
+      }, null)
+    }
+
+    const updateBreakpoint = (breakpointId) => {
+      const viewports = getViewports()
+      const nextBreakpoint = viewports.find((item) => item?.id === breakpointId) || getMaxBreakpoint(viewports)
+
+      if (nextBreakpoint?.id) {
+        data.prototype[path] = nextBreakpoint.id
+        setBreakpoint(nextBreakpoint)
+      } else {
+        setBreakpoint(null)
+      }
+    }
+
+    const fn = (breakpointId) => {
+      updateBreakpoint(breakpointId)
+    }
+
+    updateBreakpoint(data.prototype[path])
+    prototype.events.on(path, fn)
+
+    const off = prototype.events.on('appConfig', (appConfig) => {
+      updateBreakpoint(data.prototype[path])
+    })
+
+    return () => {
+      prototype.events.off(path, fn)
+      off()
+    }
+  }, [path])
+
+  useEffect(() => {
+    if (breakpoint) {
+      mixContext.component?.actions.loaded?.()
+    }
+  }, [breakpoint])
+
+  return breakpoint
+}
 
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
@@ -221,13 +286,27 @@ interface CreateMyBricksProps {
 }
 
 const createMyBricks = (props: CreateMyBricksProps) => {
+  const frontendMode = config.getFrontendMode()
 
   const Wrapper = config.getFrontendWrapper()
 
   // 配置的画布信息
-  const { width: canvasWidth = 1440, height: canvasHeight = 900 } = window._sandbox_.config.componentRuntime?.canvas || {}
+  const { width: canvasWidth = 1440, height: canvasHeight = 900, update } = window._sandbox_.config.componentRuntime?.canvas || {}
   
   const { comId, runtimeMode, env, data, logger } = props;
+
+  if (frontendMode === 'prototype') {
+    prototype.events.offAll()
+
+    update((appConfig) => {
+      prototype.events.emit('appConfig', appConfig)
+      if (appConfig.viewports.length > 1) {
+        mixContext.component?.actions.updatePages?.([], {
+          breakpoints: appConfig.viewports
+        })
+      }
+    })
+  }
 
   // let mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
   // if (mdCompiled) {
@@ -507,7 +586,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
                 const { files } = loc;
-                if (files?.less) {
+                if (files?.less && frontendMode !== 'prototype') {
                   if (files.less !== lessRef.current.filename) {
                     const fileSystem = mixContext.fileSystem
                     lessRef.current.off()
@@ -563,6 +642,70 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       })
     }, [])
 
+    const breakpoint = useBreakpoints(path)
+
+    useLayoutEffect(() => {
+      if (breakpoint) {
+        if (frontendMode === 'prototype' && isDesign()) {
+          const cssFileNames: string[] = []
+          const unwatchList: Array<() => void> = []
+          const fileSystem = mixContext.fileSystem
+          const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+          const setLessCss = (filename: string) => {
+            const entry = fileSystem?.filesMap?.[filename]
+            if (!entry || !entry.file.filename.endsWith('.less')) {
+              return
+            }
+
+            const { file, module } = entry
+            const { cssContent, mediaQueries } = module
+
+            const value = breakpoint.width
+
+            const cssText = mediaQueries.reduce((pre, cur) => {
+              const match = cur.conditionText.match(/max-width:\s*(\d+)px/)
+              if (!match) {
+                return pre
+              }
+              const width = parseInt(match[1])
+
+              if (value <= width) {
+                return pre.replace(cur.placeholder, cur.cssText)
+              }
+
+              return pre
+            }, cssContent)
+
+            const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId}) [data-desn-page='${path}']`)
+              .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
+            // 组件id + 文件路径，保证唯一性
+            const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
+            if (!cssFileNames.includes(cssId)) {
+              cssFileNames.push(cssId)
+            }
+            ;(env as any).canvas.css.set(cssId, myContent)
+          }
+
+          Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename, { file }]) => {
+            if (file.filename.endsWith('.less')) {
+              unwatchList.push(fileSystem!.fileWatcher.watch(filename, (event) => {
+                if (['create', 'update'].includes(event.type)) {
+                  setLessCss(filename)
+                }
+              }))
+            }
+          })
+
+          return () => {
+            unwatchList.forEach(unwatch => unwatch())
+            if (frontendMode === 'prototype') {
+              cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
+            }
+          }
+        }
+      }
+    }, [breakpoint])
+
     return (
       <div
         ref={containerRef}
@@ -570,12 +713,20 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         data-zone-kind='page'
         data-desn-page={path}
         data-zone-title='页面'
+        {...(breakpoint ? {
+          ['data-zone-show-type']: breakpoint.id,
+        } : {})}
         style={{
           // [TODO]
           // height: '100%',
           width: 'fit-content',
           height: 'fit-content',
           ...style,
+          ...(breakpoint && isDesign() ? {
+            width: breakpoint.width,
+            minWidth: breakpoint.width,
+            maxWidth: breakpoint.width,
+          } : {}),
           // ...(data?.frameStyle?.width
           //   ? { width: data.frameStyle.width }
           //   : { minWidth: 1200, width: 'fit-content' }
@@ -588,7 +739,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ...theme?.vars?.reduce((pre, cur) => {
             pre[cur.propertyName] = cur.value;
             return pre;
-          }, {})
+          }, {}),
         }}
       >
         {container && <PageContext.Provider value={container}>
@@ -802,20 +953,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           let totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
-            mixContext.component?.actions.updatePages?.([], {
-              breakpoints:  [
-                {
-                  id: 'desktop',
-                  label: 'PC端',
-                  width: 1440,
-                },
-                {
-                  id: 'mobile',
-                  label: '移动端',
-                  width: 414,
-                },
-              ]
-            })
           }
         }, [])
 
@@ -866,6 +1003,49 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           </AppContext.Provider>
         )
       }
+
+      useLayoutEffect(() => {
+        let cssFileNames: string[] = []
+        if (frontendMode === 'prototype') {
+          const showType = env._debugTarget.showType
+          const fileSystem = mixContext.fileSystem
+          const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+          const event = prototype.events.getEvent('appConfig')
+          const breakpoint = event.cache.viewports.find((item) => item.id === showType)
+          const value = breakpoint.width
+          Object.entries(fileSystem!.filesMap).forEach(([_, { file, module }]) => {
+            if (file.filename.endsWith('.less')) {
+              const { cssContent, mediaQueries } = module
+              const cssText = mediaQueries.reduce((pre, cur) => {
+                const match = cur.conditionText.match(/max-width:\s*(\d+)px/)
+                if (!match) {
+                  return pre
+                }
+                const width = parseInt(match[1])
+
+                if (value <= width) {
+                  return pre.replace(cur.placeholder, cur.cssText)
+                }
+
+                return pre
+              }, cssContent)
+
+              const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
+                .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
+              // 组件id + 文件路径，保证唯一性
+              const cssId = `${comId}_${file.filename}`.replace(/\./g, '__').replace(/\//g, '_')
+              cssFileNames.push(cssId)
+              env.canvas.css.set(cssId, myContent)
+            }
+          })
+        }
+
+        return () => {
+          if (frontendMode === 'prototype') {
+            cssFileNames.forEach(id => env.canvas.css.remove(id))
+          }
+        }
+      }, [])
 
       if (props._standalone) {
         /**
@@ -932,6 +1112,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
         const [style, setStyle] = useState<React.CSSProperties>({
           width: canvasWidth,
+          minWidth: canvasWidth,
+          maxWidth: canvasWidth,
           height: canvasHeight
         });
         const lessRef = useRef<{ filename: string, off: () => void }>({
@@ -939,9 +1121,28 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           off: () => {}
         });
 
-        useEffect(() => {
+        useLayoutEffect(() => {
+          const getPopupWidth = (appConfig) => {
+            const viewports = Array.isArray(appConfig?.viewports) ? appConfig.viewports : []
+            const maxBreakpoint = viewports.reduce((max, item) => {
+              const maxWidth = Number(max?.width ?? -Infinity)
+              const itemWidth = Number(item?.width ?? -Infinity)
+              return itemWidth > maxWidth ? item : max
+            }, null)
+            return maxBreakpoint ? Number(maxBreakpoint.width) : canvasWidth
+          }
+          const off = prototype.events.on('appConfig', (appConfig) => {
+            const width = getPopupWidth(appConfig)
+            setStyle((prev) => ({
+              ...prev,
+              minWidth: width,
+              maxWidth: width,
+              width
+            }))
+          })
           return () => {
             lessRef.current?.off?.()
+            off()
           }
         }, [])
 
@@ -976,7 +1177,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               if (dataLoc) {
                 const loc = JSON.parse(dataLoc);
                 const { files } = loc;
-                if (files?.less) {
+                if (files?.less && frontendMode !== 'prototype') {
                   if (files.less !== lessRef.current.filename) {
                     const fileSystem = mixContext.fileSystem
                     lessRef.current.off()
