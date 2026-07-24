@@ -194,7 +194,20 @@ const design = (props: CreateMyBricksProps) => {
               description: skill.md,
               tools: skill.tools
             }
-          }))
+          }), {
+            breakpoints: [
+              {
+                id: 'pc',
+                label: 'PC端',
+                width: 1200,
+              },
+              {
+                id: 'mobile',
+                label: '移动端',
+                width: 480,
+              },
+            ]
+          })
 
           setSkills(skills)
         }
