@@ -569,13 +569,16 @@ export default function createSetStyleHandler(
       if (state === 'start') {
 
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
-        style = resolveStyle(getStyle(ctx, params), multiple)
         style = resolveStyle(
           multiple
             ? getStyle(ctx, params)
             : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
           multiple,
         )
+        console.log('[move]', {
+          style,
+          multiple
+        })
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
