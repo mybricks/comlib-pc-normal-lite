@@ -575,10 +575,7 @@ export default function createSetStyleHandler(
             : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
           multiple,
         )
-        console.log('[move]', {
-          style,
-          multiple
-        })
+
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)

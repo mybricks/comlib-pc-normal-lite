@@ -88,6 +88,11 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       }
     }
 
+    // if (!result) {
+    // TODO
+    //   console.log('找不到依赖', packageName)
+    // }
+
     if (result[DYNAMIC_MODULE] === DYNAMIC_MODULE) {
       return result({ id: filename, logger: dependencies.mybricks.logger })
     }

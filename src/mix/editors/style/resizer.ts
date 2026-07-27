@@ -18,7 +18,7 @@ export default function() {
         if (state === 'ing') {
           style = value
         }
-        handler(ctx, { state })
+        handler(ctx, status)
       },
     },
   }
