@@ -465,7 +465,7 @@ const patchSingleElementInlineStyle = (
   targetEle: HTMLElement,
   nextStyle: Record<string, number>,
   initialInlineCssText = '',
-): { fileName: string; previousCode: string; newCode: string } | null => {
+): { fileName: string; previousCode: string; newCode: string; nextStyleInfo: Record<string, StyleKeyInfo> | null } | null => {
   const jsxInfo = getJsxFileInfo(targetEle)
   if (!jsxInfo) return null
 
@@ -512,6 +512,8 @@ const patchSingleElementInlineStyle = (
       const appendResult = appendPropsToExistingInlineStyle(newCode, jsxInfo.loc, latestStyleInfo, propsToAdd)
       if (!appendResult) return null
       newCode = appendResult.newSource
+      // Merge newly-appended prop offsets into latestStyleInfo so the return value reflects accurate positions.
+      latestStyleInfo = { ...latestStyleInfo, ...appendResult.styleInfoUpdates }
     } else {
       // 没有 data-style-info 表示源码标签可能尚无静态 style 属性；若运行时已有 style，通常来自变量 style={x}，不能安全再注入一个 style 属性。
       if (initialInlineCssText) return null
@@ -520,6 +522,8 @@ const patchSingleElementInlineStyle = (
       const injectResult = injectStyleAttrIntoJSX(newCode, tagEnd, propsToAdd)
       if (!injectResult) return null
       newCode = injectResult.newSource
+      // injectStyleAttrIntoJSX produced a brand-new style attr; capture the fresh offsets.
+      latestStyleInfo = injectResult.styleInfo
     }
   }
 
@@ -528,6 +532,9 @@ const patchSingleElementInlineStyle = (
     fileName: jsxInfo.fileName,
     previousCode: jsxInfo.previousCode,
     newCode,
+    // Return the updated source-offset map so callers can write it back to data-style-info,
+    // keeping subsequent edits (noUpdateFileSystem) aligned with the new source positions.
+    nextStyleInfo: latestStyleInfo,
   }
 }
 
@@ -808,20 +815,35 @@ export default function createSetStyleHandler(
             }
           })
 
+          // Snapshot the current data-style-info BEFORE patching so undo can restore it.
+          const prevStyleInfoStr = ele.dataset.styleInfo
+
           const inlineUpdate = Object.keys(inlineStyle).length
             ? patchSingleElementInlineStyle(ele, inlineStyle, initialInlineCssText)
             : null
           const lessUpdates = patchLessStyles(lessStyle)
-          const updateFIles = (inlineUpdate ? [inlineUpdate] : []).concat(lessUpdates)
+          const inlineUpdateAsFileUpdate: FileUpdate | null = inlineUpdate
+            ? { fileName: inlineUpdate.fileName, previousCode: inlineUpdate.previousCode, newCode: inlineUpdate.newCode }
+            : null
+          const updateFIles: FileUpdate[] = (inlineUpdateAsFileUpdate ? [inlineUpdateAsFileUpdate] : [] as FileUpdate[]).concat(lessUpdates)
           const inlineStyleSnapshots = inlineUpdate
             ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
             : []
+
+          // Pre-serialise the updated offset map so execute/undo closures don't hold a reference
+          // to a mutable object.
+          const nextStyleInfoStr = inlineUpdate?.nextStyleInfo
+            ? JSON.stringify(inlineUpdate.nextStyleInfo)
+            : null
 
           if (updateFIles.length) {
             const filenames = updateFIles.map(f => f.fileName);
             undoRedoManager.execute({
               execute() {
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+                // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
+                // so that subsequent inline-style drags can locate values correctly.
+                if (nextStyleInfoStr) ele.dataset.styleInfo = nextStyleInfoStr
                 updateFIles.forEach(({ fileName, newCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
@@ -830,6 +852,8 @@ export default function createSetStyleHandler(
               },
               undo() {
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+                // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
+                if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
                 updateFIles.forEach(({ fileName, previousCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
