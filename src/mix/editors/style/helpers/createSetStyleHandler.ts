@@ -162,6 +162,12 @@ type InlineSyncTarget = {
   initialInlineValue: string;
   hadInitialInlineValue: boolean;
 }
+type SelectorMatchStats = {
+  /** selectorText 在当前 shadowRoot 下实际命中的 DOM 数量 */
+  elementCount?: number;
+  /** 命中 DOM 去重后的源码 JSX 位置数量；map 渲染出来的多个 DOM 通常只有 1 个源码位置 */
+  sourceLocationCount?: number;
+}
 type LessStyleMap = Map<string, Array<{ key: string; value: number }>>
 type FileUpdate = {
   fileName: string;
@@ -175,8 +181,10 @@ type StyleKeyRoute = {
   loc?: { start: number; end: number };
   needsAI?: boolean;
   source?: 'jsx-inline' | 'less';
-  /** selectorText 在当前 shadowRoot 下实际命中的 DOM 数量，用于判断写 Less 是否只影响单个 DOM */
+  /** selectorText 在当前 shadowRoot 下实际命中的 DOM 数量，用于调试/辅助判断 */
   matchedElementCount?: number;
+  /** selectorText 命中的 DOM 去重后的源码 JSX 位置数量；相同代码位置的 map 实例视为 1 个 */
+  matchedSourceLocationCount?: number;
   /** 拖拽开始前，当前 DOM 元素该属性的实际数值，用于计算 delta */
   initialValue?: number;
   /** 拖拽开始前，Less 规则里该属性的数值；inline + multiple 时 Less 按该值叠加 delta */
@@ -288,8 +296,43 @@ const getSelectorMatchedElements = (selector: string, shadowRoot: ShadowRoot): H
   }
 }
 
+const getSourceLocationKey = (targetEle: HTMLElement): string | null => {
+  const loc = parseJSON<any>(targetEle.dataset.loc)
+  const jsxFile = loc?.files?.jsx
+  const jsxStart = loc?.jsx?.start
+  const jsxEnd = loc?.jsx?.end
+
+  if (jsxFile && typeof jsxStart === 'number' && typeof jsxEnd === 'number') {
+    return `${jsxFile}:${jsxStart}:${jsxEnd}`
+  }
+
+  const lineStart = loc?.codeLine?.start
+  const lineEnd = loc?.codeLine?.end
+  if (jsxFile && typeof lineStart === 'number' && typeof lineEnd === 'number') {
+    return `${jsxFile}:L${lineStart}:L${lineEnd}`
+  }
+
+  return null
+}
+
+const getSelectorMatchStats = (selector: string, shadowRoot: ShadowRoot): SelectorMatchStats => {
+  const matchedElements = getSelectorMatchedElements(selector, shadowRoot)
+  if (!matchedElements) return {}
+
+  const sourceLocationKeys = new Set<string>()
+  matchedElements.forEach((matchedEle, index) => {
+    // 没有 data-loc 时退化为 DOM 实例粒度，避免错误地把未知来源的多个节点合并成 1 个。
+    sourceLocationKeys.add(getSourceLocationKey(matchedEle) ?? `__dom_${index}`)
+  })
+
+  return {
+    elementCount: matchedElements.length,
+    sourceLocationCount: sourceLocationKeys.size,
+  }
+}
+
 const isSingleDomLessRoute = (route?: StyleKeyRoute) => {
-  return route?.source === 'less' && route.matchedElementCount === 1
+  return route?.source === 'less' && route.matchedSourceLocationCount === 1
 }
 
 const collectInlineSyncTargets = (
@@ -684,7 +727,7 @@ export default function createSetStyleHandler(
                 const initialValue = getElementNumericStyleValue(ele, key)
                 const lessInitialValue = lessSelectorFromLoc ? getRuleNumericStyleValue(sheet, lessSelectorFromLoc, key) : undefined
                 const selector = lessSelectorFromLoc ?? winningRule.selectorText
-                const matchedElementCount = getSelectorMatchedElements(selector, shadowRoot)?.length
+                const matchStats = getSelectorMatchStats(selector, shadowRoot)
                 // JSX 内联 style：单元素模式继续写当前 JSX；批量模式同时更新当前 JSX inline 与 Less。
                 // 这样当前元素保留个性化值，其他同 class 元素通过 Less 按同一 delta 变化。
                 styleKeyRoutes[key] = {
@@ -697,7 +740,8 @@ export default function createSetStyleHandler(
                   source: 'jsx-inline',
                   initialValue,
                   lessInitialValue,
-                  matchedElementCount,
+                  matchedElementCount: matchStats.elementCount,
+                  matchedSourceLocationCount: matchStats.sourceLocationCount,
                   syncInline: multiple && !!lessSelectorFromLoc,
                   inlineSyncTargets,
                 }
@@ -715,7 +759,7 @@ export default function createSetStyleHandler(
                 styleKeyRoutes[key] = { selector: '', isJsx: false, needsAI: true }
               } else {
                 const selector = (ownerCssRule ?? winningRule).selectorText
-                const matchedElementCount = getSelectorMatchedElements(selector, shadowRoot)?.length
+                const matchStats = getSelectorMatchStats(selector, shadowRoot)
                 const routeInlineSyncTargets = multiple
                   ? (selector === lessSelectorFromLoc
                     ? inlineSyncTargets
@@ -726,7 +770,8 @@ export default function createSetStyleHandler(
                   isJsx: false,
                   source: 'less',
                   initialValue: getElementNumericStyleValue(ele, key),
-                  matchedElementCount,
+                  matchedElementCount: matchStats.elementCount,
+                  matchedSourceLocationCount: matchStats.sourceLocationCount,
                   inlineSyncTargets: routeInlineSyncTargets,
                 }
               }
