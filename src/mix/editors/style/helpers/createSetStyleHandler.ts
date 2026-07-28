@@ -599,8 +599,6 @@ export default function createSetStyleHandler(
             }
           })
           const componentID = context.component!.params.id
-          // styleID 计算规则与 runtime-card.tsx 中 css.set 保持一致：
-          // `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
           const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
           const loc = locRaw ? (() => { try { return JSON.parse(locRaw) } catch { return null } })() : null
@@ -609,7 +607,23 @@ export default function createSetStyleHandler(
             context.component?.params?.data?.files,
             config.getEntryFile(),
           )
-          const styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+          // styleID 计算规则需与 index.tsx 中 canvas.css.set 保持一致：
+          // prototype 模式下：`${componentID}_${path}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
+          // 其他模式下：`${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+          const frontendMode = config.getFrontendMode()
+          let styleID: string
+          if (frontendMode === 'prototype') {
+            // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
+            const pageEle = (sourceEle as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
+            const pagePath = pageEle?.dataset?.desnPage ?? null
+            if (pagePath != null) {
+              styleID = `${componentID}_${pagePath}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
+            } else {
+              styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+            }
+          } else {
+            styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+          }
           const shadowRoot = getShadowRoot()
           const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement | null
           const sheet = styleTag?.sheet ?? null
