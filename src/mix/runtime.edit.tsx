@@ -61,8 +61,8 @@ const dataCompatible = (props) => {
     const version = config.getVersion()
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 37 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 37
+    if (!data.version || data.version < 38 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 38
       data._componentRuntime.version = version
       
       // const mode = config.getFrontendMode()
@@ -152,6 +152,33 @@ const dataCompatible = (props) => {
   "width": ${maxWidth}
 }`
           })
+        } else {
+          if (location.pathname.split('/').slice(-1)[0] === '18793') {
+            const appConfigFile = data.files.find((file) => file.fileName === 'app.config.ts')
+            appConfigFile.source = encodeURIComponent(`export default defineAppConfig({
+  viewports: [
+    {
+      id: "desktop",
+      label: "PC",
+      width: 1440,
+    },
+    {
+      id: "mobile",
+      label: "手机",
+      width: 480,
+    },
+  ],
+  breakpoints: [
+    {
+      id: "mobile",
+      media: {
+        maxWidth: 480,
+      },
+    },
+  ],
+})`)
+
+          }
         }
       }
       
