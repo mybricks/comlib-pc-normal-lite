@@ -574,7 +574,10 @@ export default function createSetStyleHandler(
      */
     try {
       if (state === 'start') {
-
+        const sourceEle = getEle(ctx, params)
+        ele = resolveTargetEle(sourceEle, style, multiple)
+        initialInlineCssText = ele.style?.cssText ?? ''
+        initialInlineStyleValues = {}
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
         style = resolveStyle(
           multiple
@@ -586,8 +589,8 @@ export default function createSetStyleHandler(
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
-          initialInlineCssText = ele.style?.cssText ?? ''
-          initialInlineStyleValues = {}
+          // initialInlineCssText = ele.style?.cssText ?? ''
+          // initialInlineStyleValues = {}
           Object.keys(style as Record<string, number>).forEach((key) => {
             const initialValue = ele.style.getPropertyValue(convertCamelToHyphen(key))
             initialInlineStyleValues[key] = {
