@@ -42,7 +42,10 @@ const design = (props: CreateMyBricksProps) => {
         data-desn-page=''
         data-zone-title='弹窗'
         data-widge-name='弹窗'
-        style={DEFAULT_STYLE}
+        style={{
+          ...DEFAULT_STYLE,
+          height: 896
+        }}
       >
         {container && <Component {...props} popupNode={container}/>}
       </div>
