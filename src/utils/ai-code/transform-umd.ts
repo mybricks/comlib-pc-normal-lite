@@ -10,6 +10,7 @@ import esmPreCheckPlugin from './plugins/esmPreCheckPlugin'
 import wrapThirdPartyPlugin from './plugins/wrapThirdPartyPlugin'
 import skillBoundaryPlugin from './render/mybricks/gui-card-next/skill-boundary-plugin'
 import eslintCheckPlugin from './plugins/eslintCheckPlugin'
+import appConfigCheckPlugin from './plugins/appConfigCheckPlugin'
 import config from '../../mix/context/config'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
@@ -55,6 +56,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
           }
         ],
         ...babelPlugins,
+        ...(frontendMode === 'prototype' ? [appConfigCheckPlugin(fileName, onError),] : []),
         babelPlugin({ constituency, fileName: ctx?.fileName }),
         wrapThirdPartyPlugin(),
         ...validatorPlugins,
