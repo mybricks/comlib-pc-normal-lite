@@ -21,9 +21,15 @@ export function injectStyleAttrIntoJSX(
   if (!filteredProps.length) return null;
 
   // tagEnd 是开标签的 exclusive end，tagEnd-1 指向 '>'
-  const insertPos = tagEnd - 1;
+  let insertPos = tagEnd - 1;
   if (insertPos < 0 || insertPos >= source.length) return null;
   if (source[insertPos] !== '>') return null; // 安全校验，非法偏移时放弃
+
+  // 处理自闭合标签 `/>` 的情况：'/' 紧靠 '>' 之前，直接插入会拆开 '/>'，
+  // 需将插入位置退到 '/' 之前，确保产出合法的 `... style={{ ... }} />`
+  if (insertPos > 0 && source[insertPos - 1] === '/') {
+    insertPos--;
+  }
 
   const styleInfo: Record<string, StyleInfoEntry> = {};
   let attrStr = ' style={{ ';
