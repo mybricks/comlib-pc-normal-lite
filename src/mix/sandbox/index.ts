@@ -1065,6 +1065,16 @@ export async function registerSandbox(comId: string): Promise<void> {
         context.notifyVersionsChange(target);
       },
     },
+    chipRemoveHandlers: {
+      ['element-move'](params) {
+        context.chipPromiseIds.delete(params.id)
+        context.component!.actions!.promiseCancel(params.id)
+      },
+      ['element-delete'](params) {
+        context.chipPromiseIds.delete(params.id)
+        context.component!.actions!.promiseCancel(params.id)
+      }
+    }
   }) ?? {};
 
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────

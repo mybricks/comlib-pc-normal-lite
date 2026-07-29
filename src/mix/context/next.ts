@@ -54,6 +54,9 @@ class Context {
 
       updatePages: (...params: any) => any
       updateDocs: (...params: any) => any
+
+      promiseComplete: (...params: any) => void
+      promiseCancel: (...params: any) => void
     }
     /** 事件 */
     events: Events<{
@@ -517,6 +520,8 @@ class Context {
     this.logEvents.emit('log', msg);
     this.notifyComDebugState();
   }
+
+  chipPromiseIds = new Set<string>()
 }
 
 const nextContext = new Context()

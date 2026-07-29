@@ -5,7 +5,7 @@ import runDelete from './delete'
 export default function () {
   return {
     '@updateSegment'(ctx: any, type: string, options: any) {
-      if (type === 'changeOrder') {
+      if (type === 'cutTo') {
         return changeOrder(options)
       } else if (type === 'updateText') {
         updateText(options)

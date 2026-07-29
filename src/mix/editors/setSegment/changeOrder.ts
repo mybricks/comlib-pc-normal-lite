@@ -1,5 +1,6 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
+import { randomUUID } from '../../utils/uuid'
 
 const getSnippet = (fileName: string, loc: any, files): string => {
   const file = files.find((f) => f.fileName === fileName)
@@ -8,14 +9,6 @@ const getSnippet = (fileName: string, loc: any, files): string => {
   const start: number = loc.jsx?.start ?? 0
   const end: number = loc.jsx?.end ?? source.length
   return source.slice(start, end).trim()
-}
-
-const getLineRange = (source: string, loc: any): string => {
-  const start: number = loc.jsx?.start ?? 0
-  const end: number = loc.jsx?.end ?? source.length
-  const startLine = source.slice(0, start).split('\n').length
-  const endLine = source.slice(0, end).split('\n').length
-  return startLine === endLine ? `第 ${startLine} 行` : `第 ${startLine}~${endLine} 行`
 }
 
 /**
@@ -141,11 +134,6 @@ const changeOrder = (options) => {
   const fromSnippet = getSnippet(fromFile, fromLoc, files)
   const toSnippet = getSnippet(toFile, toLoc, files)
 
-  // const fromFileSource = decodeURIComponent(files.find((f) => f.fileName === fromFile)?.source ?? '')
-  // const toFileSource = decodeURIComponent(files.find((f) => f.fileName === toFile)?.source ?? '')
-  // const fromLineRange = getLineRange(fromFileSource, fromLoc)
-  // const toLineRange = getLineRange(toFileSource, toLoc)
-
   // ─── 快速路径：不走 AI，直接替换 ─────────────────────────────────────
   // 条件：
   //   1. 两个元素都直接有 data-loc（fromDOM === fromEle && toDOM === toEle）
@@ -175,7 +163,9 @@ const changeOrder = (options) => {
             context.saveManualVersion([fromFile])
           },
         })
-        return true
+        return {
+          type: 'success'
+        }
       }
     }
   }
@@ -185,7 +175,7 @@ const changeOrder = (options) => {
   const toLabel = toEle?.dataset?.zoneTitle?.slice(1) || toEle?.classList?.[0] || toEle?.tagName?.toLowerCase?.() || '节点2'
 
   const chip = {
-    id: Math.random().toString(36).slice(2, 8),
+    id: randomUUID(),
     type: 'element-move',
     label: `将 ${fromLabel} 移到 ${toLabel} ${type === 'before' ? '前面' : '后面'}`,
     data: {
@@ -204,7 +194,13 @@ const changeOrder = (options) => {
     },
     animation: true
   })
-  return false
+
+  context.chipPromiseIds.add(chip.id)
+
+  return {
+    type: 'promise',
+    promiseId: chip.id
+  }
 }
 
 export default changeOrder
