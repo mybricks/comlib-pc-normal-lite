@@ -6,6 +6,7 @@ import createMyBricksForKdsWeb from '../mybricks/kds-web'
 import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
 import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
+import createMyBricksReactNative from '../mybricks/react-native'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -67,6 +68,8 @@ const useDependencies = (params: Params) => {
       mybricks = createMyBricksForKdsWeb(createMyBricksProps)
     } else if (frontendMode === 'gui_card') {
       mybricks = createMyBricksForGuiCardNext(createMyBricksProps)
+    } else if (frontendMode === 'react-native') {
+      mybricks = createMyBricksReactNative(createMyBricksProps)
     } else {
       mybricks = createMyBricks(createMyBricksProps);
     }
