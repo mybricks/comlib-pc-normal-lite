@@ -676,7 +676,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               return pre
             }, cssContent)
 
-            const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId}) [data-desn-page='${path}']`)
+            const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
               .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
             // 组件id + 文件路径，保证唯一性
             const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
