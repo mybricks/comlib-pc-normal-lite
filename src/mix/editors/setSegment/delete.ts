@@ -3,8 +3,6 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
 
-const Babel = window.Babel
-
 const createDeletePlaceholder = (length: number) => {
   const placeholder = '<></>'
   return placeholder.length >= length ? placeholder.slice(0, length) : placeholder + ' '.repeat(length - placeholder.length)
@@ -26,6 +24,7 @@ const sendDeleteToAI = (fromEle) => {
     },
     animation: true
   })
+  context.chipPromiseIds.add(chip.id)
 
   return {
     type: 'promise',

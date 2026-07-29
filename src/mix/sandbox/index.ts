@@ -1073,6 +1073,13 @@ export async function registerSandbox(comId: string): Promise<void> {
           context.component!.actions!.promiseCancel(params.id)
         }
       },
+      ['element-text-update']: {
+        onRemove(params) {
+          console.log('element-text-update', params)
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
       ['element-delete']: {
         onRemove(params) {
           console.log('element-delete', params)

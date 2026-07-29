@@ -1,5 +1,32 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
+import { randomUUID } from '../../utils/uuid'
+import { getShadowRoot } from '../../../helpers/designer'
+
+const sendUpdateTextToAI = (fromEle, content: string) => {
+  const fromLabel = fromEle?.dataset?.zoneTitle?.slice(1) || fromEle?.classList?.[0] || fromEle?.tagName?.toLowerCase?.() || '节点1'
+  const chip = {
+    id: randomUUID(),
+    type: 'element-text-update',
+    label: `修改 ${fromLabel} 文案`,
+    data: { ele: fromEle, label: fromLabel, content },
+  }
+  const componentId = context.component!.params.id
+  window._sandbox_.helpers.appendToSender(componentId, {
+    message: `[[chip:${chip.id}]]`,
+    meta: {
+      chips: [chip],
+    },
+    animation: true
+  })
+
+  context.chipPromiseIds.add(chip.id)
+
+  return {
+    type: 'promise',
+    promiseId: chip.id
+  }
+}
 
 const updateText = (options) => {
   const { fromEle, content } = options
@@ -7,40 +34,58 @@ const updateText = (options) => {
     // 不允许空字符
     return
   }
-  let zoneTextEditable = fromEle.dataset['zoneTextEditable']
 
-  if (zoneTextEditable) {
-    // 如果有 data-zone-text-editable 属性，可以直接改代码
-    zoneTextEditable = JSON.parse(zoneTextEditable)
-    const loc = JSON.parse(fromEle.dataset.loc)
-    const fileName = loc.files.jsx
-    const source = decodeURIComponent(
-      context.component!.params.data.files.find((file) => {
-        return file.fileName === fileName
-      })
-      .source
-    )
-    const newCode = source.slice(0, zoneTextEditable.jsx.start) + 
-      content.split("\n").join("<br/>") +
-      source.slice(zoneTextEditable.jsx.end)
+  const zoneTextEditable = fromEle.dataset['zoneTextEditable']
+
+  if (!zoneTextEditable) {
+    // 没有 data-zone-text-editable 属性，添加到对话框
+    return sendUpdateTextToAI(fromEle, content)
+  }
+
+  try {
+    const locValue = fromEle.dataset.loc
+    if (!locValue) {
+      return sendUpdateTextToAI(fromEle, content)
+    }
+
+    const shadowRoot = getShadowRoot()
+    const elements = shadowRoot.querySelectorAll(`[data-loc='${locValue}']`)
+    if (elements.length > 1) {
+      // 有多个相同 data-loc，直接修改会影响多个渲染实例，走 AI
+      return sendUpdateTextToAI(fromEle, content)
+    }
+
+    const loc = JSON.parse(locValue)
+    const textloc = JSON.parse(zoneTextEditable)
+    const fileName = loc.files?.jsx
+    const file = context.component!.params!.data!.files.find((file) => file.fileName === fileName)
+    const source = file ? decodeURIComponent(file.source) : ''
+    const start = textloc.jsx?.start
+    const end = textloc.jsx?.end
+
+    if (!file || !fileName || typeof start !== 'number' || typeof end !== 'number' || start < 0 || end <= start || end > source.length) {
+      return sendUpdateTextToAI(fromEle, content)
+    }
+
+    const nextValue = content.split('\n').join('<br/>')
+    const newSource = source.slice(0, start) + nextValue + source.slice(end)
 
     undoRedoManager.execute({
       execute() {
-        context.updateFile({fileName, content: newCode, type: ''})
+        context.updateFile({ fileName, content: newSource, type: undefined, noUpdateFileSystem: true })
         context.saveManualVersion([fileName])
       },
       undo() {
-        context.updateFile({fileName, content: source, type: ''})
+        context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true })
         context.saveManualVersion([fileName])
       },
     })
-  } else {
-    const message = `将当前聚焦元素的文字内容修改为 "${content}"` + 
-      ""
-      // "\n当前聚焦元素的文字内容来自变量，请修改对应变量的值，但不要改变代码结构"
 
-    const componentId = context.component!.params.id
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, mentionFocus: true })
+    return {
+      type: 'success'
+    }
+  } catch (e) {
+    return sendUpdateTextToAI(fromEle, content)
   }
 }
 

@@ -5,12 +5,13 @@ import runDelete from './delete'
 export default function () {
   return {
     '@updateSegment'(ctx: any, type: string, options: any) {
+      console.log('[type]', type)
       if (type === 'cutTo') {
         return changeOrder(options)
       } else if (type === 'updateText') {
-        updateText(options)
+        return updateText(options)
       } else if (type === 'delete') {
-        runDelete(options)
+        return runDelete(options)
       }
     }
   }
