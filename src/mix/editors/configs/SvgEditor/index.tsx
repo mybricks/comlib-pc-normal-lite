@@ -71,6 +71,8 @@ const svgReplacer = genSvgReplacer();
 
 function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string }) {
   const svgEle = editConfig.editConfig?.ele as SVGElement | null;
+  // 存在代码标注，则代表 svg 是真实存在代码里的，否则可能是引入的三方库
+  const isSvgElement = !!svgEle?.dataset.loc;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [currentSvgHtml, setCurrentSvgHtml] = useState(svgEle?.outerHTML ?? '');
   const [svgColor] = useState<string | undefined>(() => getSvgComputedColor(svgEle));
@@ -82,13 +84,16 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
     return () => registerSvgAppliedCallback(null);
   }, []);
 
-  const syntheticParams = { focusArea: svgEle, id: comId };
+  const syntheticParams = {
+    focusArea: isSvgElement ? svgEle : svgEle?.closest('[data-loc]'),
+    id: comId,
+  };
   const svgSize = readSvgSize(currentSvgHtml, svgEle);
 
   return (
     <div className={css.panel}>
       <SvgPreview svgHtml={currentSvgHtml} color={svgColor} />
-      {currentSvgHtml && (
+      {currentSvgHtml && isSvgElement && (
         <SizeEditor
           size={svgSize}
           onCommit={(size) => patchSvgSizeInTsx(syntheticParams, size)}

@@ -142,7 +142,7 @@ export default function (props: Props, actions: Actions) {
       },
       items: buildImgEditorItems(comId),
     },
-    '[data-zone-svg]': {
+    '[data-zone-type="page"] svg': {
       '@ai': {
         title: aiSvgIcon5,
         desc: '通过AI创作图标',

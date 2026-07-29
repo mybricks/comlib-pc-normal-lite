@@ -1813,7 +1813,19 @@ function findActualSvgRange(
   source: string,
   hintStart: number,
   hintEnd: number,
+  allowIconComponent = false,
 ): { start: number; end: number } | null {
+  if (allowIconComponent) {
+    // 仅替换路径允许 data-loc 指向三方图标组件（如 <Icon />）。
+    const componentRange = findActualIconTagRange(source, hintStart);
+    if (componentRange) {
+      const componentSource = source.slice(componentRange.start, componentRange.end);
+      if (/^<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/.test(componentSource)) {
+        return componentRange;
+      }
+    }
+  }
+
   // Step 1: 以 hintStart 为锚点，向前搜索最近的合法 <svg 开始标签。
   // 合法：<svg 后接空白、> 或 / (即不是 <svgFoo 之类的自定义标签)
   const isSvgTag = (pos: number) => /[\s>/]/.test(source[pos + 4] ?? '');
@@ -1876,6 +1888,7 @@ let _lastSvgState: {
 
 export function applyRawSvg(params: any, rawSvg: string): void {
   const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
+
   const jsxPath = loc.files?.jsx;
   if (!jsxPath) return;
 
@@ -1892,6 +1905,7 @@ export function applyRawSvg(params: any, rawSvg: string): void {
   // 避免 data-loc 因源码长度变化失效导致截断位置出错。
   let hintStart: number = loc.jsx?.start;
   let hintEnd: number = loc.jsx?.end;
+  if (!Number.isInteger(hintStart) || hintStart < 0) return;
   if (
     _lastSvgState &&
     _lastSvgState.comId === comId &&
@@ -1903,19 +1917,23 @@ export function applyRawSvg(params: any, rawSvg: string): void {
     hintEnd = _lastSvgState.end;
   }
 
-  const range = findActualSvgRange(source, hintStart, hintEnd);
+  const range = findActualSvgRange(source, hintStart, hintEnd, true);
   if (!range) return;
 
-  // 最终安全断言：被替换的 slice 必须是完整的 <svg>…</svg>，否则放弃
+  // 允许替换完整 SVG，或 data-loc 指向的 JSX 图标组件。
   const candidate = source.slice(range.start, range.end);
-  if (!candidate.startsWith('<svg') || !candidate.trimEnd().endsWith('</svg>')) return;
+  const isSvg = candidate.startsWith('<svg') && candidate.trimEnd().endsWith('</svg>');
+  const isIconComponent = /^<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/.test(candidate);
+  if (!isSvg && !isIconComponent) return;
 
-  // 提取原始 svg 的 width/height 属性，替换时保持图标尺寸不变
+  // 原 SVG 替换时保持尺寸；组件图标没有可复用的 SVG 宽高属性。
   const sizeOverride: { width?: string; height?: string } = {};
-  const widthMatch = candidate.match(/\bwidth="([^"]+)"/);
-  const heightMatch = candidate.match(/\bheight="([^"]+)"/);
-  if (widthMatch) sizeOverride.width = widthMatch[1];
-  if (heightMatch) sizeOverride.height = heightMatch[1];
+  if (isSvg) {
+    const widthMatch = candidate.match(/\bwidth="([^"]+)"/);
+    const heightMatch = candidate.match(/\bheight="([^"]+)"/);
+    if (widthMatch) sizeOverride.width = widthMatch[1];
+    if (heightMatch) sizeOverride.height = heightMatch[1];
+  }
 
   const jsxSvg = svgToJsx(rawSvg, sizeOverride);
   const newSource = source.slice(0, range.start) + jsxSvg + source.slice(range.end);
