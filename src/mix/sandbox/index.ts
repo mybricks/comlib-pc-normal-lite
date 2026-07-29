@@ -1065,14 +1065,20 @@ export async function registerSandbox(comId: string): Promise<void> {
         context.notifyVersionsChange(target);
       },
     },
-    chipRemoveHandlers: {
-      ['element-move'](params) {
-        context.chipPromiseIds.delete(params.id)
-        context.component!.actions!.promiseCancel(params.id)
+    chips: {
+      ['element-move']: {
+        onRemove(params) {
+          console.log('element-move', params)
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
       },
-      ['element-delete'](params) {
-        context.chipPromiseIds.delete(params.id)
-        context.component!.actions!.promiseCancel(params.id)
+      ['element-delete']: {
+        onRemove(params) {
+          console.log('element-delete', params)
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
       }
     }
   }) ?? {};
