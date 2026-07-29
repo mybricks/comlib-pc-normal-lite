@@ -645,62 +645,60 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const breakpoint = useBreakpoints(path)
 
     useLayoutEffect(() => {
-      if (breakpoint) {
-        if (frontendMode === 'prototype' && isDesign()) {
-          const cssFileNames: string[] = []
-          const unwatchList: Array<() => void> = []
-          const fileSystem = mixContext.fileSystem
-          const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
-          const setLessCss = (filename: string) => {
-            const entry = fileSystem?.filesMap?.[filename]
-            if (!entry || !entry.file.filename.endsWith('.less')) {
-              return
-            }
-
-            const { file, module } = entry
-            const { cssContent, mediaQueries } = module
-
-            const value = breakpoint.width
-
-            const cssText = mediaQueries.reduce((pre, cur) => {
-              const match = cur.conditionText.match(/max-width:\s*(\d+)px/)
-              if (!match) {
-                return pre
-              }
-              const width = parseInt(match[1])
-
-              if (value <= width) {
-                return pre.replace(cur.placeholder, cur.cssText)
-              }
-
-              return pre
-            }, cssContent)
-
-            const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
-              .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
-            // 组件id + 文件路径，保证唯一性
-            const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
-            if (!cssFileNames.includes(cssId)) {
-              cssFileNames.push(cssId)
-            }
-            ;(env as any).canvas.css.set(cssId, myContent)
+      if (frontendMode === 'prototype' && isDesign()) {
+        const cssFileNames: string[] = []
+        const unwatchList: Array<() => void> = []
+        const fileSystem = mixContext.fileSystem
+        const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+        const setLessCss = (filename: string) => {
+          const entry = fileSystem?.filesMap?.[filename]
+          if (!entry || !entry.file.filename.endsWith('.less')) {
+            return
           }
 
-          Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename, { file }]) => {
-            if (file.filename.endsWith('.less')) {
-              unwatchList.push(fileSystem!.fileWatcher.watch(filename, (event) => {
-                if (['create', 'update'].includes(event.type)) {
-                  setLessCss(filename)
-                }
-              }))
-            }
-          })
+          const { file, module } = entry
+          const { cssContent, mediaQueries } = module
 
-          return () => {
-            unwatchList.forEach(unwatch => unwatch())
-            if (frontendMode === 'prototype') {
-              cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
+          const value = breakpoint?.width ?? canvasWidth
+
+          const cssText = mediaQueries.reduce((pre, cur) => {
+            const match = cur.conditionText.match(/max-width:\s*(\d+)px/)
+            if (!match) {
+              return pre
             }
+            const width = parseInt(match[1])
+
+            if (value <= width) {
+              return pre.replace(cur.placeholder, cur.cssText)
+            }
+
+            return pre
+          }, cssContent)
+
+          const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
+            .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
+          // 组件id + 文件路径，保证唯一性
+          const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
+          if (!cssFileNames.includes(cssId)) {
+            cssFileNames.push(cssId)
+          }
+          ;(env as any).canvas.css.set(cssId, myContent)
+        }
+
+        Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename, { file }]) => {
+          if (file.filename.endsWith('.less')) {
+            unwatchList.push(fileSystem!.fileWatcher.watch(filename, (event) => {
+              if (['create', 'update'].includes(event.type)) {
+                setLessCss(filename)
+              }
+            }))
+          }
+        })
+
+        return () => {
+          unwatchList.forEach(unwatch => unwatch())
+          if (frontendMode === 'prototype') {
+            cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
           }
         }
       }

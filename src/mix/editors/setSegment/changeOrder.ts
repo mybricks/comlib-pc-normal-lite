@@ -68,6 +68,173 @@ const swapSnippetsInSource = (source: string, fromSnippet: string, toSnippet: st
   return result
 }
 
+type SourceRange = {
+  start: number
+  end: number
+}
+
+const shiftLocByDelta = (loc: any, delta: number) => {
+  if (!loc || typeof delta !== 'number' || delta === 0) return loc
+
+  const nextLoc = { ...loc }
+
+  if (nextLoc.jsx && typeof nextLoc.jsx.start === 'number' && typeof nextLoc.jsx.end === 'number') {
+    nextLoc.jsx = {
+      ...nextLoc.jsx,
+      start: nextLoc.jsx.start + delta,
+      end: nextLoc.jsx.end + delta,
+    }
+  }
+
+  if (nextLoc.tag && typeof nextLoc.tag.end === 'number') {
+    nextLoc.tag = {
+      ...nextLoc.tag,
+      end: nextLoc.tag.end + delta,
+    }
+  }
+
+  return nextLoc
+}
+
+const isLocInRange = (loc: any, fileName: string, range: SourceRange) => {
+  const start = loc?.jsx?.start
+  const end = loc?.jsx?.end
+  return (
+    loc?.files?.jsx === fileName &&
+    typeof start === 'number' &&
+    typeof end === 'number' &&
+    start >= range.start &&
+    end <= range.end
+  )
+}
+
+const shiftElementJSONAttribute = (ele: Element, attrName: string, delta: number) => {
+  const value = ele.getAttribute(attrName)
+  if (!value) return
+
+  try {
+    // data-zone-text-editable 等属性内部也是 JSON，且记录的是源码绝对位置。
+    // 当 JSX 子树整体移动时，这类属性需要与 data-loc 使用同一个 delta 平移，
+    // 否则后续文本编辑会继续使用旧 start/end 定位。
+    ele.setAttribute(attrName, JSON.stringify(shiftLocByDelta(JSON.parse(value), delta)))
+  } catch { }
+}
+
+/**
+ * 根据一次 JSX 片段交换，计算某个 data-loc 应该平移多少字符。
+ *
+ * 这里不能简单只更新 from/to 两个根节点：
+ * 1. 被交换的两个 JSX 子树自身会移动到对方位置；
+ * 2. 如果两个片段长度不同，夹在两者之间的同级节点源码位置也会整体前移或后移；
+ * 3. 两个片段外部的节点不受影响，delta 为 0。
+ *
+ * 约定：firstRange/secondRange 是交换前源码中的两个 JSX 根节点范围，
+ * 函数内部先按 start 排出 left/right，再根据 loc 所在区间返回应平移的 delta。
+ * 快速路径使用 noUpdateFileSystem 更新源码，不会立即重新渲染 DOM，
+ * 因此必须同步平移当前 DOM 上的 data-loc，否则再次拖动时会按旧位置截取源码，导致字符串无法匹配。
+ */
+const getSwapDelta = (loc: any, fileName: string, firstRange: SourceRange, secondRange: SourceRange) => {
+  if (firstRange.start === secondRange.start) return 0
+
+  const leftRange = firstRange.start < secondRange.start ? firstRange : secondRange
+  const rightRange = firstRange.start < secondRange.start ? secondRange : firstRange
+  const leftLength = leftRange.end - leftRange.start
+  const rightLength = rightRange.end - rightRange.start
+
+  if (isLocInRange(loc, fileName, leftRange)) {
+    // 左侧片段被移动到右侧片段原位置之后。
+    // 目标起点 = rightRange.end - leftLength。
+    return rightRange.end - leftLength - leftRange.start
+  }
+
+  if (isLocInRange(loc, fileName, rightRange)) {
+    // 右侧片段被移动到左侧片段原位置。
+    return leftRange.start - rightRange.start
+  }
+
+  if (
+    loc?.files?.jsx === fileName &&
+    typeof loc?.jsx?.start === 'number' &&
+    typeof loc?.jsx?.end === 'number' &&
+    loc.jsx.start >= leftRange.end &&
+    loc.jsx.end <= rightRange.start
+  ) {
+    // 中间区间会被右侧片段替换到左侧后产生的长度差整体平移。
+    // 例如左片段更短，则中间节点向右移动；左片段更长，则中间节点向左移动。
+    return rightLength - leftLength
+  }
+
+  return 0
+}
+
+/**
+ * 将交换影响范围内的 DOM 定位信息同步到新的源码位置。
+ *
+ * root 取两个拖拽元素的共同父节点：
+ * - 快速路径已经要求 from/to 是同一个 parentElement；
+ * - 因此扫描该父节点下的 data-loc，就能覆盖被交换节点以及中间受位移影响的兄弟节点；
+ * - 不扫描全局 DOM，避免误改其它组件实例或同名页面中的节点。
+ *
+ * 这里只做位置平移，不重算 codeLine：
+ * - start/end/tag.end 是后续字符串截取、样式注入、文本编辑真正依赖的绝对偏移；
+ * - codeLine 需要 AST/源码重新解析才能准确计算，手动推断容易生成不可信行号。
+ */
+const shiftDOMLocAfterSourceSwap = (root: Element | null, fileName: string, firstRange: SourceRange, secondRange: SourceRange) => {
+  if (!root) return
+
+  const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
+  elements.forEach((ele) => {
+    const locValue = ele.getAttribute('data-loc')
+    if (!locValue) return
+
+    try {
+      const loc = JSON.parse(locValue)
+      const delta = getSwapDelta(loc, fileName, firstRange, secondRange)
+      if (delta === 0) return
+
+      ele.setAttribute('data-loc', JSON.stringify(shiftLocByDelta(loc, delta)))
+      shiftElementJSONAttribute(ele, 'data-zone-text-editable', delta)
+    } catch { }
+  })
+}
+
+const restoreDOMAttribute = (ele: Element | null, attrName: string, value: string | null) => {
+  if (!ele) return
+  if (value == null) {
+    ele.removeAttribute(attrName)
+  } else {
+    ele.setAttribute(attrName, value)
+  }
+}
+
+const restoreDOMLocSnapshot = (root: Element | null, snapshot: Map<Element, { loc: string | null; textEditable: string | null }>) => {
+  if (!root) return
+
+  const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
+  elements.forEach((ele) => {
+    const item = snapshot.get(ele)
+    if (!item) return
+
+    restoreDOMAttribute(ele, 'data-loc', item.loc)
+    restoreDOMAttribute(ele, 'data-zone-text-editable', item.textEditable)
+  })
+}
+
+const createDOMLocSnapshot = (root: Element | null) => {
+  const snapshot = new Map<Element, { loc: string | null; textEditable: string | null }>()
+  if (!root) return snapshot
+
+  const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
+  elements.forEach((ele) => {
+    snapshot.set(ele, {
+      loc: ele.getAttribute('data-loc'),
+      textEditable: ele.getAttribute('data-zone-text-editable'),
+    })
+  })
+
+  return snapshot
+}
+
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
   // console.log('[changeOrder]', options)
@@ -153,13 +320,29 @@ const changeOrder = (options) => {
     if (fileEntry) {
       const newSource = swapSnippetsInSource(source, fromSnippet, toSnippet)
       if (newSource !== null) {
+        const fromRange = {
+          start: fromLoc.jsx.start,
+          end: fromLoc.jsx.end,
+        }
+        const toRange = {
+          start: toLoc.jsx.start,
+          end: toLoc.jsx.end,
+        }
+        const locSnapshotRoot = fromEle.parentElement
+        // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原交换前快照，
+        // 否则源码已回退但 DOM 仍保留交换后的 data-loc，再次操作仍会错位。
+        const locSnapshot = createDOMLocSnapshot(locSnapshotRoot)
+
         undoRedoManager.execute({
           execute() {
-            context.updateFile({ fileName: fromFile, content: newSource, type: undefined })
+            context.updateFile({ fileName: fromFile, content: newSource, type: undefined, noUpdateFileSystem: true })
+            // noUpdateFileSystem 不触发完整重渲染，需要手动同步 DOM 中仍在使用的源码偏移。
+            shiftDOMLocAfterSourceSwap(locSnapshotRoot, fromFile, fromRange, toRange)
             context.saveManualVersion([fromFile])
           },
           undo() {
-            context.updateFile({ fileName: fromFile, content: source, type: undefined })
+            context.updateFile({ fileName: fromFile, content: source, type: undefined, noUpdateFileSystem: true })
+            restoreDOMLocSnapshot(locSnapshotRoot, locSnapshot)
             context.saveManualVersion([fromFile])
           },
         })
