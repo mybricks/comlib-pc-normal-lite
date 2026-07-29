@@ -1012,6 +1012,12 @@ export async function registerSandbox(comId: string): Promise<void> {
           message: '[轮次/afterTurn] 本轮结束 — 开始执行轮后处理',
         })
         const data = context.component?.params?.data;
+
+        Array.from(context.chipPromiseIds).forEach((id) => {
+          context.chipPromiseIds.delete(id)
+          context.component!.actions!.promiseCancel(id)
+        })
+
         if (history && data && typeof data === 'object') {
           await persistAiVersionAfterTurn(comId, history, data, turn);
         }
