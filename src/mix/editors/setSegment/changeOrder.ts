@@ -141,10 +141,10 @@ const changeOrder = (options) => {
   const fromSnippet = getSnippet(fromFile, fromLoc, files)
   const toSnippet = getSnippet(toFile, toLoc, files)
 
-  const fromFileSource = decodeURIComponent(files.find((f) => f.fileName === fromFile)?.source ?? '')
-  const toFileSource = decodeURIComponent(files.find((f) => f.fileName === toFile)?.source ?? '')
-  const fromLineRange = getLineRange(fromFileSource, fromLoc)
-  const toLineRange = getLineRange(toFileSource, toLoc)
+  // const fromFileSource = decodeURIComponent(files.find((f) => f.fileName === fromFile)?.source ?? '')
+  // const toFileSource = decodeURIComponent(files.find((f) => f.fileName === toFile)?.source ?? '')
+  // const fromLineRange = getLineRange(fromFileSource, fromLoc)
+  // const toLineRange = getLineRange(toFileSource, toLoc)
 
   // ─── 快速路径：不走 AI，直接替换 ─────────────────────────────────────
   // 条件：
@@ -155,13 +155,6 @@ const changeOrder = (options) => {
   //      - children 中无 JSXExpressionContainer（{h1}、{items.map(...)} 等）
   const fileEntry = files.find((f) => f.fileName === fromFile)
   const source = fileEntry ? decodeURIComponent(fileEntry.source) : ''
-
-  // console.log('[结果]', {
-  //   useAI,
-  //   'fromFile === toFile': fromFile === toFile,
-  //   'fromLoc.swappable': fromLoc.swappable,
-  //   'toLoc.swappable': toLoc.swappable
-  // })
 
   if (
     !useAI &&
@@ -186,69 +179,31 @@ const changeOrder = (options) => {
       }
     }
   }
-  // ─────────────────────────────────────────────────────────────────────
-
-  // const fromDOMSnapshot = serializeDOMShallow(fromEle, 3)
-  // const toDOMSnapshot = serializeDOMShallow(toEle, 3)
-  // const direction = type === 'before' ? '之前（上方）' : '之后（下方）'
-  // const message =
-  //   `请调整页面中两个元素在 JSX 源码里的顺序。\n` +
-  //   `\n` +
-  //   `## 操作意图\n` +
-  //   `用户将【被拖拽元素】拖拽到【参照元素】的${direction}，请在源码中完成对应的位置调换。\n` +
-  //   `\n` +
-  //   `## 被拖拽元素（需要移动）\n` +
-  //   `- DOM 结构快照：\n` +
-  //   `\`\`\`html\n${fromDOMSnapshot}\n\`\`\`\n` +
-  //   `- 所在文件：${fromFile}（${fromLineRange}）\n` +
-  //   `- 对应的 JSX 代码：\n` +
-  //   `\`\`\`jsx\n${fromSnippet}\n\`\`\`\n` +
-  //   `\n` +
-  //   `## 参照元素（位置不变）\n` +
-  //   `- DOM 结构快照：\n` +
-  //   `\`\`\`html\n${toDOMSnapshot}\n\`\`\`\n` +
-  //   `- 所在文件：${toFile}（${toLineRange}）\n` +
-  //   `- 对应的 JSX 代码：\n` +
-  //   `\`\`\`jsx\n${toSnippet}\n\`\`\`\n` +
-  //   `\n` +
-  //   `## 修改要求\n` +
-  //   `1. 只移动【被拖拽元素】的 JSX 节点（含其完整子树），不修改任何属性或样式，保证修改前后代码语义不变\n` +
-  //   `2. 将【被拖拽元素】移动到【参照元素】的${direction}\n` +
-  //   `3. 保持其余元素的顺序和缩进不变\n` +
-  //   `4. 如果两个元素位于不同父容器，请自行判断最合理的移动方案\n` +
-  //   `\n` +
-  //   `## 注意\n` +
-  //   `如果你认为这次操作不合法，请用一句话向用户说明原因，不要修改任何代码。`
 
   const componentId = context.component!.params.id
+  const fromLabel = fromEle?.dataset?.zoneTitle?.slice(1) || fromEle?.classList?.[0] || fromEle?.tagName?.toLowerCase?.() || '节点1'
+  const toLabel = toEle?.dataset?.zoneTitle?.slice(1) || toEle?.classList?.[0] || toEle?.tagName?.toLowerCase?.() || '节点2'
 
-  const label1 = fromDOM?.dataset?.zoneTitle?.slice(1) || fromEle.tagName || '节点1'
-  const label2 = toDOM?.dataset?.zoneTitle?.slice(1) || toEle.tagName || '节点2'
-
-  const chip1 = {
+  const chip = {
     id: Math.random().toString(36).slice(2, 8),
-    type: "dom",
-    label: label1,
-    data: { ele: fromEle },
-  };
-
-  const chip2 = {
-    id: Math.random().toString(36).slice(2, 8),
-    type: "dom",
-    label: label2,
-    data: { ele: toEle },
-  };
-
-  type === 'before' ? '之前（上方）' : '之后（下方）'
+    type: 'element-move',
+    label: `将 ${fromLabel} 移到 ${toLabel} ${type === 'before' ? '前面' : '后面'}`,
+    data: {
+      fromEle,
+      toEle,
+      placement: type === 'before' ? 'before' : 'after',
+      fromLabel,
+      toLabel,
+    },
+  }
 
   window._sandbox_.helpers.appendToSender(componentId, {
-    message: `把 [[chip:${chip1.id}]] 调整到 [[chip:${chip2.id}]] ${type === 'before' ? '前面' : '后面'}；\n`,
+    message: `[[chip:${chip.id}]]`,
     meta: {
-      chips: [chip1, chip2],
+      chips: [chip],
     },
     animation: true
-  });
-  // ;(window as any)._sandbox_?.helpers?.sendToAgent?.(componentId, { message, extra: { source: '@updateSegment:changeOrder' } })
+  })
   return false
 }
 
