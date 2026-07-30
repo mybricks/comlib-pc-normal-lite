@@ -74,7 +74,7 @@ function deriveNameFromFilePath(filePath?: string): string {
   return stem || 'root';
 }
 
-export default function ({ constituency, fileName }: { constituency: any; fileName?: string }) {
+export default function ({ fileName }: { fileName?: string }) {
   const fallbackName = deriveNameFromFilePath(fileName);
   return function () {
     const importRelyMap = new Map();
@@ -218,7 +218,7 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 }
               };
               // 同时支持 className="foo" 字符串字面量 与 className={css.foo} CSS Module
-              // 保持 cnList 为 string[]，data-loc 和 constituency.className 的下游消费者无需改动
+              // 保持 cnList 为 string[]，data-loc 的下游消费者无需改动
               const cnList = [...new Set(extractCssClassNamesFromJSXElement(node, cssModuleNames).map(c => c.name))];
               pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(','));
               const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
@@ -312,14 +312,6 @@ export default function ({ constituency, fileName }: { constituency: any; fileNa
                 // if (jsdoc) {
                 //   dataLocValueObject.jsdoc = jsdoc;
                 // }
-  
-                constituency.push({
-                  className: cnList,
-                  component: relyName,
-                  source,
-                  selectors,
-                  // ...(jsdoc && { jsdoc }),
-                })
   
                 // node.openingElement.attributes.push({
                 //   type: 'JSXAttribute',

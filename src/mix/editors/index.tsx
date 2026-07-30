@@ -2,7 +2,6 @@ import './resourceLoader';
 import '../../utils/antd';
 import React from 'react';
 import context, { config } from '../context';
-import { buildFocusAreaConfigs } from './configs/focusArea';
 import { buildExportCodeConfig } from './configs/exportCode';
 import { buildPagePanel } from './configs/pagePanel';
 import { buildGuiCardPromptItems } from './configs/guiCard';
@@ -29,7 +28,7 @@ export default function (props: Props, actions: Actions) {
   registerResourcesCode(props.id, props.name)
 
   const comId = props.id;
-  const focusAreaConfigs = buildFocusAreaConfigs(props.data, comId);
+  const focusAreaConfigs = {};
   const exportCodeConfig = buildExportCodeConfig(props);
 
 

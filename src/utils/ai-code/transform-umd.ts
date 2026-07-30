@@ -13,9 +13,8 @@ import eslintCheckPlugin from './plugins/eslintCheckPlugin'
 import appConfigCheckPlugin from './plugins/appConfigCheckPlugin'
 import config from '../../mix/context/config'
 
-export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, constituency: any, jsDocMap: any } {
+export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, jsDocMap: any } {
   let transformCode
-  const constituency: any = [];
   const errors: Error[] = []
   const onError = (error: Error) => {
     if (error) {
@@ -57,7 +56,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         ],
         ...babelPlugins,
         ...(frontendMode === 'prototype' ? [appConfigCheckPlugin(fileName, onError),] : []),
-        babelPlugin({ constituency, fileName: ctx?.fileName }),
+        babelPlugin({ fileName: ctx?.fileName }),
         wrapThirdPartyPlugin(),
         ...validatorPlugins,
         functionPropsPlugin(),
@@ -86,7 +85,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
     throw error
   }
 
-  return { transformCode, constituency, jsDocMap }
+  return { transformCode, jsDocMap }
 }
 
 export function transformLess(code, filename: string) {

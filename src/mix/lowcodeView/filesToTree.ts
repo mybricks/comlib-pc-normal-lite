@@ -7,7 +7,6 @@ export type LowcodeFileRecord = {
   fileName: string;
   source?: string;
   compiled?: string;
-  constituency?: unknown[];
   [key: string]: unknown;
 };
 
