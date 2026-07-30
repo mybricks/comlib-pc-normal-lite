@@ -622,6 +622,23 @@ async function diffVersions(history: SandboxHistory, ...versionIds: string[]): P
   };
 }
 
+function formatParsedElementChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: any }> }): string {
+  let resolved = message;
+  const infoBlocks: string[] = [];
+
+  for (const chip of chips) {
+    const inlineText = typeof chip.data?.inlineText === 'string' ? chip.data.inlineText : '';
+    const detailText = typeof chip.data?.detailText === 'string' ? chip.data.detailText : '';
+    resolved = resolved.split(`[[chip:${chip.id}]]`).join(inlineText || detailText || '');
+    if (detailText) {
+      infoBlocks.push(detailText);
+    }
+  }
+
+  if (!infoBlocks.length) return resolved;
+  return `${resolved}\n\n${infoBlocks.join('\n\n')}`;
+}
+
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
 
@@ -1073,22 +1090,31 @@ export async function registerSandbox(comId: string): Promise<void> {
     },
     chips: {
       ['element-move']: {
+        def: {
+          type: 'element-move',
+          format: formatParsedElementChipMessage,
+        },
         onRemove(params) {
-          console.log('element-move', params)
           context.chipPromiseIds.delete(params.id)
           context.component!.actions!.promiseCancel(params.id)
         }
       },
       ['element-text-update']: {
+        def: {
+          type: 'element-text-update',
+          format: formatParsedElementChipMessage,
+        },
         onRemove(params) {
-          console.log('element-text-update', params)
           context.chipPromiseIds.delete(params.id)
           context.component!.actions!.promiseCancel(params.id)
         }
       },
       ['element-delete']: {
+        def: {
+          type: 'element-delete',
+          format: formatParsedElementChipMessage,
+        },
         onRemove(params) {
-          console.log('element-delete', params)
           context.chipPromiseIds.delete(params.id)
           context.component!.actions!.promiseCancel(params.id)
         }

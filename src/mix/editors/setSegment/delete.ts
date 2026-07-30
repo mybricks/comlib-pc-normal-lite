@@ -1,6 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
+import { buildElementDeleteChipData, getElementLabel } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
 
 const createDeletePlaceholder = (length: number) => {
@@ -9,12 +10,12 @@ const createDeletePlaceholder = (length: number) => {
 }
 
 const sendDeleteToAI = (fromEle) => {
-  const fromLabel = fromEle?.dataset?.zoneTitle?.slice(1) || fromEle?.classList?.[0] || fromEle?.tagName?.toLowerCase?.() || '节点1'
+  const fromLabel = getElementLabel(fromEle, '节点1')
   const chip = {
     id: randomUUID(),
     type: 'element-delete',
     label: `删除 ${fromLabel} `,
-    data: { ele: fromEle, label: fromLabel },
+    data: buildElementDeleteChipData(fromEle, fromLabel),
   }
   const componentId = context.component!.params.id
   window._sandbox_.helpers.appendToSender(componentId, {

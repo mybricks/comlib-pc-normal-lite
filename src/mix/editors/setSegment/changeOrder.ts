@@ -1,6 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
+import { buildElementMoveChipData, getElementLabel } from './elementChip'
 
 const getSnippet = (fileName: string, loc: any, files): string => {
   const file = files.find((f) => f.fileName === fileName)
@@ -9,41 +10,6 @@ const getSnippet = (fileName: string, loc: any, files): string => {
   const start: number = loc.jsx?.start ?? 0
   const end: number = loc.jsx?.end ?? source.length
   return source.slice(start, end).trim()
-}
-
-/**
- * 将 DOM 元素序列化为简洁的 HTML 结构字符串，最多展开 maxDepth 层。
- * 过滤掉平台注入的 data-* 属性，保留 class / id / type 等有语义的属性。
- */
-const serializeDOMShallow = (ele: Element, maxDepth: number, depth = 0): string => {
-  const tag = ele.tagName.toLowerCase()
-  const attrs = Array.from(ele.attributes)
-    .filter((a) => !a.name.startsWith('data-'))
-    .map((a) => `${a.name}="${a.value}"`)
-    .join(' ')
-  const openTag = attrs ? `<${tag} ${attrs}>` : `<${tag}>`
-
-  if (depth >= maxDepth) {
-    // 到达深度上限，只输出文本内容（截断）
-    const text = ele.textContent?.trim().slice(0, 40) ?? ''
-    return text ? `${openTag}${text}</${tag}>` : `<${tag} />`
-  }
-
-  const childNodes = Array.from(ele.childNodes)
-  const childParts: string[] = []
-  for (const node of childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim()
-      if (text) childParts.push(text)
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const indent = '  '.repeat(depth + 1)
-      childParts.push(indent + serializeDOMShallow(node as Element, maxDepth, depth + 1))
-    }
-  }
-
-  if (!childParts.length) return `<${tag} />`
-  const indent = '  '.repeat(depth)
-  return `${openTag}\n${childParts.join('\n')}\n${indent}</${tag}>`
 }
 
 /**
@@ -354,20 +320,15 @@ const changeOrder = (options) => {
   }
 
   const componentId = context.component!.params.id
-  const fromLabel = fromEle?.dataset?.zoneTitle?.slice(1) || fromEle?.classList?.[0] || fromEle?.tagName?.toLowerCase?.() || '节点1'
-  const toLabel = toEle?.dataset?.zoneTitle?.slice(1) || toEle?.classList?.[0] || toEle?.tagName?.toLowerCase?.() || '节点2'
+  const fromLabel = getElementLabel(fromEle, '节点1')
+  const toLabel = getElementLabel(toEle, '节点2')
+  const placement = type === 'before' ? 'before' : 'after'
 
   const chip = {
     id: randomUUID(),
     type: 'element-move',
     label: `将 ${fromLabel} 移到 ${toLabel} ${type === 'before' ? '前面' : '后面'}`,
-    data: {
-      fromEle,
-      toEle,
-      placement: type === 'before' ? 'before' : 'after',
-      fromLabel,
-      toLabel,
-    },
+    data: buildElementMoveChipData(fromEle, toEle, placement, fromLabel, toLabel),
   }
 
   window._sandbox_.helpers.appendToSender(componentId, {

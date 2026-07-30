@@ -1,15 +1,16 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
+import { buildElementTextUpdateChipData, getElementLabel } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
 
 const sendUpdateTextToAI = (fromEle, content: string) => {
-  const fromLabel = fromEle?.dataset?.zoneTitle?.slice(1) || fromEle?.classList?.[0] || fromEle?.tagName?.toLowerCase?.() || '节点1'
+  const fromLabel = getElementLabel(fromEle, '节点1')
   const chip = {
     id: randomUUID(),
     type: 'element-text-update',
     label: `修改 ${fromLabel} 文案`,
-    data: { ele: fromEle, label: fromLabel, content },
+    data: buildElementTextUpdateChipData(fromEle, content, fromLabel),
   }
   const componentId = context.component!.params.id
   window._sandbox_.helpers.appendToSender(componentId, {
