@@ -1526,8 +1526,9 @@ export function genStyleValue(props) {
       }
 
       if (Object.keys(cssObj[targetKey] || {}).length === 0) {
-        const orphanKeys = findOrphanKeys(cssObj, targetKey);
-        orphanKeys.forEach(key => delete cssObj[key]);
+        // 这段代码会强制转为baseselector，导致误删selector尾部的:hover等伪类
+        // const orphanKeys = findOrphanKeys(cssObj, targetKey);
+        // orphanKeys.forEach(key => delete cssObj[key]);
         delete cssObj[targetKey];
       }
 
