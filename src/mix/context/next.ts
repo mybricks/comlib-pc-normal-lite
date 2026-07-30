@@ -197,7 +197,7 @@ class Context {
         case 'jsx':
         case 'tsx':
           try {
-            const { transformCode, constituency, jsDocMap } = transformTsx(content, { fileName });
+            const { transformCode, jsDocMap } = transformTsx(content, { fileName });
             const transformJsDoc = Object.fromEntries(jsDocMap)
             const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
             this.notifyChanged(fileName, 'update', notifyChangedValue);
@@ -207,7 +207,6 @@ class Context {
               content: {
                 source: encodeURIComponent(content),
                 compiled: encodeURIComponent(transformCode),
-                constituency,
                 jsDocMap: encodeURIComponent(JSON.stringify(Object.fromEntries(jsDocMap)))
               }
             })
