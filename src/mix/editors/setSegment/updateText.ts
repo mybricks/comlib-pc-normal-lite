@@ -12,20 +12,11 @@ const sendUpdateTextToAI = (fromEle, content: string) => {
     label: `修改 ${fromLabel} 文案`,
     data: buildElementTextUpdateChipData(fromEle, content, fromLabel),
   }
-  const componentId = context.component!.params.id
-  window._sandbox_.helpers.appendToSender(componentId, {
-    message: `[[chip:${chip.id}]]`,
-    meta: {
-      chips: [chip],
-    },
-    animation: true
-  })
-
-  context.chipPromiseIds.add(chip.id)
 
   return {
     type: 'promise',
-    promiseId: chip.id
+    message: `[[chip:${chip.id}]]`,
+    chips: [chip]
   }
 }
 

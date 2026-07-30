@@ -17,19 +17,11 @@ const sendDeleteToAI = (fromEle) => {
     label: `删除 ${fromLabel} `,
     data: buildElementDeleteChipData(fromEle, fromLabel),
   }
-  const componentId = context.component!.params.id
-  window._sandbox_.helpers.appendToSender(componentId, {
-    message: `[[chip:${chip.id}]]`,
-    meta: {
-      chips: [chip],
-    },
-    animation: true
-  })
-  context.chipPromiseIds.add(chip.id)
 
   return {
     type: 'promise',
-    promiseId: chip.id
+    message: `[[chip:${chip.id}]]`,
+    chips: [chip]
   }
 }
 
