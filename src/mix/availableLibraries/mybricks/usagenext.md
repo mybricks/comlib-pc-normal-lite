@@ -5,9 +5,6 @@
 - 所有页面都需要通过 comRef 包装，无需导出；
 - 所有组件和模块都需要使用 comRef 包装，无需导出;
 - 所有浮层类组件（弹窗/抽屉等）都需要使用 popupRef 包装，这样可以在设计态进行展示，无需导出;
-- 所有数据源（接口请求、静态数据）的声明和使用方式都需要通过 dataSource + setup 文件声明；
-- 必须维护一个 dataSource.js 文件用于存放正式环境数据；
-- 必须维护一个 setup.js 来保证多环境测试，其中mock环境是必须的；
 
 ### 项目声明
 项目必须export default 一个由 appRef 包裹的实现
@@ -74,10 +71,9 @@ const ConfirmModal = popupRef(({ popupNode }) => {
 
 通过继承 `DataSource` 基类并 `export default new MyDatasource()` 来声明数据源；
 
-怎么声明数据源：
-1. 判断用户是否提供接口信息，对于提供了接口信息的，使用 `this.axios` 发起请求；
-2. 对于未提供接口信息的，思考哪些应该属于接口信息，用静态数据来return返回，为以后开发留下坑位，保障运行态也能看见数据；
-
+数据源采用渐进式声明，按需要的复杂度逐步升级：
+1.起步阶段，无需接口：静态数据可以直接写死在代码中，或者在 dataSource.js 中 return 写死，此阶段无需 setup.js；
+2.进阶阶段，需要真实接口时：如果用户需要明确需要使用http接口，在 dataSource.js 中用 this.axios 发起接口请求，同时在 setup.js 声明 mock 环境，劫持方法以保证设计态可渲染；
 
 ```js DataSource 说明
 // DataSource 基类：mybricks 提供，构造时对所有子类方法自动做 Proxy 拦截，
@@ -91,19 +87,21 @@ dataSource.js 文件示例：
 import { DataSource } from 'mybricks'
 
 class MyDatasource extends DataSource {
-  // 场景一：静态数据
+  // 静态数据示例
   async getConfig() {
     return { theme: 'dark', version: '1.0.0' }
   }
 
-  // 场景二：真实接口，用 this.axios 发请求（不要自己 import axios）
+  // 真实接口示例，用 this.axios 发请求（不要自己 import axios）
   // this.axios 是 DataSource 基类内置的独立 axios 实例，与其他组件隔离
   async getUserById({ id }) {
-    return this.axios.get('/getUserById', { params: { id } })
+    return this.axios.get('/query', { params: { id } })
+      .then(res => res.status == 200 ? res.data : null)
   }
 
+  // 真实接口示例
   async createUser(data) {
-    return this.axios.post('/createUser', data)
+    return this.axios.post('/add', data)
   }
 }
 
@@ -111,46 +109,55 @@ export default new MyDatasource()
 ```
 
 ### 环境声明（setup.js）
-`setup.js` 用于声明多套运行环境，**必须包含 `mock` 环境（设计态自动激活）**，其余环境根据用户需求按需来实现。
+> 何时需要 setup.js：**当且仅当 dataSource.js 中存在动态接口（this.axios）时**才需要。纯静态数据的项目可以完全不写 setup.js。
 
-一共需要关心 设计态 + 运行态（正式环境 + N套自定义环境）：
-1. 搭建环境：使用 mock 定义，由于axios在设计态无法调用，我们需要劫持动态数据的接口以保证设计态的正常返回
+一旦引入了动态接口，`setup.js` 就用于声明多套运行环境，此时**必须包含 `mock` 环境（设计态自动激活）**，其余环境按需实现：
+1. 设计态（mock）：axios 在设计态无法调用，需劫持动态接口以保证设计态正常返回；
 2. 正式环境：使用 dataSource.js 中定义的静态数据和接口请求；
-3. N套自定义环境：用户需要时声明，比如特殊环境和特殊测试场景；
+3. N 套自定义环境：用户需要时声明，比如特殊环境和特殊测试场景。
 
-比如下面的代码，虽然 dataSource.js 有两个方法，但是对于mock环境来说，只需要增量劫持：
-1. getConfig 返回的是静态数据，设计态可以展示，无需spy；
-2. getUserById 在设计态无法请求真实接口，所以需要mock一个接口返回，保证设计态渲染；
+下面的例子里 dataSource 有三个方法，但 mock 环境只需要「增量劫持动态接口」：
+1. getConfig 是静态数据，设计态可直接展示，无需 spy；
+2. getUserById / createUser 是动态接口，设计态请求不到，需要 mock 返回以保证渲染。
 
 ```js
 import { describe, spyOn } from 'mybricks/testing'
 import dataSource from './dataSource'
 
-// 必须：设计态 mock 环境
+// 用户使用了getUserById，所以需要设计态 mock 环境
 describe('mock', () => {
-  // 上面 getUserById 直接返回一个axios.get，可以确定里面有status、data字段
+  // getUserById 返回 mockReturn 就给 User
   spyOn(dataSource, 'getUserById').mockReturn({
     status: 200,
     data: { id: 1, name: '张三', age: 18 },
+  })
+
+  // createUser 返回 { status, data } mockReturn 就给 { status, data }
+  spyOn(dataSource, 'createUser').mockReturn({
+    status: 200,
+    data: {
+      code: 1,
+      message: 'success'
+    }
   })
 })
 
 // 按需：用户需要的话，需要配置中文名
 describe('预发环境', () => {
   // 预发请求staging环境接口和特殊headers
-  dataSource.axios.baseURL = 'https://api.staging.com';
-  dataSource.axios.headers.common['x-env'] = 'staging';
+  dataSource.axios.defaults.baseURL = 'https://api.staging.com';
+  dataSource.axios.defaults.headers.common['x-env'] = 'staging';
 })
 
 // 按需：用户需要的话，需要配置中文名
 describe('游客角色测试', () => {
-  // dataSource.getUserById 返回值为 { username, age } 结构，按照此结构模拟
+  // getUserById 返回值为 { username, age } 结构，按照此结构模拟
   spyOn(dataSource, 'getUserById').mockReturn({
     username: '李四',
     age: 20
   })
 
-  // dataSource.createUser 返回值为 axios 原始返回，包含http的status，按照此结构模拟
+  // createUser 返回值为 axios 原始返回，包含http的status，按照此结构模拟
   spyOn(dataSource, 'createUser').mockReturn({
     status: 403,
     data: {
@@ -163,10 +170,9 @@ describe('游客角色测试', () => {
 
 #### spyOn 使用原则
 - spyOn的有且只有一个使用方式，就是 `mockReturn`，不得使用任何其他不存在的方法；
+- mockReturn 可显式声明返回类型 `mockReturn<T>(value: T)`，T 即该方法的返回类型；
 - `spyOn(dataSource, 'method').mockReturn(value: Record<string, any>): Promise<value>`：可以替换该单个方法的返回值，**value 必须为 对象**；
-- 仅必要时使用，比如由于设计态无法请求真实接口，需要劫持axios接口调用，不要劫持静态数据方法；
 - `describe` 回调里可以做任意副作用：操作 `dataSource.axios.defaults`、写 localStorage 等；
-- **必须声明 `mock` 环境**（设计态自动激活）；
 
 ### 日志
 对于日志，我们提供了 `logger` 工具。
