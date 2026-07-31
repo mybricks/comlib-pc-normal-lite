@@ -4,6 +4,9 @@ import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
+import { randomUUID } from '../../../utils/uuid'
+import { buildElementStyleUpdateChipData, getElementLabel } from '../../setSegment/elementChip'
+import { applyVisualStyleOverlay, removeVisualStyleOverlay } from '../../visualStyleOverlay'
 import {
   appendToInlineStyleAttr,
   appendToInlineStyleAttrByTagRange,
@@ -14,6 +17,11 @@ import {
 import { resolveLessFilePath } from './resolveLessFilePath'
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
+
+const getStyleActionTitle = (ele: HTMLElement) => {
+  const label = getElementLabel(ele, '节点1')
+  return `调整 ${label} 样式`
+}
 
 // gap 相关属性：由三方组件 size/gap prop 内部控制，无法通过 CSS 修改，需交 AI 处理
 const GAP_KEYS = new Set(['gap', 'columnGap', 'rowGap'])
@@ -294,6 +302,36 @@ const getSelectorMatchedElements = (selector: string, shadowRoot: ShadowRoot): H
   } catch {
     return null
   }
+}
+
+/** Less 样式通过可重放的 CSS 覆盖层维持画布效果，不依赖 HTMLElement 引用。 */
+const buildLessStyleOverlayCss = (
+  routes: Record<string, StyleKeyRoute>,
+  style: Record<string, number>,
+): string => {
+  const selectorStyleMap = new Map<string, Record<string, number>>()
+
+  Object.entries(routes).forEach(([key, route]) => {
+    if (route.needsAI || !route.selector) return
+    if (route.source !== 'less' && !(route.source === 'jsx-inline' && route.syncInline)) return
+
+    const value = style[key]
+    if (typeof value !== 'number') return
+    const cssValue = route.source === 'jsx-inline'
+      ? (route.lessInitialValue ?? 0) + value - (route.initialValue ?? 0)
+      : value
+    if (!selectorStyleMap.has(route.selector)) selectorStyleMap.set(route.selector, {})
+    selectorStyleMap.get(route.selector)![key] = cssValue
+  })
+
+  return Array.from(selectorStyleMap.entries())
+    .map(([selector, properties]) => {
+      const declarations = Object.entries(properties)
+        .map(([key, value]) => `${convertCamelToHyphen(key)}: ${value}px;`)
+        .join(' ')
+      return `${selector} { ${declarations} }`
+    })
+    .join('\n')
 }
 
 const getSourceLocationKey = (targetEle: HTMLElement): string | null => {
@@ -863,6 +901,9 @@ export default function createSetStyleHandler(
             : subtractParentGapFromStyle(rawFinishStyle, ele),
           multiple,
         )
+        const aiKeys = Object.entries(styleKeyRoutes)
+          .filter(([, route]) => route.needsAI)
+          .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
 
         if (!multiple) {
           const lessStyle: LessStyleMap = new Map()
@@ -872,7 +913,7 @@ export default function createSetStyleHandler(
             const route = styleKeyRoutes[key]
             if (isSingleDomLessRoute(route)) {
               pushLessStyle(lessStyle, route!.selector, key, value)
-            } else {
+            } else if (!route?.needsAI) {
               inlineStyle[key] = value
             }
           })
@@ -891,6 +932,10 @@ export default function createSetStyleHandler(
           const inlineStyleSnapshots = inlineUpdate
             ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
             : []
+          const lessOverlayCssText = lessUpdates.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : ''
+          const styleOverlay = lessOverlayCssText
+            ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
+            : undefined
 
           // Pre-serialise the updated offset map so execute/undo closures don't hold a reference
           // to a mutable object.
@@ -899,32 +944,79 @@ export default function createSetStyleHandler(
             : null
 
           if (updateFIles.length) {
-            const filenames = updateFIles.map(f => f.fileName);
-            undoRedoManager.execute({
+            const actionId = randomUUID()
+            const title = getStyleActionTitle(ele)
+            undoRedoManager.executeBranch({
+              styleOverlay,
               execute() {
-                applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
-                // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
-                // so that subsequent inline-style drags can locate values correctly.
-                if (nextStyleInfoStr) ele.dataset.styleInfo = nextStyleInfoStr
                 updateFIles.forEach(({ fileName, newCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
-                context.saveManualVersion(filenames);
+                applyVisualStyleOverlay(styleOverlay)
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+                // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
+                // so that subsequent inline-style drags can locate values correctly.
+                if (nextStyleInfoStr) ele.dataset.styleInfo = nextStyleInfoStr
+                context.component!.actions.addUserAction({
+                  id: actionId,
+                  type: 'element-style-update',
+                  title,
+                  refElement: ele,
+                })
               },
               undo() {
-                applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
-                // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
-                if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
                 updateFIles.forEach(({ fileName, previousCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
-                context.saveManualVersion(filenames);
+                removeVisualStyleOverlay(styleOverlay)
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+                // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
+                if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
+                context.component!.actions.removeUserAction(actionId)
               },
             });
           }
           ctx.css.remove(SETSTYLE_CSS_ID)
+
+          if (aiKeys.length) {
+            const label = getElementLabel(ele, '节点1')
+            const title = getStyleActionTitle(ele)
+            const actionId = randomUUID()
+            const chip = {
+              id: randomUUID(),
+              type: 'element-style-update',
+              label: `调整 ${label} 样式`,
+              data: buildElementStyleUpdateChipData(ele, aiKeys, label),
+            }
+            const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
+              ele,
+              key,
+              stringifyStyleValue(value),
+              initialInlineStyleValues[key],
+            ))
+
+            undoRedoManager.executeBranch({
+              aiRequest: {
+                message: `[[chip:${chip.id}]]`,
+                chips: [chip],
+              },
+              execute() {
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+                context.component!.actions.addUserAction({
+                  id: actionId,
+                  type: 'element-style-update',
+                  title,
+                  refElement: ele,
+                })
+              },
+              undo() {
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+                context.component!.actions.removeUserAction(actionId)
+              },
+            })
+          }
           return
         }
 
@@ -1066,71 +1158,81 @@ export default function createSetStyleHandler(
               }
               : undefined,
           ))
+        const lessOverlayCssText = lesss.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : ''
+        const styleOverlay = lessOverlayCssText
+          ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
+          : undefined
 
         const updateFIles = jsxs.concat(lesss)
 
         if (updateFIles.length) {
-          const filenames = updateFIles.map(f => f.fileName);
-          undoRedoManager.execute({
+          const actionId = randomUUID()
+          const title = getStyleActionTitle(ele)
+          undoRedoManager.executeBranch({
+            styleOverlay,
             execute() {
-              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
               updateFIles.forEach(({ fileName, newCode }) => {
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
-              context.saveManualVersion(filenames);
+              applyVisualStyleOverlay(styleOverlay)
+              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
+              context.component!.actions.addUserAction({
+                id: actionId,
+                type: 'element-style-update',
+                title,
+                refElement: ele,
+              })
             },
             undo() {
-              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
               updateFIles.forEach(({ fileName, previousCode }) => {
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
-              context.saveManualVersion(filenames);
+              removeVisualStyleOverlay(styleOverlay)
+              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
+              context.component!.actions.removeUserAction(actionId)
             },
           });
         }
 
-        // 处理 needsAI 的 key：间距由三方组件 prop 控制，交给 AI 修改源码
-        const aiKeys = Object.entries(styleKeyRoutes)
-          .filter(([, route]) => route.needsAI)
-          .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
-
         if (aiKeys.length > 0) {
-          try {
-            const loc = JSON.parse(ele.dataset.loc ?? '{}')
-            const jsxFileName: string = loc?.files?.jsx
-            const lineStart: number = loc?.codeLine?.start
-            const lineEnd: number = loc?.codeLine?.end
-
-            let codeSnippet = ''
-            if (jsxFileName) {
-              const jsxFile = context.component!.params.data.files.find((f: any) => f.fileName === jsxFileName)
-              if (jsxFile) {
-                const lines = decodeURIComponent(jsxFile.source).split('\n')
-                codeSnippet = lines
-                  .slice(Math.max(0, lineStart - 3), Math.min(lines.length, lineEnd + 2))
-                  .join('\n')
-              }
-            }
-
-            const styleDesc = aiKeys
-              .map(({ key, value }) => `${convertCamelToHyphen(key)}: ${value}px`)
-              .join('，')
-
-            const message = [
-              `用户通过可视化拖拽调整了组件间距，目标样式为：${styleDesc}。`,
-              `但该间距由组件 prop 控制（非 CSS），无法直接写入 Less，需要修改 JSX 源码中的对应 prop。`,
-              jsxFileName ? `请修改文件 \`${jsxFileName}\` 第 ${lineStart}~${lineEnd} 行附近的代码，将控制间距的 prop 改为对应新值。` : '',
-              codeSnippet ? `\n相关代码片段：\n\`\`\`tsx\n${codeSnippet}\n\`\`\`` : '',
-            ].filter(Boolean).join('\n')
-
-            const plugins = (context as any).plugins as any
-            plugins?.showAIDialog?.()
-            plugins?.aiService?.request({ message, attachments: [] })
-          } catch (e) {
-            console.error('[createSetStyleHandler] AI request failed:', e)
+          const label = getElementLabel(ele, '节点1')
+          const title = getStyleActionTitle(ele)
+          const actionId = randomUUID()
+          const chip = {
+            id: randomUUID(),
+            type: 'element-style-update',
+            label: `调整 ${label} 样式`,
+            data: buildElementStyleUpdateChipData(ele, aiKeys, label),
           }
+          const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
+            ele,
+            key,
+            stringifyStyleValue(value),
+            initialInlineStyleValues[key],
+          ))
+
+          undoRedoManager.executeBranch({
+            aiRequest: {
+              message: `[[chip:${chip.id}]]`,
+              chips: [chip],
+            },
+            execute() {
+              // AI 修改尚未写回源码，仅更新画布预览；不要修改 data-style-info 等源码定位数据。
+              applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+              context.component!.actions.addUserAction({
+                id: actionId,
+                type: 'element-style-update',
+                title,
+                refElement: ele,
+              })
+            },
+            undo() {
+              applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+              context.component!.actions.removeUserAction(actionId)
+            },
+          })
         }
 
         ctx.css.remove(SETSTYLE_CSS_ID)

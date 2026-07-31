@@ -26,6 +26,7 @@ export default function () {
       const message = aiRequests.map((request) => request.message).join('')
       const chips = aiRequests.flatMap((request) => request.chips)
       const beforeFiles = undoRedoManager.getBranchInitialFiles()
+      const styleOverlays = undoRedoManager.getBranchStyleOverlays()
 
       if (!beforeFiles) return
 
@@ -35,7 +36,7 @@ export default function () {
         if (!sendToAgent) return
 
         // afterTurn 会消费这份快照，并把整个可视化分支压入主栈。
-        setPendingVisualAICommit(componentId, beforeFiles)
+        setPendingVisualAICommit(componentId, beforeFiles, styleOverlays)
         sendToAgent(componentId, {
           message,
           meta: {
@@ -45,7 +46,7 @@ export default function () {
         return
       }
 
-      const command = createVisualEditMainCommand(beforeFiles, getCurrentFileSnapshot())
+      const command = createVisualEditMainCommand(beforeFiles, getCurrentFileSnapshot(), 'manual', '', styleOverlays)
       if (command) {
         command.execute()
         undoRedoManager.record(command)

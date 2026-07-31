@@ -1,4 +1,5 @@
 import { getCurrentFileSnapshot } from './visualEditCommit'
+import type { VisualStyleOverlay } from './visualStyleOverlay'
 
 export interface BranchAIRequest {
   message: string
@@ -25,6 +26,9 @@ export interface Command {
    * 只有当前可撤销分支中的命令会被读取，已撤销的命令不会再次提交。
    */
   aiRequest?: BranchAIRequest
+
+  /** Less 可视化编辑的声明式覆盖层；不引用当前 DOM，提交后可由主栈重放。 */
+  styleOverlay?: VisualStyleOverlay
 }
 
 /**
@@ -90,6 +94,14 @@ class UndoRedoManager {
     return this.branchUndoStack
       .map((command) => command.aiRequest)
       .filter((request): request is BranchAIRequest => !!request)
+  }
+
+  /** 获取当前分支中仍生效的 Less 覆盖层，供提交后的主栈维护。 */
+  getBranchStyleOverlays(): VisualStyleOverlay[] {
+    return this.branchUndoStack
+      .map((command) => command.styleOverlay)
+      .filter((overlay): overlay is VisualStyleOverlay => !!overlay)
+      .map((overlay) => ({ ...overlay }))
   }
 
   /** 放弃分支历史；用于画布销毁或完成一次分支合并后。 */

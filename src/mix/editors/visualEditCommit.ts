@@ -1,8 +1,10 @@
 import context from '../context'
 import type { VersionRecord } from '../context'
 import type { Command, FileSnapshot } from './undoRedo'
+import type { VisualStyleOverlay } from './visualStyleOverlay'
+import { applyVisualStyleOverlay, removeVisualStyleOverlay } from './visualStyleOverlay'
 
-let pendingVisualAICommit: { comId: string; beforeFiles: FileSnapshot[] } | null = null
+let pendingVisualAICommit: { comId: string; beforeFiles: FileSnapshot[]; styleOverlays: VisualStyleOverlay[] } | null = null
 
 export const getCurrentFileSnapshot = (): FileSnapshot[] => (
   (context.component?.params?.data?.files ?? [])
@@ -36,7 +38,7 @@ const applySnapshot = (targetFiles: FileSnapshot[], changedFiles: string[]) => {
       return
     }
 
-    // 主栈通过正常文件更新触发画布刷新，并将 noUpdateFileSystem 的临时改动写入文件系统。
+    // 主栈通过正常文件更新将临时源码改动写入文件系统；Less 的即时画布效果由声明式覆盖层维持。
     context.updateFile({ fileName, content, type: undefined })
   })
 }
@@ -50,6 +52,7 @@ export const createVisualEditMainCommand = (
   afterFiles: FileSnapshot[],
   versionType: 'manual' | 'ai' = 'manual',
   turnId = '',
+  styleOverlays: VisualStyleOverlay[] = [],
 ): VisualEditMainCommand | null => {
   const files = getChangedFileNames(beforeFiles, afterFiles)
   if (!files.length) return null
@@ -70,11 +73,13 @@ export const createVisualEditMainCommand = (
     files,
     execute() {
       applySnapshot(afterFiles, files)
+      styleOverlays.forEach(applyVisualStyleOverlay)
       saveVersion(isInitialExecution ? versionType : 'manual')
       isInitialExecution = false
     },
     undo() {
       applySnapshot(beforeFiles, files)
+      ;[...styleOverlays].reverse().forEach(removeVisualStyleOverlay)
       saveVersion('manual')
     },
     getVersionRecord() {
@@ -84,10 +89,15 @@ export const createVisualEditMainCommand = (
 }
 
 /** 当前产品保证同时最多一个 AI 请求，因此用模块级状态关联提交与 afterTurn。 */
-export const setPendingVisualAICommit = (comId: string, beforeFiles: FileSnapshot[]) => {
+export const setPendingVisualAICommit = (
+  comId: string,
+  beforeFiles: FileSnapshot[],
+  styleOverlays: VisualStyleOverlay[] = [],
+) => {
   pendingVisualAICommit = {
     comId,
     beforeFiles: beforeFiles.map((file) => ({ ...file })),
+    styleOverlays: styleOverlays.map((overlay) => ({ ...overlay })),
   }
 }
 

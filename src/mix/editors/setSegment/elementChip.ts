@@ -91,6 +91,11 @@ export interface ParsedElementMoveChipData extends ParsedElementChipData {
   direction: string
 }
 
+export interface ParsedElementStyleUpdateChipData extends ParsedElementChipData {
+  target: ParsedElementInfo
+  styles: Array<{ property: string; value: number }>
+}
+
 function safeParseJson<T>(value: string | null): T | undefined {
   if (!value) return undefined
   try {
@@ -539,6 +544,49 @@ export function buildElementTextUpdateChipData(ele: Element, content: string, la
       '## 注意',
       ...notes,
       '</element-text-update-operation>',
+    ].join('\n'),
+  }
+}
+
+export function buildElementStyleUpdateChipData(
+  ele: Element,
+  styles: Array<{ key: string; value: number }>,
+  label = getElementLabel(ele, '节点1'),
+): ParsedElementStyleUpdateChipData {
+  const opLabel = '元素样式调整操作1'
+  const target = parseElementInfo(ele, label)
+  const normalizedStyles = styles.map(({ key, value }) => ({
+    property: key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`),
+    value,
+  }))
+
+  return {
+    inlineText: `执行「${opLabel}」，`,
+    target,
+    styles: normalizedStyles,
+    detailText: [
+      `<element-style-update-operation id="${opLabel}">`,
+      `## 操作意图（${opLabel}）`,
+      '用户通过可视化编辑调整元素样式。该样式由组件 prop 控制，无法安全地直接写入 CSS，需要修改 JSX 源码中对应的 prop。',
+      '',
+      '## 目标元素',
+      `- 名称：${target.name}`,
+      `- 代码位置：${target.codeLocation}`,
+      target.repeatContextBlock,
+      '- DOM 结构摘要：',
+      indentText(target.domSummary, '  '),
+      '',
+      '## 目标样式',
+      ...normalizedStyles.map(({ property, value }) => `- ${property}: ${value}px`),
+      '',
+      '## 修改要求',
+      '1. 只修改目标元素对应 JSX 节点中控制这些样式的 prop，不重构无关 JSX、CSS 或组件结构',
+      '2. 使运行时效果与目标样式一致；如果 prop 的单位或语义不同，请按该组件现有 API 做等价换算',
+      '3. 保持其他属性、事件和相邻节点不变',
+      '',
+      '## 注意',
+      '如果无法可靠定位控制该样式的 prop，请用一句话说明原因，不要修改无关代码。',
+      '</element-style-update-operation>',
     ].join('\n'),
   }
 }

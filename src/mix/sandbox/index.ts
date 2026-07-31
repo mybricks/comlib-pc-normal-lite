@@ -685,7 +685,10 @@ async function persistAiVersionAfterTurn(
   history: SandboxHistory,
   data: { files?: any[] },
   turn?: { id?: string },
-  options?: { visualBranchBeforeFiles?: FileSnapshot[] },
+  options?: {
+    visualBranchBeforeFiles?: FileSnapshot[]
+    visualStyleOverlays?: import('../editors/visualStyleOverlay').VisualStyleOverlay[]
+  },
 ): Promise<boolean> {
   const requestSnapshot = requestSourceSnapshotMap.get(data)
   const previousSnapshot = options?.visualBranchBeforeFiles
@@ -710,6 +713,7 @@ async function persistAiVersionAfterTurn(
       files,
       aiSourceChanged ? 'ai' : 'manual',
       aiSourceChanged ? turn?.id ?? '' : '',
+      options.visualStyleOverlays,
     )
     if (!command) return false
 
@@ -1073,6 +1077,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         if (history && data && typeof data === 'object') {
           sourceChanged = await persistAiVersionAfterTurn(comId, history, data, turn, {
             visualBranchBeforeFiles: visualAICommit?.beforeFiles,
+            visualStyleOverlays: visualAICommit?.styleOverlays,
           });
         }
         if (visualAICommit) {
@@ -1162,6 +1167,16 @@ export async function registerSandbox(comId: string): Promise<void> {
       ['element-delete']: {
         def: {
           type: 'element-delete',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-style-update']: {
+        def: {
+          type: 'element-style-update',
           format: formatParsedElementChipMessage,
         },
         onRemove(params) {
