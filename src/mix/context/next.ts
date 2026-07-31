@@ -393,11 +393,15 @@ class Context {
 
   /** 手动编辑保存后，添加 manual 类型版本记录。 */
   async saveManualVersion(updateFiles: string[]): Promise<void> {
-    return this.saveVisualEditVersion(updateFiles, 'manual')
+    this.saveVisualEditVersion(updateFiles, 'manual')
   }
 
   /** 可视化编辑提交后保存版本，可标记为手动或 AI 修改。 */
-  async saveVisualEditVersion(updateFiles: string[], type: 'manual' | 'ai'): Promise<void> {
+  saveVisualEditVersion(
+    updateFiles: string[],
+    type: 'manual' | 'ai',
+    turnId = '',
+  ): VersionRecord | undefined {
     const history = this.history
     if (!history) return;
 
@@ -415,9 +419,9 @@ class Context {
     version.total = total + 1
 
     // 新增版本记录
-    const record = {
+    const record: VersionRecord = {
       id: randomUUID(),
-      turnId: '',
+      turnId,
       label: `V${total}`,
       type,
       createdAt: Date.now(),
@@ -435,10 +439,12 @@ class Context {
       })
     })
 
-    this.notifyVersionsChange({
+    const versionRecord = {
       ...record,
       summary
-    });
+    }
+    this.notifyVersionsChange(versionRecord);
+    return versionRecord
   }
 
   /** 

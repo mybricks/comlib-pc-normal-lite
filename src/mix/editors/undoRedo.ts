@@ -110,10 +110,21 @@ class UndoRedoManager {
     this.clearBranch()
   }
 
+  /**
+   * AI 未产生源码变更时，撤销其乐观 DOM 与用户事件；
+   * 本地分支命令保持原状，随后由调用方统一清空分支。
+   */
+  rollbackAIBranchCommands() {
+    for (let index = this.branchUndoStack.length - 1; index >= 0; index -= 1) {
+      const command = this.branchUndoStack[index]
+      if (command.aiRequest) {
+        command.undo()
+      }
+    }
+  }
+
   /** 只有仍生效的分支命令才会阻塞主栈操作。 */
   private hasBranchHistory() {
-    console.log(1, this.branchUndoStack)
-    console.log(2, this.branchRedoStack)
     return this.branchUndoStack.length > 0
   }
 

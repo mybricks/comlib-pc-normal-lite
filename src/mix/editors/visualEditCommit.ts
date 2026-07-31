@@ -1,4 +1,5 @@
 import context from '../context'
+import type { VersionRecord } from '../context'
 import type { Command, FileSnapshot } from './undoRedo'
 
 let pendingVisualAICommit: { comId: string; beforeFiles: FileSnapshot[] } | null = null
@@ -40,31 +41,44 @@ const applySnapshot = (targetFiles: FileSnapshot[], changedFiles: string[]) => {
   })
 }
 
+export interface VisualEditMainCommand extends Command {
+  getVersionRecord(): VersionRecord | undefined
+}
+
 export const createVisualEditMainCommand = (
   beforeFiles: FileSnapshot[],
   afterFiles: FileSnapshot[],
   versionType: 'manual' | 'ai' = 'manual',
-): Command | null => {
+  turnId = '',
+): VisualEditMainCommand | null => {
   const files = getChangedFileNames(beforeFiles, afterFiles)
   if (!files.length) return null
+
+  let versionRecord: VersionRecord | undefined
+  let isInitialExecution = true
+  const saveVersion = (type: 'manual' | 'ai') => {
+    versionRecord = type === 'ai'
+      ? context.saveVisualEditVersion(files, 'ai', turnId)
+      : undefined
+
+    if (type === 'manual') {
+      context.saveManualVersion(files)
+    }
+  }
 
   return {
     files,
     execute() {
       applySnapshot(afterFiles, files)
-      if (versionType === 'ai') {
-        context.saveVisualEditVersion(files, 'ai')
-      } else {
-        context.saveManualVersion(files)
-      }
+      saveVersion(isInitialExecution ? versionType : 'manual')
+      isInitialExecution = false
     },
     undo() {
       applySnapshot(beforeFiles, files)
-      if (versionType === 'ai') {
-        context.saveVisualEditVersion(files, 'ai')
-      } else {
-        context.saveManualVersion(files)
-      }
+      saveVersion('manual')
+    },
+    getVersionRecord() {
+      return versionRecord
     },
   }
 }

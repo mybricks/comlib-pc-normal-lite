@@ -17,9 +17,9 @@ import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
 import { undoRedoManager } from '../editors/undoRedo';
+import type { FileSnapshot } from '../editors/undoRedo';
 import {
   createVisualEditMainCommand,
-  getCurrentFileSnapshot,
   takePendingVisualAICommit,
 } from '../editors/visualEditCommit';
 import { parseLess, stringifyLess } from '../utils/transform/less';
@@ -646,6 +646,8 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
 
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
+/** 视觉分支中只有本地代码变更的 turn 不应使用 AI summary 覆盖手动版本。 */
+const TURNS_WITH_MANUAL_VISUAL_VERSION = new Set<string>()
 
 // 记录 turn.id 对应的操作记录
 class TurnLogs {
@@ -682,12 +684,16 @@ async function persistAiVersionAfterTurn(
   comId: string,
   history: SandboxHistory,
   data: { files?: any[] },
-  turn?: { id?: string }
-): Promise<void> {
-  const previousSnapshot = requestSourceSnapshotMap.get(data);
+  turn?: { id?: string },
+  options?: { visualBranchBeforeFiles?: FileSnapshot[] },
+): Promise<boolean> {
+  const requestSnapshot = requestSourceSnapshotMap.get(data)
+  const previousSnapshot = options?.visualBranchBeforeFiles
+    ? new Map(options.visualBranchBeforeFiles.map((file) => [file.path, encodeURIComponent(file.content)]))
+    : requestSnapshot;
   if (!hasSourceChanged(data.files ?? [], previousSnapshot)) {
     turnLogs.setLog({ message: '[版本/跳过] 源码无变更 — 不记录版本' })
-    return
+    return false
   };
 
   const files: VersionFile[] = (data.files ?? [])
@@ -696,6 +702,27 @@ async function persistAiVersionAfterTurn(
       path: f.fileName,
       content: decodeURIComponent(f.source),
     }));
+
+  if (options?.visualBranchBeforeFiles) {
+    const aiSourceChanged = hasSourceChanged(data.files ?? [], requestSnapshot)
+    const command = createVisualEditMainCommand(
+      options.visualBranchBeforeFiles,
+      files,
+      aiSourceChanged ? 'ai' : 'manual',
+      aiSourceChanged ? turn?.id ?? '' : '',
+    )
+    if (!command) return false
+
+    command.execute()
+    undoRedoManager.record(command)
+    const versionRecord = command.getVersionRecord()
+    if (aiSourceChanged && versionRecord && turn?.id) {
+      TURNID_TO_RECORD[turn.id] = versionRecord
+    } else if (turn?.id) {
+      TURNS_WITH_MANUAL_VISUAL_VERSION.add(turn.id)
+    }
+    return true
+  }
 
   const version = context.version
   const total = version.total
@@ -757,6 +784,7 @@ async function persistAiVersionAfterTurn(
       context.saveManualVersion(updateFileNames);
     },
   });
+  return true
 }
 
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
@@ -1041,19 +1069,17 @@ export async function registerSandbox(comId: string): Promise<void> {
         })
 
         const visualAICommit = takePendingVisualAICommit(comId)
+        let sourceChanged = false
+        if (history && data && typeof data === 'object') {
+          sourceChanged = await persistAiVersionAfterTurn(comId, history, data, turn, {
+            visualBranchBeforeFiles: visualAICommit?.beforeFiles,
+          });
+        }
         if (visualAICommit) {
-          const command = createVisualEditMainCommand(
-            visualAICommit.beforeFiles,
-            getCurrentFileSnapshot(),
-            'ai',
-          )
-          if (command) {
-            command.execute()
-            undoRedoManager.record(command)
+          if (!sourceChanged) {
+            undoRedoManager.rollbackAIBranchCommands()
           }
           undoRedoManager.clearBranch()
-        } else if (history && data && typeof data === 'object') {
-          await persistAiVersionAfterTurn(comId, history, data, turn);
         }
 
         turnLogs.setLog({
@@ -1079,6 +1105,13 @@ export async function registerSandbox(comId: string): Promise<void> {
           });
           return
         };
+
+        if (TURNS_WITH_MANUAL_VISUAL_VERSION.delete(turn.id)) {
+          turnLogs.setLog({
+            message: '[轮次/afterTurnSummary] 视觉分支未检测到 AI 源码修改，跳过 AI 摘要覆盖',
+          });
+          return
+        }
 
         const target = TURNID_TO_RECORD[turn.id]
 
