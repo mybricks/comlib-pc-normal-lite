@@ -2,53 +2,59 @@ import changeOrder from './changeOrder'
 import updateText from './updateText'
 import runDelete from './delete'
 import context from '../../context'
-
-let updateSegments: any = []
+import { undoRedoManager } from '../undoRedo'
+import {
+  createVisualEditMainCommand,
+  getCurrentFileSnapshot,
+  setPendingVisualAICommit,
+} from '../visualEditCommit'
 
 export default function () {
   return {
     '@updateSegment'(ctx: any, type: string, options: any) {
-      updateSegments.push(() => {
-        if (type === 'cutTo') {
-          return changeOrder(options)
-        } else if (type === 'updateText') {
-          return updateText(options)
-        } else if (type === 'delete') {
-          return runDelete(options)
-        }
-      })
-
-      return {
-        type: 'success'
+      if (type === 'cutTo') {
+        return changeOrder(options)
+      } else if (type === 'updateText') {
+        return updateText(options)
+      } else if (type === 'delete') {
+        return runDelete(options)
       }
     },
     '@commitUserActions'() {
-      let message = ''
-      let chips = []
+      // 提交用户操作
+      const aiRequests = undoRedoManager.getBranchAIRequests()
+      const message = aiRequests.map((request) => request.message).join('')
+      const chips = aiRequests.flatMap((request) => request.chips)
+      const beforeFiles = undoRedoManager.getBranchInitialFiles()
 
-      updateSegments.forEach((fn) => {
-        const res = fn()
-        if (res.type === 'promise') {
-          message += res.message
-          chips = chips.concat(res.chips)
-        }
-        return res
-      })
-
-      updateSegments = []
+      if (!beforeFiles) return
 
       if (message) {
         const componentId = context.component!.params.id
-        window._sandbox_?.helpers?.sendToAgent?.(componentId, {
+        const sendToAgent = window._sandbox_?.helpers?.sendToAgent
+        if (!sendToAgent) return
+
+        // afterTurn 会消费这份快照，并把整个可视化分支压入主栈。
+        setPendingVisualAICommit(componentId, beforeFiles)
+        sendToAgent(componentId, {
           message,
           meta: {
             chips
           }
         })
+        return
       }
+
+      const command = createVisualEditMainCommand(beforeFiles, getCurrentFileSnapshot())
+      if (command) {
+        command.execute()
+        undoRedoManager.record(command)
+      }
+      undoRedoManager.clearBranch()
     },
     '@cancelUserActions'(...args) {
-      updateSegments = []
+      // 取消用户操作
+      undoRedoManager.cancelBranch()
     }
   }
 }

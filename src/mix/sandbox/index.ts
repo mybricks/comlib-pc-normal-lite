@@ -17,6 +17,11 @@ import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
 import { undoRedoManager } from '../editors/undoRedo';
+import {
+  createVisualEditMainCommand,
+  getCurrentFileSnapshot,
+  takePendingVisualAICommit,
+} from '../editors/visualEditCommit';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 
 const VERIFY_CONFIG = {
@@ -1035,7 +1040,19 @@ export async function registerSandbox(comId: string): Promise<void> {
           context.component!.actions!.promiseCancel(id)
         })
 
-        if (history && data && typeof data === 'object') {
+        const visualAICommit = takePendingVisualAICommit(comId)
+        if (visualAICommit) {
+          const command = createVisualEditMainCommand(
+            visualAICommit.beforeFiles,
+            getCurrentFileSnapshot(),
+            'ai',
+          )
+          if (command) {
+            command.execute()
+            undoRedoManager.record(command)
+          }
+          undoRedoManager.clearBranch()
+        } else if (history && data && typeof data === 'object') {
           await persistAiVersionAfterTurn(comId, history, data, turn);
         }
 

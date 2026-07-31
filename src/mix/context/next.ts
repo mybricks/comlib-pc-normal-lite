@@ -57,6 +57,11 @@ class Context {
 
       promiseComplete: (...params: any) => void
       promiseCancel: (...params: any) => void
+
+      // 推送用户事件
+      addUserAction: ({ id, type, title, refElement }) => void
+      // 删除用户事件
+      removeUserAction: (id) => void
     }
     /** 事件 */
     events: Events<{
@@ -386,10 +391,13 @@ class Context {
   /** 版本 */
   version!: Version
 
-  /**
-   * 手动编辑保存后,添加 manual 类型版本记录
-   */
+  /** 手动编辑保存后，添加 manual 类型版本记录。 */
   async saveManualVersion(updateFiles: string[]): Promise<void> {
+    return this.saveVisualEditVersion(updateFiles, 'manual')
+  }
+
+  /** 可视化编辑提交后保存版本，可标记为手动或 AI 修改。 */
+  async saveVisualEditVersion(updateFiles: string[], type: 'manual' | 'ai'): Promise<void> {
     const history = this.history
     if (!history) return;
 
@@ -411,7 +419,7 @@ class Context {
       id: randomUUID(),
       turnId: '',
       label: `V${total}`,
-      type: 'manual' as const,
+      type,
       createdAt: Date.now(),
     };
 

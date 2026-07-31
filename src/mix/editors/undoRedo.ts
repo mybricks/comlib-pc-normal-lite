@@ -1,11 +1,30 @@
-class Command {
-  execute() {
-    throw new Error('execute() 方法必须由子类实现');
-  }
-  
-  undo() {
-    throw new Error('undo() 方法必须由子类实现');
-  }
+import { getCurrentFileSnapshot } from './visualEditCommit'
+
+export interface BranchAIRequest {
+  message: string
+  chips: any[]
+}
+
+export interface FileSnapshot {
+  path: string
+  content: string
+}
+
+export interface Command {
+  execute(): void
+  undo(): void
+
+  /**
+   * 主栈命令涉及的本地文件。版本记录方可据此只保存实际变更的文件。
+   * 分支栈命令只维护画布即时状态，不需要保存版本。
+   */
+  files?: string[]
+
+  /**
+   * 分支操作需要 AI 继续处理时，保留提交 AI 所需的原始请求数据。
+   * 只有当前可撤销分支中的命令会被读取，已撤销的命令不会再次提交。
+   */
+  aiRequest?: BranchAIRequest
 }
 
 /**
@@ -13,19 +32,42 @@ class Command {
  * 1. 合并策略，目前样式编辑有防抖功能，用户修改后立即回滚可能看不到效果
  */
 class UndoRedoManager {
-  private maxStackSize = 50
+  /** 持久化操作使用的主栈。 */
+  private mainUndoStack: Command[] = []
+  private mainRedoStack: Command[] = []
 
-  /** 撤回堆栈 */
-  private undoStack: any[] = []
+  /** 画布即时编辑使用的分支栈，不会创建版本记录。 */
+  private branchUndoStack: Command[] = []
+  private branchRedoStack: Command[] = []
+  /** 分支开始前的完整源码快照，提交时用于生成主栈命令。 */
+  private branchInitialFiles: FileSnapshot[] | null = null
 
-  /** 重做堆栈 */
-  private redoStack: any[] = []
+  getBranchInitialFiles(): FileSnapshot[] | null {
+    return this.branchInitialFiles?.map((file) => ({ ...file })) ?? null
+  }
 
   /** 执行命令 */
   execute(command: Command) {
     command.execute()
-
     this.record(command)
+  }
+
+  /** 执行画布即时编辑。 */
+  executeBranch(command: Command) {
+    const isNewBranch = !this.branchInitialFiles && !this.branchUndoStack.length && !this.branchRedoStack.length
+    if (isNewBranch) {
+      this.branchInitialFiles = getCurrentFileSnapshot()
+    }
+
+    try {
+      command.execute()
+    } catch (error) {
+      if (isNewBranch) {
+        this.branchInitialFiles = null
+      }
+      throw error
+    }
+    this.recordBranch(command)
   }
 
   /**
@@ -33,44 +75,92 @@ class UndoRedoManager {
    * 适用于命令在调用前已经执行完毕的场景（如 AI 修改、拖拽等连续快速修改）。
    */
   record(command: Command) {
-    this.undoStack.push(command)
-    this.redoStack = []
+    this.mainUndoStack.push(command)
+    this.mainRedoStack = []
+  }
 
-    // 限制栈大小
-    if (this.undoStack.length > this.maxStackSize) {
-      this.undoStack.shift()
+  /** 记录一个已执行过的画布即时编辑。 */
+  recordBranch(command: Command) {
+    this.branchUndoStack.push(command)
+    this.branchRedoStack = []
+  }
+
+  /** 获取当前分支中仍生效的 AI 请求，供用户最终提交时统一发送。 */
+  getBranchAIRequests(): BranchAIRequest[] {
+    return this.branchUndoStack
+      .map((command) => command.aiRequest)
+      .filter((request): request is BranchAIRequest => !!request)
+  }
+
+  /** 放弃分支历史；用于画布销毁或完成一次分支合并后。 */
+  clearBranch() {
+    this.branchUndoStack = []
+    this.branchRedoStack = []
+    this.branchInitialFiles = null
+  }
+
+  /**
+   * 取消当前可视化编辑会话：逆序回退所有仍生效的分支命令，
+   * 已被单独撤销的命令无需再次执行，最后丢弃整段分支历史。
+   */
+  cancelBranch() {
+    while (this.branchUndoStack.length) {
+      this.undoStack(this.branchUndoStack, this.branchRedoStack)
     }
+    this.clearBranch()
+  }
+
+  /** 只有仍生效的分支命令才会阻塞主栈操作。 */
+  private hasBranchHistory() {
+    console.log(1, this.branchUndoStack)
+    console.log(2, this.branchRedoStack)
+    return this.branchUndoStack.length > 0
+  }
+
+  private undoStack(undoStack: Command[], redoStack: Command[]) {
+    const command = undoStack.pop()
+    if (!command) return
+
+    command.undo()
+    redoStack.push(command)
+  }
+
+  private redoStack(undoStack: Command[], redoStack: Command[]) {
+    const command = redoStack.pop()
+    if (!command) return
+
+    command.execute()
+    undoStack.push(command)
   }
 
   /** 撤销 */
   undo() {
-    if (this.undoStack.length === 0) {
-      // 没有可撤销操作
+    if (this.hasBranchHistory()) {
+      console.log('undo branch')
+      this.undoStack(this.branchUndoStack, this.branchRedoStack)
+      // 最后一个分支操作已回退，取消其 redo 历史并恢复主栈路由。
+      if (this.branchUndoStack.length === 0) {
+        this.clearBranch()
+      }
       return
     }
-    
-    const command = this.undoStack.pop()
-    command.undo()
 
-    this.redoStack.push(command)
+    console.log('undo stack')
+
+    this.undoStack(this.mainUndoStack, this.mainRedoStack)
   }
 
   /** 重做 */
   redo() {
-    if (this.redoStack.length === 0) {
-      // 没有可重做操作
+    if (this.hasBranchHistory()) {
+      console.log('redo branch')
+      this.redoStack(this.branchUndoStack, this.branchRedoStack)
       return
     }
-    
-    const command = this.redoStack.pop()
-    command.execute()
 
-    this.undoStack.push(command);
-    
-    // 限制栈大小
-    if (this.undoStack.length > this.maxStackSize) {
-      this.undoStack.shift();
-    }
+    console.log('redo stack')
+
+    this.redoStack(this.mainUndoStack, this.mainRedoStack)
   }
 }
 
@@ -84,12 +174,12 @@ export default function() {
   return {
     /** 撤销 */
     '@undo'() {
-      // console.log('@undo')
+      console.log('@undo')
       undoRedoManager.undo()
     },
     /** 重做 */
     '@redo'() {
-      // console.log('@redo')
+      console.log('@redo')
       undoRedoManager.redo()
     }
   }
