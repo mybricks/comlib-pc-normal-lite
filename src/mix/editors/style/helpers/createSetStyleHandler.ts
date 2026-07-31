@@ -960,7 +960,7 @@ export default function createSetStyleHandler(
                 if (nextStyleInfoStr) ele.dataset.styleInfo = nextStyleInfoStr
                 context.component!.actions.addUserAction({
                   id: actionId,
-                  type: 'element-style-update',
+                  type: 'update-style',
                   title,
                   refElement: ele,
                 })
@@ -1006,7 +1006,7 @@ export default function createSetStyleHandler(
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
                 context.component!.actions.addUserAction({
                   id: actionId,
-                  type: 'element-style-update',
+                  type: 'update-style',
                   title,
                   refElement: ele,
                 })
@@ -1179,7 +1179,7 @@ export default function createSetStyleHandler(
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
               context.component!.actions.addUserAction({
                 id: actionId,
-                type: 'element-style-update',
+                type: 'update-style',
                 title,
                 refElement: ele,
               })
@@ -1223,7 +1223,7 @@ export default function createSetStyleHandler(
               applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
               context.component!.actions.addUserAction({
                 id: actionId,
-                type: 'element-style-update',
+                type: 'update-style',
                 title,
                 refElement: ele,
               })

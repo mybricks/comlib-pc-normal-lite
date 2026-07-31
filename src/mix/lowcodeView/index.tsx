@@ -211,6 +211,7 @@ const getRelativeImportAtPosition = ({
 
 function LowcodeView(params: Params) {
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
+  const [hasBranchHistory, setHasBranchHistory] = useState(() => undoRedoManager.hasBranchHistory());
   const componentId = params.model?.runtime?.id;
 
   // 兼容老版本数据：data.files 不存在时，从旧字段迁移
@@ -227,6 +228,8 @@ function LowcodeView(params: Params) {
   // 从 context 读取当前组件的调试状态（强制刷新用的 tick）
   const [, setTick] = useState(0);
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
+
+  useEffect(() => undoRedoManager.onBranchHistoryChange(setHasBranchHistory), []);
 
   // 辅助：从 files 中找到初始/回退选中的文件
   const findFallbackFile = useCallback((fileList: typeof files) => {
@@ -453,7 +456,7 @@ function LowcodeView(params: Params) {
   }, [componentId])
 
   const handleEditorChange = useCallback((value: string) => {
-    if (!selectFile) {
+    if (!selectFile || undoRedoManager.hasBranchHistory()) {
       return
     }
     setModifiedContent((prev) => ({
@@ -478,6 +481,8 @@ function LowcodeView(params: Params) {
   }, []);
 
   const handleDeleteNode = useCallback((node: FileTreeNode) => {
+    if (undoRedoManager.hasBranchHistory()) return;
+
     const targetFiles = getNodeFiles(node, files);
     if (!targetFiles.length) return;
     const targetName = node.type === "directory" ? node.name : node.fileName;
@@ -509,6 +514,8 @@ function LowcodeView(params: Params) {
   }, [clearModifiedFiles, files, getFileContent]);
 
   const applyImportedFiles = useCallback((node: FileTreeNode, importedFiles: ImportedFile[]) => {
+    if (undoRedoManager.hasBranchHistory()) return;
+
     if (!importedFiles.length) return;
 
     const baseDir = getImportBaseDir(node);
@@ -579,6 +586,8 @@ function LowcodeView(params: Params) {
   }, [clearModifiedFiles, files, getFileContent]);
 
   const openImportPicker = useCallback((node: FileTreeNode, mode: "file" | "directory") => {
+    if (undoRedoManager.hasBranchHistory()) return;
+
     pendingImportRef.current = { node, mode };
     const input = mode === "directory" ? folderInputRef.current : fileInputRef.current;
     if (!input) return;
@@ -649,6 +658,8 @@ function LowcodeView(params: Params) {
   const handleContextMenu = useCallback((event: React.MouseEvent, node: FileTreeNode) => {
     event.preventDefault();
     event.stopPropagation();
+    if (undoRedoManager.hasBranchHistory()) return;
+
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -677,6 +688,8 @@ function LowcodeView(params: Params) {
 
   // 保存所有有未保存修改的文件
   const handleSaveAll = useCallback(async () => {
+    if (undoRedoManager.hasBranchHistory()) return;
+
     const dirtyFileNames = Object.keys(modifiedContent);
     if (dirtyFileNames.length === 0) return;
 
@@ -728,13 +741,17 @@ function LowcodeView(params: Params) {
 
   const editorOptions = useMemo(() => ({
     fontSize: 12,
+    readOnly: hasBranchHistory,
+    readOnlyMessage: {
+      value: "当前存在未提交的可视化编辑，请先提交或取消后再编辑代码。",
+    },
     scrollbar: {
       horizontal: "auto",
       vertical: "auto",
       verticalScrollbarSize: 10,
       horizontalScrollbarSize: 10
     }
-  }), []);
+  }), [hasBranchHistory]);
 
   const mountRef = useRef<any>(null)
   // 保存各文件的滚动位置，key 为 fileName
@@ -959,9 +976,9 @@ function LowcodeView(params: Params) {
         {bottomTab === 'source' ? (
           <button
             type="button"
-            className={`${css['lowcode-view-toolbar-button']} ${hasUnsavedChanges ? css['lowcode-view-toolbar-button-nosave'] : css['lowcode-view-toolbar-button-disabled']}`}
+            className={`${css['lowcode-view-toolbar-button']} ${hasUnsavedChanges && !hasBranchHistory ? css['lowcode-view-toolbar-button-nosave'] : css['lowcode-view-toolbar-button-disabled']}`}
             onClick={handleSaveAll}
-            disabled={!hasUnsavedChanges}
+            disabled={!hasUnsavedChanges || hasBranchHistory}
           >
             保存
           </button>
@@ -1020,12 +1037,15 @@ function LowcodeView(params: Params) {
                 ref={codeIns}
                 value={code}
                 {...coderOptions}
-                options={editorOptions}
                 theme={editorTheme}
                 wrapperClassName={css['coder']}
                 loaderConfig={CODEEDITOR_LOADER_CONFIG}
                 eslint={CODEEDITOR_ESLINT}
                 {...config.getWorkSpace()?.coder}
+                options={{
+                  ...config.getWorkSpace()?.coder?.options,
+                  ...editorOptions,
+                }}
                 onChange={handleEditorChange}
                 onMount={handleEditorMount}
               />
@@ -1048,7 +1068,7 @@ function LowcodeView(params: Params) {
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
         <VersionPanel render={bottomTab === 'version'} />
       </div>
-      {contextMenu ? (
+      {contextMenu && !hasBranchHistory ? (
         <div
           className={css['file-context-menu']}
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -1062,6 +1082,7 @@ function LowcodeView(params: Params) {
           <button
             type="button"
             className={css['file-context-menu-item']}
+            disabled={hasBranchHistory}
             onClick={() => {
               handleDeleteNode(contextMenu.node);
               closeContextMenu();
@@ -1083,6 +1104,7 @@ function LowcodeView(params: Params) {
           <button
             type="button"
             className={css['file-context-menu-item']}
+            disabled={hasBranchHistory}
             onClick={() => {
               handleImportNode(contextMenu.node);
               closeContextMenu();

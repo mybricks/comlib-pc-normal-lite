@@ -31,7 +31,7 @@ const runDeleteByAI = (fromEle) => {
       fromEle.remove()
       context.component!.actions.addUserAction({
         id: actionId,
-        type: 'element-delete',
+        type: 'delete',
         title: `删除 ${fromLabel}`,
         refElement: fromEle,
       })
@@ -82,7 +82,7 @@ const runDelete = (options) => {
           fromEle.remove()
           context.component!.actions.addUserAction({
             id: actionId,
-            type: 'element-delete',
+            type: 'delete',
             title: `删除 ${fromLabel}`,
             refElement: fromEle,
           })

@@ -351,7 +351,7 @@ const changeOrder = (options) => {
             shiftDOMLocAfterSourceSwap(locSnapshotRoot, fromFile, fromRange, toRange)
             context.component!.actions.addUserAction({
               id: actionId,
-              type: 'element-move',
+              type: 'move',
               title: moveDescription,
               refElement: fromEle,
             })
@@ -398,7 +398,7 @@ const changeOrder = (options) => {
       moveDOMNode(fromEle, toEle, placement)
       context.component!.actions.addUserAction({
         id: actionId,
-        type: 'element-move',
+        type: 'move',
         title: moveDescription,
         refElement: fromEle,
       })

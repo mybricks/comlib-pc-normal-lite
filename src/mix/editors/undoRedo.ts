@@ -1,5 +1,9 @@
+import context from '../context'
 import { getCurrentFileSnapshot } from './visualEditCommit'
 import type { VisualStyleOverlay } from './visualStyleOverlay'
+
+let isVibing = false
+let stopListeningVibing: (() => void) | undefined
 
 export interface BranchAIRequest {
   message: string
@@ -45,9 +49,29 @@ class UndoRedoManager {
   private branchRedoStack: Command[] = []
   /** 分支开始前的完整源码快照，提交时用于生成主栈命令。 */
   private branchInitialFiles: FileSnapshot[] | null = null
+  private branchHistoryListeners = new Set<(hasHistory: boolean) => void>()
 
   getBranchInitialFiles(): FileSnapshot[] | null {
     return this.branchInitialFiles?.map((file) => ({ ...file })) ?? null
+  }
+
+  /** 当前是否存在未提交的可视化编辑分支。 */
+  hasBranchHistory() {
+    return this.branchUndoStack.length > 0
+  }
+
+  /** 订阅可视化编辑分支状态，供外部禁用会冲突的操作。 */
+  onBranchHistoryChange(listener: (hasHistory: boolean) => void) {
+    listener(this.hasBranchHistory())
+    this.branchHistoryListeners.add(listener)
+    return () => {
+      this.branchHistoryListeners.delete(listener)
+    }
+  }
+
+  private notifyBranchHistoryChange() {
+    const hasHistory = this.hasBranchHistory()
+    this.branchHistoryListeners.forEach((listener) => listener(hasHistory))
   }
 
   /** 执行命令 */
@@ -87,6 +111,7 @@ class UndoRedoManager {
   recordBranch(command: Command) {
     this.branchUndoStack.push(command)
     this.branchRedoStack = []
+    this.notifyBranchHistoryChange()
   }
 
   /** 获取当前分支中仍生效的 AI 请求，供用户最终提交时统一发送。 */
@@ -109,6 +134,7 @@ class UndoRedoManager {
     this.branchUndoStack = []
     this.branchRedoStack = []
     this.branchInitialFiles = null
+    this.notifyBranchHistoryChange()
   }
 
   /**
@@ -133,11 +159,6 @@ class UndoRedoManager {
         command.undo()
       }
     }
-  }
-
-  /** 只有仍生效的分支命令才会阻塞主栈操作。 */
-  private hasBranchHistory() {
-    return this.branchUndoStack.length > 0
   }
 
   private undoStack(undoStack: Command[], redoStack: Command[]) {
@@ -194,15 +215,24 @@ export { undoRedoManager }
 
 // ─── 默认导出：供编辑器快捷键系统调用 ────────────────────────────────────────
 export default function() {
+  if (!stopListeningVibing && context.component) {
+    stopListeningVibing = context.component.events.on('vibing', (vibing) => {
+      isVibing = vibing
+    })
+  }
+
   return {
     /** 撤销 */
     '@undo'() {
-      console.log('@undo')
+      console.log('@undo', isVibing)
+      if (isVibing) return
+
       undoRedoManager.undo()
     },
     /** 重做 */
     '@redo'() {
-      console.log('@redo')
+      console.log('@redo', isVibing)
+      if (isVibing) return
       undoRedoManager.redo()
     }
   }

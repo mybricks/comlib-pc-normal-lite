@@ -842,8 +842,10 @@ export function createDesignerLoading(
     });
   };
 
-  const resolveMode = (): 'progress' | 'component' =>
-    !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.source === '@updateSegment:changeOrder') ? 'progress' : 'component';
+  // AI 请求统一使用全局进度锁。保留 component 分支，便于后续恢复区域锁定策略。
+  const resolveMode = (): 'progress' | 'component' => 'progress';
+  // const resolveMode = (): 'progress' | 'component' =>
+  //   !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.source === '@updateSegment:changeOrder') ? 'progress' : 'component';
 
   const applyLock = (mode: 'progress' | 'component') => {
     if (mode === 'progress') {

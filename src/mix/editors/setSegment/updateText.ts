@@ -27,7 +27,7 @@ const runUpdateTextByAI = (fromEle, content: string) => {
       fromEle.innerHTML = nextValue
       context.component!.actions.addUserAction({
         id: actionId,
-        type: 'element-text-update',
+        type: 'update-text',
         title: `修改 ${fromLabel} 文案`,
         refElement: fromEle,
       })
@@ -93,7 +93,7 @@ const updateText = (options) => {
         fromEle.innerHTML = nextValue
         context.component!.actions.addUserAction({
           id: actionId,
-          type: 'element-text-update',
+          type: 'update-text',
           title: `修改 ${fromLabel} 文案`,
           refElement: fromEle,
         })
