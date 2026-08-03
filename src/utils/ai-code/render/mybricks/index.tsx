@@ -923,7 +923,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     }, [])
 
     const EnvPanel = mixContext.fileSystem?.filesMap?.[ENV_PANEL_FILENAME]?.module?.default
-    return EnvPanel ? <EnvPanel /> : null
+    return EnvPanel ? (
+      <div data-zone-kind="config" style={{ width: 480 }}>
+        <EnvPanel />
+      </div>
+    ) : null
   }
 
   const appRef = (Component) => {
