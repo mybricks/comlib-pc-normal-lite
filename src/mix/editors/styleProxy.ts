@@ -3,6 +3,8 @@ import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
+import { randomUUID } from '../utils/uuid'
+import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 
@@ -645,38 +647,6 @@ function tryWriteNestedPseudo(
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 export function genStyleValue(props) {
-
-  const debouncedUpdateFile = debounce(
-    (params: {
-      path: string,
-      current: string,
-      previous: string,
-      callback: () => void
-    }) => {
-      const { 
-        path,
-        current,
-        previous,
-        callback
-      } = params
-
-      undoRedoManager.execute({
-        execute() {
-          context.updateFile({ fileName: path, content: current, type: undefined });
-          context.saveManualVersion([path]);
-        },
-        undo() {
-          context.updateFile({ fileName: path, content: previous, type: undefined });
-          context.saveManualVersion([path]);
-        },
-      })
-
-      callback()
-      // context.saveManualVersion(comId, [path]);
-    },
-    500
-  );
-
   let previousLess: string | null = null
   type AIStylePayload = {
     jsxFileName?: string;
@@ -1081,6 +1051,165 @@ export function genStyleValue(props) {
     });
   };
 
+  const getStyleActionTitle = (ele: Element) => `调整 ${getElementLabel(ele, '节点1')} 样式`;
+  type PendingStyleFileUpdate = { previous: string; current: string };
+  type PendingStyleFileBranch = {
+    files: Map<string, PendingStyleFileUpdate>;
+    ele: Element | null;
+    title: string;
+    actionId: string;
+    actionApplied: boolean;
+  };
+  let pendingStyleFileBranch: PendingStyleFileBranch | null = null;
+
+  /**
+   * 保持原有 trailing debounce：窗口内所有直接样式写入只对应一条分支命令和一条用户操作记录。
+   * 操作记录在首次写入时立即创建以唤起操作面板；防抖只负责结束本轮源码聚合窗口。
+   */
+  const finalizeStyleFileBranch = debounce(() => {
+    const branch = pendingStyleFileBranch;
+    if (!branch) return;
+
+    pendingStyleFileBranch = null;
+  }, 500);
+
+  // 提交或取消分支时立即关闭旧的源码聚合窗口。
+  undoRedoManager.onBranchHistoryChange((hasHistory) => {
+    if (!hasHistory) pendingStyleFileBranch = null;
+  });
+
+  const updateStyleFileInBranch = (params: {
+    path: string;
+    current: string;
+    previous: string;
+    ele: Element | null;
+    callback: () => void;
+  }) => {
+    const { path, current, previous, ele, callback } = params;
+    let branch = pendingStyleFileBranch;
+
+    if (!branch) {
+      branch = {
+        files: new Map([[path, { previous, current }]]),
+        ele,
+        title: ele ? getStyleActionTitle(ele) : '调整节点样式',
+        actionId: randomUUID(),
+        actionApplied: false,
+      };
+      pendingStyleFileBranch = branch;
+
+      const currentBranch = branch;
+      undoRedoManager.executeBranch({
+        execute() {
+          currentBranch.files.forEach(({ current }, fileName) => {
+            context.updateFile({ fileName, content: current, type: undefined });
+          });
+          // 首次执行与 redo 都在这里登记操作，保证面板不受 debounce 延迟影响。
+          if (currentBranch.ele && !currentBranch.actionApplied) {
+            context.component?.actions.addUserAction({
+              id: currentBranch.actionId,
+              type: 'update-style',
+              title: currentBranch.title,
+              refElement: currentBranch.ele,
+            });
+            currentBranch.actionApplied = true;
+          }
+        },
+        undo() {
+          if (pendingStyleFileBranch === currentBranch) pendingStyleFileBranch = null;
+          currentBranch.files.forEach(({ previous }, fileName) => {
+            context.updateFile({ fileName, content: previous, type: undefined });
+          });
+          if (currentBranch.actionApplied) {
+            context.component?.actions.removeUserAction(currentBranch.actionId);
+            currentBranch.actionApplied = false;
+          }
+        },
+      });
+    } else {
+      // 防抖窗口内仅更新最终源码，首个 previous 始终作为撤销基线。
+      const file = branch.files.get(path);
+      if (file) {
+        file.current = current;
+      } else {
+        branch.files.set(path, { previous, current });
+      }
+      branch.ele = ele;
+      branch.title = ele ? getStyleActionTitle(ele) : branch.title;
+      context.updateFile({ fileName: path, content: current, type: undefined });
+    }
+
+    finalizeStyleFileBranch();
+    callback();
+  };
+
+  /** 三方内部 DOM 没有可安全落盘的 CSS 入口时，按 setSegment 的 chip 分支请求 AI。 */
+  const updateAIStyleInBranch = (ele: HTMLElement, value: Record<string, any>, deletions: string[]) => {
+    const styleChanges = [
+      ...Object.entries(value).map(([key, value]) => ({ key, value })),
+      ...deletions
+        .filter((key) => !(key in value))
+        .map((key) => ({ key, value: null })),
+    ];
+    if (!styleChanges.length) return;
+
+    const previousStyles = styleChanges.map(({ key }) => {
+      const property = convertCamelToHyphen(key);
+      const previousValue = ele.style.getPropertyValue(property);
+      return {
+        property,
+        hadValue: previousValue !== '',
+        value: previousValue,
+        priority: ele.style.getPropertyPriority(property),
+      };
+    });
+    const label = getElementLabel(ele, '节点1');
+    const actionId = randomUUID();
+    const chip = {
+      id: randomUUID(),
+      type: 'element-style-update',
+      label: `调整 ${label} 样式`,
+      data: buildElementStyleUpdateChipData(ele, styleChanges, label),
+    };
+
+    const applyPreview = () => {
+      styleChanges.forEach(({ key, value }) => {
+        const property = convertCamelToHyphen(key);
+        if (value === null || value === undefined || value === '') {
+          ele.style.removeProperty(property);
+        } else {
+          ele.style.setProperty(property, String(value), 'important');
+        }
+      });
+    };
+
+    undoRedoManager.executeBranch({
+      aiRequest: {
+        message: `[[chip:${chip.id}]]`,
+        chips: [chip],
+      },
+      execute() {
+        applyPreview();
+        context.component?.actions.addUserAction({
+          id: actionId,
+          type: 'update-style',
+          title: getStyleActionTitle(ele),
+          refElement: ele,
+        });
+      },
+      undo() {
+        previousStyles.forEach(({ property, hadValue, value, priority }) => {
+          if (hadValue) {
+            ele.style.setProperty(property, value, priority);
+          } else {
+            ele.style.removeProperty(property);
+          }
+        });
+        context.component?.actions.removeUserAction(actionId);
+      },
+    });
+  };
+
   return {
     set(params: any, value: any) {
       const locRaw = params.focusArea?.dataset?.loc;
@@ -1097,12 +1226,9 @@ export function genStyleValue(props) {
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = !!ele && !hasDataZoneSelector;
-      batchEnabled = isAIOnlyNode;
-      syncBatchBridge();
 
       if (isAIOnlyNode) {
-        // 三方内部 DOM 在批量会话模式下只做“最终态快照 + 实时预览”，不自动提交 AI
-        upsertBatchSnapshot(params, value || {}, (deletions || []).slice());
+        updateAIStyleInBranch(ele as HTMLElement, value || {}, (deletions || []).slice());
         return;
       }
 
@@ -1157,11 +1283,11 @@ export function genStyleValue(props) {
               inlineEntries.map(({ val, valueStart, valueEnd }) => ({ val, valueStart, valueEnd, asString: true })),
             );
             if (jsxNewSource) {
-              context.updateFile({ fileName: jsxPath, content: jsxNewSource, type: undefined });
-              debouncedUpdateFile({
+              updateStyleFileInBranch({
                 path: jsxPath,
                 current: jsxNewSource,
                 previous: jsxPrevSource,
+                ele,
                 callback: () => { previousLess = null; },
               });
               // 同步更新 DOM 上的 data-style-info 偏移量，防止连续编辑时偏移量因字符长度变化而失效
@@ -1234,11 +1360,11 @@ export function genStyleValue(props) {
           );
           if (removeResult) {
             const { newSource: jsxNewSource, newStyleInfo } = removeResult;
-            context.updateFile({ fileName: jsxPathForInline, content: jsxNewSource, type: undefined });
-            debouncedUpdateFile({
+            updateStyleFileInBranch({
               path: jsxPathForInline,
               current: jsxNewSource,
               previous: jsxPrevSource,
+              ele,
               callback: () => { previousLess = null; },
             });
             if (ele) {
@@ -1264,11 +1390,11 @@ export function genStyleValue(props) {
           if (!injectResult) return;
 
           const { newSource: jsxNewSource, styleInfo: injectedStyleInfo } = injectResult;
-          context.updateFile({ fileName: jsxPathForInline, content: jsxNewSource, type: undefined });
-          debouncedUpdateFile({
+          updateStyleFileInBranch({
             path: jsxPathForInline,
             current: jsxNewSource,
             previous: jsxPrevSource,
+            ele,
             callback: () => { previousLess = null; },
           });
           if (ele) {
@@ -1280,11 +1406,11 @@ export function genStyleValue(props) {
           if (!appendResult) return;
 
           const { newSource: jsxNewSource, styleInfoUpdates } = appendResult;
-          context.updateFile({ fileName: jsxPathForInline, content: jsxNewSource, type: undefined });
-          debouncedUpdateFile({
+          updateStyleFileInBranch({
             path: jsxPathForInline,
             current: jsxNewSource,
             previous: jsxPrevSource,
+            ele,
             callback: () => { previousLess = null; },
           });
           // 把新属性的偏移合并进 DOM 上的 data-style-info
@@ -1323,11 +1449,11 @@ export function genStyleValue(props) {
       // 嵌套伪类快速路径：直接写入 &:disabled 等嵌套位置，保留 Less 原有结构
       if (tryWriteNestedPseudo(cssObj, fullSelector, lessValue, deletions)) {
         const cssStr = stringifyLess(cssObj);
-        context.updateFile({ fileName: lessPath, content: cssStr, type: undefined });
-        debouncedUpdateFile({
+        updateStyleFileInBranch({
           path: lessPath,
           current: cssStr,
-          previous: previousLess,
+          previous: previousLess ?? '',
+          ele,
           callback: () => {
             previousLess = null
           }
@@ -1440,11 +1566,11 @@ export function genStyleValue(props) {
               );
               if (removeResult) {
                 const { newSource: jsxNewSrc, newStyleInfo } = removeResult;
-                context.updateFile({ fileName: jsxPathForDel, content: jsxNewSrc, type: undefined });
-                debouncedUpdateFile({
+                updateStyleFileInBranch({
                   path: jsxPathForDel,
                   current: jsxNewSrc,
                   previous: jsxPrevForDel,
+                  ele,
                   callback: () => { previousLess = null; },
                 });
                 if (ele) {
@@ -1533,11 +1659,13 @@ export function genStyleValue(props) {
       }
 
       const cssStr = stringifyLess(cssObj);
-      context.updateFile({ fileName: lessPath, content: cssStr, type: undefined });
-      debouncedUpdateFile({
+      console.log('cssStr', cssStr)
+      console.log('lessPath', lessPath)
+      updateStyleFileInBranch({
         path: lessPath,
         current: cssStr,
-        previous: previousLess,
+        previous: previousLess ?? '',
+        ele,
         callback: () => {
           previousLess = null
         }
@@ -1580,20 +1708,12 @@ export function registerImgAppliedCallback(cb: ((src: string) => void) | null): 
 export function genImgSrcReplacer() {
   return {
     get(params: any) {
-      return params.focusArea?.ele?.getAttribute?.('src') ?? '';
+      const ele = params.focusArea?.ele ?? params.focusArea;
+      return ele?.getAttribute?.('src') ?? '';
     },
     set(params: any) {
-      const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
-      const jsxPath = loc.files?.jsx;
-      if (!jsxPath) return;
-
-      const comId = params.id;
-      const aiComParams = context.component?.params;
-      const jsxFile = aiComParams?.data?.files?.find(
-        (f: { fileName: string; source: string }) => f.fileName === jsxPath
-      );
-      if (!jsxFile) return;
-      const source = decodeURIComponent(jsxFile.source);
+      const ele = (params.focusArea?.ele ?? params.focusArea) as HTMLElement | undefined;
+      if (!ele) return;
 
       const input = document.createElement('input');
       input.type = 'file';
@@ -1617,36 +1737,93 @@ export function genImgSrcReplacer() {
 
         if (!newSrc) return;
 
-        const snippet = source.slice(loc.jsx.start, loc.jsx.end);
+        const locRaw = ele.dataset?.loc;
+        let loc: any;
+        try {
+          loc = locRaw ? JSON.parse(locRaw) : undefined;
+        } catch (_) {
+          loc = undefined;
+        }
 
-        if (STATIC_SRC_RE.test(snippet)) {
+        const jsxPath = loc?.files?.jsx;
+        const jsxFile = jsxPath
+          ? context.component?.params?.data?.files?.find(
+              (f: { fileName: string; source: string }) => f.fileName === jsxPath
+            )
+          : undefined;
+        const source = jsxFile ? decodeURIComponent(jsxFile.source) : '';
+        const start = loc?.jsx?.start;
+        const end = loc?.jsx?.end;
+        const snippet =
+          typeof start === 'number' && typeof end === 'number' && start >= 0 && end > start && end <= source.length
+            ? source.slice(start, end)
+            : '';
+        const hasRepeatedLoc = !!locRaw && Array.from(getShadowDoc().querySelectorAll<HTMLElement>('[data-loc]'))
+          .filter((item) => item.dataset.loc === locRaw)
+          .length > 1;
+        const previousSrc = ele.getAttribute('src');
+        const previousPreviewSrc = previousSrc || (ele as HTMLImageElement).currentSrc || (ele as HTMLImageElement).src || '';
+        const label = getElementLabel(ele, '图片');
+        const actionId = randomUUID();
+        const title = `修改 ${label} 图片`;
+
+        const applyPreview = (src: string | null) => {
+          if (src === null) {
+            ele.removeAttribute('src');
+          } else {
+            ele.setAttribute('src', src);
+          }
+          _imgAppliedCallback?.(src ?? previousPreviewSrc);
+        };
+
+        if (jsxPath && jsxFile && STATIC_SRC_RE.test(snippet) && !hasRepeatedLoc) {
           const newSnippet = snippet.replace(STATIC_SRC_RE, `src="${newSrc}"`);
-          const newSource = source.slice(0, loc.jsx.start) + newSnippet + source.slice(loc.jsx.end);
+          const newSource = source.slice(0, start) + newSnippet + source.slice(end);
 
-          undoRedoManager.execute({
+          undoRedoManager.executeBranch({
             execute() {
-              context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
-              context.saveManualVersion([jsxPath]);
+              context.updateFile({ fileName: jsxPath, content: newSource, type: undefined, noUpdateFileSystem: true });
+              applyPreview(newSrc);
+              context.component?.actions.addUserAction({
+                id: actionId,
+                type: 'update-image',
+                title,
+                refElement: ele,
+              });
             },
             undo() {
-              context.updateFile({ fileName: jsxPath, content: source, type: undefined });
-              context.saveManualVersion([jsxPath]);
+              context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true });
+              applyPreview(previousSrc);
+              context.component?.actions.removeUserAction(actionId);
             },
           });
         } else {
-          const plugins = context.plugins as any;
-          plugins?.showAIDialog?.();
-          plugins?.aiService?.request({
-            message: '请将页面中当前这张图片的地址替换为用户上传的图片链接',
-            mentionFocus: true,
-            attachments: [{ url: newSrc }],
+          const chip = {
+            id: randomUUID(),
+            type: 'element-image-update',
+            label: title,
+            data: buildElementImageUpdateChipData(ele, newSrc, label),
+          };
+          undoRedoManager.executeBranch({
+            aiRequest: {
+              message: `[[chip:${chip.id}]]`,
+              chips: [chip],
+            },
+            execute() {
+              applyPreview(newSrc);
+              context.component?.actions.addUserAction({
+                id: actionId,
+                type: 'update-image',
+                title,
+                refElement: ele,
+              });
+            },
+            undo() {
+              applyPreview(previousSrc);
+              context.component?.actions.removeUserAction(actionId);
+            },
           });
         }
-
-        _imgAppliedCallback?.(newSrc);
-
-        // context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
-        // context.saveManualVersion(comId, [jsxPath]);
       };
       input.click();
     }
@@ -1888,26 +2065,33 @@ let _lastSvgState: {
 } | null = null;
 
 export function applyRawSvg(params: any, rawSvg: string): void {
-  const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
+  const ele = getFocusAreaEle(params)
+  if (!ele) return
 
-  const jsxPath = loc.files?.jsx;
-  if (!jsxPath) return;
+  let loc: any
+  const locRaw = ele.dataset.loc
+  try {
+    loc = locRaw ? JSON.parse(locRaw) : undefined
+  } catch (_) {
+    loc = undefined
+  }
 
-  const comId = params.id;
-  const aiComParams = context.component?.params;
-  const jsxFile = aiComParams?.data?.files?.find(
-    (f: { fileName: string; source: string }) => f.fileName === jsxPath
-  );
-  if (!jsxFile) return;
-  const source = decodeURIComponent(jsxFile.source);
+  const jsxPath = loc?.files?.jsx
+  const comId = params.id
+  const jsxFile = jsxPath
+    ? context.component?.params?.data?.files?.find(
+        (file: { fileName: string; source: string }) => file.fileName === jsxPath
+      )
+    : undefined
+  const source = jsxFile ? decodeURIComponent(jsxFile.source) : ''
 
   // 若本次目标与上次一致（同 comId + jsxPath + dataLocStart），
   // 且上次记录的位置处确实还是 <svg，则直接用精确记录的 range，
   // 避免 data-loc 因源码长度变化失效导致截断位置出错。
-  let hintStart: number = loc.jsx?.start;
-  let hintEnd: number = loc.jsx?.end;
-  if (!Number.isInteger(hintStart) || hintStart < 0) return;
+  let hintStart = loc?.jsx?.start
+  let hintEnd = typeof loc?.jsx?.end === 'number' ? loc.jsx.end : hintStart
   if (
+    typeof hintStart === 'number' &&
     _lastSvgState &&
     _lastSvgState.comId === comId &&
     _lastSvgState.jsxPath === jsxPath &&
@@ -1918,14 +2102,15 @@ export function applyRawSvg(params: any, rawSvg: string): void {
     hintEnd = _lastSvgState.end;
   }
 
-  const range = findActualSvgRange(source, hintStart, hintEnd, true);
-  if (!range) return;
-
-  // 允许替换完整 SVG，或 data-loc 指向的 JSX 图标组件。
-  const candidate = source.slice(range.start, range.end);
-  const isSvg = candidate.startsWith('<svg') && candidate.trimEnd().endsWith('</svg>');
-  const isIconComponent = /^<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/.test(candidate);
-  if (!isSvg && !isIconComponent) return;
+  const range = typeof hintStart === 'number' && hintStart >= 0
+    ? findActualSvgRange(source, hintStart, hintEnd as number, true)
+    : null
+  const candidate = range ? source.slice(range.start, range.end) : ''
+  const isSvg = candidate.startsWith('<svg') && candidate.trimEnd().endsWith('</svg>')
+  const isIconComponent = /^<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/.test(candidate)
+  const hasRepeatedLoc = !!locRaw && Array.from(getShadowDoc().querySelectorAll<HTMLElement>('[data-loc]'))
+    .filter((item) => item.dataset.loc === locRaw)
+    .length > 1
 
   // 原 SVG 替换时保持尺寸；组件图标没有可复用的 SVG 宽高属性。
   const sizeOverride: { width?: string; height?: string } = {};
@@ -1936,32 +2121,88 @@ export function applyRawSvg(params: any, rawSvg: string): void {
     if (heightMatch) sizeOverride.height = heightMatch[1];
   }
 
-  const jsxSvg = svgToJsx(rawSvg, sizeOverride);
-  const newSource = source.slice(0, range.start) + jsxSvg + source.slice(range.end);
+  const jsxSvg = svgToJsx(rawSvg, sizeOverride)
+  const label = getElementLabel(ele, 'SVG')
+  const title = `修改 ${label} SVG`
+  const actionId = randomUUID()
 
-  // 记录本次替换的精确范围，供下次替换复用
-  _lastSvgState = {
-    comId,
-    jsxPath,
-    dataLocStart: loc.jsx?.start,
-    start: range.start,
-    end: range.start + jsxSvg.length,
-  };
+  // 保持 SVG 节点身份和平台注入的 data-* 定位属性，避免分支预览破坏后续编辑定位。
+  const currentSvg = ele instanceof SVGElement ? ele : ele.querySelector('svg')
+  const previousSvg = currentSvg?.cloneNode(true) as SVGElement | undefined
+  const parser = new DOMParser()
+  const nextSvg = parser.parseFromString(rawSvg, 'image/svg+xml').documentElement
+  const applyPreview = (svg: SVGElement | undefined) => {
+    if (!svg || !currentSvg) return
+    const importedSvg = document.importNode(svg, true) as SVGElement
+    const dataAttrs = Array.from(currentSvg.attributes)
+      .filter((attr) => attr.name.startsWith('data-'))
+      .map((attr) => [attr.name, attr.value] as const)
+    Array.from(currentSvg.attributes).forEach((attr) => currentSvg.removeAttribute(attr.name))
+    Array.from(importedSvg.attributes).forEach((attr) => currentSvg.setAttribute(attr.name, attr.value))
+    dataAttrs.forEach(([name, value]) => currentSvg.setAttribute(name, value))
+    currentSvg.replaceChildren(...Array.from(importedSvg.childNodes))
+  }
 
-  undoRedoManager.execute({
+  if (jsxPath && jsxFile && range && !hasRepeatedLoc && (isSvg || isIconComponent)) {
+    const newSource = source.slice(0, range.start) + jsxSvg + source.slice(range.end)
+    const nextSvgState = {
+      comId,
+      jsxPath,
+      dataLocStart: loc?.jsx?.start,
+      start: range.start,
+      end: range.start + jsxSvg.length,
+    }
+
+    undoRedoManager.executeBranch({
+      execute() {
+        context.updateFile({ fileName: jsxPath, content: newSource, type: undefined, noUpdateFileSystem: true })
+        _lastSvgState = nextSvgState
+        applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
+        _svgAppliedCallback?.(rawSvg)
+        context.component?.actions.addUserAction({
+          id: actionId,
+          type: 'update-svg',
+          title,
+          refElement: ele,
+        })
+      },
+      undo() {
+        context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true })
+        if (_lastSvgState === nextSvgState) _lastSvgState = null
+        applyPreview(previousSvg)
+        context.component?.actions.removeUserAction(actionId)
+      },
+    })
+    return
+  }
+
+  const chip = {
+    id: randomUUID(),
+    type: 'element-svg-update',
+    label: title,
+    data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
+  }
+
+  undoRedoManager.executeBranch({
+    aiRequest: {
+      message: `[[chip:${chip.id}]]`,
+      chips: [chip],
+    },
     execute() {
-      context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
-      context.saveManualVersion([jsxPath]);
+      applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
+      _svgAppliedCallback?.(rawSvg)
+      context.component?.actions.addUserAction({
+        id: actionId,
+        type: 'update-svg',
+        title,
+        refElement: ele,
+      })
     },
     undo() {
-      context.updateFile({ fileName: jsxPath, content: source, type: undefined });
-      context.saveManualVersion([jsxPath]);
+      applyPreview(previousSvg)
+      context.component?.actions.removeUserAction(actionId)
     },
   })
-
-  // context.updateFile(comId, { fileName: jsxPath, content: newSource, type: undefined });
-  // context.saveManualVersion(comId, [jsxPath]);
-  _svgAppliedCallback?.(rawSvg);
 }
 
 /**
@@ -1997,6 +2238,7 @@ export function scanIconsFromDOM(): Array<{ name: string; svg: string }> {
 export function genSvgReplacer() {
   return {
     set(params: any) {
+      console.log("设置：svg")
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.svg,image/svg+xml';
@@ -2064,50 +2306,106 @@ function findActualIconTagRange(
  * data-loc.jsx.end 失效导致截断不完整的问题。
  */
 export function applyIconWithSvg(params: any, rawSvg: string): void {
-  const loc = JSON.parse(params.focusArea?.dataset?.loc ?? '{}');
-  const jsxPath = loc.files?.jsx;
-  if (!jsxPath) return;
+  const ele = getFocusAreaEle(params)
+  if (!ele) return
 
-  const aiComParams = context.component?.params;
-  const jsxFile = aiComParams?.data?.files?.find(
-    (f: { fileName: string; source: string }) => f.fileName === jsxPath
-  );
-  if (!jsxFile) return;
-  const source = decodeURIComponent(jsxFile.source);
+  let loc: any
+  const locRaw = ele.dataset.loc
+  try {
+    loc = locRaw ? JSON.parse(locRaw) : undefined
+  } catch (_) {
+    loc = undefined
+  }
 
-  const hintStart: number = loc.jsx?.start;
-  if (hintStart == null || hintStart < 0) return;
+  const jsxPath = loc?.files?.jsx
+  const jsxFile = jsxPath
+    ? context.component?.params?.data?.files?.find(
+        (file: { fileName: string; source: string }) => file.fileName === jsxPath
+      )
+    : undefined
+  const source = jsxFile ? decodeURIComponent(jsxFile.source) : ''
+  const hintStart = loc?.jsx?.start
+  const range = typeof hintStart === 'number' && hintStart >= 0
+    ? findActualIconTagRange(source, hintStart)
+    : null
+  const hasRepeatedLoc = !!locRaw && Array.from(getShadowDoc().querySelectorAll<HTMLElement>('[data-loc]'))
+    .filter((item) => item.dataset.loc === locRaw)
+    .length > 1
+  const jsxSvg = svgToJsx(rawSvg, {})
+  const label = getElementLabel(ele, '图标')
+  const title = `修改 ${label} SVG`
+  const actionId = randomUUID()
 
-  // 动态扫描标签实际范围，不依赖可能已过期的 loc.jsx.end
-  const range = findActualIconTagRange(source, hintStart);
-  if (!range) return;
+  // 分支编辑不会触发完整重渲染，直接替换画布中可见的 SVG 以提供即时反馈。
+  const currentSvg = ele instanceof SVGElement ? ele : ele.querySelector('svg')
+  const previousSvg = currentSvg?.cloneNode(true) as SVGElement | undefined
+  const parser = new DOMParser()
+  const nextSvg = parser.parseFromString(rawSvg, 'image/svg+xml').documentElement
+  let displayedSvg = currentSvg
+  const applyPreview = (svg: SVGElement | undefined) => {
+    if (!svg || !displayedSvg?.parentNode) return
+    const importedSvg = document.importNode(svg, true) as SVGElement
+    displayedSvg.parentNode.replaceChild(importedSvg, displayedSvg)
+    displayedSvg = importedSvg
+  }
 
-  const { start, end } = range;
-  const candidate = source.slice(start, end);
-  // 安全断言：必须是 JSX 元素（以 < 开头）
-  if (!candidate.startsWith('<')) return;
+  if (jsxPath && jsxFile && range && !hasRepeatedLoc && source.slice(range.start, range.end).startsWith('<')) {
+    const newSource = source.slice(0, range.start) + jsxSvg + source.slice(range.end)
 
-  const jsxSvg = svgToJsx(rawSvg, {});
-  const newSource = source.slice(0, start) + jsxSvg + source.slice(end);
+    undoRedoManager.executeBranch({
+      execute() {
+        context.updateFile({ fileName: jsxPath, content: newSource, type: undefined, noUpdateFileSystem: true })
+        applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
+        _svgAppliedCallback?.(rawSvg)
+        context.component?.actions.addUserAction({
+          id: actionId,
+          type: 'update-svg',
+          title,
+          refElement: ele,
+        })
+      },
+      undo() {
+        context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true })
+        applyPreview(previousSvg)
+        context.component?.actions.removeUserAction(actionId)
+      },
+    })
+    return
+  }
 
-  undoRedoManager.execute({
+  const chip = {
+    id: randomUUID(),
+    type: 'element-svg-update',
+    label: title,
+    data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
+  }
+
+  undoRedoManager.executeBranch({
+    aiRequest: {
+      message: `[[chip:${chip.id}]]`,
+      chips: [chip],
+    },
     execute() {
-      context.updateFile({ fileName: jsxPath, content: newSource, type: undefined });
-      context.saveManualVersion([jsxPath]);
+      applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
+      context.component?.actions.addUserAction({
+        id: actionId,
+        type: 'update-svg',
+        title,
+        refElement: ele,
+      })
     },
     undo() {
-      context.updateFile({ fileName: jsxPath, content: source, type: undefined });
-      context.saveManualVersion([jsxPath]);
+      applyPreview(previousSvg)
+      context.component?.actions.removeUserAction(actionId)
     },
-  });
-
-  _svgAppliedCallback?.(rawSvg);
+  })
 }
 
 /** 触发文件选择框，用户上传 SVG 后替换第三方图标组件 */
 export function genIconReplacer() {
   return {
     set(params: any) {
+      console.log("设置：icon")
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.svg,image/svg+xml';

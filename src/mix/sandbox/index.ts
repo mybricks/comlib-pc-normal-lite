@@ -1185,6 +1185,26 @@ export async function registerSandbox(comId: string): Promise<void> {
           context.chipPromiseIds.delete(params.id)
           context.component!.actions!.promiseCancel(params.id)
         }
+      },
+      ['element-image-update']: {
+        def: {
+          type: 'element-image-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-svg-update']: {
+        def: {
+          type: 'element-svg-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
       }
     }
   }) ?? {};

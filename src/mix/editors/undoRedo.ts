@@ -179,13 +179,10 @@ class UndoRedoManager {
 
   /** 撤销 */
   undo() {
-    if (this.hasBranchHistory()) {
+    if (this.branchUndoStack.length) {
       console.log('undo branch')
       this.undoStack(this.branchUndoStack, this.branchRedoStack)
-      // 最后一个分支操作已回退，取消其 redo 历史并恢复主栈路由。
-      if (this.branchUndoStack.length === 0) {
-        this.clearBranch()
-      }
+      this.notifyBranchHistoryChange()
       return
     }
 
@@ -196,9 +193,10 @@ class UndoRedoManager {
 
   /** 重做 */
   redo() {
-    if (this.hasBranchHistory()) {
+    if (this.branchRedoStack.length) {
       console.log('redo branch')
       this.redoStack(this.branchUndoStack, this.branchRedoStack)
+      this.notifyBranchHistoryChange()
       return
     }
 
@@ -226,7 +224,6 @@ export default function() {
     '@undo'() {
       console.log('@undo', isVibing)
       if (isVibing) return
-
       undoRedoManager.undo()
     },
     /** 重做 */
@@ -236,4 +233,16 @@ export default function() {
       undoRedoManager.redo()
     }
   }
+}
+
+window._undo = () => {
+  console.log('@undo', isVibing)
+  if (isVibing) return
+  undoRedoManager.undo()
+}
+
+window._redo = () => {
+  console.log('@redo', isVibing)
+  if (isVibing) return
+  undoRedoManager.redo()
 }

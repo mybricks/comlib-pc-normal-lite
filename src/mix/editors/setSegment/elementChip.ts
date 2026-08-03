@@ -93,7 +93,18 @@ export interface ParsedElementMoveChipData extends ParsedElementChipData {
 
 export interface ParsedElementStyleUpdateChipData extends ParsedElementChipData {
   target: ParsedElementInfo
-  styles: Array<{ property: string; value: number }>
+  styles: Array<{ property: string; value: number | string | null }>
+}
+
+export interface ParsedElementImageUpdateChipData extends ParsedElementChipData {
+  target: ParsedElementInfo
+  currentSrc: string
+  nextSrc: string
+}
+
+export interface ParsedElementSvgUpdateChipData extends ParsedElementChipData {
+  target: ParsedElementInfo
+  nextSvg: string
 }
 
 function safeParseJson<T>(value: string | null): T | undefined {
@@ -548,9 +559,93 @@ export function buildElementTextUpdateChipData(ele: Element, content: string, la
   }
 }
 
+export function buildElementImageUpdateChipData(
+  ele: Element,
+  nextSrc: string,
+  label = getElementLabel(ele, '图片'),
+): ParsedElementImageUpdateChipData {
+  const opLabel = '图片修改操作1'
+  const target = parseElementInfo(ele, label)
+  const currentSrc = ele.getAttribute('src') ?? ''
+
+  return {
+    inlineText: `执行「${opLabel}」，`,
+    target,
+    currentSrc,
+    nextSrc,
+    detailText: [
+      `<element-image-update-operation id="${opLabel}">`,
+      `## 操作意图（${opLabel}）`,
+      '用户上传了新图片，请在 JSX 源码中将目标图片元素的 src 替换为指定链接。',
+      '',
+      '## 目标图片元素',
+      `- 名称：${target.name}`,
+      `- 代码位置：${target.codeLocation}`,
+      target.repeatContextBlock,
+      '- DOM 结构摘要：',
+      indentText(target.domSummary, '  '),
+      '',
+      '## 图片地址',
+      `- 当前地址：${currentSrc || '未设置'}`,
+      `- 新地址：${nextSrc}`,
+      '',
+      '## 修改要求',
+      '1. 只修改目标图片元素及其实际控制 src 的 JSX 属性；如果 src 由变量、组件 prop 或数据项控制，请在对应来源中替换为新地址',
+      '2. 保持图片元素的其他属性、样式、事件和相邻 JSX 结构不变',
+      '3. 如果目标图片位于循环 JSX / map 渲染中，默认仅替换当前项对应的图片地址；无法确认范围时先向用户确认',
+      '',
+      '## 注意',
+      '如果无法可靠定位控制该图片地址的源码，请用一句话说明原因，不要修改无关代码。',
+      '</element-image-update-operation>',
+    ].join('\n'),
+  }
+}
+
+export function buildElementSvgUpdateChipData(
+  ele: Element,
+  nextSvg: string,
+  label = getElementLabel(ele, '图标'),
+): ParsedElementSvgUpdateChipData {
+  const opLabel = 'SVG 图标修改操作1'
+  const target = parseElementInfo(ele, label)
+
+  return {
+    inlineText: `执行「${opLabel}」，`,
+    target,
+    nextSvg,
+    detailText: [
+      `<element-svg-update-operation id="${opLabel}">`,
+      `## 操作意图（${opLabel}）`,
+      '用户上传了新的 SVG 图标。请在 JSX 源码中将目标图标组件或 SVG 元素替换为下方给出的 SVG JSX。',
+      '',
+      '## 目标图标元素',
+      `- 名称：${target.name}`,
+      `- 代码位置：${target.codeLocation}`,
+      target.repeatContextBlock,
+      '- DOM 结构摘要：',
+      indentText(target.domSummary, '  '),
+      '',
+      '## 新 SVG JSX',
+      '```tsx',
+      nextSvg,
+      '```',
+      '',
+      '## 修改要求',
+      '1. 只替换目标图标实际对应的 JSX 节点；不要修改无关元素、样式或组件结构',
+      '2. 如果原图标是组件引用，替换后移除仅被该图标使用的 import；保留仍被其他位置使用的 import',
+      '3. 保留目标节点原有的布局尺寸、定位和外层样式效果；需要时将原有控制尺寸或颜色的属性合理迁移到新 SVG',
+      '4. 如果目标位于循环 JSX / map 渲染中，默认仅替换当前项对应的图标；无法确认范围时先向用户确认',
+      '',
+      '## 注意',
+      '如果无法可靠定位目标图标的源码，请用一句话说明原因，不要修改无关代码。',
+      '</element-svg-update-operation>',
+    ].join('\n'),
+  }
+}
+
 export function buildElementStyleUpdateChipData(
   ele: Element,
-  styles: Array<{ key: string; value: number }>,
+  styles: Array<{ key: string; value: number | string | null | undefined }>,
   label = getElementLabel(ele, '节点1'),
 ): ParsedElementStyleUpdateChipData {
   const opLabel = '元素样式调整操作1'
@@ -577,10 +672,14 @@ export function buildElementStyleUpdateChipData(
       indentText(target.domSummary, '  '),
       '',
       '## 目标样式',
-      ...normalizedStyles.map(({ property, value }) => `- ${property}: ${value}px`),
+      ...normalizedStyles.map(({ property, value }) => (
+        value === null || value === undefined || value === ''
+          ? `- 删除 ${property}`
+          : `- ${property}: ${typeof value === 'number' ? `${value}px` : value}`
+      )),
       '',
       '## 修改要求',
-      '1. 只修改目标元素对应 JSX 节点中控制这些样式的 prop，不重构无关 JSX、CSS 或组件结构',
+      '1. 只修改目标元素对应 JSX 节点中控制这些样式的 prop；标记为“删除”的属性应移除或恢复为组件默认值，不重构无关 JSX、CSS 或组件结构',
       '2. 使运行时效果与目标样式一致；如果 prop 的单位或语义不同，请按该组件现有 API 做等价换算',
       '3. 保持其他属性、事件和相邻节点不变',
       '',
