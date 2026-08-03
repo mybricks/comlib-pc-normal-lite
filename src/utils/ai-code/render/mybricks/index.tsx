@@ -532,9 +532,58 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     // overflow: 'hidden' // 绝对定位元素不渲染
   }
 
+  const ENV_CONFIG_FILENAME = 'config/env.json'
+
+  const getEnvCssVariables = (source?: string) => {
+    if (typeof source !== 'string') {
+      return {}
+    }
+
+    try {
+      let envConfig: any
+      try {
+        envConfig = JSON.parse(source)
+      } catch {
+        envConfig = JSON.parse(decodeURIComponent(source))
+      }
+
+      const activeStyle = envConfig?.style?.styles?.find((style) => style?.id === envConfig?.style?.active)
+      return activeStyle?.cssVariables?.reduce((variables, cssVariable) => {
+        if (
+          typeof cssVariable?.name === 'string' &&
+          cssVariable.name.startsWith('--') &&
+          (typeof cssVariable.value === 'string' || typeof cssVariable.value === 'number')
+        ) {
+          variables[cssVariable.name] = cssVariable.value
+        }
+        return variables
+      }, {}) || {}
+    } catch {
+      return {}
+    }
+  }
+
+  const useEnvCssVariables = () => {
+    const fileSystem = mixContext.fileSystem
+    const readVariables = () => getEnvCssVariables(fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file?.source)
+    const [variables, setVariables] = useState(readVariables)
+
+    useEffect(() => {
+      setVariables(readVariables())
+      return fileSystem?.events.on('fileChange', ({ filename }) => {
+        if (filename === ENV_CONFIG_FILENAME) {
+          setVariables(readVariables())
+        }
+      })
+    }, [fileSystem])
+
+    return variables
+  }
+
   const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void }>) => {
     const { path = '/', onMount, children } = params;
     const theme = mixContext.resolveActiveTheme();
+    const envCssVariables = useEnvCssVariables();
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue | null>(null);
     const [style, setStyle] = useState<React.CSSProperties>({      
@@ -738,6 +787,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             pre[cur.propertyName] = cur.value;
             return pre;
           }, {}),
+          ...envCssVariables,
         }}
       >
         {container && <PageContext.Provider value={container}>
@@ -1126,6 +1176,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         return null
       }
       const theme = mixContext.resolveActiveTheme();
+      const envCssVariables = useEnvCssVariables();
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1262,7 +1313,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               ...theme?.vars?.reduce((pre, cur) => {
                 pre[cur.propertyName] = cur.value;
                 return pre;
-              }, {})
+              }, {}),
+              ...envCssVariables
             }}>
             {container && (
               <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
@@ -1397,6 +1449,15 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         popupRefRegistryForceUpdate?.()
       }
     },
+    updateConfigJson(filename, content) {
+      try {
+        if (filename === ENV_CONFIG_FILENAME) {
+          mixContext.updateFile({ fileName: filename, content: JSON.stringify(content, null, 2) })
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
   }
 }
 
