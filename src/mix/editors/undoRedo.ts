@@ -19,6 +19,9 @@ export interface Command {
   execute(): void
   undo(): void
 
+  /** 当前命令的 userAction 与前一条命令合并时，撤销与重做也必须作为一组执行。 */
+  mergeWithPrevious?: boolean
+
   /**
    * 主栈命令涉及的本地文件。版本记录方可据此只保存实际变更的文件。
    * 分支栈命令只维护画布即时状态，不需要保存版本。
@@ -87,6 +90,7 @@ class UndoRedoManager {
       this.branchInitialFiles = getCurrentFileSnapshot()
     }
 
+    const userActionRecordCount = context.getUserActionRecordCount()
     try {
       command.execute()
     } catch (error) {
@@ -95,6 +99,7 @@ class UndoRedoManager {
       }
       throw error
     }
+    command.mergeWithPrevious = context.hasMergedUserActionSince(userActionRecordCount)
     this.recordBranch(command)
   }
 
@@ -134,6 +139,7 @@ class UndoRedoManager {
     this.branchUndoStack = []
     this.branchRedoStack = []
     this.branchInitialFiles = null
+    context.resetUserActionRecords()
     this.notifyBranchHistoryChange()
   }
 
@@ -161,27 +167,35 @@ class UndoRedoManager {
     }
   }
 
-  private undoStack(undoStack: Command[], redoStack: Command[]) {
-    const command = undoStack.pop()
+  private undoStack(undoStack: Command[], redoStack: Command[], mergeUserActions = false) {
+    let command = undoStack.pop()
     if (!command) return
 
-    command.undo()
-    redoStack.push(command)
+    do {
+      command.undo()
+      redoStack.push(command)
+      command = mergeUserActions && command.mergeWithPrevious ? undoStack.pop() : undefined
+    } while (command)
   }
 
-  private redoStack(undoStack: Command[], redoStack: Command[]) {
-    const command = redoStack.pop()
+  private redoStack(undoStack: Command[], redoStack: Command[], mergeUserActions = false) {
+    let command = redoStack.pop()
     if (!command) return
 
-    command.execute()
-    undoStack.push(command)
+    do {
+      command.execute()
+      undoStack.push(command)
+      command = mergeUserActions && !!redoStack[redoStack.length - 1]?.mergeWithPrevious
+        ? redoStack.pop()
+        : undefined
+    } while (command)
   }
 
   /** 撤销 */
   undo() {
     if (this.branchUndoStack.length) {
       console.log('undo branch')
-      this.undoStack(this.branchUndoStack, this.branchRedoStack)
+      this.undoStack(this.branchUndoStack, this.branchRedoStack, true)
       this.notifyBranchHistoryChange()
       return
     }
@@ -195,7 +209,7 @@ class UndoRedoManager {
   redo() {
     if (this.branchRedoStack.length) {
       console.log('redo branch')
-      this.redoStack(this.branchUndoStack, this.branchRedoStack)
+      this.redoStack(this.branchUndoStack, this.branchRedoStack, true)
       this.notifyBranchHistoryChange()
       return
     }

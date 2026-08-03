@@ -232,9 +232,10 @@ const moveDOMNode = (fromEle: Element, toEle: Element, type: 'before' | 'after')
   parent.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
 }
 
-const buildMoveDescription = (fromLabel: string, toLabel: string, type: 'before' | 'after') => (
-  `将 ${fromLabel} 移到 ${toLabel}${type === 'before' ? '前' : '后'}`
-)
+const buildMoveDescription = (fromLabel: string, toLabel: string, type: 'before' | 'after') => {
+  return `移动 ${fromLabel} 的位置`
+  // return `将 ${fromLabel} 移到 ${toLabel}${type === 'before' ? '前' : '后'}`
+}
 
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
