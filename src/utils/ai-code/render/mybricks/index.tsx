@@ -908,6 +908,23 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
+  const ENV_PANEL_FILENAME = 'config/env.panel.tsx'
+
+  const ConfigEnvPanel = () => {
+    const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
+
+    useEffect(() => {
+      const fileSystem = mixContext.fileSystem
+      return fileSystem?.events.on('fileChange', ({ filename, type }) => {
+        if (filename === ENV_PANEL_FILENAME && (type === 'create' || type === 'delete')) {
+          forceUpdate()
+        }
+      })
+    }, [])
+
+    const EnvPanel = mixContext.fileSystem?.filesMap?.[ENV_PANEL_FILENAME]?.module?.default
+    return EnvPanel ? <EnvPanel /> : null
+  }
 
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
@@ -956,6 +973,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
         return (
           <AppContext.Provider value={app}>
+            <ConfigEnvPanel />
             {app.state === "collect_routes" && (
               <ObservedComponent {...props} _env={_env}/>
             )}
