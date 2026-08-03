@@ -1659,8 +1659,6 @@ export function genStyleValue(props) {
       }
 
       const cssStr = stringifyLess(cssObj);
-      console.log('cssStr', cssStr)
-      console.log('lessPath', lessPath)
       updateStyleFileInBranch({
         path: lessPath,
         current: cssStr,
@@ -2238,7 +2236,6 @@ export function scanIconsFromDOM(): Array<{ name: string; svg: string }> {
 export function genSvgReplacer() {
   return {
     set(params: any) {
-      console.log("设置：svg")
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.svg,image/svg+xml';
@@ -2405,7 +2402,6 @@ export function applyIconWithSvg(params: any, rawSvg: string): void {
 export function genIconReplacer() {
   return {
     set(params: any) {
-      console.log("设置：icon")
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.svg,image/svg+xml';
