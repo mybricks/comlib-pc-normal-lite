@@ -1,0 +1,304 @@
+.panel {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--mybricks-border-color-main);
+  border-radius: 8px;
+  background: var(--mybricks-bg-color-main);
+  box-shadow: var(--mybricks-shadow-main);
+  color: var(--mybricks-text-color-main);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.panel *,
+.panel *::before,
+.panel *::after {
+  box-sizing: border-box;
+}
+
+.variablesHeader,
+.variableRow {
+  display: flex;
+  align-items: center;
+}
+
+.header {
+  margin-bottom: 12px;
+}
+
+.title,
+.variablesHeader h4 {
+  margin: 0;
+  color: var(--mybricks-text-color-main);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.description {
+  margin: 3px 0 0;
+  color: var(--mybricks-text-color-sub);
+  font-size: 12px;
+}
+
+.styleSelector {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--mybricks-border-color-secondary);
+}
+
+.emptyStyles,
+.emptyVariables {
+  margin: 0;
+  color: var(--mybricks-text-color-disabled);
+}
+
+.content {
+  padding-top: 14px;
+}
+
+.field,
+.variableField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--mybricks-text-color-sub);
+  font-size: 12px;
+}
+
+.themeSelect {
+  width: 100%;
+}
+
+.themeSelect:global(.ant-select) :global(.ant-select-selector),
+.variableField > :global(.ant-input) {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--mybricks-border-color-main) !important;
+  border-radius: 4px;
+  outline: none;
+  color: var(--mybricks-text-color-main) !important;
+  background: var(--mybricks-bg-color-secondary) !important;
+  font: inherit;
+}
+
+.themeSelect :global(.ant-select-selection-item),
+.themeSelect :global(.ant-select-arrow),
+.numberEditor :global(.ant-input-number-input),
+.colorEditor :global(.ant-color-picker-trigger-text) {
+  color: var(--mybricks-text-color-main) !important;
+}
+
+.themeSelect :global(.ant-select-arrow) {
+  color: var(--mybricks-text-color-sub) !important;
+}
+
+.numberEditor:global(.ant-input-number),
+.colorEditor:global(.ant-color-picker-trigger) {
+  border-color: var(--mybricks-border-color-main) !important;
+  background: var(--mybricks-bg-color-secondary) !important;
+}
+
+.numberEditor :global(.ant-input-number-input) {
+  background: transparent;
+}
+
+.numberEditor {
+  width: 100%;
+}
+
+.colorEditor {
+  width: 100%;
+  justify-content: start;
+}
+
+.themeSelect:global(.ant-select-focused) :global(.ant-select-selector),
+.variableField > :global(.ant-input):focus,
+.numberEditor:global(.ant-input-number-focused),
+.colorEditor:global(.ant-color-picker-trigger-active) {
+  border-color: var(--mybricks-color-primary) !important;
+  box-shadow: var(--env-config-focus-shadow) !important;
+}
+
+.themeSelect:global(.ant-select-disabled),
+.variableField > :global(.ant-input):disabled,
+.numberEditor:global(.ant-input-number-disabled),
+.colorEditor:global(.ant-color-picker-trigger-disabled) {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.themeSelectPopup {
+  padding: 4px;
+  border: 1px solid var(--mybricks-border-color-main) !important;
+  border-radius: 6px;
+  background: var(--mybricks-bg-color-main) !important;
+  box-shadow: var(--mybricks-shadow-main) !important;
+
+  :global(.ant-select-item-group) {
+    color: var(--mybricks-text-color-sub) !important;
+  }
+
+  :global(.ant-select-item) {
+    border-radius: 4px;
+    color: var(--mybricks-text-color-main) !important;
+  }
+
+  :global(.ant-select-item-option-active) {
+    background: var(--mybricks-bg-color-hover) !important;
+  }
+
+  :global(.ant-select-item-option-selected) {
+    background: color-mix(in srgb, var(--mybricks-color-primary, #1677ff) 16%, var(--mybricks-bg-color-main)) !important;
+    color: var(--mybricks-color-primary, #1677ff) !important;
+    font-weight: 600;
+  }
+
+  :global(.ant-select-item-option-disabled) {
+    color: var(--mybricks-text-color-disabled) !important;
+  }
+}
+
+.colorEditorTheme {
+  --antd-arrow-background-color: var(--mybricks-bg-color-main);
+
+  :global(.ant-popover-inner) {
+    border: 1px solid var(--mybricks-border-color-main) !important;
+  }
+
+  :global(.ant-popover-inner),
+  :global(.ant-color-picker-panel) {
+    background: var(--mybricks-bg-color-main) !important;
+    color: var(--mybricks-text-color-main) !important;
+  }
+
+  :global(.ant-popover-arrow) {
+    --antd-arrow-background-color: var(--mybricks-bg-color-main);
+  }
+
+  :global(.ant-color-picker-presets-title),
+  :global(.ant-color-picker-input-container) {
+    color: var(--mybricks-text-color-sub) !important;
+  }
+
+  :global(.ant-color-picker-format-select) {
+    color: var(--mybricks-text-color-main) !important;
+
+    :global(.ant-select-selector) {
+      color: inherit !important;
+      background: transparent !important;
+    }
+
+    :global(.ant-select-selection-item) {
+      color: inherit !important;
+    }
+
+    :global(.ant-select-arrow) {
+      color: var(--mybricks-text-color-sub) !important;
+    }
+
+    :global(.ant-select-dropdown) {
+      padding: 4px;
+      border: 1px solid var(--mybricks-border-color-main) !important;
+      border-radius: 6px;
+      background: var(--mybricks-bg-color-main) !important;
+      box-shadow: var(--mybricks-shadow-main) !important;
+    }
+
+    :global(.ant-select-item) {
+      border-radius: 4px;
+      color: var(--mybricks-text-color-main) !important;
+    }
+
+    :global(.ant-select-item-option-active) {
+      background: var(--mybricks-bg-color-hover) !important;
+    }
+
+    :global(.ant-select-item-option-selected) {
+      background: color-mix(in srgb, var(--mybricks-color-primary, #1677ff) 16%, var(--mybricks-bg-color-main)) !important;
+      color: var(--mybricks-color-primary, #1677ff) !important;
+      font-weight: 600;
+    }
+  }
+
+  :global(.ant-color-picker-hex-input.ant-input-affix-wrapper),
+  :global(.ant-color-picker-steppers.ant-input-number) {
+    border-color: var(--mybricks-border-color-main) !important;
+    color: var(--mybricks-text-color-main) !important;
+    background: var(--mybricks-bg-color-secondary) !important;
+  }
+
+  :global(.ant-color-picker-hex-input.ant-input-affix-wrapper-focused),
+  :global(.ant-color-picker-steppers.ant-input-number-focused) {
+    border-color: var(--mybricks-color-primary, #1677ff) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mybricks-color-primary, #1677ff) 20%, transparent) !important;
+  }
+
+  :global(.ant-color-picker-hex-input .ant-input-prefix) {
+    color: var(--mybricks-text-color-sub) !important;
+  }
+
+  :global(.ant-color-picker-steppers .ant-input-number-handler-wrap) {
+    border-inline-start-color: var(--mybricks-border-color-main) !important;
+    background: var(--mybricks-bg-color-secondary) !important;
+  }
+
+  :global(.ant-color-picker-steppers .ant-input-number-handler) {
+    color: var(--mybricks-text-color-sub) !important;
+  }
+
+  :global(.ant-color-picker-steppers .ant-input-number-handler:hover) {
+    color: var(--mybricks-color-primary, #1677ff) !important;
+  }
+
+  :global(.ant-color-picker-hex-input.ant-input-affix-wrapper-disabled),
+  :global(.ant-color-picker-steppers.ant-input-number-disabled) {
+    color: var(--mybricks-text-color-disabled) !important;
+    background: var(--mybricks-bg-color-hover) !important;
+  }
+
+  :global(.ant-color-picker-hex-input .ant-input),
+  :global(.ant-color-picker-steppers .ant-input-number-input) {
+    color: var(--mybricks-text-color-main) !important;
+    background: transparent !important;
+  }
+
+  :global(.ant-input) {
+    border-color: var(--mybricks-border-color-main) !important;
+    color: var(--mybricks-text-color-main) !important;
+    background: var(--mybricks-bg-color-secondary) !important;
+  }
+}
+
+.variableList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.variableRow {
+  gap: 8px;
+}
+
+.variableField:first-of-type {
+  flex: 1 1 42%;
+}
+
+.variableField:nth-of-type(2) {
+  flex: 1 1 58%;
+}
+
+@media (max-width: 560px) {
+  .variableRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .variableField:first-of-type,
+  .variableField:nth-of-type(2) {
+    flex: 1 1 auto;
+  }
+}

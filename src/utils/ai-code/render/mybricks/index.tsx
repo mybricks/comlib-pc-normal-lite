@@ -19,6 +19,7 @@ import {
   type LoggerBindings,
 } from '../logger';
 import prototype from './prototype';
+import EnvConfigPanel from './env-config-panel';
 
 const useBreakpoints = (path) => {
   const [breakpoint, setBreakpoint] = useState<any>(null)
@@ -958,24 +959,26 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
-  const ENV_PANEL_FILENAME = 'config/env.panel.tsx'
 
-  const ConfigEnvPanel = () => {
+  const EnvConfigPanelContainer = () => {
     const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
 
     useEffect(() => {
       const fileSystem = mixContext.fileSystem
       return fileSystem?.events.on('fileChange', ({ filename, type }) => {
-        if (filename === ENV_PANEL_FILENAME && (type === 'create' || type === 'delete')) {
+        if (filename === ENV_CONFIG_FILENAME && ['create', 'update', 'delete'].includes(type)) {
           forceUpdate()
         }
       })
     }, [])
 
-    const EnvPanel = mixContext.fileSystem?.filesMap?.[ENV_PANEL_FILENAME]?.module?.default
-    return EnvPanel ? (
+    const envFile = mixContext.fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file
+    return envFile ? (
       <div data-zone-kind="config" style={{ width: 480 }}>
-        <EnvPanel />
+        <EnvConfigPanel
+          env={envFile.source}
+          onSave={(source) => mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })}
+        />
       </div>
     ) : null
   }
@@ -1027,7 +1030,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
         return (
           <AppContext.Provider value={app}>
-            <ConfigEnvPanel />
+            <EnvConfigPanelContainer />
             {app.state === "collect_routes" && (
               <ObservedComponent {...props} _env={_env}/>
             )}
