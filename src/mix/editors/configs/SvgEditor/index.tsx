@@ -97,6 +97,7 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
         <SizeEditor
           size={svgSize}
           onCommit={(size) => patchSvgSizeInTsx(syntheticParams, size)}
+          svg={currentSvgHtml}
         />
       )}
       <div className={css.btnRow}>
