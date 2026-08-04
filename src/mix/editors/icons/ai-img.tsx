@@ -11,3 +11,10 @@ export const aiImgIcon = (
     </svg>
   </div>
 );
+
+
+export const DownloadIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" width="16" height="16" {...props}>
+    <path d="M544.256 605.184l244.224-244.224a31.744 31.744 0 0 1 45.056 45.056l-295.424 295.424a36.864 36.864 0 0 1-51.2 0L190.464 406.528a31.744 31.744 0 1 1 45.056-45.056l244.224 244.224V111.104a32.256 32.256 0 1 1 64 0zM153.6 902.656a32.256 32.256 0 0 1 0-64h716.8a32.256 32.256 0 0 1 0 64z" fill="#5A5A68" p-id="2954"></path>
+  </svg>
+);
