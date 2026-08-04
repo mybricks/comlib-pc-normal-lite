@@ -40,6 +40,20 @@ export interface ComDebugState {
   logIdCounter: number;
 }
 
+type UserAction = {
+  id: string;
+  type: string;
+  title: string;
+  refElement: Element;
+}
+
+type UserActionRecord = {
+  id: string;
+  type: string;
+  refElement: Element;
+  added: boolean;
+}
+
 class Context {
   /** 组件 */
   component: {
@@ -57,6 +71,11 @@ class Context {
 
       promiseComplete: (...params: any) => void
       promiseCancel: (...params: any) => void
+
+      // 推送用户事件
+      addUserAction: (action: UserAction) => void
+      // 删除用户事件
+      removeUserAction: (id) => void
     }
     /** 事件 */
     events: Events<{
@@ -79,6 +98,68 @@ class Context {
     }>;
   } | null = null
 
+  /** 当前可视化编辑会话内的用户操作，用于合并连续同一 DOM、同一类型的记录。 */
+  private userActionRecords: UserActionRecord[] = []
+
+  private createComponentActions(actions: NonNullable<Context['component']>['actions']) {
+    const addUserAction = actions.addUserAction
+    const removeUserAction = actions.removeUserAction
+
+    return {
+      ...actions,
+      addUserAction: (action: UserAction) => {
+        const lastRecord = this.userActionRecords[this.userActionRecords.length - 1]
+        const added = !lastRecord || lastRecord.refElement !== action.refElement || lastRecord.type !== action.type
+
+        this.userActionRecords.push({
+          id: action.id,
+          type: action.type,
+          refElement: action.refElement,
+          added,
+        })
+
+        if (added) {
+          addUserAction.call(actions, action)
+        }
+      },
+      removeUserAction: (id: string) => {
+        let index = -1
+        for (let recordIndex = this.userActionRecords.length - 1; recordIndex >= 0; recordIndex -= 1) {
+          if (this.userActionRecords[recordIndex].id === id) {
+            index = recordIndex
+            break
+          }
+        }
+        if (index === -1) {
+          removeUserAction.call(actions, id)
+          return
+        }
+
+        const [record] = this.userActionRecords.splice(index, 1)
+        if (record.added) {
+          removeUserAction.call(actions, id)
+        }
+      },
+    }
+  }
+
+  /** 在可视化编辑会话结束后清理相邻操作的去重状态。 */
+  resetUserActionRecords() {
+    this.userActionRecords = []
+  }
+
+  /** 判断一次命令执行期间是否产生了被合并的用户操作。 */
+  hasMergedUserActionSince(recordCount: number) {
+    return this.userActionRecords
+      .slice(recordCount)
+      .some((record) => !record.added)
+  }
+
+  /** 获取当前用户操作记录数，供撤销栈标记本次命令是否需要合并。 */
+  getUserActionRecordCount() {
+    return this.userActionRecords.length
+  }
+
   /** 全局事件 */
   events = new Events<{ 'ready': boolean }>();
 
@@ -94,7 +175,7 @@ class Context {
         const events = new Events<Context['component']['events']>()
         this.component = {
           params,
-          actions,
+          actions: this.createComponentActions(actions),
           events
         }
         events.on('debugTarget', (debugTarget: any) => {
@@ -105,7 +186,7 @@ class Context {
         }, false);
       } else {
         this.component.params = params
-        this.component.actions = actions
+        this.component.actions = this.createComponentActions(actions)
       }
     }
   }
@@ -386,10 +467,17 @@ class Context {
   /** 版本 */
   version!: Version
 
-  /**
-   * 手动编辑保存后,添加 manual 类型版本记录
-   */
+  /** 手动编辑保存后，添加 manual 类型版本记录。 */
   async saveManualVersion(updateFiles: string[]): Promise<void> {
+    this.saveVisualEditVersion(updateFiles, 'manual')
+  }
+
+  /** 可视化编辑提交后保存版本，可标记为手动或 AI 修改。 */
+  saveVisualEditVersion(
+    updateFiles: string[],
+    type: 'manual' | 'ai',
+    turnId = '',
+  ): VersionRecord | undefined {
     const history = this.history
     if (!history) return;
 
@@ -407,11 +495,11 @@ class Context {
     version.total = total + 1
 
     // 新增版本记录
-    const record = {
+    const record: VersionRecord = {
       id: randomUUID(),
-      turnId: '',
+      turnId,
       label: `V${total}`,
-      type: 'manual' as const,
+      type,
       createdAt: Date.now(),
     };
 
@@ -427,10 +515,12 @@ class Context {
       })
     })
 
-    this.notifyVersionsChange({
+    const versionRecord = {
       ...record,
       summary
-    });
+    }
+    this.notifyVersionsChange(versionRecord);
+    return versionRecord
   }
 
   /** 

@@ -4,6 +4,9 @@ import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
+import { randomUUID } from '../../../utils/uuid'
+import { buildElementStyleUpdateChipData, getElementLabel } from '../../setSegment/elementChip'
+import { applyVisualStyleOverlay, removeVisualStyleOverlay } from '../../visualStyleOverlay'
 import {
   appendToInlineStyleAttr,
   appendToInlineStyleAttrByTagRange,
@@ -14,6 +17,11 @@ import {
 import { resolveLessFilePath } from './resolveLessFilePath'
 
 const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
+
+const getStyleActionTitle = (ele: HTMLElement) => {
+  const label = getElementLabel(ele, '节点1')
+  return `调整 ${label} 样式`
+}
 
 // gap 相关属性：由三方组件 size/gap prop 内部控制，无法通过 CSS 修改，需交 AI 处理
 const GAP_KEYS = new Set(['gap', 'columnGap', 'rowGap'])
@@ -168,7 +176,8 @@ type SelectorMatchStats = {
   /** 命中 DOM 去重后的源码 JSX 位置数量；map 渲染出来的多个 DOM 通常只有 1 个源码位置 */
   sourceLocationCount?: number;
 }
-type LessStyleMap = Map<string, Array<{ key: string; value: number }>>
+type StyleValue = string | number
+type LessStyleMap = Map<string, Array<{ key: string; value: StyleValue }>>
 type FileUpdate = {
   fileName: string;
   previousCode: string;
@@ -262,7 +271,12 @@ const getJsxFileInfo = (targetEle: HTMLElement) => {
   }
 }
 
-const stringifyStyleValue = (value: string | number) => `${value}px`
+const stringifyStyleValue = (value: StyleValue) => typeof value === 'number' ? `${value}px` : value
+
+const isFlexLayout = (targetEle: HTMLElement) => {
+  const display = window.getComputedStyle(targetEle).display
+  return display === 'flex' || display === 'inline-flex'
+}
 
 const parseNumericStyleValue = (value?: string | null): number | null => {
   if (!value) return null
@@ -294,6 +308,40 @@ const getSelectorMatchedElements = (selector: string, shadowRoot: ShadowRoot): H
   } catch {
     return null
   }
+}
+
+/** Less 样式通过可重放的 CSS 覆盖层维持画布效果，不依赖 HTMLElement 引用。 */
+const buildLessStyleOverlayCss = (
+  routes: Record<string, StyleKeyRoute>,
+  style: Record<string, number>,
+): string => {
+  const selectorStyleMap = new Map<string, Record<string, number>>()
+
+  Object.entries(routes).forEach(([key, route]) => {
+    if (route.needsAI || !route.selector) return
+    if (route.source !== 'less' && !(route.source === 'jsx-inline' && route.syncInline)) return
+
+    const value = style[key]
+    if (typeof value !== 'number') return
+    const cssValue = route.source === 'jsx-inline'
+      ? (route.lessInitialValue ?? 0) + value - (route.initialValue ?? 0)
+      : value
+    if (!selectorStyleMap.has(route.selector)) selectorStyleMap.set(route.selector, {})
+    selectorStyleMap.get(route.selector)![key] = cssValue
+  })
+
+  return Array.from(selectorStyleMap.entries())
+    .map(([selector, properties]) => {
+      const declarations = Object.entries(properties)
+        .map(([key, value]) => `${convertCamelToHyphen(key)}: ${value}px;`)
+        .join(' ')
+      return `${selector} { ${declarations} }`
+    })
+    .join('\n')
+}
+
+const buildFlexDisplayOverlayCss = (shouldAddFlexDisplay: boolean, selector: string) => {
+  return shouldAddFlexDisplay && selector ? `${selector} { display: flex; }` : ''
 }
 
 const getSourceLocationKey = (targetEle: HTMLElement): string | null => {
@@ -426,7 +474,7 @@ const applyStyleInfoOffset = (
   return nextInfo
 }
 
-const pushLessStyle = (lessStyle: LessStyleMap, selector: string, key: string, value: number) => {
+const pushLessStyle = (lessStyle: LessStyleMap, selector: string, key: string, value: StyleValue) => {
   const lessValue = { key, value }
   if (!lessStyle.has(selector)) {
     lessStyle.set(selector, [lessValue])
@@ -484,7 +532,7 @@ const patchLessStyles = (lessStyle: LessStyleMap): FileUpdate[] => {
     }
 
     value.forEach(({ key: propKey, value: propVal }) => {
-      target[targetKey][propKey] = `${propVal}px`
+      target[targetKey][propKey] = stringifyStyleValue(propVal)
     })
 
     // 写完嵌套路径后，清理平铺规则中可能覆盖上述属性的简写冲突
@@ -506,7 +554,7 @@ const patchLessStyles = (lessStyle: LessStyleMap): FileUpdate[] => {
  */
 const patchSingleElementInlineStyle = (
   targetEle: HTMLElement,
-  nextStyle: Record<string, number>,
+  nextStyle: Record<string, StyleValue>,
   initialInlineCssText = '',
 ): { fileName: string; previousCode: string; newCode: string; nextStyleInfo: Record<string, StyleKeyInfo> | null } | null => {
   const jsxInfo = getJsxFileInfo(targetEle)
@@ -607,6 +655,8 @@ export default function createSetStyleHandler(
    * - needsAI: 样式由三方组件 prop 控制（非 CSS/JSX style），需交由 AI 修改源码
    */
   let styleKeyRoutes: Record<string, StyleKeyRoute> = {}
+  let shouldAddFlexDisplay = false
+  let flexDisplaySelector = ''
 
   return function handler(ctx: any, params: any) {
     const { state, multiple } = params
@@ -632,6 +682,7 @@ export default function createSetStyleHandler(
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
+          shouldAddFlexDisplay = hasGapStyle(style) && !isFlexLayout(ele)
           // initialInlineCssText = ele.style?.cssText ?? ''
           // initialInlineStyleValues = {}
           Object.keys(style as Record<string, number>).forEach((key) => {
@@ -641,6 +692,13 @@ export default function createSetStyleHandler(
               initialValue,
             }
           })
+          if (shouldAddFlexDisplay) {
+            const initialValue = ele.style.getPropertyValue('display')
+            initialInlineStyleValues.display = {
+              hadInitialValue: initialValue !== '',
+              initialValue,
+            }
+          }
           const componentID = context.component!.params.id
           // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
           const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
@@ -777,6 +835,9 @@ export default function createSetStyleHandler(
               }
             }
           })
+          flexDisplaySelector = Object.entries(styleKeyRoutes)
+            .find(([key, route]) => GAP_KEYS.has(key) && !route.needsAI && route.selector)?.[1].selector
+            ?? winningRule.selectorText
 
         }
 
@@ -797,6 +858,7 @@ export default function createSetStyleHandler(
           inlineStyleEntries.forEach(([key, val]) => {
             ele.style.setProperty(convertCamelToHyphen(key), `${val}px`)
           })
+          if (shouldAddFlexDisplay) ele.style.setProperty('display', 'flex')
 
           const cssText = Array.from(lessOnlyStyleMap.entries())
             .map(([selector, props]) => {
@@ -816,7 +878,7 @@ export default function createSetStyleHandler(
         }
 
         // 将各 key 按目标选择器分组，拼成若干段 CSS 规则（needsAI 的 key 跳过预览）
-        const selectorStyleMap = new Map<string, Record<string, { value: number; isJsx: boolean }>>()
+        const selectorStyleMap = new Map<string, Record<string, { value: StyleValue; isJsx: boolean }>>()
         Object.entries(style as Record<string, number>).forEach(([key, val]) => {
           const route = styleKeyRoutes[key]
           if (!route || route.needsAI) return
@@ -842,12 +904,16 @@ export default function createSetStyleHandler(
           if (!selectorStyleMap.has(selector)) selectorStyleMap.set(selector, {})
           selectorStyleMap.get(selector)![key] = { value: cssValue, isJsx }
         })
+        if (shouldAddFlexDisplay && flexDisplaySelector) {
+          if (!selectorStyleMap.has(flexDisplaySelector)) selectorStyleMap.set(flexDisplaySelector, {})
+          selectorStyleMap.get(flexDisplaySelector)!.display = { value: 'flex', isJsx: false }
+        }
         const cssText = Array.from(selectorStyleMap.entries())
           .map(([selector, props]) => {
             const declarations = Object.entries(props)
               .map(([prop, { value, isJsx }]) => {
                 const cssProp = convertCamelToHyphen(prop)
-                return `${cssProp}: ${value}px${isJsx ? ' !important' : ''};`
+                return `${cssProp}: ${stringifyStyleValue(value)}${isJsx ? ' !important' : ''};`
               })
               .join(' ')
             return `${selector} { ${declarations} }`
@@ -863,19 +929,23 @@ export default function createSetStyleHandler(
             : subtractParentGapFromStyle(rawFinishStyle, ele),
           multiple,
         )
+        const aiKeys = Object.entries(styleKeyRoutes)
+          .filter(([, route]) => route.needsAI)
+          .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
 
         if (!multiple) {
           const lessStyle: LessStyleMap = new Map()
-          const inlineStyle: Record<string, number> = {}
+          const inlineStyle: Record<string, StyleValue> = {}
 
           Object.entries(style as Record<string, number>).forEach(([key, value]) => {
             const route = styleKeyRoutes[key]
             if (isSingleDomLessRoute(route)) {
               pushLessStyle(lessStyle, route!.selector, key, value)
-            } else {
+            } else if (!route?.needsAI) {
               inlineStyle[key] = value
             }
           })
+          if (shouldAddFlexDisplay) inlineStyle.display = 'flex'
 
           // Snapshot the current data-style-info BEFORE patching so undo can restore it.
           const prevStyleInfoStr = ele.dataset.styleInfo
@@ -891,6 +961,13 @@ export default function createSetStyleHandler(
           const inlineStyleSnapshots = inlineUpdate
             ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
             : []
+          const lessOverlayCssText = [
+            lessUpdates.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : '',
+            buildFlexDisplayOverlayCss(shouldAddFlexDisplay && !!lessUpdates.length, flexDisplaySelector),
+          ].filter(Boolean).join('\n')
+          const styleOverlay = lessOverlayCssText
+            ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
+            : undefined
 
           // Pre-serialise the updated offset map so execute/undo closures don't hold a reference
           // to a mutable object.
@@ -899,32 +976,79 @@ export default function createSetStyleHandler(
             : null
 
           if (updateFIles.length) {
-            const filenames = updateFIles.map(f => f.fileName);
-            undoRedoManager.execute({
+            const actionId = randomUUID()
+            const title = getStyleActionTitle(ele)
+            undoRedoManager.executeBranch({
+              styleOverlay,
               execute() {
-                applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
-                // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
-                // so that subsequent inline-style drags can locate values correctly.
-                if (nextStyleInfoStr) ele.dataset.styleInfo = nextStyleInfoStr
                 updateFIles.forEach(({ fileName, newCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
-                context.saveManualVersion(filenames);
+                applyVisualStyleOverlay(styleOverlay)
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+                // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
+                // so that subsequent inline-style drags can locate values correctly.
+                if (nextStyleInfoStr) ele.dataset.styleInfo = nextStyleInfoStr
+                context.component!.actions.addUserAction({
+                  id: actionId,
+                  type: 'update-style',
+                  title,
+                  refElement: ele,
+                })
               },
               undo() {
-                applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
-                // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
-                if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
                 updateFIles.forEach(({ fileName, previousCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
-                context.saveManualVersion(filenames);
+                removeVisualStyleOverlay(styleOverlay)
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+                // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
+                if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
+                context.component!.actions.removeUserAction(actionId)
               },
             });
           }
           ctx.css.remove(SETSTYLE_CSS_ID)
+
+          if (aiKeys.length) {
+            const label = getElementLabel(ele, '节点1')
+            const title = getStyleActionTitle(ele)
+            const actionId = randomUUID()
+            const chip = {
+              id: randomUUID(),
+              type: 'element-style-update',
+              label: `调整 ${label} 样式`,
+              data: buildElementStyleUpdateChipData(ele, aiKeys, label),
+            }
+            const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
+              ele,
+              key,
+              stringifyStyleValue(value),
+              initialInlineStyleValues[key],
+            ))
+
+            undoRedoManager.executeBranch({
+              aiRequest: {
+                message: `[[chip:${chip.id}]]`,
+                chips: [chip],
+              },
+              execute() {
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+                context.component!.actions.addUserAction({
+                  id: actionId,
+                  type: 'update-style',
+                  title,
+                  refElement: ele,
+                })
+              },
+              undo() {
+                applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+                context.component!.actions.removeUserAction(actionId)
+              },
+            })
+          }
           return
         }
 
@@ -998,6 +1122,9 @@ export default function createSetStyleHandler(
             pushLessStyle(lessStyle, selector, key, value)
           }
         })
+        if (shouldAddFlexDisplay && flexDisplaySelector) {
+          pushLessStyle(lessStyle, flexDisplaySelector, 'display', 'flex')
+        }
 
         const jsxs: {
           fileName: string;
@@ -1066,71 +1193,84 @@ export default function createSetStyleHandler(
               }
               : undefined,
           ))
+        const lessOverlayCssText = [
+          lesss.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : '',
+          buildFlexDisplayOverlayCss(shouldAddFlexDisplay && !!lesss.length, flexDisplaySelector),
+        ].filter(Boolean).join('\n')
+        const styleOverlay = lessOverlayCssText
+          ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
+          : undefined
 
         const updateFIles = jsxs.concat(lesss)
 
         if (updateFIles.length) {
-          const filenames = updateFIles.map(f => f.fileName);
-          undoRedoManager.execute({
+          const actionId = randomUUID()
+          const title = getStyleActionTitle(ele)
+          undoRedoManager.executeBranch({
+            styleOverlay,
             execute() {
-              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
               updateFIles.forEach(({ fileName, newCode }) => {
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
-              context.saveManualVersion(filenames);
+              applyVisualStyleOverlay(styleOverlay)
+              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
+              context.component!.actions.addUserAction({
+                id: actionId,
+                type: 'update-style',
+                title,
+                refElement: ele,
+              })
             },
             undo() {
-              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
               updateFIles.forEach(({ fileName, previousCode }) => {
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
-              context.saveManualVersion(filenames);
+              removeVisualStyleOverlay(styleOverlay)
+              applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
+              context.component!.actions.removeUserAction(actionId)
             },
           });
         }
 
-        // 处理 needsAI 的 key：间距由三方组件 prop 控制，交给 AI 修改源码
-        const aiKeys = Object.entries(styleKeyRoutes)
-          .filter(([, route]) => route.needsAI)
-          .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
-
         if (aiKeys.length > 0) {
-          try {
-            const loc = JSON.parse(ele.dataset.loc ?? '{}')
-            const jsxFileName: string = loc?.files?.jsx
-            const lineStart: number = loc?.codeLine?.start
-            const lineEnd: number = loc?.codeLine?.end
-
-            let codeSnippet = ''
-            if (jsxFileName) {
-              const jsxFile = context.component!.params.data.files.find((f: any) => f.fileName === jsxFileName)
-              if (jsxFile) {
-                const lines = decodeURIComponent(jsxFile.source).split('\n')
-                codeSnippet = lines
-                  .slice(Math.max(0, lineStart - 3), Math.min(lines.length, lineEnd + 2))
-                  .join('\n')
-              }
-            }
-
-            const styleDesc = aiKeys
-              .map(({ key, value }) => `${convertCamelToHyphen(key)}: ${value}px`)
-              .join('，')
-
-            const message = [
-              `用户通过可视化拖拽调整了组件间距，目标样式为：${styleDesc}。`,
-              `但该间距由组件 prop 控制（非 CSS），无法直接写入 Less，需要修改 JSX 源码中的对应 prop。`,
-              jsxFileName ? `请修改文件 \`${jsxFileName}\` 第 ${lineStart}~${lineEnd} 行附近的代码，将控制间距的 prop 改为对应新值。` : '',
-              codeSnippet ? `\n相关代码片段：\n\`\`\`tsx\n${codeSnippet}\n\`\`\`` : '',
-            ].filter(Boolean).join('\n')
-
-            const plugins = (context as any).plugins as any
-            plugins?.showAIDialog?.()
-            plugins?.aiService?.request({ message, attachments: [] })
-          } catch (e) {
-            console.error('[createSetStyleHandler] AI request failed:', e)
+          const label = getElementLabel(ele, '节点1')
+          const title = getStyleActionTitle(ele)
+          const actionId = randomUUID()
+          const chip = {
+            id: randomUUID(),
+            type: 'element-style-update',
+            label: `调整 ${label} 样式`,
+            data: buildElementStyleUpdateChipData(ele, aiKeys, label),
           }
+          const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
+            ele,
+            key,
+            stringifyStyleValue(value),
+            initialInlineStyleValues[key],
+          ))
+
+          undoRedoManager.executeBranch({
+            aiRequest: {
+              message: `[[chip:${chip.id}]]`,
+              chips: [chip],
+            },
+            execute() {
+              // AI 修改尚未写回源码，仅更新画布预览；不要修改 data-style-info 等源码定位数据。
+              applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+              context.component!.actions.addUserAction({
+                id: actionId,
+                type: 'update-style',
+                title,
+                refElement: ele,
+              })
+            },
+            undo() {
+              applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+              context.component!.actions.removeUserAction(actionId)
+            },
+          })
         }
 
         ctx.css.remove(SETSTYLE_CSS_ID)

@@ -25,7 +25,8 @@ const VALID_NAMES = new Set([
   'useCardAction',
   'defineTool',
   'useExposeApi',
-  'useCanvasAction'
+  'useCanvasAction',
+  'updateConfigJson'
 ])
 
 // ── 校验器实现 ────────────────────────────────────────────────────────────────

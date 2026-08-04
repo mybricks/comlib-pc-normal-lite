@@ -201,6 +201,42 @@ const createDOMLocSnapshot = (root: Element | null) => {
   return snapshot
 }
 
+const swapDOMNodes = (fromEle: Element, toEle: Element) => {
+  const parent = fromEle.parentNode
+  if (!parent || parent !== toEle.parentNode) return
+
+  const fromNext = fromEle.nextSibling
+  const toNext = toEle.nextSibling
+
+  if (fromNext === toEle) {
+    parent.insertBefore(toEle, fromEle)
+    return
+  }
+  if (toNext === fromEle) {
+    parent.insertBefore(fromEle, toEle)
+    return
+  }
+
+  parent.insertBefore(fromEle, toNext)
+  parent.insertBefore(toEle, fromNext)
+}
+
+const restoreDOMNodePosition = (ele: Element, parent: Node | null, nextSibling: Node | null) => {
+  if (!parent) return
+  parent.insertBefore(ele, nextSibling?.parentNode === parent ? nextSibling : null)
+}
+
+const moveDOMNode = (fromEle: Element, toEle: Element, type: 'before' | 'after') => {
+  const parent = toEle.parentNode
+  if (!parent) return
+  parent.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
+}
+
+const buildMoveDescription = (fromLabel: string, toLabel: string, type: 'before' | 'after') => {
+  return `移动 ${fromLabel} 的位置`
+  // return `将 ${fromLabel} 移到 ${toLabel}${type === 'before' ? '前' : '后'}`
+}
+
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
   // console.log('[changeOrder]', options)
@@ -299,52 +335,82 @@ const changeOrder = (options) => {
         // 否则源码已回退但 DOM 仍保留交换后的 data-loc，再次操作仍会错位。
         const locSnapshot = createDOMLocSnapshot(locSnapshotRoot)
 
-        undoRedoManager.execute({
+        const fromParent = fromEle.parentNode
+        const fromNextSibling = fromEle.nextSibling
+        const toParent = toEle.parentNode
+        const toNextSibling = toEle.nextSibling
+        const fromLabel = getElementLabel(fromEle, '节点1')
+        const toLabel = getElementLabel(toEle, '节点2')
+        const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
+        const actionId = randomUUID()
+
+        undoRedoManager.executeBranch({
           execute() {
             context.updateFile({ fileName: fromFile, content: newSource, type: undefined, noUpdateFileSystem: true })
-            // noUpdateFileSystem 不触发完整重渲染，需要手动同步 DOM 中仍在使用的源码偏移。
+            // noUpdateFileSystem 不触发完整重渲染，必须同步节点顺序和源码定位。
+            swapDOMNodes(fromEle, toEle)
             shiftDOMLocAfterSourceSwap(locSnapshotRoot, fromFile, fromRange, toRange)
-            context.saveManualVersion([fromFile])
+            context.component!.actions.addUserAction({
+              id: actionId,
+              type: 'move',
+              title: moveDescription,
+              refElement: fromEle,
+            })
           },
           undo() {
             context.updateFile({ fileName: fromFile, content: source, type: undefined, noUpdateFileSystem: true })
+            restoreDOMNodePosition(fromEle, fromParent, fromNextSibling)
+            restoreDOMNodePosition(toEle, toParent, toNextSibling)
             restoreDOMLocSnapshot(locSnapshotRoot, locSnapshot)
-            context.saveManualVersion([fromFile])
+            context.component!.actions.removeUserAction(actionId)
           },
         })
         return {
-          type: 'success'
+          type: 'success',
+          actionId,
         }
       }
     }
   }
 
-  const componentId = context.component!.params.id
   const fromLabel = getElementLabel(fromEle, '节点1')
   const toLabel = getElementLabel(toEle, '节点2')
   const placement = type === 'before' ? 'before' : 'after'
 
+  const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
+
   const chip = {
     id: randomUUID(),
     type: 'element-move',
-    label: `将 ${fromLabel} 移到 ${toLabel} ${type === 'before' ? '前面' : '后面'}`,
+    label: moveDescription,
     data: buildElementMoveChipData(fromEle, toEle, placement, fromLabel, toLabel),
   }
+  const actionId = randomUUID()
+  const fromParent = fromEle.parentNode
+  const fromNextSibling = fromEle.nextSibling
 
-  window._sandbox_.helpers.appendToSender(componentId, {
-    message: `[[chip:${chip.id}]]`,
-    meta: {
+  undoRedoManager.executeBranch({
+    aiRequest: {
+      message: `[[chip:${chip.id}]]`,
       chips: [chip],
     },
-    animation: true
+    execute() {
+      // AI 修改尚未回写源码，不能更新 data-loc 等源码定位属性。
+      moveDOMNode(fromEle, toEle, placement)
+      context.component!.actions.addUserAction({
+        id: actionId,
+        type: 'move',
+        title: moveDescription,
+        refElement: fromEle,
+      })
+    },
+    undo() {
+      restoreDOMNodePosition(fromEle, fromParent, fromNextSibling)
+      context.component!.actions.removeUserAction(actionId)
+    },
   })
 
-  context.chipPromiseIds.add(chip.id)
-
-  return {
-    type: 'promise',
-    promiseId: chip.id
-  }
+  return { type: 'success' }
 }
 
 export default changeOrder
