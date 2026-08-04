@@ -176,7 +176,8 @@ type SelectorMatchStats = {
   /** 命中 DOM 去重后的源码 JSX 位置数量；map 渲染出来的多个 DOM 通常只有 1 个源码位置 */
   sourceLocationCount?: number;
 }
-type LessStyleMap = Map<string, Array<{ key: string; value: number }>>
+type StyleValue = string | number
+type LessStyleMap = Map<string, Array<{ key: string; value: StyleValue }>>
 type FileUpdate = {
   fileName: string;
   previousCode: string;
@@ -270,7 +271,12 @@ const getJsxFileInfo = (targetEle: HTMLElement) => {
   }
 }
 
-const stringifyStyleValue = (value: string | number) => `${value}px`
+const stringifyStyleValue = (value: StyleValue) => typeof value === 'number' ? `${value}px` : value
+
+const isFlexLayout = (targetEle: HTMLElement) => {
+  const display = window.getComputedStyle(targetEle).display
+  return display === 'flex' || display === 'inline-flex'
+}
 
 const parseNumericStyleValue = (value?: string | null): number | null => {
   if (!value) return null
@@ -332,6 +338,10 @@ const buildLessStyleOverlayCss = (
       return `${selector} { ${declarations} }`
     })
     .join('\n')
+}
+
+const buildFlexDisplayOverlayCss = (shouldAddFlexDisplay: boolean, selector: string) => {
+  return shouldAddFlexDisplay && selector ? `${selector} { display: flex; }` : ''
 }
 
 const getSourceLocationKey = (targetEle: HTMLElement): string | null => {
@@ -464,7 +474,7 @@ const applyStyleInfoOffset = (
   return nextInfo
 }
 
-const pushLessStyle = (lessStyle: LessStyleMap, selector: string, key: string, value: number) => {
+const pushLessStyle = (lessStyle: LessStyleMap, selector: string, key: string, value: StyleValue) => {
   const lessValue = { key, value }
   if (!lessStyle.has(selector)) {
     lessStyle.set(selector, [lessValue])
@@ -522,7 +532,7 @@ const patchLessStyles = (lessStyle: LessStyleMap): FileUpdate[] => {
     }
 
     value.forEach(({ key: propKey, value: propVal }) => {
-      target[targetKey][propKey] = `${propVal}px`
+      target[targetKey][propKey] = stringifyStyleValue(propVal)
     })
 
     // 写完嵌套路径后，清理平铺规则中可能覆盖上述属性的简写冲突
@@ -544,7 +554,7 @@ const patchLessStyles = (lessStyle: LessStyleMap): FileUpdate[] => {
  */
 const patchSingleElementInlineStyle = (
   targetEle: HTMLElement,
-  nextStyle: Record<string, number>,
+  nextStyle: Record<string, StyleValue>,
   initialInlineCssText = '',
 ): { fileName: string; previousCode: string; newCode: string; nextStyleInfo: Record<string, StyleKeyInfo> | null } | null => {
   const jsxInfo = getJsxFileInfo(targetEle)
@@ -645,6 +655,8 @@ export default function createSetStyleHandler(
    * - needsAI: 样式由三方组件 prop 控制（非 CSS/JSX style），需交由 AI 修改源码
    */
   let styleKeyRoutes: Record<string, StyleKeyRoute> = {}
+  let shouldAddFlexDisplay = false
+  let flexDisplaySelector = ''
 
   return function handler(ctx: any, params: any) {
     const { state, multiple } = params
@@ -670,6 +682,7 @@ export default function createSetStyleHandler(
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
+          shouldAddFlexDisplay = hasGapStyle(style) && !isFlexLayout(ele)
           // initialInlineCssText = ele.style?.cssText ?? ''
           // initialInlineStyleValues = {}
           Object.keys(style as Record<string, number>).forEach((key) => {
@@ -679,6 +692,13 @@ export default function createSetStyleHandler(
               initialValue,
             }
           })
+          if (shouldAddFlexDisplay) {
+            const initialValue = ele.style.getPropertyValue('display')
+            initialInlineStyleValues.display = {
+              hadInitialValue: initialValue !== '',
+              initialValue,
+            }
+          }
           const componentID = context.component!.params.id
           // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
           const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
@@ -815,6 +835,9 @@ export default function createSetStyleHandler(
               }
             }
           })
+          flexDisplaySelector = Object.entries(styleKeyRoutes)
+            .find(([key, route]) => GAP_KEYS.has(key) && !route.needsAI && route.selector)?.[1].selector
+            ?? winningRule.selectorText
 
         }
 
@@ -835,6 +858,7 @@ export default function createSetStyleHandler(
           inlineStyleEntries.forEach(([key, val]) => {
             ele.style.setProperty(convertCamelToHyphen(key), `${val}px`)
           })
+          if (shouldAddFlexDisplay) ele.style.setProperty('display', 'flex')
 
           const cssText = Array.from(lessOnlyStyleMap.entries())
             .map(([selector, props]) => {
@@ -854,7 +878,7 @@ export default function createSetStyleHandler(
         }
 
         // 将各 key 按目标选择器分组，拼成若干段 CSS 规则（needsAI 的 key 跳过预览）
-        const selectorStyleMap = new Map<string, Record<string, { value: number; isJsx: boolean }>>()
+        const selectorStyleMap = new Map<string, Record<string, { value: StyleValue; isJsx: boolean }>>()
         Object.entries(style as Record<string, number>).forEach(([key, val]) => {
           const route = styleKeyRoutes[key]
           if (!route || route.needsAI) return
@@ -880,12 +904,16 @@ export default function createSetStyleHandler(
           if (!selectorStyleMap.has(selector)) selectorStyleMap.set(selector, {})
           selectorStyleMap.get(selector)![key] = { value: cssValue, isJsx }
         })
+        if (shouldAddFlexDisplay && flexDisplaySelector) {
+          if (!selectorStyleMap.has(flexDisplaySelector)) selectorStyleMap.set(flexDisplaySelector, {})
+          selectorStyleMap.get(flexDisplaySelector)!.display = { value: 'flex', isJsx: false }
+        }
         const cssText = Array.from(selectorStyleMap.entries())
           .map(([selector, props]) => {
             const declarations = Object.entries(props)
               .map(([prop, { value, isJsx }]) => {
                 const cssProp = convertCamelToHyphen(prop)
-                return `${cssProp}: ${value}px${isJsx ? ' !important' : ''};`
+                return `${cssProp}: ${stringifyStyleValue(value)}${isJsx ? ' !important' : ''};`
               })
               .join(' ')
             return `${selector} { ${declarations} }`
@@ -907,7 +935,7 @@ export default function createSetStyleHandler(
 
         if (!multiple) {
           const lessStyle: LessStyleMap = new Map()
-          const inlineStyle: Record<string, number> = {}
+          const inlineStyle: Record<string, StyleValue> = {}
 
           Object.entries(style as Record<string, number>).forEach(([key, value]) => {
             const route = styleKeyRoutes[key]
@@ -917,6 +945,7 @@ export default function createSetStyleHandler(
               inlineStyle[key] = value
             }
           })
+          if (shouldAddFlexDisplay) inlineStyle.display = 'flex'
 
           // Snapshot the current data-style-info BEFORE patching so undo can restore it.
           const prevStyleInfoStr = ele.dataset.styleInfo
@@ -932,7 +961,10 @@ export default function createSetStyleHandler(
           const inlineStyleSnapshots = inlineUpdate
             ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
             : []
-          const lessOverlayCssText = lessUpdates.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : ''
+          const lessOverlayCssText = [
+            lessUpdates.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : '',
+            buildFlexDisplayOverlayCss(shouldAddFlexDisplay && !!lessUpdates.length, flexDisplaySelector),
+          ].filter(Boolean).join('\n')
           const styleOverlay = lessOverlayCssText
             ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
             : undefined
@@ -1090,6 +1122,9 @@ export default function createSetStyleHandler(
             pushLessStyle(lessStyle, selector, key, value)
           }
         })
+        if (shouldAddFlexDisplay && flexDisplaySelector) {
+          pushLessStyle(lessStyle, flexDisplaySelector, 'display', 'flex')
+        }
 
         const jsxs: {
           fileName: string;
@@ -1158,7 +1193,10 @@ export default function createSetStyleHandler(
               }
               : undefined,
           ))
-        const lessOverlayCssText = lesss.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : ''
+        const lessOverlayCssText = [
+          lesss.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : '',
+          buildFlexDisplayOverlayCss(shouldAddFlexDisplay && !!lesss.length, flexDisplaySelector),
+        ].filter(Boolean).join('\n')
         const styleOverlay = lessOverlayCssText
           ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
           : undefined
