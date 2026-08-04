@@ -980,7 +980,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
     const envFile = mixContext.fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file
     return envFile ? (
-      <div data-zone-kind="config" style={{ width: 480 }}>
+      <div data-zone-kind="config" style={{ width: 480, maxHeight: '100vh', overflowY: 'auto' }}>
         <EnvConfigPanel
           env={envFile.source}
           onSave={(source) => mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })}

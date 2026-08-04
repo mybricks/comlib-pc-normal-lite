@@ -161,7 +161,7 @@ export default function EnvConfigPanel({
   const rootClassName = [css.panel, className].filter(Boolean).join(' ')
 
   return (
-    <section className={rootClassName} aria-label="环境主题配置">
+    <section className={rootClassName} aria-label="环境主题配置" data-zone-type='ai-fixed'>
       <header className={css.header}>
         <div>
           <h3 className={css.title}>主题配置</h3>
@@ -190,79 +190,66 @@ export default function EnvConfigPanel({
       </div>
 
       {selectedStyle && (
-        <div className={css.content}>
-          <div className={css.variablesHeader}>
-            <h4>CSS 变量</h4>
-          </div>
-
-          <div className={css.variableList}>
-            {selectedStyle.cssVariables.map((category, categoryIndex) => (
-              <section className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
+        <div className={css.variableList}>
+          {selectedStyle.cssVariables.map((category, categoryIndex) => (
+            <section className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
+              <div className={css.categoryHeader}>
                 <h5 className={css.categoryTitle}>{category.category}</h5>
-                {category.variables.map((variable, variableIndex) => (
-                  <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
-                    <label className={css.variableField}>
+              </div>
+              {category.variables.map((variable, variableIndex) => (
+                <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
+                  <div className={css.variableMeta}>
+                    <span className={css.variableTitle}>{variable.title || variable.name}</span>
+                    <code className={css.variableName}>{variable.name}</code>
+                  </div>
+                  <label className={css.variableField}>
+                    {isColorValue(variable.value) ? (
+                      <ColorPicker
+                        className={css.colorEditor}
+                        rootClassName={css.colorEditorTheme}
+                        value={variable.value}
+                        disabled={disabled}
+                        showText
+                        onChangeComplete={color => updateVariable(
+                          selectedStyle.id,
+                          categoryIndex,
+                          variableIndex,
+                          item => ({ ...item, value: color.toHexString() }),
+                        )}
+                      />
+                    ) : typeof variable.value === 'number' ? (
+                      <InputNumber
+                        className={css.numberEditor}
+                        value={variable.value}
+                        disabled={disabled}
+                        onChange={value => {
+                          if (typeof value !== 'number') return
+                          updateVariable(
+                            selectedStyle.id,
+                            categoryIndex,
+                            variableIndex,
+                            item => ({ ...item, value }),
+                          )
+                        }}
+                      />
+                    ) : (
                       <Input
-                        value={variable.title || ''}
-                        placeholder={variable.name}
+                        value={variable.value}
                         disabled={disabled}
                         onChange={event => updateVariable(
                           selectedStyle.id,
                           categoryIndex,
                           variableIndex,
-                          item => ({ ...item, title: event.target.value }),
+                          item => ({ ...item, value: event.target.value }),
                         )}
                       />
-                    </label>
-                    <label className={css.variableField}>
-                      {isColorValue(variable.value) ? (
-                        <ColorPicker
-                          className={css.colorEditor}
-                          rootClassName={css.colorEditorTheme}
-                          value={variable.value}
-                          disabled={disabled}
-                          showText
-                          onChangeComplete={color => updateVariable(
-                            selectedStyle.id,
-                            categoryIndex,
-                            variableIndex,
-                            item => ({ ...item, value: color.toHexString() }),
-                          )}
-                        />
-                      ) : typeof variable.value === 'number' ? (
-                        <InputNumber
-                          className={css.numberEditor}
-                          value={variable.value}
-                          disabled={disabled}
-                          onChange={value => {
-                            if (typeof value !== 'number') return
-                            updateVariable(
-                              selectedStyle.id,
-                              categoryIndex,
-                              variableIndex,
-                              item => ({ ...item, value }),
-                            )
-                          }}
-                        />
-                      ) : (
-                        <Input
-                          value={variable.value}
-                          disabled={disabled}
-                          onChange={event => updateVariable(
-                            selectedStyle.id,
-                            categoryIndex,
-                            variableIndex,
-                            item => ({ ...item, value: event.target.value }),
-                          )}
-                        />
-                      )}
-                    </label>
-                  </div>
-                ))}
-              </section>
-            ))}
-            {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
-          </div>
+                    )}
+                  </label>
+                </div>
+              ))}
+            </section>
+          ))}
+          {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
         </div>
       )}
     </section>
