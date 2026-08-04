@@ -9,10 +9,16 @@ export interface CssVariable {
   [key: string]: unknown
 }
 
+export interface CssVariableCategory {
+  category: string
+  variables: CssVariable[]
+  [key: string]: unknown
+}
+
 export interface EnvStyle {
   id: string
   name: string
-  cssVariables: CssVariable[]
+  cssVariables: CssVariableCategory[]
   [key: string]: unknown
 }
 
@@ -59,10 +65,15 @@ function isEnvConfig(value: unknown): value is EnvConfig {
       return typeof itemStyle.id === 'string' &&
         typeof itemStyle.name === 'string' &&
         Array.isArray(itemStyle.cssVariables) &&
-        itemStyle.cssVariables.every(variable =>
-          Boolean(variable) &&
-          typeof variable.name === 'string' &&
-          (typeof variable.value === 'string' || typeof variable.value === 'number'),
+        itemStyle.cssVariables.every(category =>
+          Boolean(category) &&
+          typeof category.category === 'string' &&
+          Array.isArray(category.variables) &&
+          category.variables.every(variable =>
+            Boolean(variable) &&
+            typeof variable.name === 'string' &&
+            (typeof variable.value === 'string' || typeof variable.value === 'number'),
+          ),
         )
     })
 }
@@ -126,6 +137,27 @@ export default function EnvConfigPanel({
     })
   }
 
+  const updateVariable = (
+    styleId: string,
+    categoryIndex: number,
+    variableIndex: number,
+    updater: (variable: CssVariable) => CssVariable,
+  ) => {
+    updateStyle(styleId, style => ({
+      ...style,
+      cssVariables: style.cssVariables.map((category, currentCategoryIndex) =>
+        currentCategoryIndex === categoryIndex
+          ? {
+              ...category,
+              variables: category.variables.map((variable, currentVariableIndex) =>
+                currentVariableIndex === variableIndex ? updater(variable) : variable,
+              ),
+            }
+          : category,
+      ),
+    }))
+  }
+
   const rootClassName = [css.panel, className].filter(Boolean).join(' ')
 
   return (
@@ -164,59 +196,70 @@ export default function EnvConfigPanel({
           </div>
 
           <div className={css.variableList}>
-            {selectedStyle.cssVariables.map((variable, index) => (
-              <div className={css.variableRow} key={`${variable.name}-${index}`}>
-                <label className={css.variableField}>
-                  <span>变量名称</span>
-                  <Input
-                    value={variable.title || ''}
-                    placeholder={variable.name}
-                    disabled={disabled}
-                    onChange={event => updateStyle(selectedStyle.id, style => ({
-                      ...style,
-                      cssVariables: style.cssVariables.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item),
-                    }))}
-                  />
-                </label>
-                <label className={css.variableField}>
-                  <span>变量值</span>
-                  {isColorValue(variable.value) ? (
-                    <ColorPicker
-                      className={css.colorEditor}
-                      rootClassName={css.colorEditorTheme}
-                      value={variable.value}
-                      disabled={disabled}
-                      showText
-                      onChangeComplete={color => updateStyle(selectedStyle.id, style => ({
-                        ...style,
-                        cssVariables: style.cssVariables.map((item, itemIndex) => itemIndex === index ? { ...item, value: color.toHexString() } : item),
-                      }))}
-                    />
-                  ) : typeof variable.value === 'number' ? (
-                    <InputNumber
-                      className={css.numberEditor}
-                      value={variable.value}
-                      disabled={disabled}
-                      onChange={value => {
-                        if (typeof value !== 'number') return
-                        updateStyle(selectedStyle.id, style => ({
-                          ...style,
-                          cssVariables: style.cssVariables.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item),
-                        }))
-                      }}
-                    />
-                  ) : (
-                    <Input
-                      value={variable.value}
-                      disabled={disabled}
-                      onChange={event => updateStyle(selectedStyle.id, style => ({
-                        ...style,
-                        cssVariables: style.cssVariables.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item),
-                      }))}
-                    />
-                  )}
-                </label>
-              </div>
+            {selectedStyle.cssVariables.map((category, categoryIndex) => (
+              <section className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
+                <h5 className={css.categoryTitle}>{category.category}</h5>
+                {category.variables.map((variable, variableIndex) => (
+                  <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
+                    <label className={css.variableField}>
+                      <Input
+                        value={variable.title || ''}
+                        placeholder={variable.name}
+                        disabled={disabled}
+                        onChange={event => updateVariable(
+                          selectedStyle.id,
+                          categoryIndex,
+                          variableIndex,
+                          item => ({ ...item, title: event.target.value }),
+                        )}
+                      />
+                    </label>
+                    <label className={css.variableField}>
+                      {isColorValue(variable.value) ? (
+                        <ColorPicker
+                          className={css.colorEditor}
+                          rootClassName={css.colorEditorTheme}
+                          value={variable.value}
+                          disabled={disabled}
+                          showText
+                          onChangeComplete={color => updateVariable(
+                            selectedStyle.id,
+                            categoryIndex,
+                            variableIndex,
+                            item => ({ ...item, value: color.toHexString() }),
+                          )}
+                        />
+                      ) : typeof variable.value === 'number' ? (
+                        <InputNumber
+                          className={css.numberEditor}
+                          value={variable.value}
+                          disabled={disabled}
+                          onChange={value => {
+                            if (typeof value !== 'number') return
+                            updateVariable(
+                              selectedStyle.id,
+                              categoryIndex,
+                              variableIndex,
+                              item => ({ ...item, value }),
+                            )
+                          }}
+                        />
+                      ) : (
+                        <Input
+                          value={variable.value}
+                          disabled={disabled}
+                          onChange={event => updateVariable(
+                            selectedStyle.id,
+                            categoryIndex,
+                            variableIndex,
+                            item => ({ ...item, value: event.target.value }),
+                          )}
+                        />
+                      )}
+                    </label>
+                  </div>
+                ))}
+              </section>
             ))}
             {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
           </div>

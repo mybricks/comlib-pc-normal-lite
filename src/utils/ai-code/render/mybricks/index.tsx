@@ -549,14 +549,20 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       }
 
       const activeStyle = envConfig?.style?.styles?.find((style) => style?.id === envConfig?.style?.active)
-      return activeStyle?.cssVariables?.reduce((variables, cssVariable) => {
-        if (
-          typeof cssVariable?.name === 'string' &&
-          cssVariable.name.startsWith('--') &&
-          (typeof cssVariable.value === 'string' || typeof cssVariable.value === 'number')
-        ) {
-          variables[cssVariable.name] = cssVariable.value
+      return activeStyle?.cssVariables?.reduce((variables, category) => {
+        if (!Array.isArray(category?.variables)) {
+          return variables
         }
+
+        category.variables.forEach(cssVariable => {
+          if (
+            typeof cssVariable?.name === 'string' &&
+            cssVariable.name.startsWith('--') &&
+            (typeof cssVariable.value === 'string' || typeof cssVariable.value === 'number')
+          ) {
+            variables[cssVariable.name] = cssVariable.value
+          }
+        })
         return variables
       }, {}) || {}
     } catch {
