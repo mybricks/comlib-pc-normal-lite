@@ -228,11 +228,13 @@ function VersionPanel2() {
     version,
   })
   const [hasBranchHistory, setHasBranchHistory] = useState(() => undoRedoManager.hasBranchHistory())
+  const [isVibing, setIsVibing] = useState(false)
 
   useEffect(() => undoRedoManager.onBranchHistoryChange(setHasBranchHistory), [])
+  useEffect(() => context.component?.events.on('vibing', setIsVibing), [])
 
   const handleRollback = useCallback((version: VersionRecord, latestVersion: VersionRecord) => {
-    if (undoRedoManager.hasBranchHistory()) return
+    if (undoRedoManager.hasBranchHistory() || isVibing) return
 
     const rollback = context.rollback;
 
@@ -244,7 +246,7 @@ function VersionPanel2() {
         rollback?.(latestVersion.id);
       },
     })
-  }, []);
+  }, [isVibing]);
 
   return (
     <div className={css.list} id="com-material-list" ref={panelContainer}>
@@ -287,7 +289,7 @@ function VersionPanel2() {
               dotCls={dotCls}
               tagCls={tagCls}
               onRollback={(version) => handleRollback(version, versions[0])}
-              rollbackDisabled={hasBranchHistory}
+              rollbackDisabled={hasBranchHistory || isVibing}
               parentElement={panelContainer.current!}
             />
           )

@@ -212,6 +212,7 @@ const getRelativeImportAtPosition = ({
 function LowcodeView(params: Params) {
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
   const [hasBranchHistory, setHasBranchHistory] = useState(() => undoRedoManager.hasBranchHistory());
+  const [isVibing, setIsVibing] = useState(false);
   const componentId = params.model?.runtime?.id;
 
   // 兼容老版本数据：data.files 不存在时，从旧字段迁移
@@ -230,6 +231,7 @@ function LowcodeView(params: Params) {
   const forceUpdate = useCallback(() => setTick(t => t + 1), []);
 
   useEffect(() => undoRedoManager.onBranchHistoryChange(setHasBranchHistory), []);
+  useEffect(() => context.component?.events.on('vibing', setIsVibing), []);
 
   // 辅助：从 files 中找到初始/回退选中的文件
   const findFallbackFile = useCallback((fileList: typeof files) => {
@@ -456,14 +458,14 @@ function LowcodeView(params: Params) {
   }, [componentId])
 
   const handleEditorChange = useCallback((value: string) => {
-    if (!selectFile || undoRedoManager.hasBranchHistory()) {
+    if (!selectFile || undoRedoManager.hasBranchHistory() || isVibing) {
       return
     }
     setModifiedContent((prev) => ({
       ...prev,
       [selectFile.fileName]: value,
     }));
-  }, [selectFile]);
+  }, [selectFile, isVibing]);
 
   const getFileContent = useCallback((file: LowcodeFile) => {
     if (file.fileName in modifiedContent) {
@@ -741,9 +743,11 @@ function LowcodeView(params: Params) {
 
   const editorOptions = useMemo(() => ({
     fontSize: 12,
-    readOnly: hasBranchHistory,
+    readOnly: hasBranchHistory || isVibing,
     readOnlyMessage: {
-      value: "当前存在未提交的可视化编辑，请先提交或取消后再编辑代码。",
+      value: isVibing
+        ? "AI 正在生成代码，请稍后再编辑。"
+        : "当前存在未提交的可视化编辑，请先提交或取消后再编辑代码。",
     },
     scrollbar: {
       horizontal: "auto",
@@ -751,7 +755,7 @@ function LowcodeView(params: Params) {
       verticalScrollbarSize: 10,
       horizontalScrollbarSize: 10
     }
-  }), [hasBranchHistory]);
+  }), [hasBranchHistory, isVibing]);
 
   const mountRef = useRef<any>(null)
   // 保存各文件的滚动位置，key 为 fileName
