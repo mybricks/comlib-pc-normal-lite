@@ -449,7 +449,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   interface AppContextValue {
     state: 'collect_routes' | 'runtime'
-    registerRoute: (route: string) => void
+    registerRoute: (route: string, element: React.ReactElement) => void
     routeBase: string
   }
   const AppContext = createContext<AppContextValue>({
@@ -856,7 +856,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
              * 2. 通配符路由通常作为布局/兜底承载具体子路由，自身不作为独立页面收集
              */
             if (!isWildcardPath(path)) {
-              appCtx.registerRoute(joinRoutePaths(appCtx.routeBase, transformPath({ index, path })));
+              appCtx.registerRoute(
+                joinRoutePaths(appCtx.routeBase, transformPath({ index, path })),
+                element
+              );
             }
           }
         }
@@ -994,6 +997,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return (props) => {
       if (isDesign()) {
         const collectingRoutes = useRef<string[]>([]);
+        const collectingRouteTypes = useRef<Set<React.ElementType>>(new Set());
         const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
         React.useEffect(() => {
           popupRefRegistryForceUpdate = forceUpdate;
@@ -1004,7 +1008,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
         const [app, setApp] = useState<AppContextValue>({
           state: 'collect_routes',
-          registerRoute: (path: string) => {
+          registerRoute: (path: string, element: React.ReactElement) => {
+            if (frontendMode === 'default') {
+              // A page can be registered under several routes. Render it once on the design canvas.
+              if (collectingRouteTypes.current.has(element.type)) return;
+              collectingRouteTypes.current.add(element.type);
+            }
             collectingRoutes.current.push(path);
           },
           routeBase: ''
