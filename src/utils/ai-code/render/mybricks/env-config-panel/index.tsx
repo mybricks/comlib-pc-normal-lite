@@ -161,97 +161,99 @@ export default function EnvConfigPanel({
   const rootClassName = [css.panel, className].filter(Boolean).join(' ')
 
   return (
-    <section className={rootClassName} aria-label="环境主题配置" data-zone-type='ai-fixed'>
-      <header className={css.header}>
-        <div>
-          <h3 className={css.title}>主题配置</h3>
+    <div data-zone-kind="config" style={{ width: 480, maxHeight: '100vh' }}>
+      <div className={rootClassName} aria-label="环境主题配置" data-zone-type='ai-fixed'>
+        <header className={css.header}>
+          <div>
+            <h3 className={css.title}>主题配置</h3>
+          </div>
+        </header>
+
+        <div className={css.styleSelector}>
+          <label className={css.field}>
+            <Select
+              className={css.themeSelect}
+              popupClassName={css.themeSelectPopup}
+              value={selectedStyleId}
+              disabled={disabled || parsedEnv.style.styles.length === 0}
+              aria-label="选择主题"
+              options={parsedEnv.style.styles.map(style => ({
+                value: style.id,
+                label: `${style.name || style.id}`,
+              }))}
+              onChange={styleId => {
+                setSelectedStyleId(styleId)
+                commit({ ...parsedEnv, style: { ...parsedEnv.style, active: styleId } })
+              }}
+            />
+          </label>
+          {parsedEnv.style.styles.length === 0 && <span className={css.emptyStyles}>尚未创建主题</span>}
         </div>
-      </header>
 
-      <div className={css.styleSelector}>
-        <label className={css.field}>
-          <Select
-            className={css.themeSelect}
-            popupClassName={css.themeSelectPopup}
-            value={selectedStyleId}
-            disabled={disabled || parsedEnv.style.styles.length === 0}
-            aria-label="选择主题"
-            options={parsedEnv.style.styles.map(style => ({
-              value: style.id,
-              label: `${style.name || style.id}`,
-            }))}
-            onChange={styleId => {
-              setSelectedStyleId(styleId)
-              commit({ ...parsedEnv, style: { ...parsedEnv.style, active: styleId } })
-            }}
-          />
-        </label>
-        {parsedEnv.style.styles.length === 0 && <span className={css.emptyStyles}>尚未创建主题</span>}
-      </div>
-
-      {selectedStyle && (
-        <div className={css.variableList}>
-          {selectedStyle.cssVariables.map((category, categoryIndex) => (
-            <section className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
-              <div className={css.categoryHeader}>
-                <h5 className={css.categoryTitle}>{category.category}</h5>
-              </div>
-              {category.variables.map((variable, variableIndex) => (
-                <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
-                  <div className={css.variableMeta}>
-                    <span className={css.variableTitle}>{variable.title || variable.name}</span>
-                    <code className={css.variableName}>{variable.name}</code>
-                  </div>
-                  <label className={css.variableField}>
-                    {isColorValue(variable.value) ? (
-                      <ColorPicker
-                        className={css.colorEditor}
-                        rootClassName={css.colorEditorTheme}
-                        value={variable.value}
-                        disabled={disabled}
-                        showText
-                        onChangeComplete={color => updateVariable(
-                          selectedStyle.id,
-                          categoryIndex,
-                          variableIndex,
-                          item => ({ ...item, value: color.toHexString() }),
-                        )}
-                      />
-                    ) : typeof variable.value === 'number' ? (
-                      <InputNumber
-                        className={css.numberEditor}
-                        value={variable.value}
-                        disabled={disabled}
-                        onChange={value => {
-                          if (typeof value !== 'number') return
-                          updateVariable(
+        {selectedStyle && (
+          <div className={css.variableList}>
+            {selectedStyle.cssVariables.map((category, categoryIndex) => (
+              <div className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
+                <div className={css.categoryHeader}>
+                  <h5 className={css.categoryTitle}>{category.category}</h5>
+                </div>
+                {category.variables.map((variable, variableIndex) => (
+                  <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
+                    <div className={css.variableMeta}>
+                      <span className={css.variableTitle}>{variable.title || variable.name}</span>
+                      <code className={css.variableName}>{variable.name}</code>
+                    </div>
+                    <label className={css.variableField}>
+                      {isColorValue(variable.value) ? (
+                        <ColorPicker
+                          className={css.colorEditor}
+                          rootClassName={css.colorEditorTheme}
+                          value={variable.value}
+                          disabled={disabled}
+                          showText
+                          onChangeComplete={color => updateVariable(
                             selectedStyle.id,
                             categoryIndex,
                             variableIndex,
-                            item => ({ ...item, value }),
-                          )
-                        }}
-                      />
-                    ) : (
-                      <Input
-                        value={variable.value}
-                        disabled={disabled}
-                        onChange={event => updateVariable(
-                          selectedStyle.id,
-                          categoryIndex,
-                          variableIndex,
-                          item => ({ ...item, value: event.target.value }),
-                        )}
-                      />
-                    )}
-                  </label>
-                </div>
-              ))}
-            </section>
-          ))}
-          {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
-        </div>
-      )}
-    </section>
+                            item => ({ ...item, value: color.toHexString() }),
+                          )}
+                        />
+                      ) : typeof variable.value === 'number' ? (
+                        <InputNumber
+                          className={css.numberEditor}
+                          value={variable.value}
+                          disabled={disabled}
+                          onChange={value => {
+                            if (typeof value !== 'number') return
+                            updateVariable(
+                              selectedStyle.id,
+                              categoryIndex,
+                              variableIndex,
+                              item => ({ ...item, value }),
+                            )
+                          }}
+                        />
+                      ) : (
+                        <Input
+                          value={variable.value}
+                          disabled={disabled}
+                          onChange={event => updateVariable(
+                            selectedStyle.id,
+                            categoryIndex,
+                            variableIndex,
+                            item => ({ ...item, value: event.target.value }),
+                          )}
+                        />
+                      )}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
