@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ColorPicker, Input, InputNumber, Select } from 'antd'
 import css from './index.less'
 
@@ -33,13 +33,18 @@ export interface EnvConfig {
 
 export type EnvInput = EnvConfig | string | null | undefined
 
+export interface EnvConfigAction {
+  type: string
+  title: string
+}
+
 export interface EnvConfigPanelProps {
   /** env.json 的对象或 JSON 字符串。 */
   env: EnvInput
   /** 配置变更时返回完整的 env 对象。 */
   onChange?: (env: EnvConfig) => void
   /** 配置变更时返回格式化后的 env.json 内容，便于直接写入文件系统。 */
-  onSave?: (source: string, env: EnvConfig) => void
+  onSave?: (source: string, refElement: HTMLDivElement, action: EnvConfigAction) => void
   disabled?: boolean
   className?: string
 }
@@ -113,6 +118,7 @@ export default function EnvConfigPanel({
   className,
 }: EnvConfigPanelProps) {
   const parsedEnv = useMemo(() => parseEnv(env), [env])
+  const panelRef = useRef<HTMLDivElement>(null)
   const [selectedStyleId, setSelectedStyleId] = useState(parsedEnv.style.active)
 
   useEffect(() => {
@@ -122,19 +128,29 @@ export default function EnvConfigPanel({
 
   const selectedStyle = parsedEnv.style.styles.find(style => style.id === selectedStyleId)
 
-  const commit = (nextEnv: EnvConfig) => {
+  const commit = (nextEnv: EnvConfig, action: EnvConfigAction) => {
     onChange?.(nextEnv)
-    onSave?.(serializeEnv(nextEnv), nextEnv)
+    onSave?.(serializeEnv(nextEnv), panelRef.current!, action)
   }
 
-  const updateStyle = (styleId: string, updater: (style: EnvStyle) => EnvStyle) => {
+  const updateStyle = (
+    styleId: string,
+    updater: (style: EnvStyle) => { style: EnvStyle, action: EnvConfigAction },
+  ) => {
+    let action: EnvConfigAction | undefined
+    const styles = parsedEnv.style.styles.map(style => {
+      if (style.id !== styleId) return style
+
+      const result = updater(style)
+      action = result.action
+      return result.style
+    })
+
+    if (!action) return
     commit({
       ...parsedEnv,
-      style: {
-        ...parsedEnv.style,
-        styles: parsedEnv.style.styles.map(style => style.id === styleId ? updater(style) : style),
-      },
-    })
+      style: { ...parsedEnv.style, styles },
+    }, action)
   }
 
   const updateVariable = (
@@ -143,25 +159,36 @@ export default function EnvConfigPanel({
     variableIndex: number,
     updater: (variable: CssVariable) => CssVariable,
   ) => {
-    updateStyle(styleId, style => ({
-      ...style,
-      cssVariables: style.cssVariables.map((category, currentCategoryIndex) =>
-        currentCategoryIndex === categoryIndex
-          ? {
-              ...category,
-              variables: category.variables.map((variable, currentVariableIndex) =>
-                currentVariableIndex === variableIndex ? updater(variable) : variable,
-              ),
-            }
-          : category,
-      ),
-    }))
+    updateStyle(styleId, style => {
+      const variable = style.cssVariables[categoryIndex]?.variables[variableIndex]
+      const variableTitle = variable?.title || variable?.name || 'CSS 变量'
+
+      return {
+        style: {
+          ...style,
+          cssVariables: style.cssVariables.map((category, currentCategoryIndex) =>
+            currentCategoryIndex === categoryIndex
+              ? {
+                  ...category,
+                  variables: category.variables.map((variable, currentVariableIndex) =>
+                    currentVariableIndex === variableIndex ? updater(variable) : variable,
+                  ),
+                }
+              : category,
+          ),
+        },
+        action: {
+          type: `env-variable:${styleId}:${variableTitle}`,
+          title: `修改${style.name || styleId}主题的${variableTitle}`,
+        },
+      }
+    })
   }
 
   const rootClassName = [css.panel, className].filter(Boolean).join(' ')
 
   return (
-    <div data-zone-kind="config" style={{ width: 480, maxHeight: '100vh' }}>
+    <div ref={panelRef} data-zone-kind="config" style={{ width: 480, maxHeight: '100vh' }}>
       <div className={rootClassName} aria-label="环境主题配置" data-zone-type='ai-fixed'>
         <header className={css.header}>
           <div>
@@ -183,7 +210,12 @@ export default function EnvConfigPanel({
               }))}
               onChange={styleId => {
                 setSelectedStyleId(styleId)
-                commit({ ...parsedEnv, style: { ...parsedEnv.style, active: styleId } })
+                const style = parsedEnv.style.styles.find(item => item.id === styleId)
+                const styleName = style?.name || style?.id || styleId
+                commit({ ...parsedEnv, style: { ...parsedEnv.style, active: styleId } }, {
+                  type: `env-theme:${styleId}`,
+                  title: `切换至${styleName}主题`,
+                })
               }}
             />
           </label>

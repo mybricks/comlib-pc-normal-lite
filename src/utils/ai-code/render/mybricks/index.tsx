@@ -13,6 +13,8 @@ import { parseFrameSize } from "./utils";
 import css from './index.less';
 import { debugLogs } from '../../../../mix/context/debugLogs';
 import mixContext, { config } from '../../../../mix/context';
+import { undoRedoManager } from '../../../../mix/editors/undoRedo';
+import { randomUUID } from '../../../../mix/utils/uuid';
 import {
   isLoggerMethod,
   mergeLoggerBindings,
@@ -731,7 +733,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             return pre
           }, cssContent)
 
-          const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
+          const myContent = cssText
+            .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
+            .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
+            .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
+            .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
             .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
           // 组件id + 文件路径，保证唯一性
           const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
@@ -985,7 +991,27 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     return envFile ? (
       <EnvConfigPanel
         env={envFile.source}
-        onSave={(source) => mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })}
+        onSave={(source, refElement, action) => {
+          const previousSource = decodeURIComponent(envFile.source)
+          if (source === previousSource) return
+          const actionId = randomUUID()
+
+          undoRedoManager.executeBranch({
+            execute() {
+              mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })
+              mixContext.component!.actions.addUserAction({
+                id: actionId,
+                type: action.type,
+                title: action.title,
+                refElement,
+              })
+            },
+            undo() {
+              mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: previousSource })
+              mixContext.component!.actions.removeUserAction(actionId)
+            },
+          })
+        }}
       />
     ) : null
   }
