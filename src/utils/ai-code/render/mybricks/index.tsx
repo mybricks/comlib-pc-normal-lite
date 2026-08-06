@@ -1142,7 +1142,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 return pre
               }, cssContent)
 
-              const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
+              const myContent = cssText
+                .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
+                .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
+                .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
+                .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
                 .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
               // 组件id + 文件路径，保证唯一性
               const cssId = `${comId}_${file.filename}`.replace(/\./g, '__').replace(/\//g, '_')

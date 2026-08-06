@@ -483,7 +483,7 @@ const pushLessStyle = (lessStyle: LessStyleMap, selector: string, key: string, v
   }
 }
 
-const patchLessStyles = (lessStyle: LessStyleMap): FileUpdate[] => {
+const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): FileUpdate[] => {
   const lesss: FileUpdate[] = []
 
   if (!lessStyle.size) return lesss
@@ -500,7 +500,15 @@ const patchLessStyles = (lessStyle: LessStyleMap): FileUpdate[] => {
     const parsed = tokens.map(token => {
       const clean = token.replace(/^\./, '')
       const dashIdx = clean.indexOf('--')
-      if (dashIdx === -1) return null
+      if (dashIdx === -1) {
+        if (fallbackLessFile) {
+          return {
+            fileName: fallbackLessFile,
+            className: clean
+          }
+        }
+        return null
+      }
       const fileRaw = clean.slice(0, dashIdx)
       const className = clean.slice(dashIdx + 2)
       const fileName = fileRaw.replace(/__/g, '.').replace(/_/g, '/')
@@ -643,6 +651,7 @@ export default function createSetStyleHandler(
   // [引擎兼容处理] start、finish状态可能没有style，在ing阶段进行收集
   let style = {}
   let ele
+  let lessFile = ''
   let initialInlineCssText = ''
   let initialInlineStyleValues: Record<string, InitialInlineStyleValue> = {}
   // state状态不靠谱，第一次ing认为是start
@@ -703,7 +712,7 @@ export default function createSetStyleHandler(
           // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
           const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
           const loc = locRaw ? (() => { try { return JSON.parse(locRaw) } catch { return null } })() : null
-          const lessFile: string = resolveLessFilePath(
+          lessFile = resolveLessFilePath(
             loc?.files?.less,
             context.component?.params?.data?.files,
             config.getEntryFile(),
@@ -953,7 +962,7 @@ export default function createSetStyleHandler(
           const inlineUpdate = Object.keys(inlineStyle).length
             ? patchSingleElementInlineStyle(ele, inlineStyle, initialInlineCssText)
             : null
-          const lessUpdates = patchLessStyles(lessStyle)
+          const lessUpdates = patchLessStyles(lessStyle, lessFile)
           const inlineUpdateAsFileUpdate: FileUpdate | null = inlineUpdate
             ? { fileName: inlineUpdate.fileName, previousCode: inlineUpdate.previousCode, newCode: inlineUpdate.newCode }
             : null
@@ -1179,7 +1188,7 @@ export default function createSetStyleHandler(
           })
         }
 
-        const lesss = patchLessStyles(lessStyle)
+        const lesss = patchLessStyles(lessStyle, lessFile)
         const jsxInlineStyleSnapshots = jsxStyle
           .filter((entry): entry is typeof entry & { ele: HTMLElement } => !!entry.ele)
           .map((entry) => getInitialInlineStyleSnapshot(
