@@ -7,6 +7,7 @@ import { randomUUID } from '../utils/uuid'
 import { getTimestamp } from "../../utils/time"
 import config from './config'
 import { validateSkillMd } from "../../utils/ai-code/render/mybricks/gui-card-next/validate-skill-md"
+import { undoRedoManager } from '../editors/undoRedo'
 
 const updateFileContent = ({ fileName, files, content }) => {
   const replaceFileName = fileName.replace(/^\//, '')
@@ -656,5 +657,11 @@ export class Version {
   addPromiseTask(fn: () => Promise<void>) {
     this.promiseStack.push(fn)
     this.runStack()
+  }
+}
+
+(window as any).__VIBE_COMPONENT_APIS__ = {
+  hasUncommittedChanges: () => {
+    return undoRedoManager.hasBranchHistory()
   }
 }

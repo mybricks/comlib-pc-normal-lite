@@ -260,3 +260,7 @@ window._redo = () => {
   if (isVibing) return
   undoRedoManager.redo()
 }
+
+window._hasBranchHistory = () => {
+  return undoRedoManager.hasBranchHistory()
+}
