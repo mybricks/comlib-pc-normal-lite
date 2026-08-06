@@ -3,6 +3,22 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementTextUpdateChipData, getElementLabel } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
+import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftDOMSourceLocationsAfterReplacement,
+} from './sourceLocation'
+
+const toSafeJSXText = (content: string) => {
+  return content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/{/g, '&#123;')
+    .replace(/}/g, '&#125;')
+    .split('\n')
+    .join('<br/>')
+}
 
 const runUpdateTextByAI = (fromEle, content: string) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
@@ -15,7 +31,7 @@ const runUpdateTextByAI = (fromEle, content: string) => {
   }
 
   const previousInnerHTML = fromEle.innerHTML
-  const nextValue = content.split('\n').join('<br/>')
+  const nextValue = toSafeJSXText(content)
 
   undoRedoManager.executeBranch({
     aiRequest: {
@@ -80,15 +96,22 @@ const updateText = (options) => {
       return runUpdateTextByAI(fromEle, content)
     }
 
-    const nextValue = content.split('\n').join('<br/>')
+    const nextValue = toSafeJSXText(content)
     const newSource = source.slice(0, start) + nextValue + source.slice(end)
     const previousInnerHTML = fromEle.innerHTML
+    // noUpdateFileSystem 保留当前 DOM；后续节点仍会引用原始绝对偏移，先保留快照以支持撤销。
+    const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, fileName)
     const fromLabel = getElementLabel(fromEle, '节点1')
     const actionId = randomUUID()
 
     undoRedoManager.executeBranch({
       execute() {
         context.updateFile({ fileName, content: newSource, type: undefined, noUpdateFileSystem: true })
+        shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, {
+          start,
+          end,
+          newLength: nextValue.length,
+        })
         // noUpdateFileSystem 不会触发重新渲染，画布内容需要立即同步。
         fromEle.innerHTML = nextValue
         context.component!.actions.addUserAction({
@@ -100,6 +123,7 @@ const updateText = (options) => {
       },
       undo() {
         context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true })
+        restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
         fromEle.innerHTML = previousInnerHTML
         context.component!.actions.removeUserAction(actionId)
       },

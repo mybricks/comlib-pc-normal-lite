@@ -3,10 +3,17 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementDeleteChipData, getElementLabel } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
+import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftDOMSourceLocationsAfterReplacement,
+} from './sourceLocation'
 
 const createDeletePlaceholder = (length: number) => {
   const placeholder = '<></>'
-  return placeholder.length >= length ? placeholder.slice(0, length) : placeholder + ' '.repeat(length - placeholder.length)
+  // 不能截断空 Fragment：<i/> 只有 4 个字符，截成 <></ 会产生无法编译的 JSX。
+  // 极短节点允许源码增长 1 个字符，并在下方同步后续绝对偏移。
+  return placeholder.length >= length ? placeholder : placeholder + ' '.repeat(length - placeholder.length)
 }
 
 const runDeleteByAI = (fromEle) => {
@@ -70,7 +77,9 @@ const runDelete = (options) => {
         return runDeleteByAI(fromEle)
       }
 
-      const newSource = source.slice(0, start) + createDeletePlaceholder(end - start) + source.slice(end)
+      const placeholder = createDeletePlaceholder(end - start)
+      const newSource = source.slice(0, start) + placeholder + source.slice(end)
+      const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, files.jsx)
       const parent = fromEle.parentNode
       const nextSibling = fromEle.nextSibling
       const fromLabel = getElementLabel(fromEle, '节点1')
@@ -79,6 +88,11 @@ const runDelete = (options) => {
       undoRedoManager.executeBranch({
         execute() {
           context.updateFile({ fileName: files.jsx, content: newSource, type: undefined, noUpdateFileSystem: true })
+          shiftDOMSourceLocationsAfterReplacement(shadowRoot, files.jsx, {
+            start,
+            end,
+            newLength: placeholder.length,
+          })
           fromEle.remove()
           context.component!.actions.addUserAction({
             id: actionId,
@@ -92,6 +106,7 @@ const runDelete = (options) => {
           if (parent) {
             parent.insertBefore(fromEle, nextSibling?.parentNode === parent ? nextSibling : null)
           }
+          restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
           context.component!.actions.removeUserAction(actionId)
         },
       })
