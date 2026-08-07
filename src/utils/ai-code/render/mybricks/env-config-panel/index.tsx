@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { CaretRightOutlined } from '@ant-design/icons'
 import { ColorPicker, Input, InputNumber, Select } from 'antd'
 import css from './index.less'
 
@@ -120,6 +121,7 @@ export default function EnvConfigPanel({
   const parsedEnv = useMemo(() => parseEnv(env), [env])
   const panelRef = useRef<HTMLDivElement>(null)
   const [selectedStyleId, setSelectedStyleId] = useState(parsedEnv.style.active)
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const styles = parsedEnv.style.styles
@@ -127,6 +129,8 @@ export default function EnvConfigPanel({
   }, [parsedEnv])
 
   const selectedStyle = parsedEnv.style.styles.find(style => style.id === selectedStyleId)
+
+  const getCategoryKey = (styleId: string, categoryIndex: number) => `${styleId}:${categoryIndex}`
 
   const commit = (nextEnv: EnvConfig, action: EnvConfigAction) => {
     onChange?.(nextEnv)
@@ -224,64 +228,78 @@ export default function EnvConfigPanel({
 
         {selectedStyle && (
           <div className={css.variableList}>
-            {selectedStyle.cssVariables.map((category, categoryIndex) => (
-              <div className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
-                <div className={css.categoryHeader}>
-                  <h5 className={css.categoryTitle}>{category.category}</h5>
-                </div>
-                {category.variables.map((variable, variableIndex) => (
-                  <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
-                    <div className={css.variableMeta}>
-                      <span className={css.variableTitle}>{variable.title || variable.name}</span>
-                      <code className={css.variableName}>{variable.name}</code>
-                    </div>
-                    <label className={css.variableField}>
-                      {isColorValue(variable.value) ? (
-                        <ColorPicker
-                          className={css.colorEditor}
-                          rootClassName={css.colorEditorTheme}
-                          value={variable.value}
-                          disabled={disabled}
-                          showText
-                          onChangeComplete={color => updateVariable(
-                            selectedStyle.id,
-                            categoryIndex,
-                            variableIndex,
-                            item => ({ ...item, value: color.toHexString() }),
-                          )}
-                        />
-                      ) : typeof variable.value === 'number' ? (
-                        <InputNumber
-                          className={css.numberEditor}
-                          value={variable.value}
-                          disabled={disabled}
-                          onChange={value => {
-                            if (typeof value !== 'number') return
-                            updateVariable(
+            {selectedStyle.cssVariables.map((category, categoryIndex) => {
+              const categoryKey = getCategoryKey(selectedStyle.id, categoryIndex)
+              const isExpanded = !collapsedCategories[categoryKey]
+
+              return (
+                <div className={css.variableCategory} key={`${category.category}-${categoryIndex}`}>
+                  <button
+                    className={css.categoryHeader}
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => setCollapsedCategories(categories => ({
+                      ...categories,
+                      [categoryKey]: isExpanded,
+                    }))}
+                  >
+                    <span className={css.categoryTitle}>{category.category}</span>
+                    <CaretRightOutlined className={`${css.categoryIcon} ${isExpanded ? css.categoryIconExpanded : ''}`} />
+                  </button>
+                  {isExpanded && category.variables.map((variable, variableIndex) => (
+                    <div className={css.variableRow} key={`${variable.name}-${variableIndex}`}>
+                      <div className={css.variableMeta}>
+                        <span className={css.variableTitle}>{variable.title || variable.name}</span>
+                        <code className={css.variableName}>{variable.name}</code>
+                      </div>
+                      <label className={css.variableField}>
+                        {isColorValue(variable.value) ? (
+                          <ColorPicker
+                            className={css.colorEditor}
+                            rootClassName={css.colorEditorTheme}
+                            value={variable.value}
+                            disabled={disabled}
+                            showText
+                            onChangeComplete={color => updateVariable(
                               selectedStyle.id,
                               categoryIndex,
                               variableIndex,
-                              item => ({ ...item, value }),
-                            )
-                          }}
-                        />
-                      ) : (
-                        <Input
-                          value={variable.value}
-                          disabled={disabled}
-                          onChange={event => updateVariable(
-                            selectedStyle.id,
-                            categoryIndex,
-                            variableIndex,
-                            item => ({ ...item, value: event.target.value }),
-                          )}
-                        />
-                      )}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            ))}
+                              item => ({ ...item, value: color.toHexString() }),
+                            )}
+                          />
+                        ) : typeof variable.value === 'number' ? (
+                          <InputNumber
+                            className={css.numberEditor}
+                            value={variable.value}
+                            disabled={disabled}
+                            onChange={value => {
+                              if (typeof value !== 'number') return
+                              updateVariable(
+                                selectedStyle.id,
+                                categoryIndex,
+                                variableIndex,
+                                item => ({ ...item, value }),
+                              )
+                            }}
+                          />
+                        ) : (
+                          <Input
+                            value={variable.value}
+                            disabled={disabled}
+                            onChange={event => updateVariable(
+                              selectedStyle.id,
+                              categoryIndex,
+                              variableIndex,
+                              item => ({ ...item, value: event.target.value }),
+                            )}
+                          />
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
             {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
           </div>
         )}

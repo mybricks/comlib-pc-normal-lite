@@ -80,13 +80,30 @@
 
 .categoryHeader {
   display: flex;
+  width: 100%;
   min-height: 34px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 7px 10px 7px 12px;
+  border: 0;
   border-bottom: 1px solid var(--mybricks-border-color-secondary, var(--mybricks-border-color-main));
+  outline: none;
+  cursor: pointer;
   background: var(--mybricks-bg-color-hover);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background-color .18s ease;
+  cursor: pointer !important;
+}
+
+.categoryHeader:focus-visible {
+  box-shadow: inset var(--env-config-focus-shadow);
+}
+
+.categoryHeader[aria-expanded='false'] {
+  border-bottom: 0;
 }
 
 .categoryTitle {
@@ -95,6 +112,19 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
+  cursor: pointer !important;
+}
+
+.categoryIcon {
+  flex: 0 0 auto;
+  color: var(--mybricks-text-color-sub);
+  font-size: 11px;
+  transition: transform .18s ease;
+  cursor: pointer !important;
+}
+
+.categoryIconExpanded {
+  transform: rotate(90deg);
 }
 
 .field,
