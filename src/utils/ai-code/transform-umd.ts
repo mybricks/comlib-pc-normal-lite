@@ -12,6 +12,7 @@ import skillBoundaryPlugin from './render/mybricks/gui-card-next/skill-boundary-
 import eslintCheckPlugin from './plugins/eslintCheckPlugin'
 import appConfigCheckPlugin from './plugins/appConfigCheckPlugin'
 import config from '../../mix/context/config'
+import { generate as generateCss, parse as parseCss, walk as walkCss } from 'css-tree'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, jsDocMap: any } {
   let transformCode
@@ -217,13 +218,50 @@ export function transformLess(code, filename: string) {
       // console.error(error)
       throw new Error(`Less 代码编译失败: ${error.message}`)
     } else {
-      const { cssContent, mediaQueries } = extractMediaQueries(result?.css || '')
+      const { cssContent, mediaQueries } = extractMediaQueries(convertRemToPx(result?.css || ''))
       cssModule.cssContent = cssContent
       cssModule.mediaQueries = mediaQueries
     }
   })
 
   return cssModule;
+}
+
+const REM_BASE_PX = 16
+
+function convertRemToPx(css: string): string {
+  const cssAst = parseCss(css, { context: 'stylesheet' })
+
+  transformRemDimensions(cssAst)
+
+  // css-tree intentionally preserves unsupported and custom-property values as
+  // Raw nodes. Parse those values separately so their dimensions are not missed.
+  walkCss(cssAst, {
+    visit: 'Raw',
+    enter: (node: any) => {
+      try {
+        const valueAst = parseCss(node.value, { context: 'value' })
+        transformRemDimensions(valueAst)
+        node.value = generateCss(valueAst)
+      } catch {
+        // Keep syntaxes that css-tree does not understand unchanged.
+      }
+    },
+  })
+
+  return generateCss(cssAst)
+}
+
+function transformRemDimensions(ast: any) {
+  walkCss(ast, {
+    visit: 'Dimension',
+    enter: (node: any) => {
+      if (node.unit.toLowerCase() === 'rem') {
+        node.value = String(Number(node.value) * REM_BASE_PX)
+        node.unit = 'px'
+      }
+    },
+  })
 }
 
 function extractMediaQueries(css: string): {
