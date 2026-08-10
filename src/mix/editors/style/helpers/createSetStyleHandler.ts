@@ -6,7 +6,6 @@ import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
 import { randomUUID } from '../../../utils/uuid'
 import { buildElementStyleUpdateChipData, getElementLabel } from '../../setSegment/elementChip'
-import { applyVisualStyleOverlay, removeVisualStyleOverlay } from '../../visualStyleOverlay'
 import {
   appendToInlineStyleAttr,
   appendToInlineStyleAttrByTagRange,
@@ -15,8 +14,6 @@ import {
   StyleInfoEntry,
 } from './patchJsxInlineStyle'
 import { resolveLessFilePath } from './resolveLessFilePath'
-
-const SETSTYLE_CSS_ID = "SETSTYLE_CSS_ID"
 
 const getStyleActionTitle = (ele: HTMLElement) => {
   const label = getElementLabel(ele, '节点1')
@@ -162,6 +159,13 @@ type InlineStyleSnapshot = {
   initialValue: string;
   nextValue: string;
 }
+type CssRuleStyleSnapshot = {
+  rule: CSSStyleRule;
+  cssProp: string;
+  hadInitialValue: boolean;
+  initialValue: string;
+  initialPriority: string;
+}
 type InlineSyncTarget = {
   ele: HTMLElement;
   fileName: string;
@@ -186,6 +190,8 @@ type FileUpdate = {
 
 type StyleKeyRoute = {
   selector: string;
+  /** Less 预览直接修改该 CSSOM 规则，保持原有 source order。 */
+  cssRule?: CSSStyleRule;
   isJsx: boolean;
   loc?: { start: number; end: number };
   needsAI?: boolean;
@@ -308,40 +314,6 @@ const getSelectorMatchedElements = (selector: string, shadowRoot: ShadowRoot): H
   } catch {
     return null
   }
-}
-
-/** Less 样式通过可重放的 CSS 覆盖层维持画布效果，不依赖 HTMLElement 引用。 */
-const buildLessStyleOverlayCss = (
-  routes: Record<string, StyleKeyRoute>,
-  style: Record<string, number>,
-): string => {
-  const selectorStyleMap = new Map<string, Record<string, number>>()
-
-  Object.entries(routes).forEach(([key, route]) => {
-    if (route.needsAI || !route.selector) return
-    if (route.source !== 'less' && !(route.source === 'jsx-inline' && route.syncInline)) return
-
-    const value = style[key]
-    if (typeof value !== 'number') return
-    const cssValue = route.source === 'jsx-inline'
-      ? (route.lessInitialValue ?? 0) + value - (route.initialValue ?? 0)
-      : value
-    if (!selectorStyleMap.has(route.selector)) selectorStyleMap.set(route.selector, {})
-    selectorStyleMap.get(route.selector)![key] = cssValue
-  })
-
-  return Array.from(selectorStyleMap.entries())
-    .map(([selector, properties]) => {
-      const declarations = Object.entries(properties)
-        .map(([key, value]) => `${convertCamelToHyphen(key)}: ${value}px;`)
-        .join(' ')
-      return `${selector} { ${declarations} }`
-    })
-    .join('\n')
-}
-
-const buildFlexDisplayOverlayCss = (shouldAddFlexDisplay: boolean, selector: string) => {
-  return shouldAddFlexDisplay && selector ? `${selector} { display: flex; }` : ''
 }
 
 const getSourceLocationKey = (targetEle: HTMLElement): string | null => {
@@ -526,25 +498,37 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
     const lessPreviousCode = decodeURIComponent(lessFile.source)
     const cssObj = parseLess(lessPreviousCode)
 
-    // 按 classPath 逐层导航嵌套的 cssObj，最后一层写入属性
-    let target = cssObj
-    for (let i = 0; i < classPath.length - 1; i++) {
-      if (!target[classPath[i]] || typeof target[classPath[i]] !== 'object') {
-        target[classPath[i]] = {}
+    const flatSelector = classPath.join(' ')
+    const flatRule = cssObj[flatSelector]
+    let target: Record<string, any>
+
+    if (flatRule && typeof flatRule === 'object') {
+      // parseLess 会保留平铺选择器，优先更新已有规则，避免错误创建嵌套规则。
+      target = flatRule
+    } else {
+      // 未命中平铺选择器时，按 classPath 创建或进入 Less 嵌套结构。
+      target = cssObj
+      for (let i = 0; i < classPath.length - 1; i++) {
+        if (!target[classPath[i]] || typeof target[classPath[i]] !== 'object') {
+          target[classPath[i]] = {}
+        }
+        target = target[classPath[i]]
       }
-      target = target[classPath[i]]
-    }
-    const targetKey = classPath[classPath.length - 1]
-    if (!target[targetKey] || typeof target[targetKey] !== 'object') {
-      target[targetKey] = {}
+      const targetKey = classPath[classPath.length - 1]
+      if (!target[targetKey] || typeof target[targetKey] !== 'object') {
+        target[targetKey] = {}
+      }
+      target = target[targetKey]
     }
 
     value.forEach(({ key: propKey, value: propVal }) => {
-      target[targetKey][propKey] = stringifyStyleValue(propVal)
+      target[propKey] = stringifyStyleValue(propVal)
     })
 
-    // 写完嵌套路径后，清理平铺规则中可能覆盖上述属性的简写冲突
-    clearFlatRuleConflicts(cssObj, classPath, value.map(v => v.key))
+    // 写入嵌套规则后，清理平铺规则中可能覆盖上述属性的简写冲突。
+    if (!flatRule || typeof flatRule !== 'object') {
+      clearFlatRuleConflicts(cssObj, classPath, value.map(v => v.key))
+    }
 
     const lessNewCode = stringifyLess(cssObj)
     lesss.push({
@@ -666,6 +650,101 @@ export default function createSetStyleHandler(
   let styleKeyRoutes: Record<string, StyleKeyRoute> = {}
   let shouldAddFlexDisplay = false
   let flexDisplaySelector = ''
+  let previewStyleSheet: CSSStyleSheet | null = null
+  let ruleStyleSnapshots: CssRuleStyleSnapshot[] = []
+  let previewInlineSnapshots: InlineStyleSnapshot[] = []
+  let temporaryPreviewRules: CSSStyleRule[] = []
+
+  const findStyleRule = (sheet: CSSStyleSheet, selector: string) => {
+    return Array.from(sheet.cssRules).find((rule): rule is CSSStyleRule => {
+      return rule instanceof CSSStyleRule && rule.selectorText === selector
+    })
+  }
+
+  const getPreviewRule = (route: StyleKeyRoute) => {
+    if (route.cssRule) return route.cssRule
+    if (!previewStyleSheet || !route.selector) return null
+
+    const existingRule = findStyleRule(previewStyleSheet, route.selector)
+    if (existingRule) {
+      route.cssRule = existingRule
+      return existingRule
+    }
+
+    // Less 编译会省略空规则。预览期间创建一个空规则，完成时由源码更新接管。
+    try {
+      const index = previewStyleSheet.cssRules.length
+      previewStyleSheet.insertRule(`${route.selector} {}`, index)
+      const insertedRule = previewStyleSheet.cssRules[index]
+      if (insertedRule instanceof CSSStyleRule) {
+        route.cssRule = insertedRule
+        temporaryPreviewRules.push(insertedRule)
+        return insertedRule
+      }
+    } catch {
+      // 无法插入的选择器不影响其它属性预览。
+    }
+    return null
+  }
+
+  const setRulePreviewStyle = (route: StyleKeyRoute, key: string, value: StyleValue) => {
+    const rule = getPreviewRule(route)
+    if (!rule) return
+
+    const cssProp = convertCamelToHyphen(key)
+    let snapshot = ruleStyleSnapshots.find(item => item.rule === rule && item.cssProp === cssProp)
+    if (!snapshot) {
+      const initialValue = rule.style.getPropertyValue(cssProp)
+      snapshot = {
+        rule,
+        cssProp,
+        hadInitialValue: initialValue !== '',
+        initialValue,
+        initialPriority: rule.style.getPropertyPriority(cssProp),
+      }
+      ruleStyleSnapshots.push(snapshot)
+    }
+
+    // 继承原声明的 !important 语义，不因预览意外改变优先级。
+    rule.style.setProperty(cssProp, stringifyStyleValue(value), snapshot.initialPriority)
+  }
+
+  const setInlinePreviewStyle = (target: HTMLElement, key: string, value: StyleValue) => {
+    const cssProp = convertCamelToHyphen(key)
+    let snapshot = previewInlineSnapshots.find(item => item.ele === target && item.cssProp === cssProp)
+    if (!snapshot) {
+      snapshot = getInitialInlineStyleSnapshot(target, key, stringifyStyleValue(value))
+      previewInlineSnapshots.push(snapshot)
+    }
+    target.style.setProperty(cssProp, stringifyStyleValue(value))
+  }
+
+  const clearPreviewStyles = () => {
+    ruleStyleSnapshots.forEach((snapshot) => {
+      if (snapshot.hadInitialValue) {
+        snapshot.rule.style.setProperty(snapshot.cssProp, snapshot.initialValue, snapshot.initialPriority)
+      } else {
+        snapshot.rule.style.removeProperty(snapshot.cssProp)
+      }
+    })
+    previewInlineSnapshots.forEach(snapshot => {
+      if (snapshot.hadInitialValue) {
+        snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.initialValue)
+      } else {
+        snapshot.ele.style.removeProperty(snapshot.cssProp)
+      }
+    })
+    temporaryPreviewRules.forEach((rule) => {
+      const sheet = rule.parentStyleSheet
+      if (!sheet) return
+      const index = Array.from(sheet.cssRules).indexOf(rule)
+      if (index >= 0) sheet.deleteRule(index)
+    })
+    ruleStyleSnapshots = []
+    previewInlineSnapshots = []
+    temporaryPreviewRules = []
+    previewStyleSheet = null
+  }
 
   return function handler(ctx: any, params: any) {
     const { state, multiple } = params
@@ -676,6 +755,8 @@ export default function createSetStyleHandler(
      */
     try {
       if (state === 'start') {
+        clearPreviewStyles()
+        isStart = false
         const sourceEle = getEle(ctx, params)
         ele = resolveTargetEle(sourceEle, style, multiple)
         initialInlineCssText = ele.style?.cssText ?? ''
@@ -739,6 +820,7 @@ export default function createSetStyleHandler(
           const sheet = styleTag?.sheet ?? null
           // styleTag 或 sheet 未就绪时跳过本次，等下次 ing 再试
           if (!sheet) return
+          previewStyleSheet = sheet
           isStart = true
           const matchedRules: CSSStyleRule[] = [];
           for (const rule of sheet.cssRules) {
@@ -751,12 +833,23 @@ export default function createSetStyleHandler(
               } catch {/** 某些伪类选择器 matches() 会报错，忽略 */}
             }
           }
+          const specificities = new Map<CSSStyleRule, ReturnType<typeof calculate>>()
+          const sortableMatchedRules = matchedRules.filter((rule) => {
+            try {
+              specificities.set(rule, calculate(rule.selectorText))
+              return true
+            } catch (e) {
+              return false
+            }
+          })
+          matchedRules.splice(0, matchedRules.length, ...sortableMatchedRules)
+          const sourceOrders = new Map(matchedRules.map((rule, index) => [rule, index]))
           matchedRules.sort((a, b) => {
             // b 在前，a 在后 → 权重高的排到索引 0
-            const cmp = compare(calculate(b.selectorText), calculate(a.selectorText));
-            if (cmp !== 0) return cmp;
+            const cmp = compare(specificities.get(b)!, specificities.get(a)!)
+            if (cmp !== 0) return cmp
             // specificity 相同时，source order 靠后的优先（index 越大越靠后）
-            return 0; // stable sort 下 push 顺序即书写顺序，同权重保持原序
+            return sourceOrders.get(b)! - sourceOrders.get(a)!
           })
           let winningRule: CSSStyleRule
           if (matchedRules[0]) {
@@ -794,11 +887,13 @@ export default function createSetStyleHandler(
                 const initialValue = getElementNumericStyleValue(ele, key)
                 const lessInitialValue = lessSelectorFromLoc ? getRuleNumericStyleValue(sheet, lessSelectorFromLoc, key) : undefined
                 const selector = lessSelectorFromLoc ?? winningRule.selectorText
+                const cssRule = lessSelectorFromLoc ? findStyleRule(sheet, lessSelectorFromLoc) : undefined
                 const matchStats = getSelectorMatchStats(selector, shadowRoot)
                 // JSX 内联 style：单元素模式继续写当前 JSX；批量模式同时更新当前 JSX inline 与 Less。
                 // 这样当前元素保留个性化值，其他同 class 元素通过 Less 按同一 delta 变化。
                 styleKeyRoutes[key] = {
                   selector,
+                  cssRule,
                   isJsx: !lessSelectorFromLoc,
                   loc: {
                     start: info.valueStart,
@@ -826,6 +921,7 @@ export default function createSetStyleHandler(
                 styleKeyRoutes[key] = { selector: '', isJsx: false, needsAI: true }
               } else {
                 const selector = (ownerCssRule ?? winningRule).selectorText
+                const cssRule = ownerCssRule ?? (matchedRules[0] ? winningRule : undefined)
                 const matchStats = getSelectorMatchStats(selector, shadowRoot)
                 const routeInlineSyncTargets = multiple
                   ? (selector === lessSelectorFromLoc
@@ -834,6 +930,7 @@ export default function createSetStyleHandler(
                   : []
                 styleKeyRoutes[key] = {
                   selector,
+                  cssRule,
                   isJsx: false,
                   source: 'less',
                   initialValue: getElementNumericStyleValue(ele, key),
@@ -851,14 +948,12 @@ export default function createSetStyleHandler(
         }
 
         if (!multiple) {
-          const lessOnlyStyleMap = new Map<string, Record<string, number>>()
           const inlineStyleEntries: Array<[string, number]> = []
 
           Object.entries(style as Record<string, number>).forEach(([key, val]) => {
             const route = styleKeyRoutes[key]
             if (isSingleDomLessRoute(route)) {
-              if (!lessOnlyStyleMap.has(route!.selector)) lessOnlyStyleMap.set(route!.selector, {})
-              lessOnlyStyleMap.get(route!.selector)![key] = val
+              setRulePreviewStyle(route!, key, val)
             } else {
               inlineStyleEntries.push([key, val])
             }
@@ -868,67 +963,44 @@ export default function createSetStyleHandler(
             ele.style.setProperty(convertCamelToHyphen(key), `${val}px`)
           })
           if (shouldAddFlexDisplay) ele.style.setProperty('display', 'flex')
-
-          const cssText = Array.from(lessOnlyStyleMap.entries())
-            .map(([selector, props]) => {
-              const declarations = Object.entries(props)
-                .map(([prop, value]) => `${convertCamelToHyphen(prop)}: ${value}px;`)
-                .join(' ')
-              return `${selector} { ${declarations} }`
-            })
-            .join('\n')
-
-          if (cssText) {
-            ctx.css.set(SETSTYLE_CSS_ID, cssText)
-          } else {
-            ctx.css.remove(SETSTYLE_CSS_ID)
-          }
           return
         }
 
-        // 将各 key 按目标选择器分组，拼成若干段 CSS 规则（needsAI 的 key 跳过预览）
-        const selectorStyleMap = new Map<string, Record<string, { value: StyleValue; isJsx: boolean }>>()
         Object.entries(style as Record<string, number>).forEach(([key, val]) => {
           const route = styleKeyRoutes[key]
           if (!route || route.needsAI) return
-          const selector = route.selector
-          const cssProp = convertCamelToHyphen(key)
           let cssValue = val
-          let isJsx = route.source === 'jsx-inline' || (route?.isJsx ?? false)
 
           if (route.source === 'jsx-inline' && route.syncInline) {
             const delta = val - (route.initialValue ?? 0)
             cssValue = (route.lessInitialValue ?? 0) + delta
-            isJsx = false
             ;(route.inlineSyncTargets?.length ? route.inlineSyncTargets : [{ ele, initialValue: route.initialValue ?? 0 }]).forEach((target) => {
-              target.ele.style.setProperty(cssProp, `${(target.initialValue ?? 0) + delta}px`)
+              setInlinePreviewStyle(target.ele, key, (target.initialValue ?? 0) + delta)
             })
           } else if (route.source === 'less' && route.inlineSyncTargets?.length) {
             const delta = val - (route.initialValue ?? 0)
             route.inlineSyncTargets.forEach((target) => {
-              target.ele.style.setProperty(cssProp, `${target.initialValue + delta}px`)
+              setInlinePreviewStyle(target.ele, key, target.initialValue + delta)
             })
           }
 
-          if (!selectorStyleMap.has(selector)) selectorStyleMap.set(selector, {})
-          selectorStyleMap.get(selector)![key] = { value: cssValue, isJsx }
+          if (route.source === 'jsx-inline' && !route.syncInline) {
+            getSelectorMatchedElements(route.selector, getShadowRoot())?.forEach((target) => {
+              setInlinePreviewStyle(target, key, cssValue)
+            })
+            return
+          }
+
+          setRulePreviewStyle(route, key, cssValue)
         })
         if (shouldAddFlexDisplay && flexDisplaySelector) {
-          if (!selectorStyleMap.has(flexDisplaySelector)) selectorStyleMap.set(flexDisplaySelector, {})
-          selectorStyleMap.get(flexDisplaySelector)!.display = { value: 'flex', isJsx: false }
+          const flexRoute = Object.values(styleKeyRoutes).find(route => route.selector === flexDisplaySelector)
+          setRulePreviewStyle(flexRoute ?? {
+            selector: flexDisplaySelector,
+            isJsx: false,
+            source: 'less',
+          }, 'display', 'flex')
         }
-        const cssText = Array.from(selectorStyleMap.entries())
-          .map(([selector, props]) => {
-            const declarations = Object.entries(props)
-              .map(([prop, { value, isJsx }]) => {
-                const cssProp = convertCamelToHyphen(prop)
-                return `${cssProp}: ${stringifyStyleValue(value)}${isJsx ? ' !important' : ''};`
-              })
-              .join(' ')
-            return `${selector} { ${declarations} }`
-          })
-          .join('\n')
-        ctx.css.set(SETSTYLE_CSS_ID, cssText)
       } else if (state === 'finish') {
         isStart = false
         const rawFinishStyle = getStyle(ctx, params) || style
@@ -938,6 +1010,8 @@ export default function createSetStyleHandler(
             : subtractParentGapFromStyle(rawFinishStyle, ele),
           multiple,
         )
+        // 拖拽预览只改 CSSOM；源码写回前先还原，最终样式由重新编译的 Less 接管。
+        clearPreviewStyles()
         const aiKeys = Object.entries(styleKeyRoutes)
           .filter(([, route]) => route.needsAI)
           .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
@@ -970,14 +1044,6 @@ export default function createSetStyleHandler(
           const inlineStyleSnapshots = inlineUpdate
             ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
             : []
-          const lessOverlayCssText = [
-            lessUpdates.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : '',
-            buildFlexDisplayOverlayCss(shouldAddFlexDisplay && !!lessUpdates.length, flexDisplaySelector),
-          ].filter(Boolean).join('\n')
-          const styleOverlay = lessOverlayCssText
-            ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
-            : undefined
-
           // Pre-serialise the updated offset map so execute/undo closures don't hold a reference
           // to a mutable object.
           const nextStyleInfoStr = inlineUpdate?.nextStyleInfo
@@ -988,13 +1054,11 @@ export default function createSetStyleHandler(
             const actionId = randomUUID()
             const title = getStyleActionTitle(ele)
             undoRedoManager.executeBranch({
-              styleOverlay,
               execute() {
                 updateFIles.forEach(({ fileName, newCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
-                applyVisualStyleOverlay(styleOverlay)
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
                 // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
                 // so that subsequent inline-style drags can locate values correctly.
@@ -1011,7 +1075,6 @@ export default function createSetStyleHandler(
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
-                removeVisualStyleOverlay(styleOverlay)
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
                 // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
                 if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
@@ -1019,8 +1082,6 @@ export default function createSetStyleHandler(
               },
             });
           }
-          ctx.css.remove(SETSTYLE_CSS_ID)
-
           if (aiKeys.length) {
             const label = getElementLabel(ele, '节点1')
             const title = getStyleActionTitle(ele)
@@ -1202,27 +1263,17 @@ export default function createSetStyleHandler(
               }
               : undefined,
           ))
-        const lessOverlayCssText = [
-          lesss.length ? buildLessStyleOverlayCss(styleKeyRoutes, style) : '',
-          buildFlexDisplayOverlayCss(shouldAddFlexDisplay && !!lesss.length, flexDisplaySelector),
-        ].filter(Boolean).join('\n')
-        const styleOverlay = lessOverlayCssText
-          ? { id: `visual-style-${randomUUID()}`, cssText: lessOverlayCssText }
-          : undefined
-
         const updateFIles = jsxs.concat(lesss)
 
         if (updateFIles.length) {
           const actionId = randomUUID()
           const title = getStyleActionTitle(ele)
           undoRedoManager.executeBranch({
-            styleOverlay,
             execute() {
               updateFIles.forEach(({ fileName, newCode }) => {
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
-              applyVisualStyleOverlay(styleOverlay)
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
               context.component!.actions.addUserAction({
                 id: actionId,
@@ -1236,7 +1287,6 @@ export default function createSetStyleHandler(
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
-              removeVisualStyleOverlay(styleOverlay)
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
               context.component!.actions.removeUserAction(actionId)
             },
@@ -1281,10 +1331,9 @@ export default function createSetStyleHandler(
             },
           })
         }
-
-        ctx.css.remove(SETSTYLE_CSS_ID)
       }
     } catch (e) {
+      clearPreviewStyles()
       console.error(e)
     }
   }
