@@ -48,13 +48,6 @@ type UserAction = {
   refElement: Element;
 }
 
-type UserActionRecord = {
-  id: string;
-  type: string;
-  refElement: Element;
-  added: boolean;
-}
-
 class Context {
   /** 组件 */
   component: {
@@ -99,66 +92,12 @@ class Context {
     }>;
   } | null = null
 
-  /** 当前可视化编辑会话内的用户操作，用于合并连续同一 DOM、同一类型的记录。 */
-  private userActionRecords: UserActionRecord[] = []
-
   private createComponentActions(actions: NonNullable<Context['component']>['actions']) {
-    const addUserAction = actions.addUserAction
-    const removeUserAction = actions.removeUserAction
-
     return {
       ...actions,
-      addUserAction: (action: UserAction) => {
-        const lastRecord = this.userActionRecords[this.userActionRecords.length - 1]
-        const added = !lastRecord || lastRecord.refElement !== action.refElement || lastRecord.type !== action.type
-
-        this.userActionRecords.push({
-          id: action.id,
-          type: action.type,
-          refElement: action.refElement,
-          added,
-        })
-
-        if (added) {
-          addUserAction.call(actions, action)
-        }
-      },
-      removeUserAction: (id: string) => {
-        let index = -1
-        for (let recordIndex = this.userActionRecords.length - 1; recordIndex >= 0; recordIndex -= 1) {
-          if (this.userActionRecords[recordIndex].id === id) {
-            index = recordIndex
-            break
-          }
-        }
-        if (index === -1) {
-          removeUserAction.call(actions, id)
-          return
-        }
-
-        const [record] = this.userActionRecords.splice(index, 1)
-        if (record.added) {
-          removeUserAction.call(actions, id)
-        }
-      },
+      addUserAction: (action: UserAction) => actions.addUserAction.call(actions, action),
+      removeUserAction: (id: string) => actions.removeUserAction.call(actions, id),
     }
-  }
-
-  /** 在可视化编辑会话结束后清理相邻操作的去重状态。 */
-  resetUserActionRecords() {
-    this.userActionRecords = []
-  }
-
-  /** 判断一次命令执行期间是否产生了被合并的用户操作。 */
-  hasMergedUserActionSince(recordCount: number) {
-    return this.userActionRecords
-      .slice(recordCount)
-      .some((record) => !record.added)
-  }
-
-  /** 获取当前用户操作记录数，供撤销栈标记本次命令是否需要合并。 */
-  getUserActionRecordCount() {
-    return this.userActionRecords.length
   }
 
   /** 全局事件 */
