@@ -201,8 +201,12 @@ export default function (props: Props, actions: Actions) {
                     return value?.length
                   })
                   .map(([key]) => {
+                    const operator = value[0].operator
                     return {
                       refSelector: key,
+                      author: {
+                        name: operator?.name || operator?.userName || operator?.email || '-'
+                      }
                     }
                   }),
                 events: [],

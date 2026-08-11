@@ -224,7 +224,10 @@ class Context {
             if (notifyChangedValue.docs?.length) {
               notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
                 return {
-                  refSelector
+                  refSelector,
+                  author: {
+                    name: "Leon"
+                  }
                 }
               })
             }
