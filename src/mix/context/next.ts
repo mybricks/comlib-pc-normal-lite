@@ -221,16 +221,16 @@ class Context {
             const { transformCode, jsDocMap } = transformTsx(content, { fileName });
             const transformJsDoc = Object.fromEntries(jsDocMap)
             const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
-            if (notifyChangedValue.docs?.length) {
-              notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
-                return {
-                  refSelector,
-                  author: {
-                    name: "Leon"
-                  }
-                }
-              })
-            }
+            // if (notifyChangedValue.docs?.length) {
+            //   notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
+            //     return {
+            //       refSelector,
+            //       author: {
+            //         name: "Leon"
+            //       }
+            //     }
+            //   })
+            // }
             this.notifyChanged(fileName, 'update', notifyChangedValue);
             updateFileContent({
               fileName,

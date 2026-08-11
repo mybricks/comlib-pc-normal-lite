@@ -24,13 +24,6 @@ import {
 } from '../editors/visualEditCommit';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 
-const VERIFY_CONFIG = {
-  rules: {
-    // [RULE_IDS.README_CHECK]: 'off' as const,
-    [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
-  },
-};
-
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
 /**
@@ -177,6 +170,12 @@ function buildProject(comId: string) {
       const messages: any[] = [];
       const files: any[] = aiComParams?.data?.files ?? [];
       const componentRuntime = window._sandbox_?.config?.componentRuntime
+      const VERIFY_CONFIG = {
+        rules: {
+          // [RULE_IDS.README_CHECK]: 'off' as const,
+          [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
+        },
+      };
 
       if (componentRuntime) {
         const { eslint, modules } = componentRuntime
@@ -971,8 +970,40 @@ export async function registerSandbox(comId: string): Promise<void> {
 
       async verify() {
         const aiComParams = context.component?.params;
+        const messages: any[] = [];
         const files: any[] = aiComParams?.data?.files ?? [];
-        return await eslintVerify(files, VERIFY_CONFIG);
+        const componentRuntime = window._sandbox_?.config?.componentRuntime
+        const VERIFY_CONFIG = {
+          rules: {
+            // [RULE_IDS.README_CHECK]: 'off' as const,
+            [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
+          },
+        };
+
+        if (componentRuntime) {
+          const { eslint, modules } = componentRuntime
+          if (eslint) {
+            const { rules, verify } = eslint
+            if (rules) {
+              Object.assign(VERIFY_CONFIG.rules, eslint.rules)
+            }
+            if (verify) {
+              messages.push(...await verify(files))
+            }
+          }
+          if (modules) {
+            await Promise.all(Object.entries(modules).map(async ([key, value]: any) => {
+              const eslintVerify = value.eslint.verify
+              if (eslintVerify) {
+                messages.push(...await eslintVerify(files))
+              }
+            }))
+          }
+        }
+
+        messages.push(...await eslintVerify(files, VERIFY_CONFIG))
+
+        return messages;
       },
 
       async updateFiles(files: Array<{ path: string; content: string }>) {
