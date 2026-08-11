@@ -23,6 +23,50 @@ import setSegment from './setSegment';
 import setStyle from './style/setStyle'
 import resizer from './style/resizer'
 
+function getElementRefSelector(ele: Element | null | undefined) {
+  const getNearestAttribute = (attribute: string) => {
+    if (!ele) {
+      return null
+    }
+
+    const target = ele.hasAttribute(attribute)
+      ? ele
+      : ele.closest(`[${attribute}]`)
+
+    return target?.getAttribute(attribute) ?? null
+  }
+
+  const filename = getNearestAttribute('data-zone-filename')
+  const widgetName = getNearestAttribute('data-widget-name')
+  const classnames = getNearestAttribute('data-zone-classnames')
+
+  if (!filename || !widgetName) {
+    return ''
+  }
+
+  const fileSelector = `[data-zone-filename="${filename}"]`
+  const widgetSelector = `[data-widget-name="${widgetName}"]`
+  const classSelector = classnames && classnames !== 'root'
+    ? `[data-zone-classnames*="${classnames}"]`
+    : ''
+
+  const selectors = classSelector
+    ? [
+        `${fileSelector}${widgetSelector}${classSelector}`,
+        `${fileSelector}${widgetSelector} ${classSelector}`,
+        `${fileSelector} ${widgetSelector}${classSelector}`,
+        `${fileSelector} ${widgetSelector} ${classSelector}`,
+      ]
+    : [
+        `${fileSelector}${widgetSelector}`,
+        `${fileSelector} ${widgetSelector}`,
+      ]
+
+  return selectors
+    .map((selector) => `${selector}:not([data-wrap-container])`)
+    .join(', ')
+}
+
 export default function (props: Props, actions: Actions) {
 
   registerResourcesCode(props.id, props.name)
@@ -129,6 +173,46 @@ export default function (props: Props, actions: Actions) {
           ],
         },
       ],
+      items: [
+        {
+          title: '',
+          type: 'noteRender',
+          value: {
+            get(params) {
+              const data = context.component!.params.data;
+              if (!data._noteRender) {
+                data._noteRender = {}
+              }
+              const key = getElementRefSelector(params.focusArea?.ele)
+
+              return data._noteRender[key] || []
+            },
+            set(params, value) {
+              const data = context.component!.params.data;
+              const key = getElementRefSelector(params.focusArea?.ele)
+              console.log('_noteRender', {
+                key,
+                value
+              })
+              data._noteRender[key] = value
+              context.component?.actions.notifyChanged("_noteRender", 'update', {
+                comments: Object.entries(data._noteRender)
+                  .filter(([key, value]) => {
+                    return value?.length
+                  })
+                  .map(([key]) => {
+                    return {
+                      refSelector: key,
+                    }
+                  }),
+                events: [],
+                services: [],
+                store: []
+              })
+            }
+          }
+        }
+      ]
       // items: buildElementReplacerItems(comId),
     },
     'img': {
