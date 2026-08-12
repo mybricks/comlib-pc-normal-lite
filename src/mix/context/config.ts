@@ -127,6 +127,11 @@ class Config {
     }
   }
 
+  /** 是否展示 PRD 文档按钮 */
+  getShowPrdDocumentButton() {
+    return window._sandbox_?.config?.componentRuntime?.showPrdDocumentButton !== false
+  }
+
   /** 获取配置的版本号 */
   getVersion() {
     return window._sandbox_.config.componentRuntime?.version

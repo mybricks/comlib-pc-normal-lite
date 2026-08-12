@@ -11,6 +11,7 @@ const css = getLazyCss(styles)
 function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   const [prdVisible, setPrdVisible] = useState(false);
   const [iconLibVisible, setIconLibVisible] = useState(false);
+  const showPrdDocumentButton = config.getShowPrdDocumentButton();
 
   const compiled = React.useMemo(() => {
     const files = context.component?.params?.data?.files;
@@ -31,7 +32,7 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
 
   return (
     <div className={css.actionsBar}>
-      {compiled && (
+      {showPrdDocumentButton && compiled && (
         <button type="button" className={css.actionBtn} onClick={() => setPrdVisible(true)}>
           查看PRD文档
         </button>
