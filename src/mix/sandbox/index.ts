@@ -1005,7 +1005,7 @@ export async function registerSandbox(comId: string): Promise<void> {
   };
 
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
-  const { history } = connectToAI(comId, {
+  const { history, isRemoteAgent } = connectToAI(comId, {
     designer: designerFs,
     hooks: {
       async beforeRequest({ meta, extra }) {
@@ -1035,12 +1035,14 @@ export async function registerSandbox(comId: string): Promise<void> {
           context.component!.actions!.promiseCancel(id)
         })
 
-        if (history && data && typeof data === 'object') {
+        if (history && !isRemoteAgent && data && typeof data === 'object') {
           await persistAiVersionAfterTurn(comId, history, data, turn);
         }
 
         turnLogs.setLog({
-          message: '[轮次/afterTurn] 版本已持久化 — 通知 UI 并销毁设计器 loading',
+          message: isRemoteAgent
+            ? '[轮次/afterTurn] remote Agent 版本由服务端持久化 — 通知 UI 并销毁设计器 loading'
+            : '[轮次/afterTurn] 版本已持久化 — 通知 UI 并销毁设计器 loading',
           dispose: typeof loadingRef.current?.dispose
         });
 
@@ -1056,6 +1058,12 @@ export async function registerSandbox(comId: string): Promise<void> {
           message: '[轮次/afterTurnSummary] 收到 summary 回调 — 开始更新版本摘要',
           summary
         });
+        if (isRemoteAgent) {
+          turnLogs.setLog({
+            message: '[轮次/afterTurnSummary] remote Agent 版本由服务端更新 — 跳过客户端写入',
+          });
+          return
+        }
         if (!history || !turn?.id) {
           turnLogs.setLog({
             message: '[轮次/afterTurnSummary] 已中止 — history 存储或 turn.id 不可用',
