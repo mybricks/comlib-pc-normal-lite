@@ -200,7 +200,7 @@ export default function (props: Props, actions: Actions) {
                   .filter(([key, value]) => {
                     return value?.length
                   })
-                  .map(([key]) => {
+                  .map(([key, value]) => {
                     const operator = value[0].operator
                     return {
                       refSelector: key,
