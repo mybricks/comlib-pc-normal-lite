@@ -40,12 +40,12 @@ function getElementRefSelector(ele: Element | null | undefined) {
   const widgetName = getNearestAttribute('data-widget-name')
   const classnames = getNearestAttribute('data-zone-classnames')
 
-  if (!filename || !widgetName) {
-    return ''
-  }
+  // if (!filename || !widgetName) {
+  //   return ''
+  // }
 
-  const fileSelector = `[data-zone-filename="${filename}"]`
-  const widgetSelector = `[data-widget-name="${widgetName}"]`
+  const fileSelector = filename ? `[data-zone-filename="${filename}"]` : ''
+  const widgetSelector = widgetName ? `[data-widget-name="${widgetName}"]` : ''
   const classSelector = classnames && classnames !== 'root'
     ? `[data-zone-classnames*="${classnames}"]`
     : ''
@@ -63,7 +63,7 @@ function getElementRefSelector(ele: Element | null | undefined) {
       ]
 
   return selectors
-    .map((selector) => `${selector}:not([data-wrap-container])`)
+    .map((selector) => `${selector.trim()}:not([data-wrap-container])`)
     .join(', ')
 }
 
