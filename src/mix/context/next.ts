@@ -7,6 +7,7 @@ import { randomUUID } from '../utils/uuid'
 import { getTimestamp } from "../../utils/time"
 import config from './config'
 import { validateSkillMd } from "../../utils/ai-code/render/mybricks/gui-card-next/validate-skill-md"
+import { undoRedoManager } from '../editors/undoRedo'
 
 const updateFileContent = ({ fileName, files, content }) => {
   const replaceFileName = fileName.replace(/^\//, '')
@@ -40,6 +41,13 @@ export interface ComDebugState {
   logIdCounter: number;
 }
 
+type UserAction = {
+  id: string;
+  type: string;
+  title: string;
+  refElement: Element;
+}
+
 class Context {
   /** 组件 */
   component: {
@@ -57,6 +65,11 @@ class Context {
 
       promiseComplete: (...params: any) => void
       promiseCancel: (...params: any) => void
+
+      // 推送用户事件
+      addUserAction: (action: UserAction) => void
+      // 删除用户事件
+      removeUserAction: (id) => void
     }
     /** 事件 */
     events: Events<{
@@ -79,6 +92,14 @@ class Context {
     }>;
   } | null = null
 
+  private createComponentActions(actions: NonNullable<Context['component']>['actions']) {
+    return {
+      ...actions,
+      addUserAction: (action: UserAction) => actions.addUserAction.call(actions, action),
+      removeUserAction: (id: string) => actions.removeUserAction.call(actions, id),
+    }
+  }
+
   /** 全局事件 */
   events = new Events<{ 'ready': boolean }>();
 
@@ -94,7 +115,7 @@ class Context {
         const events = new Events<Context['component']['events']>()
         this.component = {
           params,
-          actions,
+          actions: this.createComponentActions(actions),
           events
         }
         events.on('debugTarget', (debugTarget: any) => {
@@ -105,7 +126,7 @@ class Context {
         }, false);
       } else {
         this.component.params = params
-        this.component.actions = actions
+        this.component.actions = this.createComponentActions(actions)
       }
     }
   }
@@ -200,6 +221,16 @@ class Context {
             const { transformCode, jsDocMap } = transformTsx(content, { fileName });
             const transformJsDoc = Object.fromEntries(jsDocMap)
             const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
+            // if (notifyChangedValue.docs?.length) {
+            //   notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
+            //     return {
+            //       refSelector,
+            //       author: {
+            //         name: "Leon"
+            //       }
+            //     }
+            //   })
+            // }
             this.notifyChanged(fileName, 'update', notifyChangedValue);
             updateFileContent({
               fileName,
@@ -386,10 +417,17 @@ class Context {
   /** 版本 */
   version!: Version
 
-  /**
-   * 手动编辑保存后,添加 manual 类型版本记录
-   */
+  /** 手动编辑保存后，添加 manual 类型版本记录。 */
   async saveManualVersion(updateFiles: string[]): Promise<void> {
+    this.saveVisualEditVersion(updateFiles, 'manual')
+  }
+
+  /** 可视化编辑提交后保存版本，可标记为手动或 AI 修改。 */
+  saveVisualEditVersion(
+    updateFiles: string[],
+    type: 'manual' | 'ai',
+    turnId = '',
+  ): VersionRecord | undefined {
     const history = this.history
     if (!history) return;
 
@@ -407,11 +445,11 @@ class Context {
     version.total = total + 1
 
     // 新增版本记录
-    const record = {
+    const record: VersionRecord = {
       id: randomUUID(),
-      turnId: '',
+      turnId,
       label: `V${total}`,
-      type: 'manual' as const,
+      type,
       createdAt: Date.now(),
     };
 
@@ -427,10 +465,12 @@ class Context {
       })
     })
 
-    this.notifyVersionsChange({
+    const versionRecord = {
       ...record,
       summary
-    });
+    }
+    this.notifyVersionsChange(versionRecord);
+    return versionRecord
   }
 
   /** 
@@ -566,5 +606,11 @@ export class Version {
   addPromiseTask(fn: () => Promise<void>) {
     this.promiseStack.push(fn)
     this.runStack()
+  }
+}
+
+(window as any).__VIBE_COMPONENT_APIS__ = {
+  hasUncommittedChanges: () => {
+    return undoRedoManager.hasBranchHistory()
   }
 }

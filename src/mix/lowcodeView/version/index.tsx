@@ -115,6 +115,7 @@ function VersionItem({
   tagCls,
   parentElement,
   onRollback,
+  rollbackDisabled,
 }: {
   version: VersionRecord;
   isCurrent: boolean;
@@ -123,6 +124,7 @@ function VersionItem({
   tagCls: string;
   parentElement: HTMLDivElement;
   onRollback: (v: VersionRecord) => void;
+  rollbackDisabled: boolean;
 }) {
   const [popconfirmVisible, setPopconfirmVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -158,7 +160,7 @@ function VersionItem({
           <div className={css['version-summary']}>{version.summary}</div>
         )}
       </div>
-      {!isCurrent && (
+      {!isCurrent && !rollbackDisabled && (
         <div>
           <Popconfirm
             title="确认回滚到该版本？该版本之后的内容将被删除且不可撤销。"
@@ -225,8 +227,15 @@ function VersionPanel2() {
     history,
     version,
   })
+  const [hasBranchHistory, setHasBranchHistory] = useState(() => undoRedoManager.hasBranchHistory())
+  const [isVibing, setIsVibing] = useState(false)
+
+  useEffect(() => undoRedoManager.onBranchHistoryChange(setHasBranchHistory), [])
+  useEffect(() => context.component?.events.on('vibing', setIsVibing), [])
 
   const handleRollback = useCallback((version: VersionRecord, latestVersion: VersionRecord) => {
+    if (undoRedoManager.hasBranchHistory() || isVibing) return
+
     const rollback = context.rollback;
 
     undoRedoManager.execute({
@@ -237,7 +246,7 @@ function VersionPanel2() {
         rollback?.(latestVersion.id);
       },
     })
-  }, []);
+  }, [isVibing]);
 
   return (
     <div className={css.list} id="com-material-list" ref={panelContainer}>
@@ -280,6 +289,7 @@ function VersionPanel2() {
               dotCls={dotCls}
               tagCls={tagCls}
               onRollback={(version) => handleRollback(version, versions[0])}
+              rollbackDisabled={hasBranchHistory || isVibing}
               parentElement={panelContainer.current!}
             />
           )

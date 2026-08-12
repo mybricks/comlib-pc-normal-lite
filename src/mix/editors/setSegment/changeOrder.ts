@@ -2,64 +2,43 @@ import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementMoveChipData, getElementLabel } from './elementChip'
-
-const getSnippet = (fileName: string, loc: any, files): string => {
-  const file = files.find((f) => f.fileName === fileName)
-  if (!file) return ''
-  const source = decodeURIComponent(file.source)
-  const start: number = loc.jsx?.start ?? 0
-  const end: number = loc.jsx?.end ?? source.length
-  return source.slice(start, end).trim()
-}
+import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftElementSourceLocationByDelta,
+  type SourceRange,
+} from './sourceLocation'
 
 /**
- * 直接用字符串替换交换源码中两段 JSX 节点的位置。
- * 要求：fromSnippet 和 toSnippet 在 source 中各自只出现一次，且均为纯净 JSX。
+ * 按 data-loc 提供的源码范围交换两个 JSX 节点。
+ * 不依赖文本全局搜索，避免相同 JSX 出现在注释、字符串或重复结构时替换到错误位置。
  *
  * 返回替换后的新 source，若失败返回 null。
  */
-const swapSnippetsInSource = (source: string, fromSnippet: string, toSnippet: string): string | null => {
-  // 用占位符避免先替换 A 后找不到 B 的问题
-  const PLACEHOLDER_A = `__SWAP_PLACEHOLDER_A_${Date.now()}__`
-  const PLACEHOLDER_B = `__SWAP_PLACEHOLDER_B_${Date.now()}__`
-
-  if (!source.includes(fromSnippet) || !source.includes(toSnippet)) {
+const swapRangesInSource = (source: string, firstRange: SourceRange, secondRange: SourceRange): string | null => {
+  const ranges = [firstRange, secondRange].sort((a, b) => a.start - b.start)
+  const [leftRange, rightRange] = ranges
+  if (
+    !Number.isInteger(leftRange.start) ||
+    !Number.isInteger(leftRange.end) ||
+    !Number.isInteger(rightRange.start) ||
+    !Number.isInteger(rightRange.end) ||
+    leftRange.start < 0 ||
+    leftRange.end <= leftRange.start ||
+    rightRange.end <= rightRange.start ||
+    rightRange.end > source.length ||
+    leftRange.end > rightRange.start
+  ) {
     return null
   }
-  let result = source
-  result = result.replace(fromSnippet, PLACEHOLDER_A)
-  result = result.replace(toSnippet, PLACEHOLDER_B)
-  result = result.replace(PLACEHOLDER_A, toSnippet)
-  result = result.replace(PLACEHOLDER_B, fromSnippet)
-  return result
-}
 
-type SourceRange = {
-  start: number
-  end: number
-}
-
-const shiftLocByDelta = (loc: any, delta: number) => {
-  if (!loc || typeof delta !== 'number' || delta === 0) return loc
-
-  const nextLoc = { ...loc }
-
-  if (nextLoc.jsx && typeof nextLoc.jsx.start === 'number' && typeof nextLoc.jsx.end === 'number') {
-    nextLoc.jsx = {
-      ...nextLoc.jsx,
-      start: nextLoc.jsx.start + delta,
-      end: nextLoc.jsx.end + delta,
-    }
-  }
-
-  if (nextLoc.tag && typeof nextLoc.tag.end === 'number') {
-    nextLoc.tag = {
-      ...nextLoc.tag,
-      end: nextLoc.tag.end + delta,
-    }
-  }
-
-  return nextLoc
+  const leftSnippet = source.slice(leftRange.start, leftRange.end)
+  const rightSnippet = source.slice(rightRange.start, rightRange.end)
+  return source.slice(0, leftRange.start)
+    + rightSnippet
+    + source.slice(leftRange.end, rightRange.start)
+    + leftSnippet
+    + source.slice(rightRange.end)
 }
 
 const isLocInRange = (loc: any, fileName: string, range: SourceRange) => {
@@ -72,18 +51,6 @@ const isLocInRange = (loc: any, fileName: string, range: SourceRange) => {
     start >= range.start &&
     end <= range.end
   )
-}
-
-const shiftElementJSONAttribute = (ele: Element, attrName: string, delta: number) => {
-  const value = ele.getAttribute(attrName)
-  if (!value) return
-
-  try {
-    // data-zone-text-editable 等属性内部也是 JSON，且记录的是源码绝对位置。
-    // 当 JSX 子树整体移动时，这类属性需要与 data-loc 使用同一个 delta 平移，
-    // 否则后续文本编辑会继续使用旧 start/end 定位。
-    ele.setAttribute(attrName, JSON.stringify(shiftLocByDelta(JSON.parse(value), delta)))
-  } catch { }
 }
 
 /**
@@ -142,7 +109,7 @@ const getSwapDelta = (loc: any, fileName: string, firstRange: SourceRange, secon
  * - 不扫描全局 DOM，避免误改其它组件实例或同名页面中的节点。
  *
  * 这里只做位置平移，不重算 codeLine：
- * - start/end/tag.end 是后续字符串截取、样式注入、文本编辑真正依赖的绝对偏移；
+ * - data-loc 与 data-style-info 的绝对偏移会被同步，供后续字符串截取、样式注入、文本编辑使用；
  * - codeLine 需要 AST/源码重新解析才能准确计算，手动推断容易生成不可信行号。
  */
 const shiftDOMLocAfterSourceSwap = (root: Element | null, fileName: string, firstRange: SourceRange, secondRange: SourceRange) => {
@@ -158,47 +125,45 @@ const shiftDOMLocAfterSourceSwap = (root: Element | null, fileName: string, firs
       const delta = getSwapDelta(loc, fileName, firstRange, secondRange)
       if (delta === 0) return
 
-      ele.setAttribute('data-loc', JSON.stringify(shiftLocByDelta(loc, delta)))
-      shiftElementJSONAttribute(ele, 'data-zone-text-editable', delta)
+      shiftElementSourceLocationByDelta(ele, delta)
     } catch { }
   })
 }
 
-const restoreDOMAttribute = (ele: Element | null, attrName: string, value: string | null) => {
-  if (!ele) return
-  if (value == null) {
-    ele.removeAttribute(attrName)
-  } else {
-    ele.setAttribute(attrName, value)
+const swapDOMNodes = (fromEle: Element, toEle: Element) => {
+  const parent = fromEle.parentNode
+  if (!parent || parent !== toEle.parentNode) return
+
+  const fromNext = fromEle.nextSibling
+  const toNext = toEle.nextSibling
+
+  if (fromNext === toEle) {
+    parent.insertBefore(toEle, fromEle)
+    return
   }
+  if (toNext === fromEle) {
+    parent.insertBefore(fromEle, toEle)
+    return
+  }
+
+  parent.insertBefore(fromEle, toNext)
+  parent.insertBefore(toEle, fromNext)
 }
 
-const restoreDOMLocSnapshot = (root: Element | null, snapshot: Map<Element, { loc: string | null; textEditable: string | null }>) => {
-  if (!root) return
-
-  const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
-  elements.forEach((ele) => {
-    const item = snapshot.get(ele)
-    if (!item) return
-
-    restoreDOMAttribute(ele, 'data-loc', item.loc)
-    restoreDOMAttribute(ele, 'data-zone-text-editable', item.textEditable)
-  })
+const restoreDOMNodePosition = (ele: Element, parent: Node | null, nextSibling: Node | null) => {
+  if (!parent) return
+  parent.insertBefore(ele, nextSibling?.parentNode === parent ? nextSibling : null)
 }
 
-const createDOMLocSnapshot = (root: Element | null) => {
-  const snapshot = new Map<Element, { loc: string | null; textEditable: string | null }>()
-  if (!root) return snapshot
+const moveDOMNode = (fromEle: Element, toEle: Element, type: 'before' | 'after') => {
+  const parent = toEle.parentNode
+  if (!parent) return
+  parent.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
+}
 
-  const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
-  elements.forEach((ele) => {
-    snapshot.set(ele, {
-      loc: ele.getAttribute('data-loc'),
-      textEditable: ele.getAttribute('data-zone-text-editable'),
-    })
-  })
-
-  return snapshot
+const buildMoveDescription = (fromLabel: string, toLabel: string, type: 'before' | 'after') => {
+  return `移动 ${fromLabel} 的位置`
+  // return `将 ${fromLabel} 移到 ${toLabel}${type === 'before' ? '前' : '后'}`
 }
 
 const changeOrder = (options) => {
@@ -264,9 +229,6 @@ const changeOrder = (options) => {
   }
 
   const files: Array<{ fileName: string; source: string }> = context.component!.params.data.files ?? []
-  const fromSnippet = getSnippet(fromFile, fromLoc, files)
-  const toSnippet = getSnippet(toFile, toLoc, files)
-
   // ─── 快速路径：不走 AI，直接替换 ─────────────────────────────────────
   // 条件：
   //   1. 两个元素都直接有 data-loc（fromDOM === fromEle && toDOM === toEle）
@@ -284,67 +246,97 @@ const changeOrder = (options) => {
     toLoc.swappable === true
   ) {
     if (fileEntry) {
-      const newSource = swapSnippetsInSource(source, fromSnippet, toSnippet)
+      const fromRange = {
+        start: fromLoc.jsx?.start,
+        end: fromLoc.jsx?.end,
+      }
+      const toRange = {
+        start: toLoc.jsx?.start,
+        end: toLoc.jsx?.end,
+      }
+      const newSource = swapRangesInSource(source, fromRange, toRange)
       if (newSource !== null) {
-        const fromRange = {
-          start: fromLoc.jsx.start,
-          end: fromLoc.jsx.end,
-        }
-        const toRange = {
-          start: toLoc.jsx.start,
-          end: toLoc.jsx.end,
-        }
         const locSnapshotRoot = fromEle.parentElement
         // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原交换前快照，
         // 否则源码已回退但 DOM 仍保留交换后的 data-loc，再次操作仍会错位。
-        const locSnapshot = createDOMLocSnapshot(locSnapshotRoot)
+        const locSnapshot = createDOMSourceLocationSnapshot(locSnapshotRoot, fromFile)
 
-        undoRedoManager.execute({
+        const fromParent = fromEle.parentNode
+        const fromNextSibling = fromEle.nextSibling
+        const toParent = toEle.parentNode
+        const toNextSibling = toEle.nextSibling
+        const fromLabel = getElementLabel(fromEle, '节点1')
+        const toLabel = getElementLabel(toEle, '节点2')
+        const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
+        const actionId = randomUUID()
+
+        undoRedoManager.executeBranch({
           execute() {
             context.updateFile({ fileName: fromFile, content: newSource, type: undefined, noUpdateFileSystem: true })
-            // noUpdateFileSystem 不触发完整重渲染，需要手动同步 DOM 中仍在使用的源码偏移。
+            // noUpdateFileSystem 不触发完整重渲染，必须同步节点顺序和源码定位。
+            swapDOMNodes(fromEle, toEle)
             shiftDOMLocAfterSourceSwap(locSnapshotRoot, fromFile, fromRange, toRange)
-            context.saveManualVersion([fromFile])
+            context.component!.actions.addUserAction({
+              id: actionId,
+              type: 'move',
+              title: moveDescription,
+              refElement: fromEle,
+            })
           },
           undo() {
             context.updateFile({ fileName: fromFile, content: source, type: undefined, noUpdateFileSystem: true })
-            restoreDOMLocSnapshot(locSnapshotRoot, locSnapshot)
-            context.saveManualVersion([fromFile])
+            restoreDOMNodePosition(fromEle, fromParent, fromNextSibling)
+            restoreDOMNodePosition(toEle, toParent, toNextSibling)
+            restoreDOMSourceLocationSnapshot(locSnapshot)
+            context.component!.actions.removeUserAction(actionId)
           },
         })
         return {
-          type: 'success'
+          type: 'success',
+          actionId,
         }
       }
     }
   }
 
-  const componentId = context.component!.params.id
   const fromLabel = getElementLabel(fromEle, '节点1')
   const toLabel = getElementLabel(toEle, '节点2')
   const placement = type === 'before' ? 'before' : 'after'
 
+  const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
+
   const chip = {
     id: randomUUID(),
     type: 'element-move',
-    label: `将 ${fromLabel} 移到 ${toLabel} ${type === 'before' ? '前面' : '后面'}`,
+    label: moveDescription,
     data: buildElementMoveChipData(fromEle, toEle, placement, fromLabel, toLabel),
   }
+  const actionId = randomUUID()
+  const fromParent = fromEle.parentNode
+  const fromNextSibling = fromEle.nextSibling
 
-  window._sandbox_.helpers.appendToSender(componentId, {
-    message: `[[chip:${chip.id}]]`,
-    meta: {
+  undoRedoManager.executeBranch({
+    aiRequest: {
+      message: `[[chip:${chip.id}]]`,
       chips: [chip],
     },
-    animation: true
+    execute() {
+      // AI 修改尚未回写源码，不能更新 data-loc 等源码定位属性。
+      moveDOMNode(fromEle, toEle, placement)
+      context.component!.actions.addUserAction({
+        id: actionId,
+        type: 'move',
+        title: moveDescription,
+        refElement: fromEle,
+      })
+    },
+    undo() {
+      restoreDOMNodePosition(fromEle, fromParent, fromNextSibling)
+      context.component!.actions.removeUserAction(actionId)
+    },
   })
 
-  context.chipPromiseIds.add(chip.id)
-
-  return {
-    type: 'promise',
-    promiseId: chip.id
-  }
+  return { type: 'success' }
 }
 
 export default changeOrder

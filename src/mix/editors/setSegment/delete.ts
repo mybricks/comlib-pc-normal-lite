@@ -3,34 +3,55 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementDeleteChipData, getElementLabel } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
+import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftDOMSourceLocationsAfterReplacement,
+} from './sourceLocation'
 
 const createDeletePlaceholder = (length: number) => {
   const placeholder = '<></>'
-  return placeholder.length >= length ? placeholder.slice(0, length) : placeholder + ' '.repeat(length - placeholder.length)
+  // 不能截断空 Fragment：<i/> 只有 4 个字符，截成 <></ 会产生无法编译的 JSX。
+  // 极短节点允许源码增长 1 个字符，并在下方同步后续绝对偏移。
+  return placeholder.length >= length ? placeholder : placeholder + ' '.repeat(length - placeholder.length)
 }
 
-const sendDeleteToAI = (fromEle) => {
+const runDeleteByAI = (fromEle) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
+  const actionId = randomUUID()
   const chip = {
     id: randomUUID(),
     type: 'element-delete',
     label: `删除 ${fromLabel} `,
     data: buildElementDeleteChipData(fromEle, fromLabel),
   }
-  const componentId = context.component!.params.id
-  window._sandbox_.helpers.appendToSender(componentId, {
-    message: `[[chip:${chip.id}]]`,
-    meta: {
+
+  const parent = fromEle.parentNode
+  const nextSibling = fromEle.nextSibling
+
+  undoRedoManager.executeBranch({
+    aiRequest: {
+      message: `[[chip:${chip.id}]]`,
       chips: [chip],
     },
-    animation: true
+    execute() {
+      fromEle.remove()
+      context.component!.actions.addUserAction({
+        id: actionId,
+        type: 'delete',
+        title: `删除 ${fromLabel}`,
+        refElement: fromEle,
+      })
+    },
+    undo() {
+      if (parent) {
+        parent.insertBefore(fromEle, nextSibling?.parentNode === parent ? nextSibling : null)
+      }
+      context.component!.actions.removeUserAction(actionId)
+    },
   })
-  context.chipPromiseIds.add(chip.id)
 
-  return {
-    type: 'promise',
-    promiseId: chip.id
-  }
+  return { type: 'success' }
 }
 
 const runDelete = (options) => {
@@ -38,13 +59,13 @@ const runDelete = (options) => {
   const loc = fromEle.dataset.loc
 
   if (!loc) {
-    return sendDeleteToAI(fromEle)
+    return runDeleteByAI(fromEle)
   } else {
     const shadowRoot = getShadowRoot()
     const elements = shadowRoot.querySelectorAll(`[data-loc='${loc}']`)
     if (elements.length > 1) {
       // 有多个，走AI
-      return sendDeleteToAI(fromEle)
+      return runDeleteByAI(fromEle)
     } else {
       const { files, jsx } = JSON.parse(loc)
       const file = context.component!.params!.data!.files.find((file) => file.fileName === files.jsx)
@@ -53,24 +74,46 @@ const runDelete = (options) => {
       const end = jsx?.end
 
       if (!file || typeof start !== 'number' || typeof end !== 'number' || start < 0 || end <= start || end > source.length) {
-        return sendDeleteToAI(fromEle)
+        return runDeleteByAI(fromEle)
       }
 
-      const newSource = source.slice(0, start) + createDeletePlaceholder(end - start) + source.slice(end)
+      const placeholder = createDeletePlaceholder(end - start)
+      const newSource = source.slice(0, start) + placeholder + source.slice(end)
+      const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, files.jsx)
+      const parent = fromEle.parentNode
+      const nextSibling = fromEle.nextSibling
+      const fromLabel = getElementLabel(fromEle, '节点1')
+      const actionId = randomUUID()
 
-      undoRedoManager.execute({
+      undoRedoManager.executeBranch({
         execute() {
           context.updateFile({ fileName: files.jsx, content: newSource, type: undefined, noUpdateFileSystem: true })
-          context.saveManualVersion([files.jsx],)
+          shiftDOMSourceLocationsAfterReplacement(shadowRoot, files.jsx, {
+            start,
+            end,
+            newLength: placeholder.length,
+          })
+          fromEle.remove()
+          context.component!.actions.addUserAction({
+            id: actionId,
+            type: 'delete',
+            title: `删除 ${fromLabel}`,
+            refElement: fromEle,
+          })
         },
         undo() {
           context.updateFile({ fileName: files.jsx, content: source, type: undefined, noUpdateFileSystem: true })
-          context.saveManualVersion([files.jsx])
+          if (parent) {
+            parent.insertBefore(fromEle, nextSibling?.parentNode === parent ? nextSibling : null)
+          }
+          restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
+          context.component!.actions.removeUserAction(actionId)
         },
       })
 
       return {
-        type: 'success'
+        type: 'success',
+        actionId,
       }
     }
   }

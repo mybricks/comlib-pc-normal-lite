@@ -94,6 +94,7 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
 
   const [replacedSvg, setReplacedSvg] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const currentSvgHtml = replacedSvg ?? (svgEl?.tagName.toLowerCase() === 'svg' ? svgEl.outerHTML : '');
 
   useEffect(() => {
     registerSvgAppliedCallback((rawSvg: string) => {
@@ -139,7 +140,7 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
       </div>
 
       {/* 尺寸编辑器：三方组件图标不支持非等比变形，禁止解锁宽高比 */}
-      <SizeEditor size={iconSize} onCommit={handleSizeCommit} disableLock={!replacedSvg} />
+      <SizeEditor size={iconSize} onCommit={handleSizeCommit} svg={currentSvgHtml} disableLock={!replacedSvg} />
 
       {/* 操作按钮 */}
       <div className={css.btnRow}>

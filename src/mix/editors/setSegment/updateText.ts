@@ -3,30 +3,58 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementTextUpdateChipData, getElementLabel } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
+import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftDOMSourceLocationsAfterReplacement,
+} from './sourceLocation'
 
-const sendUpdateTextToAI = (fromEle, content: string) => {
+const toSafeJSXText = (content: string) => {
+  return content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/{/g, '&#123;')
+    .replace(/}/g, '&#125;')
+    .split('\n')
+    .join('<br/>')
+}
+
+const runUpdateTextByAI = (fromEle, content: string) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
+  const actionId = randomUUID()
   const chip = {
     id: randomUUID(),
     type: 'element-text-update',
     label: `修改 ${fromLabel} 文案`,
     data: buildElementTextUpdateChipData(fromEle, content, fromLabel),
   }
-  const componentId = context.component!.params.id
-  window._sandbox_.helpers.appendToSender(componentId, {
-    message: `[[chip:${chip.id}]]`,
-    meta: {
+
+  const previousInnerHTML = fromEle.innerHTML
+  const nextValue = toSafeJSXText(content)
+
+  undoRedoManager.executeBranch({
+    aiRequest: {
+      message: `[[chip:${chip.id}]]`,
       chips: [chip],
     },
-    animation: true
+    execute() {
+      // AI 尚未改写源码，先在画布上显示用户输入的预期结果。
+      fromEle.innerHTML = nextValue
+      context.component!.actions.addUserAction({
+        id: actionId,
+        type: 'update-text',
+        title: `修改 ${fromLabel} 文案`,
+        refElement: fromEle,
+      })
+    },
+    undo() {
+      fromEle.innerHTML = previousInnerHTML
+      context.component!.actions.removeUserAction(actionId)
+    },
   })
 
-  context.chipPromiseIds.add(chip.id)
-
-  return {
-    type: 'promise',
-    promiseId: chip.id
-  }
+  return { type: 'success' }
 }
 
 const updateText = (options) => {
@@ -40,20 +68,20 @@ const updateText = (options) => {
 
   if (!zoneTextEditable) {
     // 没有 data-zone-text-editable 属性，添加到对话框
-    return sendUpdateTextToAI(fromEle, content)
+    return runUpdateTextByAI(fromEle, content)
   }
 
   try {
     const locValue = fromEle.dataset.loc
     if (!locValue) {
-      return sendUpdateTextToAI(fromEle, content)
+      return runUpdateTextByAI(fromEle, content)
     }
 
     const shadowRoot = getShadowRoot()
     const elements = shadowRoot.querySelectorAll(`[data-loc='${locValue}']`)
     if (elements.length > 1) {
       // 有多个相同 data-loc，直接修改会影响多个渲染实例，走 AI
-      return sendUpdateTextToAI(fromEle, content)
+      return runUpdateTextByAI(fromEle, content)
     }
 
     const loc = JSON.parse(locValue)
@@ -65,28 +93,48 @@ const updateText = (options) => {
     const end = textloc.jsx?.end
 
     if (!file || !fileName || typeof start !== 'number' || typeof end !== 'number' || start < 0 || end <= start || end > source.length) {
-      return sendUpdateTextToAI(fromEle, content)
+      return runUpdateTextByAI(fromEle, content)
     }
 
-    const nextValue = content.split('\n').join('<br/>')
+    const nextValue = toSafeJSXText(content)
     const newSource = source.slice(0, start) + nextValue + source.slice(end)
+    const previousInnerHTML = fromEle.innerHTML
+    // noUpdateFileSystem 保留当前 DOM；后续节点仍会引用原始绝对偏移，先保留快照以支持撤销。
+    const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, fileName)
+    const fromLabel = getElementLabel(fromEle, '节点1')
+    const actionId = randomUUID()
 
-    undoRedoManager.execute({
+    undoRedoManager.executeBranch({
       execute() {
         context.updateFile({ fileName, content: newSource, type: undefined, noUpdateFileSystem: true })
-        context.saveManualVersion([fileName])
+        shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, {
+          start,
+          end,
+          newLength: nextValue.length,
+        })
+        // noUpdateFileSystem 不会触发重新渲染，画布内容需要立即同步。
+        fromEle.innerHTML = nextValue
+        context.component!.actions.addUserAction({
+          id: actionId,
+          type: 'update-text',
+          title: `修改 ${fromLabel} 文案`,
+          refElement: fromEle,
+        })
       },
       undo() {
         context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true })
-        context.saveManualVersion([fileName])
+        restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
+        fromEle.innerHTML = previousInnerHTML
+        context.component!.actions.removeUserAction(actionId)
       },
     })
 
     return {
-      type: 'success'
+      type: 'success',
+      actionId,
     }
   } catch (e) {
-    return sendUpdateTextToAI(fromEle, content)
+    return runUpdateTextByAI(fromEle, content)
   }
 }
 

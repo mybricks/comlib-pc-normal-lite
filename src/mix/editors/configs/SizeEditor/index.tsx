@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AspectRadiolock } from '../../icons/aspect-radio-lock';
 import { AspectRadioUnlock } from '../../icons/aspect-radio-unlock';
+import { DownloadIcon } from '../../icons/ai-img';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 import { useDragLabel } from '../hooks/useDragLabel';
@@ -64,11 +65,23 @@ function roundToTwoDecimals(value: number): number {
 export interface SizeEditorProps {
   size: { w: number; h: number };
   onCommit: (size: { width: number; height: number }) => void;
+  svg?: string;
   /** 禁止解锁宽高比（如三方库图标），始终锁定且不可点击 */
   disableLock?: boolean;
 }
 
-export function SizeEditor({ size: initialSize, onCommit, disableLock = false }: SizeEditorProps) {
+function downloadSvg(svg: string): void {
+  const objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = 'icon.svg';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+export function SizeEditor({ size: initialSize, onCommit, svg, disableLock = false }: SizeEditorProps) {
   const [w, setW] = useState(initialSize.w);
   const [h, setH] = useState(initialSize.h);
   const [locked, setLocked] = useState(true);
@@ -146,6 +159,27 @@ export function SizeEditor({ size: initialSize, onCommit, disableLock = false }:
       >
         {locked ? <AspectRadiolock /> : <AspectRadioUnlock />}
       </button>
+      {svg && (
+        <button
+          type="button"
+          aria-label="下载SVG"
+          data-mybricks-tip={JSON.stringify({ content: '下载SVG', position: 'left' })}
+          onClick={() => downloadSvg(svg)}
+          style={{
+            flexShrink: 0,
+            width: 26,
+            height: 26,
+            padding: 4,
+            boxSizing: 'border-box',
+            border: '1px solid var(--mybricks-border-color-main, #ddd)',
+            borderRadius: 6,
+            backgroundColor: 'var(--mybricks-bg-color-main, #fff)',
+            cursor: 'pointer',
+          }}
+        >
+          <DownloadIcon style={{ display: 'block', width: '100%', height: '100%' }} />
+        </button>
+      )}
     </div>
   );
 }

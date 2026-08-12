@@ -17,14 +17,12 @@ import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
 import { undoRedoManager } from '../editors/undoRedo';
+import type { FileSnapshot } from '../editors/undoRedo';
+import {
+  createVisualEditMainCommand,
+  takePendingVisualAICommit,
+} from '../editors/visualEditCommit';
 import { parseLess, stringifyLess } from '../utils/transform/less';
-
-const VERIFY_CONFIG = {
-  rules: {
-    // [RULE_IDS.README_CHECK]: 'off' as const,
-    [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
-  },
-};
 
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
@@ -172,6 +170,12 @@ function buildProject(comId: string) {
       const messages: any[] = [];
       const files: any[] = aiComParams?.data?.files ?? [];
       const componentRuntime = window._sandbox_?.config?.componentRuntime
+      const VERIFY_CONFIG = {
+        rules: {
+          // [RULE_IDS.README_CHECK]: 'off' as const,
+          [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
+        },
+      };
 
       if (componentRuntime) {
         const { eslint, modules } = componentRuntime
@@ -641,6 +645,8 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
 
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
+/** 视觉分支中只有本地代码变更的 turn 不应使用 AI summary 覆盖手动版本。 */
+const TURNS_WITH_MANUAL_VISUAL_VERSION = new Set<string>()
 
 // 记录 turn.id 对应的操作记录
 class TurnLogs {
@@ -677,12 +683,19 @@ async function persistAiVersionAfterTurn(
   comId: string,
   history: SandboxHistory,
   data: { files?: any[] },
-  turn?: { id?: string }
-): Promise<void> {
-  const previousSnapshot = requestSourceSnapshotMap.get(data);
+  turn?: { id?: string },
+  options?: {
+    visualBranchBeforeFiles?: FileSnapshot[]
+    visualStyleOverlays?: import('../editors/visualStyleOverlay').VisualStyleOverlay[]
+  },
+): Promise<boolean> {
+  const requestSnapshot = requestSourceSnapshotMap.get(data)
+  const previousSnapshot = options?.visualBranchBeforeFiles
+    ? new Map(options.visualBranchBeforeFiles.map((file) => [file.path, encodeURIComponent(file.content)]))
+    : requestSnapshot;
   if (!hasSourceChanged(data.files ?? [], previousSnapshot)) {
     turnLogs.setLog({ message: '[版本/跳过] 源码无变更 — 不记录版本' })
-    return
+    return false
   };
 
   const files: VersionFile[] = (data.files ?? [])
@@ -691,6 +704,28 @@ async function persistAiVersionAfterTurn(
       path: f.fileName,
       content: decodeURIComponent(f.source),
     }));
+
+  if (options?.visualBranchBeforeFiles) {
+    const aiSourceChanged = hasSourceChanged(data.files ?? [], requestSnapshot)
+    const command = createVisualEditMainCommand(
+      options.visualBranchBeforeFiles,
+      files,
+      aiSourceChanged ? 'ai' : 'manual',
+      aiSourceChanged ? turn?.id ?? '' : '',
+      options.visualStyleOverlays,
+    )
+    if (!command) return false
+
+    command.execute()
+    undoRedoManager.record(command)
+    const versionRecord = command.getVersionRecord()
+    if (aiSourceChanged && versionRecord && turn?.id) {
+      TURNID_TO_RECORD[turn.id] = versionRecord
+    } else if (turn?.id) {
+      TURNS_WITH_MANUAL_VISUAL_VERSION.add(turn.id)
+    }
+    return true
+  }
 
   const version = context.version
   const total = version.total
@@ -752,6 +787,7 @@ async function persistAiVersionAfterTurn(
       context.saveManualVersion(updateFileNames);
     },
   });
+  return true
 }
 
 // ─── 设计器 loading / lock（与 vibeCoding 请求进度一致）────────────────────────
@@ -805,8 +841,10 @@ export function createDesignerLoading(
     });
   };
 
-  const resolveMode = (): 'progress' | 'component' =>
-    !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.source === '@updateSegment:changeOrder') ? 'progress' : 'component';
+  // AI 请求统一使用全局进度锁。保留 component 分支，便于后续恢复区域锁定策略。
+  const resolveMode = (): 'progress' | 'component' => 'progress';
+  // const resolveMode = (): 'progress' | 'component' =>
+  //   !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.source === '@updateSegment:changeOrder') ? 'progress' : 'component';
 
   const applyLock = (mode: 'progress' | 'component') => {
     if (mode === 'progress') {
@@ -932,8 +970,40 @@ export async function registerSandbox(comId: string): Promise<void> {
 
       async verify() {
         const aiComParams = context.component?.params;
+        const messages: any[] = [];
         const files: any[] = aiComParams?.data?.files ?? [];
-        return await eslintVerify(files, VERIFY_CONFIG);
+        const componentRuntime = window._sandbox_?.config?.componentRuntime
+        const VERIFY_CONFIG = {
+          rules: {
+            // [RULE_IDS.README_CHECK]: 'off' as const,
+            [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
+          },
+        };
+
+        if (componentRuntime) {
+          const { eslint, modules } = componentRuntime
+          if (eslint) {
+            const { rules, verify } = eslint
+            if (rules) {
+              Object.assign(VERIFY_CONFIG.rules, eslint.rules)
+            }
+            if (verify) {
+              messages.push(...await verify(files))
+            }
+          }
+          if (modules) {
+            await Promise.all(Object.entries(modules).map(async ([key, value]: any) => {
+              const eslintVerify = value.eslint.verify
+              if (eslintVerify) {
+                messages.push(...await eslintVerify(files))
+              }
+            }))
+          }
+        }
+
+        messages.push(...await eslintVerify(files, VERIFY_CONFIG))
+
+        return messages;
       },
 
       async updateFiles(files: Array<{ path: string; content: string }>) {
@@ -1035,8 +1105,19 @@ export async function registerSandbox(comId: string): Promise<void> {
           context.component!.actions!.promiseCancel(id)
         })
 
+        const visualAICommit = takePendingVisualAICommit(comId)
+        let sourceChanged = false
         if (history && !isRemoteAgent && data && typeof data === 'object') {
-          await persistAiVersionAfterTurn(comId, history, data, turn);
+          sourceChanged = await persistAiVersionAfterTurn(comId, history, data, turn, {
+            visualBranchBeforeFiles: visualAICommit?.beforeFiles,
+            visualStyleOverlays: visualAICommit?.styleOverlays,
+          });
+        }
+        if (visualAICommit) {
+          if (!sourceChanged) {
+            undoRedoManager.rollbackAIBranchCommands()
+          }
+          undoRedoManager.clearBranch()
         }
 
         turnLogs.setLog({
@@ -1070,6 +1151,13 @@ export async function registerSandbox(comId: string): Promise<void> {
           });
           return
         };
+
+        if (TURNS_WITH_MANUAL_VISUAL_VERSION.delete(turn.id)) {
+          turnLogs.setLog({
+            message: '[轮次/afterTurnSummary] 视觉分支未检测到 AI 源码修改，跳过 AI 摘要覆盖',
+          });
+          return
+        }
 
         const target = TURNID_TO_RECORD[turn.id]
 
@@ -1120,6 +1208,36 @@ export async function registerSandbox(comId: string): Promise<void> {
       ['element-delete']: {
         def: {
           type: 'element-delete',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-style-update']: {
+        def: {
+          type: 'element-style-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-image-update']: {
+        def: {
+          type: 'element-image-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-svg-update']: {
+        def: {
+          type: 'element-svg-update',
           format: formatParsedElementChipMessage,
         },
         onRemove(params) {

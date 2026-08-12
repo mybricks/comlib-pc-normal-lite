@@ -21,7 +21,9 @@ const design = (props: CreateMyBricksProps) => {
         data-widge-name='页面'
         style={DEFAULT_STYLE}
       >
-        <Render />
+        <div style={{ width: '100%', height: '100%', overflowX: 'hidden'}}>
+          <Render />
+        </div>
       </div>
     )
   }

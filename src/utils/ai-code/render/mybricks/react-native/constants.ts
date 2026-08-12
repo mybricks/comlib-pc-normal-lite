@@ -7,5 +7,5 @@ export const DEFAULT_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   transform: 'scale(1)',
-  height: 896,
+  minHeight: 896,
 }

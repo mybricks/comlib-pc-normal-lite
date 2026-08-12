@@ -13,12 +13,15 @@ import { parseFrameSize } from "./utils";
 import css from './index.less';
 import { debugLogs } from '../../../../mix/context/debugLogs';
 import mixContext, { config } from '../../../../mix/context';
+import { undoRedoManager } from '../../../../mix/editors/undoRedo';
+import { randomUUID } from '../../../../mix/utils/uuid';
 import {
   isLoggerMethod,
   mergeLoggerBindings,
   type LoggerBindings,
 } from '../logger';
 import prototype from './prototype';
+import EnvConfigPanel from './env-config-panel';
 
 const useBreakpoints = (path) => {
   const [breakpoint, setBreakpoint] = useState<any>(null)
@@ -448,7 +451,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
   interface AppContextValue {
     state: 'collect_routes' | 'runtime'
-    registerRoute: (route: string) => void
+    registerRoute: (route: string, element: React.ReactElement) => void
     routeBase: string
   }
   const AppContext = createContext<AppContextValue>({
@@ -532,9 +535,64 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     // overflow: 'hidden' // 绝对定位元素不渲染
   }
 
+  const ENV_CONFIG_FILENAME = 'config/env.json'
+
+  const getEnvCssVariables = (source?: string) => {
+    if (typeof source !== 'string') {
+      return {}
+    }
+
+    try {
+      let envConfig: any
+      try {
+        envConfig = JSON.parse(source)
+      } catch {
+        envConfig = JSON.parse(decodeURIComponent(source))
+      }
+
+      const activeStyle = envConfig?.style?.styles?.find((style) => style?.id === envConfig?.style?.active)
+      return activeStyle?.cssVariables?.reduce((variables, category) => {
+        if (!Array.isArray(category?.variables)) {
+          return variables
+        }
+
+        category.variables.forEach(cssVariable => {
+          if (
+            typeof cssVariable?.name === 'string' &&
+            cssVariable.name.startsWith('--') &&
+            (typeof cssVariable.value === 'string' || typeof cssVariable.value === 'number')
+          ) {
+            variables[cssVariable.name] = cssVariable.value
+          }
+        })
+        return variables
+      }, {}) || {}
+    } catch {
+      return {}
+    }
+  }
+
+  const useEnvCssVariables = () => {
+    const fileSystem = mixContext.fileSystem
+    const readVariables = () => getEnvCssVariables(fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file?.source)
+    const [variables, setVariables] = useState(readVariables)
+
+    useEffect(() => {
+      setVariables(readVariables())
+      return fileSystem?.events.on('fileChange', ({ filename }) => {
+        if (filename === ENV_CONFIG_FILENAME) {
+          setVariables(readVariables())
+        }
+      })
+    }, [fileSystem])
+
+    return variables
+  }
+
   const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void }>) => {
     const { path = '/', onMount, children } = params;
     const theme = mixContext.resolveActiveTheme();
+    const envCssVariables = useEnvCssVariables();
     const containerRef = useRef<HTMLDivElement>(null);
     const [container, setContainer] = useState<PageContextValue | null>(null);
     const [style, setStyle] = useState<React.CSSProperties>({      
@@ -675,7 +733,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             return pre
           }, cssContent)
 
-          const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
+          const myContent = cssText
+            .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
+            .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
+            .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
+            .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
             .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
           // 组件id + 文件路径，保证唯一性
           const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
@@ -738,6 +800,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             pre[cur.propertyName] = cur.value;
             return pre;
           }, {}),
+          ...envCssVariables,
         }}
       >
         {container && <PageContext.Provider value={container}>
@@ -799,7 +862,10 @@ const createMyBricks = (props: CreateMyBricksProps) => {
              * 2. 通配符路由通常作为布局/兜底承载具体子路由，自身不作为独立页面收集
              */
             if (!isWildcardPath(path)) {
-              appCtx.registerRoute(joinRoutePaths(appCtx.routeBase, transformPath({ index, path })));
+              appCtx.registerRoute(
+                joinRoutePaths(appCtx.routeBase, transformPath({ index, path })),
+                element
+              );
             }
           }
         }
@@ -909,11 +975,53 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
 
+  const EnvConfigPanelContainer = () => {
+    const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
+
+    useEffect(() => {
+      const fileSystem = mixContext.fileSystem
+      return fileSystem?.events.on('fileChange', ({ filename, type }) => {
+        if (filename === ENV_CONFIG_FILENAME && ['create', 'update', 'delete'].includes(type)) {
+          forceUpdate()
+        }
+      })
+    }, [])
+
+    const envFile = mixContext.fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file
+    return envFile ? (
+      <EnvConfigPanel
+        env={envFile.source}
+        onSave={(source, refElement, action) => {
+          const previousSource = decodeURIComponent(envFile.source)
+          if (source === previousSource) return
+          const actionId = randomUUID()
+
+          undoRedoManager.executeBranch({
+            execute() {
+              mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })
+              mixContext.component!.actions.addUserAction({
+                id: actionId,
+                type: action.type,
+                title: action.title,
+                refElement,
+              })
+            },
+            undo() {
+              mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: previousSource })
+              mixContext.component!.actions.removeUserAction(actionId)
+            },
+          })
+        }}
+      />
+    ) : null
+  }
+
   const appRef = (Component) => {
     const ObservedComponent = observer(Component);
     return (props) => {
       if (isDesign()) {
         const collectingRoutes = useRef<string[]>([]);
+        const collectingRouteTypes = useRef<Set<React.ElementType>>(new Set());
         const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
         React.useEffect(() => {
           popupRefRegistryForceUpdate = forceUpdate;
@@ -924,7 +1032,12 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
         const [app, setApp] = useState<AppContextValue>({
           state: 'collect_routes',
-          registerRoute: (path: string) => {
+          registerRoute: (path: string, element: React.ReactElement) => {
+            if (frontendMode === 'default') {
+              // A page can be registered under several routes. Render it once on the design canvas.
+              if (collectingRouteTypes.current.has(element.type)) return;
+              collectingRouteTypes.current.add(element.type);
+            }
             collectingRoutes.current.push(path);
           },
           routeBase: ''
@@ -956,6 +1069,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
         return (
           <AppContext.Provider value={app}>
+            <EnvConfigPanelContainer />
             {app.state === "collect_routes" && (
               <ObservedComponent {...props} _env={_env}/>
             )}
@@ -1028,7 +1142,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 return pre
               }, cssContent)
 
-              const myContent = cssText.replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
+              const myContent = cssText
+                .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
+                .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
+                .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
+                .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
                 .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
               // 组件id + 文件路径，保证唯一性
               const cssId = `${comId}_${file.filename}`.replace(/\./g, '__').replace(/\//g, '_')
@@ -1104,6 +1222,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         return null
       }
       const theme = mixContext.resolveActiveTheme();
+      const envCssVariables = useEnvCssVariables();
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1240,7 +1359,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               ...theme?.vars?.reduce((pre, cur) => {
                 pre[cur.propertyName] = cur.value;
                 return pre;
-              }, {})
+              }, {}),
+              ...envCssVariables
             }}>
             {container && (
               <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
@@ -1375,6 +1495,15 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         popupRefRegistryForceUpdate?.()
       }
     },
+    updateConfigJson(filename, content) {
+      try {
+        if (filename === ENV_CONFIG_FILENAME) {
+          mixContext.updateFile({ fileName: filename, content: JSON.stringify(content, null, 2) })
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
   }
 }
 
