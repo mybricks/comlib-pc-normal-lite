@@ -590,7 +590,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void }>) => {
-    const { path = '/', onMount, children } = params;
+    const { path = '/', onMount, children, defaultMount } = params;
     const theme = mixContext.resolveActiveTheme();
     const envCssVariables = useEnvCssVariables();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -605,6 +605,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     });
 
     useEffect(() => {
+      if (defaultMount) {
+        onMount()
+      }
       return () => {
         lessRef.current?.off?.()
       }
@@ -1093,6 +1096,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                   <Page
                     path={'/'}
                     onMount={onMount}
+                    defaultMount={true}
                   >
                     <Route
                       path='/'
