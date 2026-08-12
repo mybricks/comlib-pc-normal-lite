@@ -1114,7 +1114,8 @@ export async function registerSandbox(comId: string): Promise<void> {
           });
         }
         if (visualAICommit) {
-          if (!sourceChanged) {
+          // remote Agent 会实时回写源码；客户端虽不保存版本，也不能回滚画布上的结果。
+          if (!sourceChanged && !isRemoteAgent) {
             undoRedoManager.rollbackAIBranchCommands()
           }
           undoRedoManager.clearBranch()
