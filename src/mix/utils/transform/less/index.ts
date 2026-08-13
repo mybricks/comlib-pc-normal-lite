@@ -4,7 +4,7 @@ interface Rule {
   selectors?: {
     toCSS: () => string;
   }[];
-  type: "Ruleset" | "Declaration" | "Media" | "AtRule";
+  type: "Ruleset" | "Declaration" | "Media" | "Container" | "AtRule";
   rules: (RuleSet | Declaration | Media | AtRule)[];
 }
 
@@ -59,7 +59,7 @@ interface Declaration extends Rule {
 }
 
 interface Media extends Rule {
-  type: "Media";
+  type: "Media" | "Container";
   features: {
     value: Expression[];
   };
@@ -315,7 +315,7 @@ class Parse {
       } else if (rule.type === "Declaration") {
         const res = this.handleDeclaration(rule);
         cssObj[res.key] = res.value;
-      } else if (rule.type === "Media") {
+      } else if (rule.type === "Media" || rule.type === "Container") {
         const res = this.handleMedia(rule);
         cssObjs.push(res);
       } else if (rule.type === "AtRule") {
@@ -392,18 +392,38 @@ class Parse {
     }
   }
 
+  stringifyFeatureNode(value: Expression["value"][number] | Paren): string {
+    // `(min-width: 400px)` 这类 Declaration；`(inline-size > 400px)` 是 QueryInParens，不能走 handleDeclaration。
+    if (value.type === "Paren") {
+      const inner = (value as Paren).value as Declaration | undefined;
+      if (inner && (inner.type === "Declaration" || inner.name)) {
+        try {
+          const res = this.handleDeclaration(inner);
+          return ` (${convertCamelToHyphen(res.key)}: ${res.value})`;
+        } catch {
+          // fall through
+        }
+      }
+    }
+    try {
+      const css = typeof (value as Keyword).toCSS === "function" ? (value as Keyword).toCSS() : "";
+      if (css) return css.startsWith(" ") ? css : ` ${css}`;
+    } catch {
+      // toCSS 在无 compress 上下文时可能抛错
+    }
+    const raw = extractRawLessValue((value as Paren).value ?? value);
+    return raw ? ` ${raw}` : "";
+  }
+
   handleMedia(media: Media) {
+    // Less.js 把 @container 解析成独立的 Container 节点，结构和 Media 相同（features + rules）。
+    const atKeyword = media.type === "Container" ? "@container" : "@media";
     const features = media.features.value.reduce<string>((features, expression: Expression) => {
       expression.value.forEach((value) => {
-        if (value.type === "Paren") {
-          const res = this.handleDeclaration(value.value);
-          features += ` (${convertCamelToHyphen(res.key)}: ${res.value})`;
-        } else {
-          features += ` ${value.toCSS()}`;
-        }
+        features += this.stringifyFeatureNode(value);
       })
       return features;
-    }, "@media");
+    }, atKeyword);
     const { cssObj, cssObjs } = this.handleRules(media.rules);
 
     const value: CSSObj = { ...cssObj };
