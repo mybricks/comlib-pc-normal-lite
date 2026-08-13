@@ -708,7 +708,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     useLayoutEffect(() => {
       if (frontendMode === 'prototype' && isDesign()) {
         const cssFileNames: string[] = []
-        const unwatchList: Array<() => void> = []
         const fileSystem = mixContext.fileSystem
         const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
         const setLessCss = (filename: string) => {
@@ -750,18 +749,16 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ;(env as any).canvas.css.set(cssId, myContent)
         }
 
-        Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename, { file }]) => {
-          if (file.filename.endsWith('.less')) {
-            unwatchList.push(fileSystem!.fileWatcher.watch(filename, (event) => {
-              if (['create', 'update'].includes(event.type)) {
-                setLessCss(filename)
-              }
-            }))
+        Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename]) => setLessCss(filename))
+
+        const unwatch = fileSystem?.events.on('fileChange', ({ filename, type }) => {
+          if (['create', 'update'].includes(type)) {
+            setLessCss(filename)
           }
         })
 
         return () => {
-          unwatchList.forEach(unwatch => unwatch())
+          unwatch?.()
           if (frontendMode === 'prototype') {
             cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
           }
