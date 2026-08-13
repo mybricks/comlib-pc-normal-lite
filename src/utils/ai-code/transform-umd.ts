@@ -25,6 +25,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
   const { fileName } = ctx
   const jsDocMap = new Map()
   const frontendMode = config.getFrontendMode()
+  const isReactNativeRender = config.isReactNativeRender()
 
   try {
     const validatorPlugins = getValidatorPlugins({ ...ctx, fileName, onError })
@@ -57,7 +58,10 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         ],
         ...babelPlugins,
         ...(frontendMode === 'prototype' ? [appConfigCheckPlugin(fileName, onError),] : []),
-        ...(frontendMode !== 'react-native' ? [babelPlugin({ fileName: ctx?.fileName }), wrapThirdPartyPlugin(), styleAnalysisPlugin()] : []),
+        // 纯 RN 页面模式也未注入 react-native/plugins。该插件会改写 RN 节点和 StyleSheet 产物，
+        // 在 gui_card 的卡片渲染器中会把有效组件变为对象；这里仅跳过 Web 专属转换。
+        // 后续若接入 RN 可视化选中能力，需先验证 RN Skill 卡片在设计态与运行态都可正常渲染。
+        ...(isReactNativeRender || frontendMode === 'react-native' ? [] : [babelPlugin({ fileName: ctx?.fileName }), wrapThirdPartyPlugin(), styleAnalysisPlugin()]),
         ...validatorPlugins,
         functionPropsPlugin(),
         [collectJsDocPlugin, { result: jsDocMap, fileName }],

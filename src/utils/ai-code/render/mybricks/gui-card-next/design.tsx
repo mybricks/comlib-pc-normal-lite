@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import context from '../../../../../mix/context'
+import context, { config as runtimeConfig } from '../../../../../mix/context'
 import {
   IS_TOOL,
   IS_CARD_CONFIG,
@@ -298,6 +298,17 @@ const design = (props: CreateMyBricksProps) => {
                 ): null}
                 {cards.map(({ render: Render, filename, config }) => {
                   const { showType, cardStyle } = getShowTypeAndCardStyle(filename)
+                  if (runtimeConfig.isReactNativeRender()) {
+                    const rawRender = context.fileSystem?.filesMap[filename]?.module?.__default
+                    console.info('【做SKILL-RN排查】RN卡片设计态渲染', {
+                      filename,
+                      renderType: typeof Render,
+                      rawRenderType: typeof rawRender,
+                      rawRenderKeys: rawRender && typeof rawRender === 'object'
+                        ? Object.keys(rawRender).slice(0, 20)
+                        : [],
+                    })
+                  }
                   return (
                     <Card
                       key={filename}

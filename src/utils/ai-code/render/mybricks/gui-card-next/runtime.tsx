@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, createContext, useContext } from 'react'
-import context from '../../../../../mix/context'
+import context, { config as runtimeConfig } from '../../../../../mix/context'
 import { IS_TOOL, IS_CARD_CONFIG, MOBILE_CONTAINER_STYLE, PC_CONTAINER_STYLE } from './constants'
 import AIChatPanel from './ChatPanel'
 import RuntimeContainer from '../components/runtimeContainer'
@@ -145,6 +145,13 @@ const runtime = (props: CreateMyBricksProps) => {
       const card = allCards.find((card) => card.filename === filename)
 
       if (card) {
+        if (runtimeConfig.isReactNativeRender()) {
+          console.info('【做SKILL-RN排查】RN卡片运行态渲染', {
+            filename: card.filename,
+            renderType: typeof card.render,
+            rawRenderType: typeof context.fileSystem?.filesMap[card.filename]?.module?.__default,
+          })
+        }
         // 构建 apis 说明文字：将卡片声明的 apis 列表格式化给 LLM
         const apisDesc = card?.config?.apis?.length > 0
           ? card.config.apis.map((api) => `  - ${api.name}: ${api.description}`).join('\n')
