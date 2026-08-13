@@ -193,9 +193,11 @@ export function getSelectorSegment(node: any, importRelyMap: any, cssModuleNames
  * 其子 &lt;h1&gt; 得到 "div.container > h1"。
  */
 export function getCssSelectorForJSXPath(path: { node: any; parentPath?: any }, importRelyMap: any, cssModuleNames?: Set<string>) {
+  const maxJsxDepth = 5;
   let segments: string[] = [];
   let p: any = path;
-  while (p?.node) {
+  let jsxDepth = 0;
+  while (p?.node && jsxDepth < maxJsxDepth) {
     if (p.isJSXElement?.()) {
       const selectors = getSelectorSegment(p.node, importRelyMap, cssModuleNames);
       if (selectors.length === 1) {
@@ -203,12 +205,14 @@ export function getCssSelectorForJSXPath(path: { node: any; parentPath?: any }, 
           segments.length === 0
             ? [selectors[0]]
             : segments.map((segment) => `${selectors[0]} ${segment}`);
+        jsxDepth += 1;
       } else if (selectors.length > 1) {
         // 多个选择器时分支：当前层（祖先）在前，已有 segment（后代）在后
         segments =
           segments.length === 0
             ? [...selectors]
             : segments.flatMap((segment) => selectors.map((sel) => `${sel} ${segment}`));
+        jsxDepth += 1;
       }
     };
     p = p.parentPath;
