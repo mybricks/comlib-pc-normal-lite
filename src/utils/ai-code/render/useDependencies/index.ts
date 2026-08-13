@@ -61,7 +61,6 @@ const useDependencies = (params: Params) => {
 
     const { id, env, data, activeEnv, runtimeMode, logger } = params;
     const frontendMode = config.getFrontendMode()
-    const isReactNativeRender = config.isReactNativeRender()
     const createMyBricksProps = { comId: id, runtimeMode, logger, env, data }
     let mybricks: any = {}
 
@@ -88,19 +87,6 @@ const useDependencies = (params: Params) => {
 
     const customDependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks }) || {}
 
-    if (isReactNativeRender) {
-      const reactNative = customDependencies['react-native']?.module
-      console.info('【做SKILL-RN排查】RN依赖注入结果', {
-        reactNativeType: typeof reactNative,
-        reactNativeKeys: reactNative && typeof reactNative === 'object'
-          ? Object.keys(reactNative).slice(0, 20)
-          : [],
-        viewType: typeof reactNative?.View,
-        textType: typeof reactNative?.Text,
-        styleSheetType: typeof reactNative?.StyleSheet,
-      })
-    }
-    
     const dependencies: Dependencies = {
       ...params.dependencies,
       ...Object.entries(customDependencies).reduce((pre, [key, value]: any) => {

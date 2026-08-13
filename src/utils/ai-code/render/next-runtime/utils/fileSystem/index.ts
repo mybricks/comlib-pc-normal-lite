@@ -46,7 +46,6 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
 
   const { _refreshPopups } = dependencies['mybricks']
   _refreshPopups?.(filename)
-  const isReactNativeRender = Boolean(dependencies['react-native'])
 
   try {
     eval(`(function(exports, require) {
@@ -56,19 +55,6 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
       //# sourceURL=_mybricks_ai/${filename}
     })`)(exports, (packageName: string) => {
     const result = dependencies[packageName]
-    if (
-      isReactNativeRender &&
-      ['react-native', '@kds/kid-ui-plus', '@kid-ui/krn'].includes(packageName)
-    ) {
-      console.info('【做SKILL-RN排查】RN模块解析', {
-        filename,
-        packageName,
-        moduleType: typeof result,
-        moduleKeys: result && typeof result === 'object'
-          ? Object.keys(result).slice(0, 20)
-          : [],
-      })
-    }
     if (packageName === 'mybricks') {
       return {
         ...result,
@@ -113,22 +99,6 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
 
     return result
   })
-    if (isReactNativeRender) {
-      console.info('【做SKILL-RN排查】RN文件入口导出', {
-        filename,
-        defaultType: typeof exports.default,
-        defaultKeys: exports.default && typeof exports.default === 'object'
-          ? Object.keys(exports.default).slice(0, 20)
-          : [],
-        namedExportKeys: Object.keys(exports).filter(key => !['default', '__default'].includes(key)),
-      })
-      if (filename === 'index.tsx' && typeof exports.default !== 'function') {
-        console.info('【做SKILL-RN排查】RN根入口源码异常', {
-          filename,
-          sourcePreview: compiled.slice(0, 800),
-        })
-      }
-    }
   } catch (e: any) {
     // console.log('[params]', params)
     // [TODO] 复制的代码，关注下错误信息收集是否准确
