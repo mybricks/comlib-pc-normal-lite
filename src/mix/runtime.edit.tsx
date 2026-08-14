@@ -236,6 +236,18 @@ const dataCompatible = (props) => {
 }
 
 export default (props: any) => {
+  if (window.MYBRICKS_LOCAL_IFRAME) {
+    return (
+      <iframe
+        src={'/__local/lingchuang'}
+        style={{ border: 'none', width: '100vw', height: '100vh' }}
+        onLoad={(ref) => {
+          props.onIframeLoad(ref.target.contentDocument)
+        }}
+      />
+    )
+  }
+
   const { env, data } = props;
 
   dataCompatible(props);
