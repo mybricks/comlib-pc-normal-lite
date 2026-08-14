@@ -61,8 +61,8 @@ const dataCompatible = (props) => {
     const version = config.getVersion()
 
     // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 38 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 38
+    if (!data.version || data.version < 39 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 39
       data._componentRuntime.version = version
       
       // const mode = config.getFrontendMode()

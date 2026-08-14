@@ -62,7 +62,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         functionPropsPlugin(),
         [collectJsDocPlugin, { result: jsDocMap, fileName }],
         loggerPlugin({ fileName }),
-        // zoneIndexPlugin({ fileName }),
+        zoneIndexPlugin({ fileName }),
         ...(frontendMode === 'gui_card' ? [skillBoundaryPlugin({ fileName, onError })] : [])
       ],
       retainLines: true,
