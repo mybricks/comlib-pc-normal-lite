@@ -119,7 +119,15 @@ const RenderComponent = (props: RenderComponentProps) => {
   const componentValueRef = useRef({
     id: componentId,
     set(value) {
-      const component = canvasClass.canvasMap.get(canvasId!)!.get(componentId)!
+      const canvas = canvasClass.canvasMap.get(canvasId!)
+      if (!canvas) {
+        return
+      }
+
+      const component = canvas!.get(componentId)!
+      if (!component) {
+        return
+      }
 
       Object.entries(value).forEach(([key, value]) => {
         component[key] = value
@@ -188,7 +196,7 @@ const CanvasRender = (props: CanvasRenderProps) => {
 
   useEffect(() => {
     return () => {
-      canvasClass.canvasMap.delete(canvasValueRef.current.id)
+      // canvasClass.canvasMap.delete(canvasValueRef.current.id)
     }
   }, [])
 
