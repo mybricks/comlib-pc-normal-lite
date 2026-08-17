@@ -255,6 +255,7 @@ export default (props: any) => {
   const [debugTarget, setDebugTarget] = useState<any>(null);
   const [fileChangeKey, setFileChangeKey] = useState<number>(0);
   const [render, setRender] = useState(false)
+  const [sandboxError, setSandboxError] = useState<string | null>(null)
 
   useLayoutEffect(() => {
     ;(window as any).__MB_REGISTER_ICONS__ = context.registerIcons.bind(context)
@@ -273,10 +274,10 @@ export default (props: any) => {
       //   context,
       //   props
       // })
-    }).catch((error) => {
-      // console.error('[初始化错误]', error)
-    }).finally(() => {
       setRender(true)
+    }).catch((error) => {
+      console.error('[初始化错误]', error)
+      setSandboxError('工程加载失败，请刷新页面后重试')
     });
 
     return () => {
@@ -308,6 +309,17 @@ export default (props: any) => {
   const runtimeKey = `${isPageDebug
     ? `page-debug-${debugTarget.pageIndex}`
     : 'component-edit'}` + fileChangeKey;
+
+  if (sandboxError) {
+    return (
+      <div
+        role="alert"
+        style={{ padding: 16, color: '#ff4d4f' }}
+      >
+        {sandboxError}
+      </div>
+    )
+  }
 
   return render && <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
 };

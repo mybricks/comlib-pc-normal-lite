@@ -931,16 +931,29 @@ export function createDesignerLoading(
 
 // ─── 注册沙箱 ─────────────────────────────────────────────────────────────────
 
-const REGISTER_COMIDS = new Set<string>()
+const REGISTER_COMIDS = new Map<string, Promise<void>>()
 /**
  * 注册组件沙箱到 plugin-ai。
  * 在 editors/index.tsx 中 context.setAiCom 之后调用。
  */
-export async function registerSandbox(comId: string): Promise<void> {
-  if (REGISTER_COMIDS.has(comId)) {
-    return
+export function registerSandbox(comId: string): Promise<void> {
+  const existing = REGISTER_COMIDS.get(comId)
+  if (existing) {
+    return existing
   }
-  REGISTER_COMIDS.add(comId)
+
+  const registration = registerSandboxInternal(comId)
+  REGISTER_COMIDS.set(comId, registration)
+  return registration.catch((error) => {
+    // 失败的注册不能永久占住 comId，页面刷新或重新挂载后仍可重新尝试。
+    if (REGISTER_COMIDS.get(comId) === registration) {
+      REGISTER_COMIDS.delete(comId)
+    }
+    throw error
+  })
+}
+
+async function registerSandboxInternal(comId: string): Promise<void> {
   const connectToAI = (window as any)._sandbox_?.connectToAI;
   if (typeof connectToAI !== 'function') {
     // console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
@@ -1075,7 +1088,7 @@ export async function registerSandbox(comId: string): Promise<void> {
   };
 
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
-  const { history, isRemoteAgent } = connectToAI(comId, {
+  const { history, isRemoteAgent, workspaceReady } = connectToAI(comId, {
     designer: designerFs,
     hooks: {
       async beforeRequest({ meta, extra }) {
@@ -1142,7 +1155,7 @@ export async function registerSandbox(comId: string): Promise<void> {
         });
         if (isRemoteAgent) {
           turnLogs.setLog({
-            message: '[轮次/afterTurnSummary] remote Agent 版本由服务端更新 — 跳过客户端写入',
+            message: '[轮次/afterTurnSummary] 收到服务端 turn:summary 通知；版本摘要已落库，跳过客户端写入',
           });
           return
         }
@@ -1248,6 +1261,12 @@ export async function registerSandbox(comId: string): Promise<void> {
       }
     }
   }) ?? {};
+
+  // remote Agent 的首个 workspace 快照会异步回写 data.files。等待它完成后再让
+  // registerSandbox 结束，runtime.edit.tsx 才会挂载 Runtime，避免先闪出空 StartView。
+  if (isRemoteAgent) {
+    await workspaceReady;
+  }
 
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────
 
