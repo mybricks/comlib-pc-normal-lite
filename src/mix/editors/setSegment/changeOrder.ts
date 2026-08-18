@@ -12,6 +12,28 @@ import {
 } from './sourceLocation'
 
 /**
+ * `swappable` 仅描述 JSX 节点自身是否适合重排，不能保证完整模块在替换后仍然合法。
+ * 在快速路径落盘前编译一次；例如 JSX 根节点被意外拆成相邻节点时，改走 AI 分支。
+ */
+const validateSource = (source: string, fileName: string) => {
+  if (!window.Babel) return false
+
+  try {
+    window.Babel.transform(source, {
+      filename: fileName,
+      presets: [
+        ['env', { modules: 'commonjs' }],
+        ['react', { runtime: 'classic' }],
+      ],
+      plugins: [['transform-typescript', { isTSX: true, allExtensions: true }]],
+    })
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+/**
  * 按 data-loc 提供的源码范围，将 from 片段移动到 to 片段的前面或后面。
  * 不依赖文本全局搜索，避免相同 JSX 出现在注释、字符串或重复结构时替换到错误位置。
  */
@@ -271,7 +293,7 @@ const changeOrder = (options) => {
       }
       const placement = type === 'before' ? 'before' : 'after'
       const newSource = moveRangeInSource(source, fromRange, toRange, placement)
-      if (newSource !== null) {
+      if (newSource !== null && validateSource(newSource, fromFile)) {
         const locSnapshotRoot = fromEle.parentElement
         // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原移动前快照，
         // 否则源码已回退但 DOM 仍保留移动后的 data-loc，再次操作仍会错位。

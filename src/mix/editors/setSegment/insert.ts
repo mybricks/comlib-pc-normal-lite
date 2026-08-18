@@ -213,6 +213,19 @@ const applyCompiledDataAttributes = (container: HTMLDivElement, attributes: JSXE
   })
 }
 
+/**
+ * AI 回退预览尚未回写源码并经过项目编译，因此没有源码定位信息。
+ * 仅标记其渲染出的根节点为可选中的 AI 节点：点击子元素时可命中根节点，
+ * 同时避免将组件库的内部 DOM 暴露为独立编辑目标。
+ */
+const markAIOnlyPreviewRoots = (container: HTMLDivElement) => {
+  Array.from(container.children).forEach((element) => {
+    if (!element.hasAttribute('data-zone-selector') && !element.hasAttribute('data-zone-noselector')) {
+      element.setAttribute('data-zone-noselector', 'true')
+    }
+  })
+}
+
 const createPreview = (code: InsertOptions['code'], location?: PreviewSourceLocation): InsertPreview | null => {
   if (!window.Babel || !code.jsx.trim()) return null
 
@@ -250,6 +263,8 @@ const createPreview = (code: InsertOptions['code'], location?: PreviewSourceLoca
     })
     if (location) {
       applyCompiledDataAttributes(container, location.dataAttributes)
+    } else {
+      markAIOnlyPreviewRoots(container)
     }
     return { container }
   } catch (_) {
