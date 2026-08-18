@@ -74,7 +74,39 @@ function deriveNameFromFilePath(filePath?: string): string {
   return stem || 'root';
 }
 
-export default function ({ fileName }: { fileName?: string }) {
+export type JSXElementDataAttributes = {
+  start: number
+  end: number
+  attributes: Record<string, string>
+}
+
+type BabelPluginOptions = {
+  fileName?: string
+  /**
+   * Compile a JSX segment in a virtual module while retaining its coordinates
+   * in the original source file.
+   */
+  sourceOffset?: number
+  lineOffset?: number
+  onJSXElement?: (metadata: JSXElementDataAttributes) => void
+}
+
+const getStaticDataAttributes = (attributes: any[]) => {
+  const result: Record<string, string> = {}
+
+  attributes.forEach((attribute) => {
+    if (attribute?.type !== 'JSXAttribute' || typeof attribute.name?.name !== 'string') return
+    if (!attribute.name.name.startsWith('data-')) return
+
+    if (attribute.value?.type === 'StringLiteral') {
+      result[attribute.name.name] = attribute.value.value
+    }
+  })
+
+  return result
+}
+
+export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElement }: BabelPluginOptions) {
   const fallbackName = deriveNameFromFilePath(fileName);
   return function () {
     const importRelyMap = new Map();
@@ -200,7 +232,15 @@ export default function ({ fileName }: { fileName?: string }) {
             try {
               const { node } = path;
 
-              const dataZoneTextEditable = hasEditableTextContent(node)
+              let dataZoneTextEditable = hasEditableTextContent(node)
+              if (sourceOffset !== 0 && dataZoneTextEditable && typeof dataZoneTextEditable === 'object') {
+                dataZoneTextEditable = {
+                  jsx: {
+                    start: dataZoneTextEditable.jsx.start + sourceOffset,
+                    end: dataZoneTextEditable.jsx.end + sourceOffset,
+                  },
+                }
+              }
 
               if (dataZoneTextEditable) {
                 pushDataAttr(node.openingElement.attributes, "data-zone-text-editable", JSON.stringify(dataZoneTextEditable));
@@ -217,6 +257,15 @@ export default function ({ fileName }: { fileName?: string }) {
                   less: lessMap.get("less")
                 }
               };
+              if (sourceOffset !== 0) {
+                dataLocValueObject.jsx.start += sourceOffset
+                dataLocValueObject.jsx.end += sourceOffset
+                dataLocValueObject.tag.end += sourceOffset
+              }
+              if (lineOffset !== 0) {
+                dataLocValueObject.codeLine.start += lineOffset
+                dataLocValueObject.codeLine.end += lineOffset
+              }
               // 同时支持 className="foo" 字符串字面量 与 className={css.foo} CSS Module
               // 保持 cnList 为 string[]，data-loc 的下游消费者无需改动
               const cnList = [...new Set(extractCssClassNamesFromJSXElement(node, cssModuleNames).map(c => c.name))];
@@ -452,6 +501,12 @@ export default function ({ fileName }: { fileName?: string }) {
               if (popupName) {
                 pushDataAttr(node.openingElement.attributes, "data-widge-name", popupName);
               }
+
+              onJSXElement?.({
+                start: node.start + sourceOffset,
+                end: node.end + sourceOffset,
+                attributes: getStaticDataAttributes(node.openingElement.attributes),
+              })
             } catch {}
           },
           exit(path) {

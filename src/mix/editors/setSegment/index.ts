@@ -8,6 +8,7 @@ import {
   getCurrentFileSnapshot,
   setPendingVisualAICommit,
 } from '../visualEditCommit'
+import insert from './insert'
 
 export default function () {
   return {
@@ -19,6 +20,7 @@ export default function () {
       } else if (type === 'delete') {
         return runDelete(options)
       } else if (type === 'insert') {
+        return insert(options)
       }
     },
     '@commitUserActions'() {
@@ -27,7 +29,7 @@ export default function () {
         // 取消用户操作
         undoRedoManager.cancelBranch()
         context.connectToAIRef.disabledHandler.message('当前没有编辑权限')
-        return
+        return false
       }
 
       // 提交用户操作
@@ -37,12 +39,12 @@ export default function () {
       const beforeFiles = undoRedoManager.getBranchInitialFiles()
       const styleOverlays = undoRedoManager.getBranchStyleOverlays()
 
-      if (!beforeFiles) return
+      if (!beforeFiles) return true
 
       if (message) {
         const componentId = context.component!.params.id
         const sendToAgent = window._sandbox_?.helpers?.sendToAgent
-        if (!sendToAgent) return
+        if (!sendToAgent) return true
 
         // afterTurn 会消费这份快照，并把整个可视化分支压入主栈。
         setPendingVisualAICommit(componentId, beforeFiles, styleOverlays)
@@ -52,7 +54,7 @@ export default function () {
             chips
           }
         })
-        return
+        return true
       }
 
       const command = createVisualEditMainCommand(beforeFiles, getCurrentFileSnapshot(), 'manual', '', styleOverlays)
@@ -61,10 +63,12 @@ export default function () {
         undoRedoManager.record(command)
       }
       undoRedoManager.clearBranch()
+      return true
     },
     '@cancelUserActions'(...args) {
       // 取消用户操作
       undoRedoManager.cancelBranch()
+      return true
     }
   }
 }
