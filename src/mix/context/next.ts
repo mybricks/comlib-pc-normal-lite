@@ -408,6 +408,22 @@ class Context {
   /** 版本记录API */
   history: any
 
+  /** connectToAI 返回值 */
+  connectToAIRef: {
+    disabledHandler: {
+      isDisabled: () => boolean
+      message: (tip: string | {
+        type: "info" | "warn";
+        content: string;
+      }) => void
+    }
+  } = {
+    disabledHandler: {
+      isDisabled: () => false,
+      message: () => {}
+    }
+  }
+
   /** 注册的回滚方法 */
   rollback: any
 

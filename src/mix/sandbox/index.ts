@@ -1088,7 +1088,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   };
 
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
-  const { history, disabledHandler, isRemoteAgent, workspaceReady } = connectToAI(comId, {
+  const connectToAIRef = connectToAI(comId, {
     designer: designerFs,
     hooks: {
       async beforeRequest({ meta, extra }) {
@@ -1262,6 +1262,8 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     }
   }) ?? {};
 
+  const { history, disabledHandler, isRemoteAgent, workspaceReady } = connectToAIRef
+
   // remote Agent 的首个 workspace 快照会异步回写 data.files。等待它完成后再让
   // registerSandbox 结束，runtime.edit.tsx 才会挂载 Runtime，避免先闪出空 StartView。
   if (isRemoteAgent) {
@@ -1350,6 +1352,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
 
   context.rollback = rollbackToVersion
   context.history = history;
+  context.connectToAIRef = connectToAIRef
   context.diff = (...versionIds: string[]) => diffVersions(history, ...versionIds);
 
   // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）

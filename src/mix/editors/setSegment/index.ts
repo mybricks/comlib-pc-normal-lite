@@ -18,9 +18,18 @@ export default function () {
         return updateText(options)
       } else if (type === 'delete') {
         return runDelete(options)
+      } else if (type === 'insert') {
       }
     },
     '@commitUserActions'() {
+
+      if (context.connectToAIRef.disabledHandler?.isDisabled()) {
+        // 取消用户操作
+        undoRedoManager.cancelBranch()
+        context.connectToAIRef.disabledHandler.message('当前没有编辑权限')
+        return
+      }
+
       // 提交用户操作
       const aiRequests = undoRedoManager.getBranchAIRequests()
       const message = aiRequests.map((request) => request.message).join('')
