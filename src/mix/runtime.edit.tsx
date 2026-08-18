@@ -52,51 +52,10 @@ const dataCompatible = (props) => {
       }
     }
 
-    const readme = data.files.find((file) => file.fileName === "README.md")
-    if (readme) {
-      // 从 data.files 中移除 README.md（已同步到 context，无需保留在文件列表中）
-      data.files = data.files.filter((file) => file.fileName !== "README.md");
-    }
-
     const version = config.getVersion()
-
-    // console.log('[com:version]', data.version)
-    if (!data.version || data.version < 39 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 39
+    if (!data.version || data.version < 40 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 40
       data._componentRuntime.version = version
-      
-      // const mode = config.getFrontendMode()
-      // if (mode === 'gui_card' && !data._gui_card_version) {
-      //   const cardsPrefix = new Map()
-      //   data.files.forEach((file) => {
-      //     const splitPath = file.fileName.split('/')
-      //     if (splitPath[splitPath.length - 1] === 'index.config.ts' && !file.fileName.startsWith('frontend/cards')) {
-      //       cardsPrefix.set(splitPath.slice(0, 2).join('/'), true)
-      //     }
-      //   })
-
-      //   if (cardsPrefix.size) {
-      //     data.files.forEach((file) => {
-      //       const splitPath = file.fileName.split('/')
-      //       const prefix = splitPath.slice(0, 2).join('/')
-      //       if (cardsPrefix.has(prefix)) {
-      //         splitPath.splice(1, 0, 'cards')
-      //         file.fileName = splitPath.join('/')
-      //         // 文件层级多加了一层 cards，需将 source 中所有相对路径的 dataSource 引用多加一层 ../
-      //         // e.g. from '../../dataSource' → from '../../../dataSource'
-      //         if (file.source) {
-      //           let decoded = decodeURIComponent(file.source)
-      //           decoded = decoded.replace(
-      //             /(from\s+['"])((?:\.\.\/)+)(dataSource['"])/g,
-      //             '$1../$2$3'
-      //           )
-      //           file.source = encodeURIComponent(decoded)
-      //         }
-      //       }
-      //     })
-      //   }
-      // }
-
       console.log('[com:update]', data)
       // 去除重复文件（以 fileName 为唯一键，保留最后出现的条目）
       const fileMap = new Map<string, any>();
@@ -104,10 +63,6 @@ const dataCompatible = (props) => {
         fileMap.set(file.fileName, file);
       });
       data.files = Array.from(fileMap.values());
-      // const readme = data.files.find((file) => file.fileName === "README.md")
-      // if (readme?.source) {
-      //   context.updateFile(id, { fileName: "README.md", content: decodeURIComponent(readme.source) })
-      // }
 
       if (data.files.length && mode === 'prototype') {
         if (!fileMap.has('app.config.ts')) {
@@ -152,83 +107,29 @@ const dataCompatible = (props) => {
   "width": ${maxWidth}
 }`
           })
-        } else {
-          if (location.pathname.split('/').slice(-1)[0] === '18793') {
-            const appConfigFile = data.files.find((file) => file.fileName === 'app.config.ts')
-            appConfigFile.source = encodeURIComponent(`export default defineAppConfig({
-  viewports: [
-    {
-      id: "desktop",
-      label: "PC",
-      width: 1440,
-    },
-    {
-      id: "mobile",
-      label: "手机",
-      width: 480,
-    },
-  ],
-  breakpoints: [
-    {
-      id: "mobile",
-      media: {
-        maxWidth: 480,
-      },
-    },
-  ],
-})`)
-
-          }
         }
       }
-      
 
-      // const lessCode = typeof file?.source === 'string' ? decodeURIComponent(file.source) : ""
-      // const style: React.CSSProperties = {
-      //   width: canvasWidth,
-      //   height: canvasHeight
-      // }
-      // const { width, height } = parseFrameSize(lessCode);
-
-      data.files.forEach((file) => {
-        if (/(?<!\.module)\.less$/.test(file.fileName)) {
-          file.fileName = file.fileName.replace(/\.less$/, '.module.less')
-          if (file.source?.includes('%40import')) {
-            // 将 @import 引用的 .less 路径也改为 .module.less
-            file.source = encodeURIComponent(
-              decodeURIComponent(file.source).replace(/(?<!\.module)\.less(['")])/g, '.module.less$1')
-            )
-          }
-        }
-        // jsx → tsx，js → ts（不影响 .json 等其他扩展名）
-        if (/\.jsx$/.test(file.fileName)) {
-          file.fileName = file.fileName.replace(/\.jsx$/, '.tsx')
-        } else if (/\.js$/.test(file.fileName)) {
-          file.fileName = file.fileName.replace(/\.js$/, '.ts')
+      if (location.pathname.split('/').slice(-1)[0] === '20356') {
+        const lessFile = data.files.find((file) => file.fileName === 'index.module.less')
+        if (lessFile) {
+          lessFile.fileName = 'index.less'
+          context.updateFile({ fileName: lessFile.fileName, content: decodeURIComponent(lessFile.source) })
         }
 
-        // 将源码中的 .less 引用（非 .module.less）改为 .module.less
-        if (file.source && (file.fileName.endsWith('.tsx') || file.fileName.endsWith('.ts') || file.fileName.endsWith('.jsx') || file.fileName.endsWith('.js'))) {
-          let decoded = decodeURIComponent(file.source)
-          decoded = decoded.replace(/(?<=from\s+['"][^'"]*?)(?<!\.module)(\.less)(?=['"])/g, '.module.less')
-          // 移除 import 语句中依赖路径末尾的 .js / .jsx 扩展名
-          // e.g. import store from "./store.js" → import store from "./store"
-          // e.g. import Comp from "./Comp.jsx" → import Comp from "./Comp"
-          decoded = decoded.replace(
-            /(from\s+['"](?:[^'"]*?))\.jsx?(['"])/g,
-            '$1$2'
+        const indexFile = data.files.find((file) => file.fileName === 'index.tsx')
+        if (typeof indexFile?.source === 'string') {
+          const source = decodeURIComponent(indexFile.source)
+          indexFile.source = encodeURIComponent(
+            source.replace("import './index.module.less';", "import './index.less';")
           )
-          // 将裸 import .less 语句（无 from）转换为 .module.less
-          // e.g. import "./index.less" → import "./index.module.less"
-          decoded = decoded.replace(
-            /^(import\s+['"](?:[^'"]*?)(?<!\.module))(\.less)(['"];?)$/gm,
-            '$1.module.less$3'
-          )
-          file.source = encodeURIComponent(decoded)
+          context.updateFile({ fileName: indexFile.fileName, content: decodeURIComponent(indexFile.source) })
         }
+      }
 
-        context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
-      })
+      // data.files.forEach((file) => {
+      //   context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
+      // })
     }
   } catch (e) {
     console.log('[初始化报错]', e)
