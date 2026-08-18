@@ -440,10 +440,47 @@ export function buildElementRepeatContextInfo(el?: Element) {
   return { lines, hasRepeatContext, block }
 }
 
+function toKebabCase(key: string): string {
+  return key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)
+}
+
+function getElementClassNames(ele?: Element): string {
+  if (!ele) return ''
+  return Array.from(ele.classList).filter(Boolean).join(' ')
+}
+
+/**
+ * 类名约定为基础类在前、具体类在后（如 "ant-col ant-form-item-label"），取末位作为可辨识名称。
+ * 修饰类以「基础类-」为前缀（如 ant-tabs-tab-active 之于 ant-tabs-tab），先剔除以取到稳定身份，
+ * 否则名称会随 hover / 激活 / 加载等状态漂移。
+ */
+function pickDistinguishingClassName(ele?: Element): string {
+  const classes = ele ? Array.from(ele.classList).filter(Boolean) : []
+  const baseClasses = classes.filter(
+    (cls) => !classes.some((other) => other !== cls && cls.startsWith(`${other}-`)),
+  )
+  const candidates = baseClasses.length ? baseClasses : classes
+  return candidates[candidates.length - 1] ?? ''
+}
+
+function getIdentifyingInlineStyle(ele: Element, excludeProperties: string[]): string {
+  const style = (ele as HTMLElement).style
+  if (!style?.length) return '无'
+  const exclude = new Set(excludeProperties)
+  const parts: string[] = []
+  for (let i = 0; i < style.length; i++) {
+    const prop = style.item(i)
+    if (!prop || exclude.has(prop)) continue
+    const value = style.getPropertyValue(prop)
+    if (value) parts.push(`${prop}: ${value}`)
+  }
+  return parts.length ? parts.join('; ') : '无（除本次目标样式外）'
+}
+
 export function getElementLabel(ele: Element | undefined, fallback: string): string {
   return ele?.getAttribute('data-zone-title')?.slice(1) ||
     (ele as HTMLElement | undefined)?.dataset?.zoneTitle?.slice(1) ||
-    ele?.classList?.[0] ||
+    pickDistinguishingClassName(ele) ||
     ele?.tagName?.toLowerCase?.() ||
     fallback
 }
@@ -650,10 +687,15 @@ export function buildElementStyleUpdateChipData(
 ): ParsedElementStyleUpdateChipData {
   const opLabel = '元素样式调整操作1'
   const target = parseElementInfo(ele, label)
+  const classNames = getElementClassNames(ele)
   const normalizedStyles = styles.map(({ key, value }) => ({
-    property: key.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`),
-    value,
+    property: toKebabCase(key),
+    value: value ?? null,
   }))
+  const identifyingInlineStyle = getIdentifyingInlineStyle(
+    ele,
+    normalizedStyles.map(({ property }) => property),
+  )
 
   return {
     inlineText: `执行「${opLabel}」，`,
@@ -666,7 +708,9 @@ export function buildElementStyleUpdateChipData(
       '',
       '## 目标元素',
       `- 名称：${target.name}`,
+      `- 类名：${classNames || '无'}`,
       `- 代码位置：${target.codeLocation}`,
+      `- 当前内联样式（用于对齐到正确 prop，不含本次要改的属性）：${identifyingInlineStyle}`,
       target.repeatContextBlock,
       '- DOM 结构摘要：',
       indentText(target.domSummary, '  '),
@@ -679,12 +723,14 @@ export function buildElementStyleUpdateChipData(
       )),
       '',
       '## 修改要求',
-      '1. 只修改目标元素对应 JSX 节点中控制这些样式的 prop；标记为“删除”的属性应移除或恢复为组件默认值，不重构无关 JSX、CSS 或组件结构',
+      '1. 只修改真正渲染出【当前这个目标节点】的 JSX prop；同一个组件可能渲染出多个结构相似的内部节点，必须用上面的「类名」和「当前内联样式」确定是哪一个，不要只看兄弟节点或相邻 prop',
       '2. 使运行时效果与目标样式一致；如果 prop 的单位或语义不同，请按该组件现有 API 做等价换算',
-      '3. 保持其他属性、事件和相邻节点不变',
+      '3. 保持其他属性、事件和相邻节点不变；标记为“删除”的属性应移除或恢复为组件默认值，不重构无关 JSX、CSS 或组件结构',
       '',
       '## 注意',
-      '如果无法可靠定位控制该样式的 prop，请用一句话说明原因，不要修改无关代码。',
+      '- 其他 prop 上已经有同名样式，不代表当前节点已经生效。必须先核对目标节点对应 prop 本身是否已写入该属性，才能判定“无需修改”',
+      '- 画布预览可能已临时加上目标样式，不能据此认为源码已完成',
+      '- 如果无法可靠定位控制该样式的 prop，请用一句话说明原因，不要修改无关代码。',
       '</element-style-update-operation>',
     ].join('\n'),
   }
