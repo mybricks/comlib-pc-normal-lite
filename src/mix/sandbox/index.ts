@@ -1088,7 +1088,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   };
 
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
-  const { history, isRemoteAgent, workspaceReady } = connectToAI(comId, {
+  const { history, disabledHandler, isRemoteAgent, workspaceReady } = connectToAI(comId, {
     designer: designerFs,
     hooks: {
       async beforeRequest({ meta, extra }) {
@@ -1272,6 +1272,10 @@ async function registerSandboxInternal(comId: string): Promise<void> {
 
   async function rollbackToVersion(versionId: string): Promise<void> {
     if (!history) return;
+    if (disabledHandler.isDisabled()) {
+      disabledHandler.message('当前没有编辑权限');
+      return;
+    }
 
     // 1. 读出目标版本的文件
     const [targetMeta, files] = await Promise.all([
