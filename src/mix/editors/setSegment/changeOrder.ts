@@ -3,10 +3,12 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementMoveChipData, getElementLabel } from './elementChip'
 import {
+  createSourceLineResolver,
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
   shiftElementSourceLocationByDelta,
   type SourceRange,
+  updateElementSourceLocationCodeLine,
 } from './sourceLocation'
 
 /**
@@ -127,9 +129,8 @@ const getMoveDelta = (
  * - 因此扫描该父节点下的 data-loc，就能覆盖被移动节点以及中间受位移影响的兄弟节点；
  * - 不扫描全局 DOM，避免误改其它组件实例或同名页面中的节点。
  *
- * 这里只做位置平移，不重算 codeLine：
- * - data-loc 与 data-style-info 的绝对偏移会被同步，供后续字符串截取、样式注入、文本编辑使用；
- * - codeLine 需要 AST/源码重新解析才能准确计算，手动推断容易生成不可信行号。
+ * data-loc 与 data-style-info 的绝对偏移会被同步，供后续字符串截取、样式注入、文本编辑使用。
+ * codeLine 则根据移动后的完整源码和更新后的绝对偏移重新计算，避免按片段换行数推断造成错位。
  */
 const shiftDOMLocAfterSourceMove = (
   root: Element | null,
@@ -137,9 +138,11 @@ const shiftDOMLocAfterSourceMove = (
   fromRange: SourceRange,
   toRange: SourceRange,
   type: 'before' | 'after',
+  source: string,
 ) => {
   if (!root) return
 
+  const getLineForOffset = createSourceLineResolver(source)
   const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
   elements.forEach((ele) => {
     const locValue = ele.getAttribute('data-loc')
@@ -147,10 +150,17 @@ const shiftDOMLocAfterSourceMove = (
 
     try {
       const loc = JSON.parse(locValue)
-      const delta = getMoveDelta(loc, fileName, fromRange, toRange, type)
-      if (delta === 0) return
+      if (loc?.files?.jsx !== fileName) return
 
-      shiftElementSourceLocationByDelta(ele, delta)
+      const delta = getMoveDelta(loc, fileName, fromRange, toRange, type)
+      if (delta !== 0) {
+        shiftElementSourceLocationByDelta(ele, delta)
+      }
+
+      // A node can keep its character offset while its preceding fragment is
+      // reordered. Refresh every matching node from the final source instead
+      // of trying to infer line deltas from the move direction.
+      updateElementSourceLocationCodeLine(ele, getLineForOffset)
     } catch { }
   })
 }
@@ -281,7 +291,7 @@ const changeOrder = (options) => {
             context.updateFile({ fileName: fromFile, content: newSource, type: undefined, noUpdateFileSystem: true })
             // noUpdateFileSystem 不触发完整重渲染，必须同步节点顺序和源码定位。
             moveDOMNode(fromEle, toEle, placement)
-            shiftDOMLocAfterSourceMove(locSnapshotRoot, fromFile, fromRange, toRange, placement)
+            shiftDOMLocAfterSourceMove(locSnapshotRoot, fromFile, fromRange, toRange, placement, newSource)
             context.component!.actions.addUserAction({
               id: actionId,
               type: 'move',

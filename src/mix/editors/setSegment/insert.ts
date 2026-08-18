@@ -55,6 +55,8 @@ type LegacyReactDOM = typeof ReactDOM & {
 
 const IMPORT_DECLARATION_RE = /\bimport\s+(?:(?:[\s\S]*?)\s+from\s+)?['"]([^'"]+)['"][ \t]*;?/g
 
+const countLineBreaks = (value: string) => value.match(/\r\n|\r|\n/g)?.length ?? 0
+
 const getBabelOptions = (fileName = 'inserted-segment.tsx') => ({
   filename: fileName,
   presets: [
@@ -162,7 +164,12 @@ const mergeImports = (source: string, importCode?: string): { source: string; pa
     }
 
     nextSource = nextSource.slice(0, start) + replacement + nextSource.slice(start + mergeTarget.text.length)
-    patches.push({ start, end: start + mergeTarget.text.length, newLength: replacement.length })
+    patches.push({
+      start,
+      end: start + mergeTarget.text.length,
+      newLength: replacement.length,
+      lineDelta: countLineBreaks(replacement) - countLineBreaks(mergeTarget.text),
+    })
   })
 
   if (pendingDeclarations.length) {
@@ -170,7 +177,12 @@ const mergeImports = (source: string, importCode?: string): { source: string; pa
     const followedByNewline = nextSource[start] === '\n' || nextSource[start] === '\r'
     const insertion = `${start ? '\n' : ''}${pendingDeclarations.join('\n')}${followedByNewline ? '' : '\n'}`
     nextSource = nextSource.slice(0, start) + insertion + nextSource.slice(start)
-    patches.push({ start, end: start, newLength: insertion.length })
+    patches.push({
+      start,
+      end: start,
+      newLength: insertion.length,
+      lineDelta: countLineBreaks(insertion),
+    })
   }
 
   return { source: nextSource, patches }
@@ -322,6 +334,9 @@ const shiftTargetStartAtInsertionBoundary = (target: HTMLElement, patch: SourceP
     const loc = JSON.parse(target.dataset.loc || '')
     if (loc?.jsx?.start !== patch.start) return
     loc.jsx.start += delta
+    if (patch.lineDelta && typeof loc.codeLine?.start === 'number') {
+      loc.codeLine.start += patch.lineDelta
+    }
     target.dataset.loc = JSON.stringify(loc)
   } catch (_) {
     // data-loc is runtime metadata; a malformed value should not break undo/redo.
@@ -433,7 +448,12 @@ const insert = (options: InsertOptions) => {
     })
 
     const sourcePatches: SourcePatch[] = [
-      { start: insertPosition, end: insertPosition, newLength: jsxInsertion.length },
+      {
+        start: insertPosition,
+        end: insertPosition,
+        newLength: jsxInsertion.length,
+        lineDelta: countLineBreaks(jsxInsertion),
+      },
       ...imports.patches,
     ]
     const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, fileName)

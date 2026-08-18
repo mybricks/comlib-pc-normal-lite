@@ -5,6 +5,8 @@ export type SourceRange = {
 
 export type SourceReplacement = SourceRange & {
   newLength: number
+  /** Optional line count delta, used when the caller knows the replacement text. */
+  lineDelta?: number
 }
 
 type SourceLocationSnapshot = Map<Element, {
@@ -36,6 +38,65 @@ const getElementJsxFileName = (ele: Element) => {
     return JSON.parse(ele.getAttribute('data-loc') || '')?.files?.jsx
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Return the 1-based source line for an absolute character offset. Both CRLF
+ * and standalone CR line endings are treated as a single line break.
+ */
+export const createSourceLineResolver = (source: string) => {
+  const lineStarts = [0]
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (char === '\n' || (char === '\r' && source[index + 1] !== '\n')) {
+      lineStarts.push(index + 1)
+    }
+  }
+
+  return (offset: number): number | undefined => {
+    if (!Number.isInteger(offset) || offset < 0 || offset > source.length) return undefined
+
+    let low = 0
+    let high = lineStarts.length - 1
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2)
+      if (lineStarts[middle] <= offset) {
+        low = middle
+      } else {
+        high = middle - 1
+      }
+    }
+    return low + 1
+  }
+}
+
+/** Recalculate codeLine from the current JSX offsets after source reordering. */
+export const updateElementSourceLocationCodeLine = (
+  ele: Element,
+  getLineForOffset: (offset: number) => number | undefined,
+) => {
+  const locValue = ele.getAttribute('data-loc')
+  if (!locValue) return
+
+  try {
+    const loc = JSON.parse(locValue)
+    const start = loc?.jsx?.start
+    const end = loc?.jsx?.end
+    if (typeof start !== 'number' || typeof end !== 'number') return
+
+    const startLine = getLineForOffset(start)
+    const endLine = getLineForOffset(end)
+    if (startLine == null || endLine == null) return
+
+    loc.codeLine = {
+      ...loc.codeLine,
+      start: startLine,
+      end: endLine,
+    }
+    ele.setAttribute('data-loc', JSON.stringify(loc))
+  } catch {
+    // Runtime metadata can be malformed; keep it unchanged when it cannot be parsed.
   }
 }
 
@@ -96,6 +157,29 @@ const shiftLocAfterReplacement = (loc: any, replacement: SourceReplacement) => {
       end: shiftRangeAfterReplacement({ start: nextLoc.tag.end, end: nextLoc.tag.end }, replacement).end,
     }
   }
+
+  const lineDelta = replacement.lineDelta
+  if (
+    lineDelta &&
+    nextLoc.codeLine &&
+    typeof nextLoc.codeLine.start === 'number' &&
+    typeof nextLoc.codeLine.end === 'number' &&
+    loc.jsx &&
+    typeof loc.jsx.start === 'number' &&
+    typeof loc.jsx.end === 'number'
+  ) {
+    // For an insertion, the boundary belongs to the preceding node. A target
+    // that starts exactly at the boundary is handled by its insert caller.
+    const isAfterReplacement = (position: number) => (
+      replacement.start === replacement.end
+        ? position > replacement.start
+        : position >= replacement.end
+    )
+    nextLoc.codeLine = { ...nextLoc.codeLine }
+    if (isAfterReplacement(loc.jsx.start)) nextLoc.codeLine.start += lineDelta
+    if (isAfterReplacement(loc.jsx.end)) nextLoc.codeLine.end += lineDelta
+  }
+
   return nextLoc
 }
 
