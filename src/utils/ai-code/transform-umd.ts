@@ -268,86 +268,50 @@ function extractMediaQueries(css: string): {
   cssContent: string
   mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }>
 } {
-  const mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }> = []
-
   if (!css) {
-    return { cssContent: '', mediaQueries }
+    return { cssContent: '', mediaQueries: [] }
   }
 
-  if (typeof document !== 'undefined') {
-    try {
-      const style = document.createElement('style')
-      style.textContent = css
-      document.head.appendChild(style)
-
-      try {
-        const sheet = style.sheet as CSSStyleSheet | null
-        const cssRules = Array.from(sheet?.cssRules || [])
-        const normalRules: string[] = []
-
-        cssRules.forEach((rule) => {
-          if (rule instanceof CSSMediaRule) {
-            const placeholder = `/* __MYBRICKS_AI_MEDIA_QUERY_${mediaQueries.length}__ */`
-            normalRules.push(placeholder)
-            mediaQueries.push({
-              conditionText: rule.conditionText,
-              cssText: Array.from(rule.cssRules || []).map((innerRule) => innerRule.cssText).join('\n'),
-              placeholder
-            })
-          } else {
-            normalRules.push(rule.cssText)
-          }
-        })
-
-        return {
-          cssContent: normalRules.join('\n'),
-          mediaQueries
-        }
-      } finally {
-        style.remove()
-      }
-    } catch (error) {
-      console.warn('[extractMediaQueries] CSSOM parse failed, fallback to text parser', error)
-    }
-  }
-
-  return extractMediaQueriesByText(css)
+  // CSSOM cssText can corrupt shorthands containing var(), so use css-tree offsets.
+  return extractMediaQueriesByAst(css)
 }
 
-function extractMediaQueriesByText(css: string): {
+function extractMediaQueriesByAst(css: string): {
   cssContent: string
   mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }>
 } {
   const mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }> = []
   const ranges: Array<[number, number, string]> = []
-  const mediaRegex = /@media\s*([^{}]+)\{/g
-  let match: RegExpExecArray | null
 
-  while ((match = mediaRegex.exec(css)) !== null) {
-    let depth = 1
-    let i = mediaRegex.lastIndex
-    const contentStart = i
-
-    while (i < css.length && depth > 0) {
-      if (css[i] === '{') {
-        depth++
-      } else if (css[i] === '}') {
-        depth--
+  try {
+    const cssAst = parseCss(css, { context: 'stylesheet', positions: true })
+    cssAst.children.forEach((node: any) => {
+      if (node.type !== 'Atrule' || !isMediaAtRule(node.name) || !node.block?.loc) {
+        return
       }
-      i++
-    }
 
-    if (depth === 0) {
-      const contentEnd = i - 1
+      const start = node.loc.start.offset
+      const blockStart = node.block.loc.start.offset
+      const end = node.loc.end.offset
+      const lastChildEnd = node.block.children.last?.loc?.end.offset
+      const conditionStart = node.prelude?.loc?.start.offset ?? blockStart
+
+      // css-tree can recover an omitted closing brace. Keep malformed source intact.
+      if (css[blockStart] !== '{' || css[end - 1] !== '}' || lastChildEnd === end) {
+        return
+      }
+
       const placeholder = `/* __MYBRICKS_AI_MEDIA_QUERY_${mediaQueries.length}__ */`
       mediaQueries.push({
-        conditionText: match[1].trim(),
-        cssText: css.slice(contentStart, contentEnd).trim(),
+        conditionText: css.slice(conditionStart, blockStart).trim(),
+        cssText: css.slice(blockStart + 1, end - 1).trim(),
         placeholder
       })
-      ranges.push([match.index, i, placeholder])
-      mediaRegex.lastIndex = i
-    }
+      ranges.push([start, end, placeholder])
+    })
+  } catch {
+    // Keep CSS that cannot be parsed unchanged instead of risking a partial split.
+    return { cssContent: css, mediaQueries }
   }
 
   let cssContent = ''
@@ -363,6 +327,21 @@ function extractMediaQueriesByText(css: string): {
     cssContent: cssContent.trim(),
     mediaQueries
   }
+}
+
+function isMediaAtRule(name: unknown): boolean {
+  return typeof name === 'string' && decodeCssIdentifier(name).toLowerCase() === 'media'
+}
+
+function decodeCssIdentifier(value: string): string {
+  return value.replace(/\\(?:([0-9a-fA-F]{1,6})[\t\n\f\r ]?|([\s\S]))/g, (_, hex, character) => {
+    if (!hex) {
+      return character
+    }
+
+    const codePoint = Number.parseInt(hex, 16)
+    return codePoint === 0 || codePoint > 0x10FFFF ? '\uFFFD' : String.fromCodePoint(codePoint)
+  })
 }
 
 function extractFrameStyle(css: string): { width?: number } | undefined {

@@ -10,35 +10,46 @@ import {
 } from './sourceLocation'
 
 /**
- * 按 data-loc 提供的源码范围交换两个 JSX 节点。
+ * 按 data-loc 提供的源码范围，将 from 片段移动到 to 片段的前面或后面。
  * 不依赖文本全局搜索，避免相同 JSX 出现在注释、字符串或重复结构时替换到错误位置。
- *
- * 返回替换后的新 source，若失败返回 null。
  */
-const swapRangesInSource = (source: string, firstRange: SourceRange, secondRange: SourceRange): string | null => {
-  const ranges = [firstRange, secondRange].sort((a, b) => a.start - b.start)
-  const [leftRange, rightRange] = ranges
+const moveRangeInSource = (
+  source: string,
+  fromRange: SourceRange,
+  toRange: SourceRange,
+  type: 'before' | 'after',
+): string | null => {
   if (
-    !Number.isInteger(leftRange.start) ||
-    !Number.isInteger(leftRange.end) ||
-    !Number.isInteger(rightRange.start) ||
-    !Number.isInteger(rightRange.end) ||
-    leftRange.start < 0 ||
-    leftRange.end <= leftRange.start ||
-    rightRange.end <= rightRange.start ||
-    rightRange.end > source.length ||
-    leftRange.end > rightRange.start
+    !Number.isInteger(fromRange.start) ||
+    !Number.isInteger(fromRange.end) ||
+    !Number.isInteger(toRange.start) ||
+    !Number.isInteger(toRange.end) ||
+    fromRange.start < 0 ||
+    fromRange.end <= fromRange.start ||
+    toRange.end <= toRange.start ||
+    fromRange.end > source.length ||
+    toRange.end > source.length ||
+    (fromRange.start < toRange.start && fromRange.end > toRange.start) ||
+    (toRange.start < fromRange.start && toRange.end > fromRange.start)
   ) {
     return null
   }
 
-  const leftSnippet = source.slice(leftRange.start, leftRange.end)
-  const rightSnippet = source.slice(rightRange.start, rightRange.end)
-  return source.slice(0, leftRange.start)
-    + rightSnippet
-    + source.slice(leftRange.end, rightRange.start)
-    + leftSnippet
-    + source.slice(rightRange.end)
+  if (fromRange.start < toRange.start) {
+    const fromSnippet = source.slice(fromRange.start, fromRange.end)
+    const middle = source.slice(fromRange.end, toRange.start)
+    const toSnippet = source.slice(toRange.start, toRange.end)
+    return type === 'before'
+      ? source.slice(0, fromRange.start) + middle + fromSnippet + source.slice(toRange.start)
+      : source.slice(0, fromRange.start) + middle + toSnippet + fromSnippet + source.slice(toRange.end)
+  }
+
+  const toSnippet = source.slice(toRange.start, toRange.end)
+  const middle = source.slice(toRange.end, fromRange.start)
+  const fromSnippet = source.slice(fromRange.start, fromRange.end)
+  return type === 'before'
+    ? source.slice(0, toRange.start) + fromSnippet + toSnippet + middle + source.slice(fromRange.end)
+    : source.slice(0, toRange.end) + fromSnippet + middle + source.slice(fromRange.end)
 }
 
 const isLocInRange = (loc: any, fileName: string, range: SourceRange) => {
@@ -54,65 +65,79 @@ const isLocInRange = (loc: any, fileName: string, range: SourceRange) => {
 }
 
 /**
- * 根据一次 JSX 片段交换，计算某个 data-loc 应该平移多少字符。
+ * 根据一次 JSX 片段移动，计算某个 data-loc 应该平移多少字符。
  *
  * 这里不能简单只更新 from/to 两个根节点：
- * 1. 被交换的两个 JSX 子树自身会移动到对方位置；
- * 2. 如果两个片段长度不同，夹在两者之间的同级节点源码位置也会整体前移或后移；
+ * 1. 被移动的 JSX 子树自身会移动到目标位置；
+ * 2. 夹在 from 和 to 之间的同级节点源码位置也会整体前移或后移；
  * 3. 两个片段外部的节点不受影响，delta 为 0。
  *
- * 约定：firstRange/secondRange 是交换前源码中的两个 JSX 根节点范围，
- * 函数内部先按 start 排出 left/right，再根据 loc 所在区间返回应平移的 delta。
+ * 约定：fromRange/toRange 是移动前源码中的两个 JSX 根节点范围。
  * 快速路径使用 noUpdateFileSystem 更新源码，不会立即重新渲染 DOM，
  * 因此必须同步平移当前 DOM 上的 data-loc，否则再次拖动时会按旧位置截取源码，导致字符串无法匹配。
  */
-const getSwapDelta = (loc: any, fileName: string, firstRange: SourceRange, secondRange: SourceRange) => {
-  if (firstRange.start === secondRange.start) return 0
+const getMoveDelta = (
+  loc: any,
+  fileName: string,
+  fromRange: SourceRange,
+  toRange: SourceRange,
+  type: 'before' | 'after',
+) => {
+  if (fromRange.start === toRange.start) return 0
+  const fromLength = fromRange.end - fromRange.start
+  const fromBeforeTo = fromRange.start < toRange.start
+  const movedRange = fromBeforeTo ? fromRange : toRange
+  const targetRange = fromBeforeTo ? toRange : fromRange
 
-  const leftRange = firstRange.start < secondRange.start ? firstRange : secondRange
-  const rightRange = firstRange.start < secondRange.start ? secondRange : firstRange
-  const leftLength = leftRange.end - leftRange.start
-  const rightLength = rightRange.end - rightRange.start
-
-  if (isLocInRange(loc, fileName, leftRange)) {
-    // 左侧片段被移动到右侧片段原位置之后。
-    // 目标起点 = rightRange.end - leftLength。
-    return rightRange.end - leftLength - leftRange.start
+  if (isLocInRange(loc, fileName, fromRange)) {
+    if (fromBeforeTo) {
+      return type === 'before'
+        ? toRange.start - fromLength - fromRange.start
+        : toRange.end - fromLength - fromRange.start
+    }
+    return (type === 'before' ? toRange.start : toRange.end) - fromRange.start
   }
 
-  if (isLocInRange(loc, fileName, rightRange)) {
-    // 右侧片段被移动到左侧片段原位置。
-    return leftRange.start - rightRange.start
+  if (isLocInRange(loc, fileName, toRange)) {
+    if (fromBeforeTo) {
+      return type === 'before' ? 0 : -fromLength
+    }
+    return type === 'before' ? fromLength : 0
   }
 
   if (
     loc?.files?.jsx === fileName &&
     typeof loc?.jsx?.start === 'number' &&
     typeof loc?.jsx?.end === 'number' &&
-    loc.jsx.start >= leftRange.end &&
-    loc.jsx.end <= rightRange.start
+    loc.jsx.start >= movedRange.end &&
+    loc.jsx.end <= targetRange.start
   ) {
-    // 中间区间会被右侧片段替换到左侧后产生的长度差整体平移。
-    // 例如左片段更短，则中间节点向右移动；左片段更长，则中间节点向左移动。
-    return rightLength - leftLength
+    return fromBeforeTo ? -fromLength : fromLength
   }
 
+  // Nodes after the target keep their absolute position because the source length is unchanged.
   return 0
 }
 
 /**
- * 将交换影响范围内的 DOM 定位信息同步到新的源码位置。
+ * 将移动影响范围内的 DOM 定位信息同步到新的源码位置。
  *
  * root 取两个拖拽元素的共同父节点：
  * - 快速路径已经要求 from/to 是同一个 parentElement；
- * - 因此扫描该父节点下的 data-loc，就能覆盖被交换节点以及中间受位移影响的兄弟节点；
+ * - 因此扫描该父节点下的 data-loc，就能覆盖被移动节点以及中间受位移影响的兄弟节点；
  * - 不扫描全局 DOM，避免误改其它组件实例或同名页面中的节点。
  *
  * 这里只做位置平移，不重算 codeLine：
  * - data-loc 与 data-style-info 的绝对偏移会被同步，供后续字符串截取、样式注入、文本编辑使用；
  * - codeLine 需要 AST/源码重新解析才能准确计算，手动推断容易生成不可信行号。
  */
-const shiftDOMLocAfterSourceSwap = (root: Element | null, fileName: string, firstRange: SourceRange, secondRange: SourceRange) => {
+const shiftDOMLocAfterSourceMove = (
+  root: Element | null,
+  fileName: string,
+  fromRange: SourceRange,
+  toRange: SourceRange,
+  type: 'before' | 'after',
+) => {
   if (!root) return
 
   const elements = [root, ...Array.from(root.querySelectorAll('[data-loc]'))]
@@ -122,32 +147,12 @@ const shiftDOMLocAfterSourceSwap = (root: Element | null, fileName: string, firs
 
     try {
       const loc = JSON.parse(locValue)
-      const delta = getSwapDelta(loc, fileName, firstRange, secondRange)
+      const delta = getMoveDelta(loc, fileName, fromRange, toRange, type)
       if (delta === 0) return
 
       shiftElementSourceLocationByDelta(ele, delta)
     } catch { }
   })
-}
-
-const swapDOMNodes = (fromEle: Element, toEle: Element) => {
-  const parent = fromEle.parentNode
-  if (!parent || parent !== toEle.parentNode) return
-
-  const fromNext = fromEle.nextSibling
-  const toNext = toEle.nextSibling
-
-  if (fromNext === toEle) {
-    parent.insertBefore(toEle, fromEle)
-    return
-  }
-  if (toNext === fromEle) {
-    parent.insertBefore(fromEle, toEle)
-    return
-  }
-
-  parent.insertBefore(fromEle, toNext)
-  parent.insertBefore(toEle, fromNext)
 }
 
 const restoreDOMNodePosition = (ele: Element, parent: Node | null, nextSibling: Node | null) => {
@@ -254,11 +259,12 @@ const changeOrder = (options) => {
         start: toLoc.jsx?.start,
         end: toLoc.jsx?.end,
       }
-      const newSource = swapRangesInSource(source, fromRange, toRange)
+      const placement = type === 'before' ? 'before' : 'after'
+      const newSource = moveRangeInSource(source, fromRange, toRange, placement)
       if (newSource !== null) {
         const locSnapshotRoot = fromEle.parentElement
-        // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原交换前快照，
-        // 否则源码已回退但 DOM 仍保留交换后的 data-loc，再次操作仍会错位。
+        // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原移动前快照，
+        // 否则源码已回退但 DOM 仍保留移动后的 data-loc，再次操作仍会错位。
         const locSnapshot = createDOMSourceLocationSnapshot(locSnapshotRoot, fromFile)
 
         const fromParent = fromEle.parentNode
@@ -274,8 +280,8 @@ const changeOrder = (options) => {
           execute() {
             context.updateFile({ fileName: fromFile, content: newSource, type: undefined, noUpdateFileSystem: true })
             // noUpdateFileSystem 不触发完整重渲染，必须同步节点顺序和源码定位。
-            swapDOMNodes(fromEle, toEle)
-            shiftDOMLocAfterSourceSwap(locSnapshotRoot, fromFile, fromRange, toRange)
+            moveDOMNode(fromEle, toEle, placement)
+            shiftDOMLocAfterSourceMove(locSnapshotRoot, fromFile, fromRange, toRange, placement)
             context.component!.actions.addUserAction({
               id: actionId,
               type: 'move',

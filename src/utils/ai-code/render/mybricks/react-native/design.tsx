@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../../../../../mix/context'
 import { PAGE_ENTRY_PATTERN, DEFAULT_STYLE } from './constants'
 import { randomUUID } from '../../../../../mix/utils/uuid'
@@ -8,12 +8,26 @@ const design = (props: CreateMyBricksProps) => {
   // 弹窗注册表，存储通过 popupRef 包装的组件实例
   const popupsCollection: Array<{ id: string; Component: React.ComponentType<any>; props: any }> = []
   let forceUpdateApp: (() => void) | null = null
+  const fallbackContainer = document
+    .getElementById('_mybricks-geo-webview_')
+    ?.shadowRoot
+    ?.getElementById(props.comId)
+  const PageContext = createContext({
+    container: fallbackContainer,
+  })
 
   const Page = ({ page }) => {
     const Render = page.module.default
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [container, setContainer] = useState<HTMLDivElement>()
+
+    useLayoutEffect(() => {
+      setContainer(containerRef.current!)
+    }, [])
 
     return (
       <div
+        ref={containerRef}
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={page.file.filename}
@@ -22,7 +36,11 @@ const design = (props: CreateMyBricksProps) => {
         style={DEFAULT_STYLE}
       >
         <div style={{ width: '100%', height: '100%', overflowX: 'hidden'}}>
-          <Render />
+          {container && (
+            <PageContext.Provider value={{ container }}>
+              <Render />
+            </PageContext.Provider>
+          )}
         </div>
       </div>
     )
@@ -109,7 +127,8 @@ const design = (props: CreateMyBricksProps) => {
 
   const comRef = (Component) => {
     return (props) => {
-      return <Component {...props} />
+      const pageContext = useContext(PageContext)
+      return <Component {...props} popupNode={pageContext.container}/>
     }
   }
 

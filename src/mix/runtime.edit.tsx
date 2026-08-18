@@ -127,9 +127,11 @@ const dataCompatible = (props) => {
         }
       }
 
-      // data.files.forEach((file) => {
-      //   context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
-      // })
+      data.files.forEach((file) => {
+        if (file.fileName.endsWith('.less')) {
+          context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
+        }
+      })
     }
   } catch (e) {
     console.log('[初始化报错]', e)
