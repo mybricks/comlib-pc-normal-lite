@@ -6,7 +6,7 @@ import context, { config } from '../../context'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
 import { undoRedoManager } from '../undoRedo'
-import { getElementCodeLocation, getElementLabel, indentText, parseElementInfo } from './elementChip'
+import { buildElementInsertChipData, getElementLabel, indentText } from './elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -14,19 +14,23 @@ import {
   type SourceReplacement,
 } from './sourceLocation'
 
+type InsertCode = {
+  /** Imports required by the JSX fragment. */
+  import?: string;
+  /** JSX fragment to insert. */
+  jsx: string;
+}
+
 interface InsertOptions {
   /** Target element. */
   toEle: HTMLElement;
   /** Insert before or after the target element. */
   type: 'before' | 'after';
   /** Code to insert. */
-  code: {
-    /** Imports required by the JSX fragment. */
-    import?: string;
-    /** JSX fragment to insert. */
-    jsx: string;
-  }
+  code: InsertCode | (() => InsertCode)
 }
+
+type ResolvedInsertOptions = Omit<InsertOptions, 'code'> & { code: InsertCode }
 
 type ImportDeclaration = {
   text: string
@@ -226,7 +230,7 @@ const markAIOnlyPreviewRoots = (container: HTMLDivElement) => {
   })
 }
 
-const createPreview = (code: InsertOptions['code'], location?: PreviewSourceLocation): InsertPreview | null => {
+const createPreview = (code: InsertCode, location?: PreviewSourceLocation): InsertPreview | null => {
   if (!window.Babel || !code.jsx.trim()) return null
 
   try {
@@ -358,31 +362,20 @@ const shiftTargetStartAtInsertionBoundary = (target: HTMLElement, patch: SourceP
   }
 }
 
-const buildInsertAIRequest = (options: InsertOptions, targetLabel: string) => {
-  const target = parseElementInfo(options.toEle, targetLabel)
-  const placement = options.type === 'before' ? '前面' : '后面'
-  const imports = options.code.import?.trim() || '无'
-
-  return [
-    `请在【${targetLabel}】${placement}插入以下 JSX 片段。`,
-    `目标源码位置：${getElementCodeLocation(options.toEle)}`,
-    `目标 DOM 摘要：${target.domSummary}`,
-    '要求：保留现有结构和缩进；将同一模块的命名 import 合并，已导入的标识符不得重复。',
-    '需要导入：',
-    indentText(imports, '  '),
-    'JSX：',
-    indentText(options.code.jsx.trim(), '  '),
-  ].join('\n')
-}
-
-const runInsertByAI = (options: InsertOptions, preview: InsertPreview | null, title: string) => {
+const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | null, title: string) => {
   const actionId = randomUUID()
   const targetLabel = getElementLabel(options.toEle, '节点')
+  const chip = {
+    id: randomUUID(),
+    type: 'element-insert',
+    label: title,
+    data: buildElementInsertChipData(options.toEle, options.type, options.code.jsx, options.code.import, targetLabel),
+  }
 
   undoRedoManager.executeBranch({
     aiRequest: {
-      message: buildInsertAIRequest(options, targetLabel),
-      chips: [],
+      message: `[[chip:${chip.id}]]`,
+      chips: [chip],
     },
     execute() {
       if (preview) mountPreview(preview, options.toEle, options.type)
@@ -403,20 +396,25 @@ const runInsertByAI = (options: InsertOptions, preview: InsertPreview | null, ti
 }
 
 const insert = (options: InsertOptions) => {
-  const { toEle, type, code } = options
-  if (!toEle || (type !== 'before' && type !== 'after') || !code?.jsx?.trim()) return
+  const { toEle, type } = options
+  if (!toEle || (type !== 'before' && type !== 'after') || !options.code) return
+
+  const code = typeof options.code === 'function' ? options.code() : options.code
+  if (!code?.jsx?.trim()) return
+
+  const resolvedOptions: ResolvedInsertOptions = { ...options, code }
 
   const targetLabel = getElementLabel(toEle, '节点')
   const title = `在 ${targetLabel}${type === 'before' ? '前' : '后'}插入内容`
 
   try {
     const locValue = toEle.dataset.loc
-    if (!locValue) return runInsertByAI(options, createPreview(code), title)
+    if (!locValue) return runInsertByAI(resolvedOptions, createPreview(code), title)
 
     const shadowRoot = getShadowRoot()
     const sameLocationElements = Array.from(shadowRoot.querySelectorAll<HTMLElement>('[data-loc]'))
       .filter((element) => element.dataset.loc === locValue)
-    if (sameLocationElements.length !== 1) return runInsertByAI(options, createPreview(code), title)
+    if (sameLocationElements.length !== 1) return runInsertByAI(resolvedOptions, createPreview(code), title)
 
     const loc = JSON.parse(locValue)
     const fileName = loc?.files?.jsx
@@ -434,7 +432,7 @@ const insert = (options: InsertOptions) => {
       end <= start ||
       end > source.length
     ) {
-      return runInsertByAI(options, createPreview(code), title)
+      return runInsertByAI(resolvedOptions, createPreview(code), title)
     }
 
     const insertPosition = type === 'before' ? start : end
@@ -442,11 +440,11 @@ const insert = (options: InsertOptions) => {
     const sourceWithJsx = source.slice(0, insertPosition) + jsxInsertion + source.slice(insertPosition)
     const imports = mergeImports(sourceWithJsx, code.import)
     if (!imports || !validateSource(imports.source, fileName)) {
-      return runInsertByAI(options, createPreview(code), title)
+      return runInsertByAI(resolvedOptions, createPreview(code), title)
     }
 
     const finalJsxStart = getPositionAfterPatches(insertPosition, imports.patches)
-    if (finalJsxStart == null) return runInsertByAI(options, createPreview(code), title)
+    if (finalJsxStart == null) return runInsertByAI(resolvedOptions, createPreview(code), title)
     const dataAttributes = collectCompiledDataAttributes(
       imports.source,
       fileName,
@@ -499,7 +497,8 @@ const insert = (options: InsertOptions) => {
 
     return { type: 'success', actionId }
   } catch (_) {
-    return runInsertByAI(options, createPreview(code), title)
+    console.error("insert:", _)
+    return runInsertByAI(resolvedOptions, createPreview(code), title)
   }
 }
 

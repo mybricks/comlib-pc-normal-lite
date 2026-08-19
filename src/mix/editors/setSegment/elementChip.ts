@@ -91,6 +91,14 @@ export interface ParsedElementMoveChipData extends ParsedElementChipData {
   direction: string
 }
 
+export interface ParsedElementInsertChipData extends ParsedElementChipData {
+  target: ParsedElementInfo
+  placement: 'before' | 'after'
+  direction: string
+  importCode: string
+  jsx: string
+}
+
 export interface ParsedElementStyleUpdateChipData extends ParsedElementChipData {
   target: ParsedElementInfo
   styles: Array<{ property: string; value: number | string | null }>
@@ -795,6 +803,61 @@ export function buildElementMoveChipData(
       '## 注意',
       ...notes,
       '</element-move-operation>',
+    ].join('\n'),
+  }
+}
+
+export function buildElementInsertChipData(
+  ele: Element,
+  placement: 'before' | 'after',
+  jsx: string,
+  importCode = '',
+  label = getElementLabel(ele, '节点1'),
+): ParsedElementInsertChipData {
+  const opLabel = '元素插入操作1'
+  const direction = placement === 'before' ? '前面（上方）' : '后面（下方）'
+  const target = parseElementInfo(ele, label)
+  const normalizedImports = importCode.trim()
+  const normalizedJsx = jsx.trim()
+
+  return {
+    inlineText: `执行「${opLabel}」，`,
+    target,
+    placement,
+    direction,
+    importCode: normalizedImports,
+    jsx: normalizedJsx,
+    detailText: [
+      `<element-insert-operation id="${opLabel}" placement="${placement}">`,
+      `## 操作意图（${opLabel}）`,
+      `用户通过可视化编辑，在【目标元素】的${direction}插入 JSX 片段，请在源码中完成对应插入。`,
+      '',
+      '## 目标元素',
+      `- 名称：${target.name}`,
+      `- 代码位置：${target.codeLocation}`,
+      target.repeatContextBlock,
+      '- DOM 结构摘要：',
+      indentText(target.domSummary, '  '),
+      '',
+      '## 需要导入',
+      normalizedImports || '无',
+      '',
+      '## JSX 片段',
+      '```tsx',
+      normalizedJsx,
+      '```',
+      '',
+      '## 修改要求',
+      '1. 只在目标元素指定位置插入给出的 JSX 片段，不改写无关结构',
+      '2. 合并同一模块的命名 import，避免重复导入和重复标识符',
+      '3. 保持现有代码的缩进、结构及其他元素不变',
+      ...(target.hasRepeatContext
+        ? ['4. 如果目标元素位于循环 JSX / map 渲染中，默认只对当前元素对应的源码位置执行插入；无法确认范围时先向用户确认']
+        : []),
+      '',
+      '## 注意',
+      '如果无法可靠定位目标元素的源码，请用一句话说明原因，不要修改无关代码。',
+      '</element-insert-operation>',
     ].join('\n'),
   }
 }

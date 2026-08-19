@@ -1209,6 +1209,16 @@ async function registerSandboxInternal(comId: string): Promise<void> {
           context.component!.actions!.promiseCancel(params.id)
         }
       },
+      ['element-insert']: {
+        def: {
+          type: 'element-insert',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
       ['element-text-update']: {
         def: {
           type: 'element-text-update',
