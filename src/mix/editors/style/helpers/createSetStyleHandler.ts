@@ -7,6 +7,12 @@ import { undoRedoManager } from '../../undoRedo'
 import { randomUUID } from '../../../utils/uuid'
 import { buildElementStyleUpdateChipData, getElementLabel } from '../../setSegment/elementChip'
 import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftDOMSourceLocationsAfterReplacement,
+  type SourceReplacement,
+} from '../../setSegment/sourceLocation'
+import {
   appendToInlineStyleAttr,
   appendToInlineStyleAttrByTagRange,
   injectStyleAttrIntoJSX,
@@ -186,6 +192,8 @@ type FileUpdate = {
   fileName: string;
   previousCode: string;
   newCode: string;
+  /** JSX 源码替换范围，用于 noUpdateFileSystem 时同步画布 DOM 的绝对定位数据。 */
+  sourceReplacements?: SourceReplacement[];
 }
 
 type StyleKeyRoute = {
@@ -278,6 +286,32 @@ const getJsxFileInfo = (targetEle: HTMLElement) => {
 }
 
 const stringifyStyleValue = (value: StyleValue) => typeof value === 'number' ? `${value}px` : value
+
+const getJsxStyleValueLength = (value: StyleValue, asString = true) => {
+  if (!asString) return String(value).length
+  const escaped = String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  return escaped.length + 2
+}
+
+/** Return the exact range for a source transformation that only inserts text. */
+const getSingleInsertionReplacement = (previousCode: string, newCode: string): SourceReplacement | null => {
+  if (newCode.length <= previousCode.length) return null
+
+  let start = 0
+  while (start < previousCode.length && previousCode[start] === newCode[start]) start += 1
+
+  let previousEnd = previousCode.length
+  let newEnd = newCode.length
+  while (previousEnd > start && newEnd > start && previousCode[previousEnd - 1] === newCode[newEnd - 1]) {
+    previousEnd -= 1
+    newEnd -= 1
+  }
+
+  if (previousEnd !== start) return null
+  return { start, end: start, newLength: newEnd - start }
+}
+
+const isJsxFile = (fileName: string) => ['jsx', 'tsx'].includes(fileName.split('.').pop() ?? '')
 
 const isFlexLayout = (targetEle: HTMLElement) => {
   const display = window.getComputedStyle(targetEle).display
@@ -548,7 +582,13 @@ const patchSingleElementInlineStyle = (
   targetEle: HTMLElement,
   nextStyle: Record<string, StyleValue>,
   initialInlineCssText = '',
-): { fileName: string; previousCode: string; newCode: string; nextStyleInfo: Record<string, StyleKeyInfo> | null } | null => {
+): {
+  fileName: string;
+  previousCode: string;
+  newCode: string;
+  nextStyleInfo: Record<string, StyleKeyInfo> | null;
+  sourceReplacements: SourceReplacement[];
+} | null => {
   const jsxInfo = getJsxFileInfo(targetEle)
   if (!jsxInfo) return null
 
@@ -568,6 +608,7 @@ const patchSingleElementInlineStyle = (
 
   let newCode = jsxInfo.previousCode
   let latestStyleInfo = styleInfo
+  const sourceReplacements: SourceReplacement[] = []
 
   if (existingEntries.length > 0) {
     const patched = patchJsxInlineStyle(
@@ -581,6 +622,15 @@ const patchSingleElementInlineStyle = (
     )
     if (!patched) return null
     newCode = patched
+    // patchJsxInlineStyle applies from right to left. Preserve that order so
+    // each source range is interpreted against the corresponding intermediate source.
+    sourceReplacements.push(...[...existingEntries]
+      .sort((a, b) => b.valueStart - a.valueStart)
+      .map(({ val, valueStart, valueEnd }) => ({
+        start: valueStart,
+        end: valueEnd,
+        newLength: getJsxStyleValueLength(val),
+      })))
     if (styleInfo) {
       latestStyleInfo = applyStyleInfoOffset(styleInfo, existingEntries.map(({ val, valueStart, valueEnd }) => {
         const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
@@ -591,6 +641,7 @@ const patchSingleElementInlineStyle = (
 
   const hasPropsToAdd = Object.keys(propsToAdd).length > 0
   if (hasPropsToAdd) {
+    const codeBeforeAppend = newCode
     if (latestStyleInfo) {
       const appendResult = appendPropsToExistingInlineStyle(newCode, jsxInfo.loc, latestStyleInfo, propsToAdd)
       if (!appendResult) return null
@@ -608,6 +659,9 @@ const patchSingleElementInlineStyle = (
       // injectStyleAttrIntoJSX produced a brand-new style attr; capture the fresh offsets.
       latestStyleInfo = injectResult.styleInfo
     }
+    const insertion = getSingleInsertionReplacement(codeBeforeAppend, newCode)
+    if (!insertion) return null
+    sourceReplacements.push(insertion)
   }
 
   if (newCode === jsxInfo.previousCode) return null
@@ -618,6 +672,7 @@ const patchSingleElementInlineStyle = (
     // Return the updated source-offset map so callers can write it back to data-style-info,
     // keeping subsequent edits (noUpdateFileSystem) aligned with the new source positions.
     nextStyleInfo: latestStyleInfo,
+    sourceReplacements,
   }
 }
 
@@ -1059,7 +1114,12 @@ export default function createSetStyleHandler(
             : null
           const lessUpdates = patchLessStyles(lessStyle, lessFile)
           const inlineUpdateAsFileUpdate: FileUpdate | null = inlineUpdate
-            ? { fileName: inlineUpdate.fileName, previousCode: inlineUpdate.previousCode, newCode: inlineUpdate.newCode }
+            ? {
+              fileName: inlineUpdate.fileName,
+              previousCode: inlineUpdate.previousCode,
+              newCode: inlineUpdate.newCode,
+              sourceReplacements: inlineUpdate.sourceReplacements,
+            }
             : null
           const updateFIles: FileUpdate[] = (inlineUpdateAsFileUpdate ? [inlineUpdateAsFileUpdate] : [] as FileUpdate[]).concat(lessUpdates)
           const inlineStyleSnapshots = inlineUpdate
@@ -1070,6 +1130,13 @@ export default function createSetStyleHandler(
           const nextStyleInfoStr = inlineUpdate?.nextStyleInfo
             ? JSON.stringify(inlineUpdate.nextStyleInfo)
             : null
+          const shadowRoot = getShadowRoot()
+          const sourceLocationSnapshots = new Map<string, ReturnType<typeof createDOMSourceLocationSnapshot>>()
+          updateFIles.forEach(({ fileName, sourceReplacements }) => {
+            if (isJsxFile(fileName) && sourceReplacements?.length && !sourceLocationSnapshots.has(fileName)) {
+              sourceLocationSnapshots.set(fileName, createDOMSourceLocationSnapshot(shadowRoot, fileName))
+            }
+          })
 
           if (updateFIles.length) {
             const actionId = randomUUID()
@@ -1079,6 +1146,12 @@ export default function createSetStyleHandler(
                 updateFIles.forEach(({ fileName, newCode }) => {
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
+                })
+                updateFIles.forEach(({ fileName, sourceReplacements }) => {
+                  if (!isJsxFile(fileName)) return
+                  sourceReplacements?.forEach((replacement) => {
+                    shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, replacement)
+                  })
                 })
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
                 // Keep data-style-info in sync with the (noUpdateFileSystem) source-file offsets
@@ -1096,6 +1169,7 @@ export default function createSetStyleHandler(
                   const suffix = fileName.split('.').pop()!;
                   context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
                 })
+                sourceLocationSnapshots.forEach((snapshot) => restoreDOMSourceLocationSnapshot(snapshot))
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
                 // Restore the pre-edit offset map so a redo / re-drag operates on correct offsets.
                 if (nextStyleInfoStr) ele.dataset.styleInfo = prevStyleInfoStr ?? ''
@@ -1223,16 +1297,13 @@ export default function createSetStyleHandler(
           fallbackInlineStyle.display = 'flex'
         }
 
-        const jsxs: {
-          fileName: string;
-          previousCode: string;
-          newCode: string;
-        }[] = []
+        const jsxs: FileUpdate[] = []
 
-        const pushJsxUpdate = (update: { fileName: string; previousCode: string; newCode: string }) => {
+        const pushJsxUpdate = (update: FileUpdate) => {
           const existing = jsxs.find(item => item.fileName === update.fileName)
           if (existing) {
             existing.newCode = update.newCode
+            existing.sourceReplacements = update.sourceReplacements
           } else {
             jsxs.push(update)
           }
@@ -1271,7 +1342,19 @@ export default function createSetStyleHandler(
             pushJsxUpdate({
               fileName: jsxFileName,
               previousCode: jsxPreviousCode,
-              newCode: jsxNewCode
+              newCode: jsxNewCode,
+              // patchJsxInlineStyle applies from right to left, so preserve its
+              // replacement order when rebasing DOM source locations.
+              sourceReplacements: [...entries]
+                .sort((a, b) => b.loc.start - a.loc.start)
+                .map((entry) => ({
+                  start: entry.loc.start,
+                  end: entry.loc.end,
+                  newLength: getJsxStyleValueLength(
+                    entry.asString ? stringifyStyleValue(entry.value) : entry.value,
+                    entry.asString,
+                  ),
+                })),
             })
           })
         }
@@ -1307,6 +1390,13 @@ export default function createSetStyleHandler(
         const nextFallbackStyleInfoStr = fallbackInlineUpdate?.nextStyleInfo
           ? JSON.stringify(fallbackInlineUpdate.nextStyleInfo)
           : null
+        const shadowRoot = getShadowRoot()
+        const sourceLocationSnapshots = new Map<string, ReturnType<typeof createDOMSourceLocationSnapshot>>()
+        updateFIles.forEach(({ fileName, sourceReplacements }) => {
+          if (isJsxFile(fileName) && sourceReplacements?.length && !sourceLocationSnapshots.has(fileName)) {
+            sourceLocationSnapshots.set(fileName, createDOMSourceLocationSnapshot(shadowRoot, fileName))
+          }
+        })
 
         if (updateFIles.length) {
           const actionId = randomUUID()
@@ -1316,6 +1406,12 @@ export default function createSetStyleHandler(
               updateFIles.forEach(({ fileName, newCode }) => {
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
+              })
+              updateFIles.forEach(({ fileName, sourceReplacements }) => {
+                if (!isJsxFile(fileName)) return
+                sourceReplacements?.forEach((replacement) => {
+                  shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, replacement)
+                })
               })
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
               if (nextFallbackStyleInfoStr) ele.dataset.styleInfo = nextFallbackStyleInfoStr
@@ -1331,6 +1427,7 @@ export default function createSetStyleHandler(
                 const suffix = fileName.split('.').pop()!;
                 context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
+              sourceLocationSnapshots.forEach((snapshot) => restoreDOMSourceLocationSnapshot(snapshot))
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
               if (nextFallbackStyleInfoStr) ele.dataset.styleInfo = prevFallbackStyleInfoStr ?? ''
               context.component!.actions.removeUserAction(actionId)
