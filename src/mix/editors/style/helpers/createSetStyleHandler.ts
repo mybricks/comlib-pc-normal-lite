@@ -852,15 +852,22 @@ export default function createSetStyleHandler(
             return sourceOrders.get(b)! - sourceOrders.get(a)!
           })
           let winningRule: CSSStyleRule
+          // 插入的普通 className（例如 `uhello`）不一定有对应的 Less 规则。
+          // 这类节点不能凭空推断 Less 文件和选择器，应直接写回 JSX style 属性。
+          let shouldWriteInlineStyle = false
           if (matchedRules[0]) {
             winningRule = matchedRules[0]
           } else {
             // Less 编译时空规则会被省略，sheet 里找不到该 class 的规则。
             // 回退：从 classList 里找 CSS Module 前缀类（含 '--'），构造合成选择器
             const moduleClass = [...ele.classList].find(c => c.includes('--'))
-            if (!moduleClass) return
-            const syntheticSelector = `:where(.${componentID}) .${moduleClass}`
-            winningRule = { selectorText: syntheticSelector, style: { getPropertyValue: () => '' } } as unknown as CSSStyleRule
+            if (!moduleClass) {
+              shouldWriteInlineStyle = true
+              winningRule = { selectorText: '', style: { getPropertyValue: () => '' } } as unknown as CSSStyleRule
+            } else {
+              const syntheticSelector = `:where(.${componentID}) .${moduleClass}`
+              winningRule = { selectorText: syntheticSelector, style: { getPropertyValue: () => '' } } as unknown as CSSStyleRule
+            }
           }
 
           // ── 解析 data-style-info，决定每个 key 路由到哪个选择器 ───────────────
@@ -877,6 +884,16 @@ export default function createSetStyleHandler(
           const lessSelectorFromLoc = buildCssModuleSelectorFromLoc(ele, locForSelector, componentID)
 
           Object.keys(style).forEach((key) => {
+            if (shouldWriteInlineStyle) {
+              styleKeyRoutes[key] = {
+                selector: '',
+                isJsx: true,
+                source: 'jsx-inline',
+                initialValue: getElementNumericStyleValue(ele, key),
+              }
+              return
+            }
+
             const info = styleInfo?.[key]
             const inlineSyncTargets = multiple && lessSelectorFromLoc
               ? collectInlineSyncTargets(lessSelectorFromLoc, key, ele, shadowRoot)
@@ -985,6 +1002,10 @@ export default function createSetStyleHandler(
           }
 
           if (route.source === 'jsx-inline' && !route.syncInline) {
+            if (!route.selector) {
+              setInlinePreviewStyle(ele, key, cssValue)
+              return
+            }
             getSelectorMatchedElements(route.selector, getShadowRoot())?.forEach((target) => {
               setInlinePreviewStyle(target, key, cssValue)
             })
@@ -1133,12 +1154,15 @@ export default function createSetStyleHandler(
           hadInitialInlineValue?: boolean;
         }> = []
         let lessStyle: LessStyleMap = new Map()
+        const fallbackInlineStyle: Record<string, StyleValue> = {}
 
         Object.entries(styleKeyRoutes).forEach(([key, route]) => {
           const { isJsx, selector, loc, needsAI } = route
           if (needsAI) return  // 交给 AI，不写入 JSX/Less
           const value = style[key]
-          if (route.source === 'jsx-inline' && route.syncInline) {
+          if (route.source === 'jsx-inline' && !selector) {
+            fallbackInlineStyle[key] = value
+          } else if (route.source === 'jsx-inline' && route.syncInline) {
             const delta = value - (route.initialValue ?? 0)
             const inlineTargets = route.inlineSyncTargets?.length
               ? route.inlineSyncTargets
@@ -1195,6 +1219,9 @@ export default function createSetStyleHandler(
         if (shouldAddFlexDisplay && flexDisplaySelector) {
           pushLessStyle(lessStyle, flexDisplaySelector, 'display', 'flex')
         }
+        if (shouldAddFlexDisplay && Object.keys(fallbackInlineStyle).length) {
+          fallbackInlineStyle.display = 'flex'
+        }
 
         const jsxs: {
           fileName: string;
@@ -1249,6 +1276,16 @@ export default function createSetStyleHandler(
           })
         }
 
+        // 没有可匹配的 CSS class 时，直接把样式写进当前 JSX 节点。
+        // patchSingleElementInlineStyle 同时支持更新已有静态 style 和注入新的 style 属性。
+        const prevFallbackStyleInfoStr = ele.dataset.styleInfo
+        const fallbackInlineUpdate = Object.keys(fallbackInlineStyle).length
+          ? patchSingleElementInlineStyle(ele, fallbackInlineStyle, initialInlineCssText)
+          : null
+        if (fallbackInlineUpdate) {
+          pushJsxUpdate(fallbackInlineUpdate)
+        }
+
         const lesss = patchLessStyles(lessStyle, lessFile)
         const jsxInlineStyleSnapshots = jsxStyle
           .filter((entry): entry is typeof entry & { ele: HTMLElement } => !!entry.ele)
@@ -1263,7 +1300,13 @@ export default function createSetStyleHandler(
               }
               : undefined,
           ))
+          .concat(Object.entries(fallbackInlineStyle).map(([key, value]) => (
+            getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key])
+          )))
         const updateFIles = jsxs.concat(lesss)
+        const nextFallbackStyleInfoStr = fallbackInlineUpdate?.nextStyleInfo
+          ? JSON.stringify(fallbackInlineUpdate.nextStyleInfo)
+          : null
 
         if (updateFIles.length) {
           const actionId = randomUUID()
@@ -1275,6 +1318,7 @@ export default function createSetStyleHandler(
                 context.updateFile({ fileName, content: newCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
+              if (nextFallbackStyleInfoStr) ele.dataset.styleInfo = nextFallbackStyleInfoStr
               context.component!.actions.addUserAction({
                 id: actionId,
                 type: 'update-style',
@@ -1288,6 +1332,7 @@ export default function createSetStyleHandler(
                 context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
               })
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
+              if (nextFallbackStyleInfoStr) ele.dataset.styleInfo = prevFallbackStyleInfoStr ?? ''
               context.component!.actions.removeUserAction(actionId)
             },
           });
