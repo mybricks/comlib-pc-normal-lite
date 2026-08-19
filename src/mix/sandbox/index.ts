@@ -1285,7 +1285,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   async function rollbackToVersion(versionId: string): Promise<void> {
     if (!history) return;
     if (disabledHandler.isDisabled()) {
-      disabledHandler.message('当前没有编辑权限');
+      disabledHandler.message('当前没有编辑权限，请在右上角上锁后编辑');
       return;
     }
 

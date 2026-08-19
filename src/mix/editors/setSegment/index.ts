@@ -28,7 +28,7 @@ export default function () {
       if (context.connectToAIRef.disabledHandler?.isDisabled()) {
         // 取消用户操作
         // undoRedoManager.cancelBranch()
-        // context.connectToAIRef.disabledHandler.message('当前没有编辑权限')
+        context.connectToAIRef.disabledHandler.message('当前没有编辑权限，请在右上角上锁后编辑')
         // 不取消用户操作
         return false
       }
