@@ -104,7 +104,16 @@ function extractStyleInfo(styleAttr: any): StyleInfo | null {
   return Object.keys(result).length > 0 ? result : null;
 }
 
-export default function styleAnalysisPlugin() {
+export type StyleAnalysisPluginOptions = {
+  /**
+   * Character offset from the virtual source passed to Babel to the original
+   * source file. This is needed when compiling a JSX fragment embedded in a
+   * synthetic wrapper.
+   */
+  sourceOffset?: number
+}
+
+export default function styleAnalysisPlugin({ sourceOffset = 0 }: StyleAnalysisPluginOptions = {}) {
   return function ({ types: t }: { types: any }) {
     return {
       visitor: {
@@ -122,6 +131,17 @@ export default function styleAnalysisPlugin() {
 
             const styleInfo = extractStyleInfo(styleAttr);
             if (!styleInfo) return;
+
+            // Babel reports offsets relative to the input string. Keep the
+            // metadata aligned with the original file when the input is a
+            // virtual JSX segment.
+            if (sourceOffset !== 0) {
+              Object.values(styleInfo).forEach((entry) => {
+                if (entry.kind !== 'static' || entry.valueStart == null || entry.valueEnd == null) return
+                entry.valueStart += sourceOffset
+                entry.valueEnd += sourceOffset
+              })
+            }
 
             // 幂等保护：已经注入过则跳过
             const alreadyInjected = attributes.some(

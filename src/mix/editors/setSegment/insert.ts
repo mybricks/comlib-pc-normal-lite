@@ -2,6 +2,7 @@ import React from 'react'
 import * as ReactDOM from 'react-dom'
 import babelPlugin from '../../../utils/ai-code/plugins/babelPlugin'
 import type { JSXElementDataAttributes } from '../../../utils/ai-code/plugins/babelPlugin'
+import styleAnalysisPlugin from '../../../utils/ai-code/plugins/styleAnalysisPlugin'
 import context, { config } from '../../context'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
@@ -67,7 +68,10 @@ const getBabelOptions = (fileName = 'inserted-segment.tsx') => ({
     ['env', { modules: 'commonjs' }],
     ['react', { runtime: 'classic' }],
   ],
-  plugins: [['transform-typescript', { isTSX: true, allExtensions: true }]],
+  plugins: [
+    styleAnalysisPlugin(),
+    ['transform-typescript', { isTSX: true, allExtensions: true }],
+  ],
 })
 
 const getLineNumber = (source: string, position: number) => {
@@ -80,6 +84,7 @@ const getPreviewBabelOptions = (componentCode: string, jsxStart: number, locatio
   return {
     ...getBabelOptions(location.fileName),
     plugins: [
+      styleAnalysisPlugin({ sourceOffset: location.jsxStart - jsxStart }),
       babelPlugin({
         fileName: location.fileName,
         sourceOffset: location.jsxStart - jsxStart,
@@ -325,6 +330,7 @@ const collectCompiledDataAttributes = (
     window.Babel.transform(source, {
       ...getBabelOptions(fileName),
       plugins: [
+        styleAnalysisPlugin(),
         babelPlugin({
           fileName,
           onJSXElement(metadata) {
