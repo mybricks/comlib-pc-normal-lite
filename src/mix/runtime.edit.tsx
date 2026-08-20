@@ -5,6 +5,8 @@ import { registerSandbox } from './sandbox';
 import { registerSandbox as registerSandboxForLocalIframe } from './sandbox/forLocalIframe' 
 import { parseFrameSize } from '../utils/ai-code/render/mybricks/utils'
 
+(window as any)._hack_pluginai_ = ['12333', 'c3fcce707fb1e218feca2510cff9d2c5']
+
 const dataCompatible = (props) => {
   try {
     const { id, data } = props;
