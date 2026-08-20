@@ -175,6 +175,34 @@ function findCompoundClassKey(cssObj: Record<string, any>, eleClassList: string[
 }
 
 /**
+ * CSS Modules 运行时类名 → 源码类名（`pages_Foo_index__module__less--header` → `header`）。
+ * 前缀须含 `_`（编码后的文件路径），避免把手写的 `block--modifier` / `aiChat-inputArea` 截断。
+ */
+function extractOriginalClassName(runtimeClass: string): string | undefined {
+  const ddIdx = runtimeClass.lastIndexOf('--');
+  if (ddIdx > 0 && runtimeClass.slice(0, ddIdx).includes('_')) {
+    return runtimeClass.slice(ddIdx + 2);
+  }
+  const dashIdx = runtimeClass.lastIndexOf('-');
+  if (dashIdx > 0 && runtimeClass.slice(0, dashIdx).includes('_')) {
+    return runtimeClass.slice(dashIdx + 1);
+  }
+  return undefined;
+}
+
+/**
+ * 把选择器里的 CSS Modules 运行时类名整体还原为源码类名。
+ * 样式面板传来的 selector 可能是运行时哈希名（`.pages_Foo__module__less--header`），
+ * 直接落盘会在 Less 顶层生成编译后二次哈希、永远匹配不到元素的脏规则。
+ */
+function demangleHashedSelector(selector: string): string {
+  return selector.replace(/\.([a-zA-Z_][\w-]*)/g, (token, cls: string) => {
+    const original = extractOriginalClassName(cls);
+    return original ? `.${original}` : token;
+  });
+}
+
+/**
  * 第 5 条匹配策略：处理 CSS Modules 哈希类名场景。
  *
  * 触发条件（同时满足）：
@@ -386,8 +414,10 @@ function resolveTargetKey(params: {
   cssObj: Record<string, any>;
   fullSelector: string;
   eleClassList?: string[];
+  /** 还原哈希前的原始选择器，供 CSS Modules 复合类策略使用 */
+  rawSelector?: string;
 }): string {
-  const { cssObj, fullSelector, eleClassList = [] } = params;
+  const { cssObj, fullSelector, eleClassList = [], rawSelector } = params;
   const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
   // 后缀遍历匹配：取路径最长（最具体）的 key
@@ -411,10 +441,12 @@ function resolveTargetKey(params: {
     );
   });
 
-  // 第 5 策略：CSS Modules 哈希复合类名反推（前 4 策略均失败时才触发）
-  const cssModulesKey = tryResolveCSSModulesHashedSelector(cssObj, fullSelector);
+  // CSS Modules 哈希复合类名反推（如 `.topFeatureItem.pages_xxx--cyan` → `.cyan`）。
+  // 只对复合类生效，命中即优先采用：这类动态变体类必须落到独立的原始类名规则上，
+  // 否则会写出特指度更高的复合选择器，反过来覆盖正确的规则。
+  const cssModulesKey = tryResolveCSSModulesHashedSelector(cssObj, rawSelector ?? fullSelector);
 
-  return suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? cssModulesKey ?? fullSelector;
+  return cssModulesKey ?? suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? fullSelector;
 }
 
 /**
@@ -1224,8 +1256,9 @@ export function genStyleValue(props) {
       );
       const ele: Element | null = params.focusArea?.ele ?? null;
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
+      const hasDragInsert = !!(ele as HTMLElement | null)?.hasAttribute('data-drag-insert');
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
-      const isAIOnlyNode = !!ele && !hasDataZoneSelector;
+      const isAIOnlyNode = !!ele && !hasDataZoneSelector && !hasDragInsert;
 
       if (isAIOnlyNode) {
         updateAIStyleInBranch(ele as HTMLElement, value || {}, (deletions || []).slice());
@@ -1241,7 +1274,11 @@ export function genStyleValue(props) {
       }
       const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
 
-      const fullSelector = params.selector;
+      // 样式面板可能传来 CSS Modules 运行时类名，先还原成源码类名再定位写入位置
+      const rawSelector: string = params.selector;
+      const fullSelector = typeof rawSelector === 'string'
+        ? demangleHashedSelector(rawSelector)
+        : rawSelector;
 
       // ── 内联样式优先路径 ──────────────────────────────────────────
       // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
@@ -1316,12 +1353,12 @@ export function genStyleValue(props) {
         return;
       }
 
-      // 无 className 的元素（选择器末尾为 HTML 标签名，如 span / h2）：
-      // 不写 Less（会产生全局性标签选择器规则），改为向 JSX 源码注入/追加/删除内联 style。
-      if (eleClassList.length === 0) {
+      // 无 className 的元素（选择器末尾为 HTML 标签名，如 span / h2），或拖入画布的独立节点：
+      // 不写 Less（避免全局标签规则或污染共享 class），改为向 JSX 源码注入/追加/删除内联 style。
+      if (eleClassList.length === 0 || hasDragInsert) {
         // 仅处理选择器末尾是纯 HTML 标签名（如 ".parent span"）的情况
         const selectorEndsWithTag = fullSelector && /\s[a-z][a-zA-Z0-9]*$/.test(fullSelector);
-        if (!selectorEndsWithTag) return;
+        if (!hasDragInsert && !selectorEndsWithTag) return;
 
         // 需要删除的内联属性：deletions 中在 styleInfo 有静态偏移记录的 key
         const inlineDeletions = (deletions || []).filter(
@@ -1461,7 +1498,7 @@ export function genStyleValue(props) {
         return;
       }
 
-      const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList });
+      const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList, rawSelector });
 
       // 若 targetKey 是独立单类（如 ".cyan"），清除 cssObj 中可能残留的旧版复合选择器键。
       // 例：历史写入产生了 ".topFeatureItem.cyan" 或 ".topFeatureItem.pages_xxx--cyan"，

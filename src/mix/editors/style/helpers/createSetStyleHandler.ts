@@ -925,6 +925,11 @@ export default function createSetStyleHandler(
             }
           }
 
+          // 拖入画布的根节点：强制写 JSX 内联，避免命中业务 class 后改 Less
+          if (ele.hasAttribute('data-drag-insert')) {
+            shouldWriteInlineStyle = true
+          }
+
           // ── 解析 data-style-info，决定每个 key 路由到哪个选择器 ───────────────
           const styleInfoRaw = ele.dataset.styleInfo
           const styleInfo: Record<string, StyleKeyInfo> | null = styleInfoRaw
