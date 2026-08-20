@@ -1,7 +1,7 @@
 import changeOrder from './changeOrder'
 import updateText from './updateText'
 import runDelete from './delete'
-import context from '../../context'
+import context, { config } from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import {
   createVisualEditMainCommand,
@@ -58,10 +58,21 @@ export default function () {
         return true
       }
 
+      // local-iframe 的文件由本地服务维护，context.files 不包含最新内容；
+      // 保留已执行的分支命令，避免提交后撤销栈为空。
+      if (config.getFrontendMode() === 'local-iframe') {
+        undoRedoManager.commitBranch()
+        return true
+      }
+
       const command = createVisualEditMainCommand(beforeFiles, getCurrentFileSnapshot(), 'manual', '', styleOverlays)
       if (command) {
         command.execute()
         undoRedoManager.record(command)
+      } else {
+        // 没有源码快照变化时仍可能存在仅作用于画布的分支命令。
+        undoRedoManager.commitBranch()
+        return true
       }
       undoRedoManager.clearBranch()
       return true

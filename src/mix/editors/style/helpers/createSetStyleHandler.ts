@@ -20,6 +20,20 @@ import {
   StyleInfoEntry,
 } from './patchJsxInlineStyle'
 import { resolveLessFilePath } from './resolveLessFilePath'
+import {
+  LocalJsxStyleUpdate,
+  LocalLessStyleUpdate,
+  LocalStyleFileSnapshot,
+  LocalStyleUpdate,
+  StyleValue,
+  restoreLocalFileStyles,
+  updateLocalFileStyles,
+} from './localStyleUpdate'
+
+// CSSOM objects may come from an iframe, whose constructors differ from the parent window's.
+const isCSSStyleRule = (rule: CSSRule): rule is CSSStyleRule => {
+  return rule.constructor.name === 'CSSStyleRule'
+}
 
 const getStyleActionTitle = (ele: HTMLElement) => {
   const label = getElementLabel(ele, '节点1')
@@ -172,6 +186,11 @@ type CssRuleStyleSnapshot = {
   initialValue: string;
   initialPriority: string;
 }
+type PreviewStyleState = {
+  ruleSnapshots: CssRuleStyleSnapshot[];
+  inlineSnapshots: InlineStyleSnapshot[];
+  temporaryRules: CSSStyleRule[];
+}
 type InlineSyncTarget = {
   ele: HTMLElement;
   fileName: string;
@@ -186,7 +205,6 @@ type SelectorMatchStats = {
   /** 命中 DOM 去重后的源码 JSX 位置数量；map 渲染出来的多个 DOM 通常只有 1 个源码位置 */
   sourceLocationCount?: number;
 }
-type StyleValue = string | number
 type LessStyleMap = Map<string, Array<{ key: string; value: StyleValue }>>
 type FileUpdate = {
   fileName: string;
@@ -194,6 +212,64 @@ type FileUpdate = {
   newCode: string;
   /** JSX 源码替换范围，用于 noUpdateFileSystem 时同步画布 DOM 的绝对定位数据。 */
   sourceReplacements?: SourceReplacement[];
+}
+
+const getStyleEditorRoot = () => {
+  const shadowRoot = getShadowRoot()
+  if (config.getFrontendMode() !== 'local-iframe') return shadowRoot
+  return shadowRoot.getElementById('local-iframe')!.contentDocument! as unknown as ShadowRoot
+}
+
+const getLocalJsxStyleUpdate = (
+  targetEle: HTMLElement,
+  styles: Record<string, StyleValue>,
+  fallbackFileName?: string,
+): LocalJsxStyleUpdate | null => {
+  const loc = parseJSON<any>(targetEle.dataset.loc)
+  const fileName: string | undefined = loc?.files?.jsx ?? fallbackFileName
+  const tagEnd = loc?.tag?.end
+  if (!fileName || typeof tagEnd !== 'number') return null
+  return {
+    type: 'jsx',
+    fileName,
+    tagStart: typeof loc?.jsx?.start === 'number' ? loc.jsx.start : undefined,
+    tagEnd,
+    styles,
+  }
+}
+
+const getLocalJsxStyleUpdates = (
+  entries: Array<{ ele?: HTMLElement; fileName?: string; key: string; value: StyleValue }>,
+  fallbackFileName?: string,
+): LocalJsxStyleUpdate[] => {
+  const grouped = new Map<string, LocalJsxStyleUpdate>()
+  entries.forEach((entry) => {
+    if (!entry.ele) return
+    const update = getLocalJsxStyleUpdate(entry.ele, { [entry.key]: entry.value }, entry.fileName ?? fallbackFileName)
+    if (!update) return
+    const id = `${update.fileName}:${update.tagStart ?? ''}:${update.tagEnd}`
+    const existing = grouped.get(id)
+    if (existing) {
+      existing.styles[entry.key] = entry.value
+    } else {
+      grouped.set(id, update)
+    }
+  })
+  return [...grouped.values()]
+}
+
+const getLocalLessStyleUpdates = (lessStyle: LessStyleMap, fallbackFileName?: string): LocalLessStyleUpdate[] => {
+  const updates: LocalLessStyleUpdate[] = []
+  lessStyle.forEach((entries, selector) => {
+    const styles = entries.reduce<Record<string, StyleValue>>((result, { key, value }) => {
+      result[key] = value
+      return result
+    }, {})
+    if (Object.keys(styles).length) {
+      updates.push({ type: 'less', selector, styles, fallbackFileName })
+    }
+  })
+  return updates
 }
 
 type StyleKeyRoute = {
@@ -334,7 +410,7 @@ const getElementNumericStyleValue = (targetEle: HTMLElement, key: string): numbe
 const getRuleNumericStyleValue = (sheet: CSSStyleSheet, selector: string, key: string): number => {
   const cssProp = convertCamelToHyphen(key)
   for (const rule of sheet.cssRules) {
-    if (!(rule instanceof CSSStyleRule)) continue
+    if (!isCSSStyleRule(rule)) continue
     if (rule.selectorText !== selector) continue
     const val = parseNumericStyleValue(rule.style.getPropertyValue(cssProp))
     if (val != null) return val
@@ -712,7 +788,7 @@ export default function createSetStyleHandler(
 
   const findStyleRule = (sheet: CSSStyleSheet, selector: string) => {
     return Array.from(sheet.cssRules).find((rule): rule is CSSStyleRule => {
-      return rule instanceof CSSStyleRule && rule.selectorText === selector
+      return isCSSStyleRule(rule) && rule.selectorText === selector
     })
   }
 
@@ -731,7 +807,7 @@ export default function createSetStyleHandler(
       const index = previewStyleSheet.cssRules.length
       previewStyleSheet.insertRule(`${route.selector} {}`, index)
       const insertedRule = previewStyleSheet.cssRules[index]
-      if (insertedRule instanceof CSSStyleRule) {
+      if (isCSSStyleRule(insertedRule)) {
         route.cssRule = insertedRule
         temporaryPreviewRules.push(insertedRule)
         return insertedRule
@@ -774,31 +850,45 @@ export default function createSetStyleHandler(
     target.style.setProperty(cssProp, stringifyStyleValue(value))
   }
 
-  const clearPreviewStyles = () => {
-    ruleStyleSnapshots.forEach((snapshot) => {
+  const capturePreviewStyleState = (): PreviewStyleState => ({
+    ruleSnapshots: ruleStyleSnapshots.map((snapshot) => ({ ...snapshot })),
+    inlineSnapshots: previewInlineSnapshots.map((snapshot) => ({ ...snapshot })),
+    temporaryRules: [...temporaryPreviewRules],
+  })
+
+  const restorePreviewStyleState = (state: PreviewStyleState) => {
+    state.ruleSnapshots.forEach((snapshot) => {
       if (snapshot.hadInitialValue) {
         snapshot.rule.style.setProperty(snapshot.cssProp, snapshot.initialValue, snapshot.initialPriority)
       } else {
         snapshot.rule.style.removeProperty(snapshot.cssProp)
       }
     })
-    previewInlineSnapshots.forEach(snapshot => {
+    state.inlineSnapshots.forEach(snapshot => {
       if (snapshot.hadInitialValue) {
         snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.initialValue)
       } else {
         snapshot.ele.style.removeProperty(snapshot.cssProp)
       }
     })
-    temporaryPreviewRules.forEach((rule) => {
+    state.temporaryRules.forEach((rule) => {
       const sheet = rule.parentStyleSheet
       if (!sheet) return
       const index = Array.from(sheet.cssRules).indexOf(rule)
       if (index >= 0) sheet.deleteRule(index)
     })
+  }
+
+  const discardPreviewStyles = () => {
     ruleStyleSnapshots = []
     previewInlineSnapshots = []
     temporaryPreviewRules = []
     previewStyleSheet = null
+  }
+
+  const clearPreviewStyles = () => {
+    restorePreviewStyleState(capturePreviewStyleState())
+    discardPreviewStyles()
   }
 
   return function handler(ctx: any, params: any) {
@@ -858,6 +948,7 @@ export default function createSetStyleHandler(
           // 其他模式下：`${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           const frontendMode = config.getFrontendMode()
           let styleID: string
+          let shadowRoot = getShadowRoot()
           if (frontendMode === 'prototype') {
             // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
             const pageEle = (sourceEle as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
@@ -867,10 +958,12 @@ export default function createSetStyleHandler(
             } else {
               styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
             }
+          } else if (frontendMode === 'local-iframe') {
+            styleID = lessFile.replace(/\./g, '__').replace(/\//g, '_')
+            shadowRoot = (shadowRoot.getElementById('local-iframe') as HTMLIFrameElement).contentDocument! as unknown as ShadowRoot
           } else {
             styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           }
-          const shadowRoot = getShadowRoot()
           const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement | null
           const sheet = styleTag?.sheet ?? null
           // styleTag 或 sheet 未就绪时跳过本次，等下次 ing 再试
@@ -879,7 +972,7 @@ export default function createSetStyleHandler(
           isStart = true
           const matchedRules: CSSStyleRule[] = [];
           for (const rule of sheet.cssRules) {
-            if (rule instanceof CSSStyleRule) {
+            if (isCSSStyleRule(rule)) {
               try {
                 // 用 el.matches() 判断选择器是否匹配当前元素
                 if (ele.matches(rule.selectorText)) {
@@ -1061,7 +1154,7 @@ export default function createSetStyleHandler(
               setInlinePreviewStyle(ele, key, cssValue)
               return
             }
-            getSelectorMatchedElements(route.selector, getShadowRoot())?.forEach((target) => {
+            getSelectorMatchedElements(route.selector, getStyleEditorRoot())?.forEach((target) => {
               setInlinePreviewStyle(target, key, cssValue)
             })
             return
@@ -1086,8 +1179,10 @@ export default function createSetStyleHandler(
             : subtractParentGapFromStyle(rawFinishStyle, ele),
           multiple,
         )
-        // 拖拽预览只改 CSSOM；源码写回前先还原，最终样式由重新编译的 Less 接管。
-        clearPreviewStyles()
+        // 本地接口写回有延迟，保留 CSSOM 预览直到 Less 重新编译接管，避免 finish 时闪回旧样式。
+        if (config.getFrontendMode() !== 'local-iframe') {
+          clearPreviewStyles()
+        }
         const aiKeys = Object.entries(styleKeyRoutes)
           .filter(([, route]) => route.needsAI)
           .map(([key]) => ({ key, value: (style as Record<string, number>)[key] }))
@@ -1109,10 +1204,14 @@ export default function createSetStyleHandler(
           // Snapshot the current data-style-info BEFORE patching so undo can restore it.
           const prevStyleInfoStr = ele.dataset.styleInfo
 
-          const inlineUpdate = Object.keys(inlineStyle).length
+          const isLocalIframe = config.getFrontendMode() === 'local-iframe'
+          const localInlineUpdate = Object.keys(inlineStyle).length
+            ? getLocalJsxStyleUpdate(ele, inlineStyle)
+            : null
+          const inlineUpdate = !isLocalIframe && Object.keys(inlineStyle).length
             ? patchSingleElementInlineStyle(ele, inlineStyle, initialInlineCssText)
             : null
-          const lessUpdates = patchLessStyles(lessStyle, lessFile)
+          const lessUpdates = isLocalIframe ? [] : patchLessStyles(lessStyle, lessFile)
           const inlineUpdateAsFileUpdate: FileUpdate | null = inlineUpdate
             ? {
               fileName: inlineUpdate.fileName,
@@ -1122,7 +1221,7 @@ export default function createSetStyleHandler(
             }
             : null
           const updateFIles: FileUpdate[] = (inlineUpdateAsFileUpdate ? [inlineUpdateAsFileUpdate] : [] as FileUpdate[]).concat(lessUpdates)
-          const inlineStyleSnapshots = inlineUpdate
+          const inlineStyleSnapshots = (inlineUpdate || localInlineUpdate)
             ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
             : []
           // Pre-serialise the updated offset map so execute/undo closures don't hold a reference
@@ -1138,7 +1237,52 @@ export default function createSetStyleHandler(
             }
           })
 
-          if (updateFIles.length) {
+          const localStyleUpdates: LocalStyleUpdate[] = isLocalIframe
+            ? [
+              ...getLocalLessStyleUpdates(lessStyle, lessFile),
+              ...(localInlineUpdate ? [localInlineUpdate] : []),
+            ]
+            : []
+
+          if (isLocalIframe && localStyleUpdates.length) {
+            const actionId = randomUUID()
+            const title = getStyleActionTitle(ele)
+            const previewState = capturePreviewStyleState()
+            void updateLocalFileStyles({ updates: localStyleUpdates }).then((files) => {
+              if (!files.length) return
+              let isInitialExecution = true
+              undoRedoManager.executeBranch({
+                execute() {
+                  if (isInitialExecution) {
+                    isInitialExecution = false
+                  } else {
+                    void updateLocalFileStyles({ updates: localStyleUpdates }).catch((error) => {
+                      console.error('[local-iframe] update style failed', error)
+                    })
+                  }
+                  applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
+                  context.component!.actions.addUserAction({
+                    id: actionId,
+                    type: 'update-style',
+                    title,
+                    refElement: ele,
+                  })
+                },
+                undo() {
+                  // Each branch owns its snapshot so cancelBranch can restore every style immediately.
+                  restorePreviewStyleState(previewState)
+                  discardPreviewStyles()
+                  void restoreLocalFileStyles(files).catch((error) => {
+                    console.error('[local-iframe] revert style failed', error)
+                  })
+                  applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
+                  context.component!.actions.removeUserAction(actionId)
+                },
+              })
+            }).catch((error) => {
+              console.error('[local-iframe] update style failed', error)
+            })
+          } else if (updateFIles.length) {
             const actionId = randomUUID()
             const title = getStyleActionTitle(ele)
             undoRedoManager.executeBranch({
@@ -1298,6 +1442,7 @@ export default function createSetStyleHandler(
         }
 
         const jsxs: FileUpdate[] = []
+        const isLocalIframe = config.getFrontendMode() === 'local-iframe'
 
         const pushJsxUpdate = (update: FileUpdate) => {
           const existing = jsxs.find(item => item.fileName === update.fileName)
@@ -1309,7 +1454,7 @@ export default function createSetStyleHandler(
           }
         }
 
-        if (jsxStyle.length) {
+        if (jsxStyle.length && !isLocalIframe) {
           const fallbackJsxFileName = parseJSON<any>(ele.dataset.loc)?.files?.jsx
           const jsxStyleByFile = new Map<string, typeof jsxStyle>()
 
@@ -1369,7 +1514,7 @@ export default function createSetStyleHandler(
           pushJsxUpdate(fallbackInlineUpdate)
         }
 
-        const lesss = patchLessStyles(lessStyle, lessFile)
+        const lesss = isLocalIframe ? [] : patchLessStyles(lessStyle, lessFile)
         const jsxInlineStyleSnapshots = jsxStyle
           .filter((entry): entry is typeof entry & { ele: HTMLElement } => !!entry.ele)
           .map((entry) => getInitialInlineStyleSnapshot(
@@ -1397,8 +1542,53 @@ export default function createSetStyleHandler(
             sourceLocationSnapshots.set(fileName, createDOMSourceLocationSnapshot(shadowRoot, fileName))
           }
         })
+        const fallbackJsxFileName = parseJSON<any>(ele.dataset.loc)?.files?.jsx
+        const localStyleUpdates: LocalStyleUpdate[] = isLocalIframe
+          ? [
+            ...getLocalLessStyleUpdates(lessStyle, lessFile),
+            ...getLocalJsxStyleUpdates(jsxStyle, fallbackJsxFileName),
+          ]
+          : []
 
-        if (updateFIles.length) {
+        if (isLocalIframe && localStyleUpdates.length) {
+          const actionId = randomUUID()
+          const title = getStyleActionTitle(ele)
+          const previewState = capturePreviewStyleState()
+          void updateLocalFileStyles({ updates: localStyleUpdates }).then((files) => {
+            if (!files.length) return
+            let isInitialExecution = true
+            undoRedoManager.executeBranch({
+              execute() {
+                if (isInitialExecution) {
+                  isInitialExecution = false
+                } else {
+                  void updateLocalFileStyles({ updates: localStyleUpdates }).catch((error) => {
+                    console.error('[local-iframe] update style failed', error)
+                  })
+                }
+                applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'execute')
+                context.component!.actions.addUserAction({
+                  id: actionId,
+                  type: 'update-style',
+                  title,
+                  refElement: ele,
+                })
+              },
+              undo() {
+                // Each branch owns its snapshot so cancelBranch can restore every style immediately.
+                restorePreviewStyleState(previewState)
+                discardPreviewStyles()
+                void restoreLocalFileStyles(files).catch((error) => {
+                  console.error('[local-iframe] revert style failed', error)
+                })
+                applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')
+                context.component!.actions.removeUserAction(actionId)
+              },
+            })
+          }).catch((error) => {
+            console.error('[local-iframe] update style failed', error)
+          })
+        } else if (updateFIles.length) {
           const actionId = randomUUID()
           const title = getStyleActionTitle(ele)
           undoRedoManager.executeBranch({

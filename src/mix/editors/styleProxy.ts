@@ -4,9 +4,15 @@ import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { randomUUID } from '../utils/uuid'
+import { calculate, compare } from 'specificity'
 import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
+import {
+  restoreLocalFileStyles,
+  updateLocalFileStyles,
+} from './style/helpers/localStyleUpdate'
+import type { LocalLessStyleUpdate } from './style/helpers/localStyleUpdate'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
@@ -233,6 +239,176 @@ function tryResolveCSSModulesHashedSelector(
 function getShadowDoc(): Document | ShadowRoot {
   return (document.getElementById('_mybricks-geo-webview_') as HTMLElement | null)?.shadowRoot
     ?? (document as unknown as ShadowRoot);
+}
+
+// CSSOM rules belong to the local iframe, so instanceof CSSStyleRule is unreliable here.
+function isCSSStyleRule(rule: CSSRule): rule is CSSStyleRule {
+  return rule.constructor.name === 'CSSStyleRule';
+}
+
+/**
+ * Align local-iframe writes with createSetStyleHandler: find the actual Less CSS rule
+ * that matches the focused element, then prefer the rule that already owns the edited property.
+ */
+function getLocalIframeStyleRule(
+  ele: Element | null,
+  lessFile: string | undefined,
+  styles: Record<string, any>,
+): CSSStyleRule | null {
+  if (!ele || !lessFile) return null;
+  try {
+    const iframe = getShadowDoc().getElementById('local-iframe') as HTMLIFrameElement | null;
+    const localDocument = iframe?.contentDocument;
+    const styleId = lessFile.replace(/\./g, '__').replace(/\//g, '_');
+    const sheet = (localDocument?.getElementById(styleId) as HTMLStyleElement | null)?.sheet;
+    if (!sheet) return null;
+
+    const matchedRules = Array.from(sheet.cssRules)
+      .filter(isCSSStyleRule)
+      .filter((rule) => {
+        try {
+          return ele.matches(rule.selectorText);
+        } catch {
+          return false;
+        }
+      });
+    const specificities = new Map<CSSStyleRule, ReturnType<typeof calculate>>();
+    const sortableRules = matchedRules.filter((rule) => {
+      try {
+        specificities.set(rule, calculate(rule.selectorText));
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    const sourceOrders = new Map(sortableRules.map((rule, index) => [rule, index]));
+    sortableRules.sort((left, right) => {
+      const specificityOrder = compare(specificities.get(right)!, specificities.get(left)!);
+      return specificityOrder || sourceOrders.get(right)! - sourceOrders.get(left)!;
+    });
+
+    const editedProperties = Object.entries(styles)
+      .filter(([, value]) => value !== null && value !== undefined)
+      .map(([key]) => convertCamelToHyphen(key));
+    const ownerRule = sortableRules.find((rule) => (
+      editedProperties.some((property) => rule.style.getPropertyValue(property) !== '')
+    ));
+    return ownerRule ?? sortableRules[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+type LocalIframeRuleStyleSnapshot = {
+  property: string;
+  hadValue: boolean;
+  value: string;
+  priority: string;
+};
+
+type LocalIframeRulePreview = {
+  rule: CSSStyleRule;
+  lessFile?: string;
+  selectorText: string;
+  snapshots: LocalIframeRuleStyleSnapshot[];
+};
+
+function getLocalIframeStyleRuleBySelector(
+  lessFile: string | undefined,
+  selectorText: string,
+): CSSStyleRule | null {
+  if (!lessFile) return null;
+  try {
+    const sheet = getLocalIframeStyleSheet(lessFile);
+    if (!sheet) return null;
+
+    return Array.from(sheet.cssRules)
+      .filter(isCSSStyleRule)
+      .find((rule) => rule.selectorText === selectorText) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getLocalIframeStyleSheet(lessFile: string | undefined): CSSStyleSheet | null {
+  if (!lessFile) return null;
+  const iframe = getShadowDoc().getElementById('local-iframe') as HTMLIFrameElement | null;
+  const localDocument = iframe?.contentDocument;
+  const styleId = lessFile.replace(/\./g, '__').replace(/\//g, '_');
+  return (localDocument?.getElementById(styleId) as HTMLStyleElement | null)?.sheet ?? null;
+}
+
+function getOrCreateLocalIframeStyleRule(
+  lessFile: string | undefined,
+  selectorText: string,
+): CSSStyleRule | null {
+  const existing = getLocalIframeStyleRuleBySelector(lessFile, selectorText);
+  if (existing) return existing;
+
+  try {
+    const sheet = getLocalIframeStyleSheet(lessFile);
+    if (!sheet || !selectorText) return null;
+    const index = sheet.insertRule(`${selectorText} {}`, sheet.cssRules.length);
+    const rule = sheet.cssRules[index];
+    return isCSSStyleRule(rule) ? rule : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalIframeRuleStyles(
+  rule: CSSStyleRule | null,
+  styles: Record<string, any>,
+  deletions: string[] | null,
+): void {
+  if (!rule) return;
+  Object.entries(styles).forEach(([key, value]) => {
+    const property = convertCamelToHyphen(key);
+    if (value === null || value === undefined || value === '') {
+      rule.style.removeProperty(property);
+    } else {
+      rule.style.setProperty(property, typeof value === 'number' ? `${value}px` : String(value));
+    }
+  });
+  (deletions ?? []).forEach((key) => rule.style.removeProperty(convertCamelToHyphen(key)));
+}
+
+function applyLocalIframeRulePreview(
+  rule: CSSStyleRule | null,
+  styles: Record<string, any>,
+  deletions: string[] | null,
+  lessFile?: string,
+): LocalIframeRulePreview | null {
+  if (!rule) return null;
+  const properties = new Set([
+    ...Object.keys(styles),
+    ...(deletions ?? []),
+  ].map(convertCamelToHyphen));
+  const snapshots = Array.from(properties).map((property) => {
+    const value = rule.style.getPropertyValue(property);
+    return {
+      property,
+      hadValue: value !== '',
+      value,
+      priority: rule.style.getPropertyPriority(property),
+    };
+  });
+  writeLocalIframeRuleStyles(rule, styles, deletions);
+  return { rule, lessFile, selectorText: rule.selectorText, snapshots };
+}
+
+function restoreLocalIframeRulePreview(preview: LocalIframeRulePreview | null): void {
+  if (!preview) return;
+  // 写回本地文件会触发 iframe HMR，旧 CSSRule 已不再属于当前 stylesheet。
+  // 每次撤销都优先定位当前规则，保证视觉反馈不依赖异步 HMR 完成。
+  const rule = getOrCreateLocalIframeStyleRule(preview.lessFile, preview.selectorText) ?? preview.rule;
+  preview.snapshots.forEach((snapshot) => {
+    if (snapshot.hadValue) {
+      rule.style.setProperty(snapshot.property, snapshot.value, snapshot.priority);
+    } else {
+      rule.style.removeProperty(snapshot.property);
+    }
+  });
 }
 
 /**
@@ -1061,6 +1237,171 @@ export function genStyleValue(props) {
     actionApplied: boolean;
   };
   let pendingStyleFileBranch: PendingStyleFileBranch | null = null;
+  const localStyleSourceCache = new Map<string, string>();
+  const localStyleFileRequests = new Map<string, Promise<void>>();
+
+  const getStyleSource = (fileName: string | undefined, source: string) => {
+    if (config.getFrontendMode() !== 'local-iframe' || !fileName) return source;
+    return localStyleSourceCache.get(fileName) ?? source;
+  };
+
+  const updateLocalStyleFileInBranch = (params: {
+    path: string;
+    current: string;
+    previous: string;
+    ele: Element | null;
+    callback: () => void;
+  }) => {
+    const { path, current, previous, ele, callback } = params;
+    const expectedContent = localStyleSourceCache.get(path) ?? previous;
+    localStyleSourceCache.set(path, current);
+
+    const applySourceUpdate = (expected: string, content: string) => updateLocalFileStyles({
+      updates: [{ type: 'source', fileName: path, expectedContent: expected, content }],
+    });
+    const applyInitialUpdate = async () => {
+      const pending = localStyleFileRequests.get(path);
+      if (pending) await pending.catch(() => undefined);
+      const files = await applySourceUpdate(expectedContent, current);
+      files.forEach(({ fileName, newCode }) => localStyleSourceCache.set(fileName, newCode));
+      callback();
+
+      if (!files.length) return;
+      const actionId = randomUUID();
+      const title = ele ? getStyleActionTitle(ele) : '调整节点样式';
+      let isInitialExecution = true;
+      undoRedoManager.executeBranch({
+        execute() {
+          if (isInitialExecution) {
+            isInitialExecution = false;
+          } else {
+            void applySourceUpdate(files[0].previousCode, files[0].newCode)
+              .then((updatedFiles) => {
+                updatedFiles.forEach(({ fileName, newCode }) => localStyleSourceCache.set(fileName, newCode));
+              })
+              .catch((error) => console.error('[local-iframe] update style failed', error));
+          }
+          if (ele) {
+            context.component?.actions.addUserAction({
+              id: actionId,
+              type: 'update-style',
+              title,
+              refElement: ele,
+            });
+          }
+        },
+        undo() {
+          void restoreLocalFileStyles(files)
+            .then((restoredFiles) => {
+              restoredFiles.forEach(({ fileName, newCode }) => localStyleSourceCache.set(fileName, newCode));
+            })
+            .catch((error) => console.error('[local-iframe] revert style failed', error));
+          context.component?.actions.removeUserAction(actionId);
+        },
+      });
+    };
+
+    const request = applyInitialUpdate().catch((error) => {
+      if (localStyleSourceCache.get(path) === current) {
+        localStyleSourceCache.delete(path);
+      }
+      console.error('[local-iframe] update style failed', error);
+    });
+    localStyleFileRequests.set(path, request);
+    void request.finally(() => {
+      if (localStyleFileRequests.get(path) === request) {
+        localStyleFileRequests.delete(path);
+      }
+    });
+  };
+
+  const updateLocalLessStyleInBranch = (params: {
+    path?: string;
+    selector: string;
+    styles: Record<string, any>;
+    deletions: string[] | null;
+    preview: LocalIframeRulePreview | null;
+    ele: Element | null;
+    callback: () => void;
+  }) => {
+    const { path, selector, styles, deletions, preview, ele, callback } = params;
+    const stylesToWrite: Record<string, string | number> = {};
+    const propertiesToDelete = new Set(filterExpandedDeletions(deletions, styles));
+    Object.entries(styles).forEach(([key, value]) => {
+      if (typeof value === 'string' || typeof value === 'number') {
+        stylesToWrite[key] = value;
+        propertiesToDelete.delete(key);
+        propertiesToDelete.delete(camelToKebab(key));
+      } else if (value === null || value === undefined) {
+        propertiesToDelete.add(key);
+      }
+    });
+    if (!Object.keys(stylesToWrite).length && !propertiesToDelete.size) return;
+
+    const update: LocalLessStyleUpdate = {
+      type: 'less',
+      selector,
+      styles: stylesToWrite,
+      deletions: Array.from(propertiesToDelete),
+      fallbackFileName: path,
+    };
+    const requestKey = path ?? selector;
+    const applyUpdate = () => updateLocalFileStyles({ updates: [update] });
+    const applyInitialUpdate = async () => {
+      const pending = localStyleFileRequests.get(requestKey);
+      if (pending) await pending.catch(() => undefined);
+      const files = await applyUpdate();
+      files.forEach(({ fileName, newCode }) => localStyleSourceCache.set(fileName, newCode));
+      callback();
+
+      if (!files.length) return;
+      const actionId = randomUUID();
+      const title = ele ? getStyleActionTitle(ele) : '调整节点样式';
+      let isInitialExecution = true;
+      undoRedoManager.executeBranch({
+        execute() {
+          if (isInitialExecution) {
+            isInitialExecution = false;
+          } else {
+            const rule = getOrCreateLocalIframeStyleRule(preview?.lessFile, preview?.selectorText ?? '') ?? preview?.rule ?? null;
+            writeLocalIframeRuleStyles(rule, styles, deletions);
+            void applyUpdate()
+              .then((updatedFiles) => {
+                updatedFiles.forEach(({ fileName, newCode }) => localStyleSourceCache.set(fileName, newCode));
+              })
+              .catch((error) => console.error('[local-iframe] update Less style failed', error));
+          }
+          if (ele) {
+            context.component?.actions.addUserAction({
+              id: actionId,
+              type: 'update-style',
+              title,
+              refElement: ele,
+            });
+          }
+        },
+        undo() {
+          restoreLocalIframeRulePreview(preview);
+          void restoreLocalFileStyles(files)
+            .then((restoredFiles) => {
+              restoredFiles.forEach(({ fileName, newCode }) => localStyleSourceCache.set(fileName, newCode));
+            })
+            .catch((error) => console.error('[local-iframe] revert Less style failed', error));
+          context.component?.actions.removeUserAction(actionId);
+        },
+      });
+    };
+
+    const request = applyInitialUpdate().catch((error) => {
+      console.error('[local-iframe] update Less style failed', error);
+    });
+    localStyleFileRequests.set(requestKey, request);
+    void request.finally(() => {
+      if (localStyleFileRequests.get(requestKey) === request) {
+        localStyleFileRequests.delete(requestKey);
+      }
+    });
+  };
 
   /**
    * 保持原有 trailing debounce：窗口内所有直接样式写入只对应一条分支命令和一条用户操作记录。
@@ -1086,6 +1427,10 @@ export function genStyleValue(props) {
     callback: () => void;
   }) => {
     const { path, current, previous, ele, callback } = params;
+    if (config.getFrontendMode() === 'local-iframe') {
+      updateLocalStyleFileInBranch({ path, current, previous, ele, callback });
+      return;
+    }
     let branch = pendingStyleFileBranch;
 
     if (!branch) {
@@ -1235,11 +1580,16 @@ export function genStyleValue(props) {
       const lessFile = lessPath
         ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
         : undefined;
-      const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
+      const rawLess = getStyleSource(
+        lessPath,
+        decodeURIComponent(lessFile?.source ?? aiComParams.data.styleSource ?? ''),
+      );
       if (!previousLess) {
-        previousLess = rawLess ? decodeURIComponent(rawLess) : ''
+        previousLess = rawLess
       }
-      const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
+      const cssObj = rawLess ? parseLess(rawLess) : {};
+
+      console.log('[params]', params)
 
       const fullSelector = params.selector;
 
@@ -1277,7 +1627,7 @@ export function genStyleValue(props) {
             (f: { fileName: string; source: string }) => f.fileName === jsxPath
           );
           if (jsxFile) {
-            const jsxPrevSource = decodeURIComponent(jsxFile.source);
+            const jsxPrevSource = getStyleSource(jsxPath, decodeURIComponent(jsxFile.source));
             const jsxNewSource = patchJsxInlineStyle(
               jsxPrevSource,
               inlineEntries.map(({ val, valueStart, valueEnd }) => ({ val, valueStart, valueEnd, asString: true })),
@@ -1349,7 +1699,7 @@ export function genStyleValue(props) {
         );
         if (!jsxFileForInline) return;
 
-        const jsxPrevSource = decodeURIComponent(jsxFileForInline.source);
+        const jsxPrevSource = getStyleSource(jsxPathForInline, decodeURIComponent(jsxFileForInline.source));
 
         // ── 路径 D：删除内联属性 ──────────────────────────────────────────────
         if (hasInlineDeletions && styleInfo !== null) {
@@ -1444,6 +1794,23 @@ export function genStyleValue(props) {
             }
           });
         }
+      }
+
+      // 本地项目直接把选择器和声明交给服务端按原 Less 结构写入，避免 stringifyLess 重排整个文件。
+      if (config.getFrontendMode() === 'local-iframe') {
+        const localStyleRule = getLocalIframeStyleRule(ele, lessPath, lessValue);
+        // 与 createSetStyleHandler 一致：设计时先写 CSSOM，接口写回期间不重置预览。
+        const preview = applyLocalIframeRulePreview(localStyleRule, lessValue, deletions, lessPath);
+        updateLocalLessStyleInBranch({
+          path: lessPath,
+          selector: localStyleRule?.selectorText ?? fullSelector,
+          styles: lessValue,
+          deletions,
+          preview,
+          ele,
+          callback: () => { previousLess = null; },
+        });
+        return;
       }
 
       // 嵌套伪类快速路径：直接写入 &:disabled 等嵌套位置，保留 Less 原有结构
@@ -1558,7 +1925,7 @@ export function genStyleValue(props) {
                 )
               : undefined;
             if (jsxFileForDel && jsxPathForDel) {
-              const jsxPrevForDel = decodeURIComponent(jsxFileForDel.source);
+              const jsxPrevForDel = getStyleSource(jsxPathForDel, decodeURIComponent(jsxFileForDel.source));
               const removeResult = removeFromInlineStyleAttr(
                 jsxPrevForDel,
                 styleInfo as Record<string, StyleInfoEntry>,

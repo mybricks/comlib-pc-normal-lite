@@ -114,6 +114,38 @@ class UndoRedoManager {
     this.notifyBranchHistoryChange()
   }
 
+  /**
+   * 将当前已执行的画布分支合并到主栈。
+   *
+   * local-iframe 的源码由本地服务维护，提交时无法从 context.files 生成快照；
+   * 直接丢弃分支会让后续 undo 找不到对应命令。复合命令复用分支命令自身的
+   * execute/undo 实现，因此不会重复执行首次编辑，但重做时仍可重新写入本地文件。
+  */
+  commitBranch() {
+    if (!this.branchUndoStack.length) {
+      this.clearBranch()
+      return false
+    }
+
+    const commands = this.branchUndoStack.slice()
+    const files = [...new Set(commands.flatMap((command) => command.files ?? []))]
+    const styleOverlay = commands
+      .flatMap((command) => command.styleOverlay ? [command.styleOverlay] : [])
+
+    this.record({
+      files,
+      styleOverlay: styleOverlay.length ? styleOverlay[styleOverlay.length - 1] : undefined,
+      execute() {
+        commands.forEach((command) => command.execute())
+      },
+      undo() {
+        commands.slice().reverse().forEach((command) => command.undo())
+      },
+    })
+    this.clearBranch()
+    return true
+  }
+
   /** 获取当前分支中仍生效的 AI 请求，供用户最终提交时统一发送。 */
   getBranchAIRequests(): BranchAIRequest[] {
     return this.branchUndoStack
@@ -164,6 +196,8 @@ class UndoRedoManager {
   private undoStack(undoStack: Command[], redoStack: Command[]) {
     const command = undoStack.pop()
     if (!command) return
+
+    console.log('command', command)
 
     command.undo()
     redoStack.push(command)

@@ -1,4 +1,4 @@
-import context from '../../context'
+import context, { config } from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementTextUpdateChipData, getElementLabel } from './elementChip'
@@ -18,6 +18,48 @@ const toSafeJSXText = (content: string) => {
     .replace(/}/g, '&#125;')
     .split('\n')
     .join('<br/>')
+}
+
+const LOCAL_FILE_TEXT_UPDATE_ENDPOINT = '/__lingchuang-local-file/text'
+
+const getUpdateTextShadowRoot = () => {
+  const shadowRoot = getShadowRoot()
+
+  if (config.getFrontendMode() === 'local-iframe') {
+    return shadowRoot.getElementById('local-iframe')!.contentDocument
+  }
+
+  return shadowRoot
+}
+
+type LocalTextUpdate = {
+  fileName: string
+  start: number
+  end: number
+  content: string
+  expectedContent?: string
+}
+
+const updateLocalFileText = async ({ expectedContent, ...update }: LocalTextUpdate) => {
+  const response = await fetch(LOCAL_FILE_TEXT_UPDATE_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...update,
+      ...(expectedContent === undefined ? {} : { expectedContent }),
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Local file update failed: ${response.status}`)
+  }
+
+  const result = await response.json()
+  if (typeof result?.replacedContent !== 'string') {
+    throw new Error('Local file update returned an invalid response')
+  }
+
+  return result.replacedContent as string
 }
 
 const runUpdateTextByAI = (fromEle, content: string) => {
@@ -57,8 +99,80 @@ const runUpdateTextByAI = (fromEle, content: string) => {
   return { type: 'success' }
 }
 
+const runUpdateTextByLocalServer = async ({
+  fromEle,
+  content,
+  fileName,
+  start,
+  end,
+  nextValue,
+  previousInnerHTML,
+  shadowRoot,
+  sourceLocationSnapshot,
+  fromLabel,
+  actionId,
+}) => {
+  let previousValue: string
+  try {
+    // 本地项目的源码不在组件 data 中，由 playground 服务读取并完成首次替换。
+    previousValue = await updateLocalFileText({ fileName, start, end, content: nextValue })
+  } catch {
+    return runUpdateTextByAI(fromEle, content)
+  }
+
+  let isInitialExecution = true
+  const updateLocalFile = (update: LocalTextUpdate) => {
+    void updateLocalFileText(update).catch((error) => {
+      console.error('[local-iframe] update text failed', error)
+    })
+  }
+
+  undoRedoManager.executeBranch({
+    execute() {
+      if (isInitialExecution) {
+        isInitialExecution = false
+      } else {
+        updateLocalFile({
+          fileName,
+          start,
+          end: start + previousValue.length,
+          content: nextValue,
+          expectedContent: previousValue,
+        })
+      }
+      shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, {
+        start,
+        end,
+        newLength: nextValue.length,
+      })
+      fromEle.innerHTML = nextValue
+      context.component!.actions.addUserAction({
+        id: actionId,
+        type: 'update-text',
+        title: `修改 ${fromLabel} 文案`,
+        refElement: fromEle,
+      })
+    },
+    undo() {
+      updateLocalFile({
+        fileName,
+        start,
+        end: start + nextValue.length,
+        content: previousValue,
+        expectedContent: nextValue,
+      })
+      restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
+      fromEle.innerHTML = previousInnerHTML
+      context.component!.actions.removeUserAction(actionId)
+    },
+  })
+
+  return { type: 'success', actionId }
+}
+
 const updateText = (options) => {
   const { fromEle, content } = options
+  console.log('updateText', options)
   if (!content.trim()) {
     // 不允许空字符
     return
@@ -77,7 +191,8 @@ const updateText = (options) => {
       return runUpdateTextByAI(fromEle, content)
     }
 
-    const shadowRoot = getShadowRoot()
+    const shadowRoot = getUpdateTextShadowRoot()
+    console.log(123, shadowRoot)
     const elements = shadowRoot.querySelectorAll(`[data-loc='${locValue}']`)
     if (elements.length > 1) {
       // 有多个相同 data-loc，直接修改会影响多个渲染实例，走 AI
@@ -87,18 +202,39 @@ const updateText = (options) => {
     const loc = JSON.parse(locValue)
     const textloc = JSON.parse(zoneTextEditable)
     const fileName = loc.files?.jsx
-    const file = context.component!.params!.data!.files.find((file) => file.fileName === fileName)
-    const source = file ? decodeURIComponent(file.source) : ''
     const start = textloc.jsx?.start
     const end = textloc.jsx?.end
 
-    if (!file || !fileName || typeof start !== 'number' || typeof end !== 'number' || start < 0 || end <= start || end > source.length) {
+    if (!fileName || typeof start !== 'number' || typeof end !== 'number' || start < 0 || end <= start) {
       return runUpdateTextByAI(fromEle, content)
     }
 
     const nextValue = toSafeJSXText(content)
-    const newSource = source.slice(0, start) + nextValue + source.slice(end)
     const previousInnerHTML = fromEle.innerHTML
+
+    if (config.getFrontendMode() === 'local-iframe') {
+      return runUpdateTextByLocalServer({
+        fromEle,
+        content,
+        fileName,
+        start,
+        end,
+        nextValue,
+        previousInnerHTML,
+        shadowRoot,
+        sourceLocationSnapshot: createDOMSourceLocationSnapshot(shadowRoot, fileName),
+        fromLabel: getElementLabel(fromEle, '节点1'),
+        actionId: randomUUID(),
+      })
+    }
+
+    const file = context.component!.params!.data!.files.find((file) => file.fileName === fileName)
+    const source = file ? decodeURIComponent(file.source) : ''
+    if (!file || end > source.length) {
+      return runUpdateTextByAI(fromEle, content)
+    }
+
+    const newSource = source.slice(0, start) + nextValue + source.slice(end)
     // noUpdateFileSystem 保留当前 DOM；后续节点仍会引用原始绝对偏移，先保留快照以支持撤销。
     const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, fileName)
     const fromLabel = getElementLabel(fromEle, '节点1')

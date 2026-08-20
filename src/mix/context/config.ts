@@ -62,6 +62,9 @@ class Config {
    * default
    */
   getFrontendMode() {
+    if (window.MYBRICKS_LOCAL_IFRAME) {
+      return 'local-iframe'
+    }
     const componentRuntime = window._sandbox_.config.componentRuntime
     if (!componentRuntime) {
       return DEFAULT_FRONTEND_MODE
