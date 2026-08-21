@@ -379,6 +379,13 @@ class Context {
           this.notifyChanged();
           break;
         default:
+          updateFileContent({
+            fileName,
+            files,
+            content: {
+              source: encodeURIComponent(content),
+            }
+          });
           break;
       }
 

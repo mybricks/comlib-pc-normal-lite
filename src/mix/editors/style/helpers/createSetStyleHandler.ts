@@ -565,6 +565,20 @@ const pushLessStyle = (lessStyle: LessStyleMap, selector: string, key: string, v
   }
 }
 
+const encodeLessFileToken = (fileName: string) => fileName.replace(/\./g, '__').replace(/\//g, '_')
+
+/**
+ * CSS Modules 的文件路径编码不是可逆的：`/` 和源码中的 `_` 都会变成 `_`。
+ * 优先根据组件文件列表做正向匹配，避免把 `FigmaAssets_1wrx2yyv` 错还原成两级目录。
+ */
+const resolveLessFileName = (fileRaw: string, files: Array<{ fileName: string }>) => {
+  const matched = files.find(file => encodeLessFileToken(file.fileName) === fileRaw)
+  if (matched) return matched.fileName
+
+  // 兼容无法从当前组件文件列表中匹配的旧选择器。
+  return fileRaw.replace(/__/g, '.').replace(/_/g, '/')
+}
+
 const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): FileUpdate[] => {
   const lesss: FileUpdate[] = []
 
@@ -593,7 +607,7 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
       }
       const fileRaw = clean.slice(0, dashIdx)
       const className = clean.slice(dashIdx + 2)
-      const fileName = fileRaw.replace(/__/g, '.').replace(/_/g, '/')
+      const fileName = resolveLessFileName(fileRaw, context.component!.params.data.files)
       return { fileName, className }
     }).filter(Boolean) as { fileName: string; className: string }[]
 
@@ -1016,6 +1030,11 @@ export default function createSetStyleHandler(
               const syntheticSelector = `:where(.${componentID}) .${moduleClass}`
               winningRule = { selectorText: syntheticSelector, style: { getPropertyValue: () => '' } } as unknown as CSSStyleRule
             }
+          }
+
+          // 拖入画布的根节点：强制写 JSX 内联，避免命中业务 class 后改 Less
+          if (ele.hasAttribute('data-drag-insert')) {
+            shouldWriteInlineStyle = true
           }
 
           // ── 解析 data-style-info，决定每个 key 路由到哪个选择器 ───────────────

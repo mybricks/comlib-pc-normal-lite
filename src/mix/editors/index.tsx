@@ -52,15 +52,15 @@ function getElementRefSelector(ele: Element | null | undefined) {
 
   const selectors = classSelector
     ? [
-        `${fileSelector}${widgetSelector}${classSelector}`,
-        `${fileSelector}${widgetSelector} ${classSelector}`,
-        `${fileSelector} ${widgetSelector}${classSelector}`,
-        `${fileSelector} ${widgetSelector} ${classSelector}`,
-      ]
+      `${fileSelector}${widgetSelector}${classSelector}`,
+      `${fileSelector}${widgetSelector} ${classSelector}`,
+      `${fileSelector} ${widgetSelector}${classSelector}`,
+      `${fileSelector} ${widgetSelector} ${classSelector}`,
+    ]
     : [
-        `${fileSelector}${widgetSelector}`,
-        `${fileSelector} ${widgetSelector}`,
-      ]
+      `${fileSelector}${widgetSelector}`,
+      `${fileSelector} ${widgetSelector}`,
+    ]
 
   return selectors
     .map((selector) => `${selector.trim()}:not([data-wrap-container])`)
@@ -77,7 +77,7 @@ export default function (props: Props, actions: Actions) {
 
 
   if (config.getFrontendMode() === 'gui_card') {
-    const projectItems = buildGuiCardPromptItems(); 
+    const projectItems = buildGuiCardPromptItems();
     // const uiItems = [
     //   ...exportCodeConfig,
     // ]

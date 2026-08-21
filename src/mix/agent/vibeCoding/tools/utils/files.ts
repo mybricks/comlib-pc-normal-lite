@@ -94,7 +94,7 @@ function updateComponentFiles(
   const fileNames = [...new Set(
     files
       .filter((f) => (
-        SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '') &&
+        // SUPPORTED_FILE_EXTENSION.has(f.fileName.split('.').pop() ?? '') &&
         SUPPORTED_FILE_LANGUAGE.has(f.language)
       ))
       .map((f) => f.fileName)
