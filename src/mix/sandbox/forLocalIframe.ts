@@ -9,6 +9,23 @@ import {
   type FileLike,
 } from '../../utils/ai-code/graph'
 
+function formatParsedElementChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: any }> }): string {
+  let resolved = message;
+  const infoBlocks: string[] = [];
+
+  for (const chip of chips) {
+    const inlineText = typeof chip.data?.inlineText === 'string' ? chip.data.inlineText : '';
+    const detailText = typeof chip.data?.detailText === 'string' ? chip.data.detailText : '';
+    resolved = resolved.split(`[[chip:${chip.id}]]`).join(inlineText || detailText || '');
+    if (detailText) {
+      infoBlocks.push(detailText);
+    }
+  }
+
+  if (!infoBlocks.length) return resolved;
+  return `${resolved}\n\n${infoBlocks.join('\n\n')}`;
+}
+
 let registerSuccess = false
 
 const LOCAL_FILES_ENDPOINT = '/__lingchuang-local-file/files'
@@ -350,68 +367,68 @@ export function registerSandbox(comId: string) {
         // context.notifyVersionsChange(target);
       },
     },
-    // chips: {
-    //   ['element-move']: {
-    //     def: {
-    //       type: 'element-move',
-    //       format: formatParsedElementChipMessage,
-    //     },
-    //     onRemove(params) {
-    //       context.chipPromiseIds.delete(params.id)
-    //       context.component!.actions!.promiseCancel(params.id)
-    //     }
-    //   },
-    //   ['element-text-update']: {
-    //     def: {
-    //       type: 'element-text-update',
-    //       format: formatParsedElementChipMessage,
-    //     },
-    //     onRemove(params) {
-    //       context.chipPromiseIds.delete(params.id)
-    //       context.component!.actions!.promiseCancel(params.id)
-    //     }
-    //   },
-    //   ['element-delete']: {
-    //     def: {
-    //       type: 'element-delete',
-    //       format: formatParsedElementChipMessage,
-    //     },
-    //     onRemove(params) {
-    //       context.chipPromiseIds.delete(params.id)
-    //       context.component!.actions!.promiseCancel(params.id)
-    //     }
-    //   },
-    //   ['element-style-update']: {
-    //     def: {
-    //       type: 'element-style-update',
-    //       format: formatParsedElementChipMessage,
-    //     },
-    //     onRemove(params) {
-    //       context.chipPromiseIds.delete(params.id)
-    //       context.component!.actions!.promiseCancel(params.id)
-    //     }
-    //   },
-    //   ['element-image-update']: {
-    //     def: {
-    //       type: 'element-image-update',
-    //       format: formatParsedElementChipMessage,
-    //     },
-    //     onRemove(params) {
-    //       context.chipPromiseIds.delete(params.id)
-    //       context.component!.actions!.promiseCancel(params.id)
-    //     }
-    //   },
-    //   ['element-svg-update']: {
-    //     def: {
-    //       type: 'element-svg-update',
-    //       format: formatParsedElementChipMessage,
-    //     },
-    //     onRemove(params) {
-    //       context.chipPromiseIds.delete(params.id)
-    //       context.component!.actions!.promiseCancel(params.id)
-    //     }
-    //   }
-    // }
+    chips: {
+      ['element-move']: {
+        def: {
+          type: 'element-move',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-text-update']: {
+        def: {
+          type: 'element-text-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-delete']: {
+        def: {
+          type: 'element-delete',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-style-update']: {
+        def: {
+          type: 'element-style-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-image-update']: {
+        def: {
+          type: 'element-image-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      },
+      ['element-svg-update']: {
+        def: {
+          type: 'element-svg-update',
+          format: formatParsedElementChipMessage,
+        },
+        onRemove(params) {
+          context.chipPromiseIds.delete(params.id)
+          context.component!.actions!.promiseCancel(params.id)
+        }
+      }
+    }
   }) ?? {};
 
   // 注册完成后主动扫描一次本地工程；getFiles 之外的首次生命周期也需要
