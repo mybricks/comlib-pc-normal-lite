@@ -1,3 +1,14 @@
+import context from '../context'
+import { transformNewFormatForNotifyChanged } from '../../utils/ai-code/md/transformForNotifyChanged'
+import {
+  hasMybricksGraphDirectory,
+  hasMybricksGraphFile,
+  isMybricksGraphFile,
+  parseMybricksGraph,
+  resolveGraphSourceFile,
+  type FileLike,
+} from '../../utils/ai-code/graph'
+
 let registerSuccess = false
 
 const LOCAL_FILES_ENDPOINT = '/__lingchuang-local-file/files'
@@ -7,6 +18,71 @@ const LOCAL_FILES_DELETE_ENDPOINT = '/__lingchuang-local-file/delete-files'
 type LocalFile = {
   path: string
   content: string
+}
+
+async function fetchLocalFiles(): Promise<LocalFile[]> {
+  console.log(0, 'designerFs:getFiles')
+  const response = await fetch(LOCAL_FILES_ENDPOINT)
+  if (!response.ok) {
+    throw new Error(`Local files request failed: ${response.status}`)
+  }
+
+  const files: unknown = await response.json()
+  if (
+    !Array.isArray(files)
+    || files.some((file) => (
+      !file
+      || typeof file !== 'object'
+      || typeof (file as LocalFile).path !== 'string'
+      || typeof (file as LocalFile).content !== 'string'
+    ))
+  ) {
+    throw new Error('Local files request returned an invalid response')
+  }
+
+  return files as LocalFile[]
+}
+
+async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
+  // local iframe 链路只编译 YAML graph；不启用 JSDoc/Babel 编译。
+  const files: FileLike[] = localFiles.map(file => ({
+    fileName: file.path,
+  }))
+
+  if (!hasMybricksGraphDirectory(files) || !hasMybricksGraphFile(files)) {
+    return
+  }
+
+  for (const graphFile of localFiles) {
+    if (!isMybricksGraphFile(graphFile.path)) continue
+
+    try {
+      const graph = parseMybricksGraph(graphFile.content)
+      const targetFileName = resolveGraphSourceFile(graphFile.path, graph, files)
+      const notifyChangedValue = transformNewFormatForNotifyChanged(graph.data, targetFileName)
+
+      console.log('[mybricks-graph][local-iframe] compiled data', {
+        graphFileName: graphFile.path,
+        sourceFileName: graph.fileName,
+        data: graph.data,
+      })
+      console.log('[mybricks-graph][local-iframe] notifyChanged data', {
+        fileName: targetFileName,
+        value: notifyChangedValue,
+      })
+      context.notifyChanged(targetFileName, 'update', notifyChangedValue)
+    } catch (error) {
+      console.error('[mybricks-graph][local-iframe] graph compile failed', {
+        graphFileName: graphFile.path,
+        error,
+      })
+    }
+  }
+}
+
+async function refreshLocalGraph(): Promise<void> {
+  const files = await fetchLocalFiles()
+  await compileLocalGraphFiles(files)
 }
 
 export function registerSandbox(comId: string) {
@@ -31,26 +107,9 @@ export function registerSandbox(comId: string) {
       // ── 文件系统 ──────────────────────────────────────────────────────────
 
       async getFiles(): Promise<LocalFile[]> {
-        console.log(0, 'designerFs:getFiles')
-        const response = await fetch(LOCAL_FILES_ENDPOINT)
-        if (!response.ok) {
-          throw new Error(`Local files request failed: ${response.status}`)
-        }
-
-        const files: unknown = await response.json()
-        if (
-          !Array.isArray(files)
-          || files.some((file) => (
-            !file
-            || typeof file !== 'object'
-            || typeof (file as LocalFile).path !== 'string'
-            || typeof (file as LocalFile).content !== 'string'
-          ))
-        ) {
-          throw new Error('Local files request returned an invalid response')
-        }
-
-        return files as LocalFile[]
+        const files = await fetchLocalFiles()
+        await compileLocalGraphFiles(files)
+        return files
       },
 
       async verify() {
@@ -103,6 +162,7 @@ export function registerSandbox(comId: string) {
         if (!response.ok) {
           throw new Error(`Local files update failed: ${response.status}`)
         }
+        await refreshLocalGraph()
       },
 
       async deleteFiles(paths: string[]) {
@@ -115,6 +175,7 @@ export function registerSandbox(comId: string) {
         if (!response.ok) {
           throw new Error(`Local files delete failed: ${response.status}`)
         }
+        await refreshLocalGraph()
       },
 
       async exportResourceCode(): Promise<string> {
@@ -352,4 +413,10 @@ export function registerSandbox(comId: string) {
     //   }
     // }
   }) ?? {};
+
+  // 注册完成后主动扫描一次本地工程；getFiles 之外的首次生命周期也需要
+  // 让已有的 .myrbicks/graph 文档尽早同步到设计器。
+  void refreshLocalGraph().catch((error) => {
+    console.error('[mybricks-graph][local-iframe] initial compile failed', error)
+  })
 }
