@@ -415,7 +415,7 @@ export function registerSandbox(comId: string) {
   }) ?? {};
 
   // 注册完成后主动扫描一次本地工程；getFiles 之外的首次生命周期也需要
-  // 让已有的 .myrbicks/graph 文档尽早同步到设计器。
+  // 让已有的 .lingchuang/graph 文档尽早同步到设计器。
   void refreshLocalGraph().catch((error) => {
     console.error('[mybricks-graph][local-iframe] initial compile failed', error)
   })

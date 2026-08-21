@@ -1,7 +1,7 @@
 import YAML from 'yaml'
 import type { NewSummaryData, NewSummaryItem } from '../md/transformForNotifyChanged'
 
-export const MYBRICKS_GRAPH_DIR = '.myrbicks/graph'
+export const MYBRICKS_GRAPH_DIR = '.lingchuang/graph'
 
 export type FileLike = {
   fileName: string
@@ -93,10 +93,11 @@ function requiredArray(value: unknown, path: string): unknown[] {
 function parseSelector(value: unknown, path: string, allowRoot: boolean): string {
   const selector = requiredString(value, path)
   if (allowRoot && selector === 'root') return selector
-  // 支持单个 selector，也支持页面中常见的后代/组合 selector，
-  // 例如 ".settle-header .backBtn"；每个元素定位 token 仍必须以 . 或 # 开头。
-  const selectorToken = '(?:[.#][A-Za-z_][\\w-]*)+'
-  const selectorPattern = new RegExp(`^${selectorToken}(?:(?:\\s*(?:[>+~])\\s*|\\s+)${selectorToken})*$`)
+  // 首个 selector token 必须是 class 或 id；后续 token 允许使用标签名及其
+  // class/id 组合，例如 ".wait_content button"、"#dialog button.primary"。
+  const firstSelectorToken = '(?:[.#][A-Za-z_][\\w-]*)+'
+  const selectorToken = '(?:(?:(?:[A-Za-z_][\\w-]*|\\*)?(?:[.#][A-Za-z_][\\w-]*)+)|[A-Za-z_][\\w-]*|\\*)'
+  const selectorPattern = new RegExp(`^${firstSelectorToken}(?:(?:\\s*(?:[>+~])\\s*|\\s+)${selectorToken})*$`)
   if (selectorPattern.test(selector)) return selector
   throw new Error(`MyBricks graph YAML 的 ${path} 必须使用以 ".className" 或 "#id" 开头的 CSS selector`)
 }
@@ -263,7 +264,7 @@ function parseNode(value: unknown, index: number): GraphNode {
   }
 }
 
-/** 解析一个 .myrbicks/graph 页面 YAML，并编译为设计器使用的节点 Map。 */
+/** 解析一个 .lingchuang/graph 页面 YAML，并编译为设计器使用的节点 Map。 */
 export function parseMybricksGraph(content: string): MybricksGraphDocument {
   const parsed = requiredRecord(YAML.parse(content), '根节点')
   if (parsed.version !== 1) {
