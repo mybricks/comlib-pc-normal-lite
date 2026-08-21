@@ -113,6 +113,20 @@ function excludeWrapContainer(refSelector: string): string {
     .join(', ')
 }
 
+/**
+ * 将 YAML 中的元素定位键转换为设计器当前可消费的 DOM selector。
+ * 新 YAML 使用 .className / #id，也支持 ".parent .child" 这类组合 selector；
+ * 旧 JSDoc 使用不带前缀的 className，继续兼容。
+ */
+function transformElementSelector(selector: string): string {
+  const value = selector.trim()
+  if (value.startsWith('.') || value.startsWith('#')) {
+    return value.replace(/\.([A-Za-z_][\w-]*)/g, '[data-zone-classnames*="$1"]')
+  }
+  const className = value.startsWith('.') ? value.slice(1) : value
+  return `[data-zone-classnames*="${className}"]`
+}
+
 /** 新版 JSON 数据格式中每个组件/页面的结构 */
 export type NewSummaryItem = {
   name: string
@@ -161,7 +175,7 @@ const transformNewFormatForNotifyChanged = (
     if (info.datasource) {
       Object.entries(info.datasource).forEach(([classname, apis]) => {
         Object.entries(apis).forEach(([apiName, { desc }]) => {
-          const classSelector = `[data-zone-classnames*="${classname}"]`
+          const classSelector = transformElementSelector(classname)
 
           const refSelector = excludeWrapContainer(
             classname === 'root' ? 
@@ -186,7 +200,7 @@ const transformNewFormatForNotifyChanged = (
     // 事件
     if (info.events) {
       Object.entries(info.events).forEach(([classname, handlers]) => {
-        const classSelector = `[data-zone-classnames*="${classname}"]`
+        const classSelector = transformElementSelector(classname)
         /**
          * 1. dom fileSelector widgetSelector classSelector 同时满足
          * 
@@ -231,7 +245,7 @@ const transformNewFormatForNotifyChanged = (
     // state
     if (info.state) {
       Object.entries(info.state).forEach(([classname, fields]) => {
-        const classSelector = `[data-zone-classnames*="${classname}"]`
+        const classSelector = transformElementSelector(classname)
         const refSelector = excludeWrapContainer(
           classname === 'root' ? 
             `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
@@ -251,7 +265,7 @@ const transformNewFormatForNotifyChanged = (
       })
     }
 
-    if (type !== 'app') {
+    if (type !== 'app' && type !== 'application') {
       // 当前仅处理组件
       docs.push({
         refSelector: excludeWrapContainer(`${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}`),

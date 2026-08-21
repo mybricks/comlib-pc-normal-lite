@@ -2,6 +2,16 @@ import { Events } from "../../utils/events";
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
 import { transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
+import {
+  findGraphForSourceFile,
+  findSourceFile,
+  getStoredJsDocMap,
+  hasMybricksGraphDirectory,
+  hasMybricksGraphFile,
+  isMybricksGraphFile,
+  parseMybricksGraph,
+  resolveGraphSourceFile,
+} from "../../utils/ai-code/graph"
 import { parseRequirement } from "../../utils/ai-code/md";
 import { randomUUID } from '../utils/uuid'
 import { getTimestamp } from "../../utils/time"
@@ -21,6 +31,23 @@ const updateFileContent = ({ fileName, files, content }) => {
     // 新增
     files.push({ fileName: replaceFileName, ...content });
   }
+}
+
+const printMybricksGraphCompilation = (
+  graphFileName: string,
+  graph: ReturnType<typeof parseMybricksGraph>,
+  notifyFileName: string,
+  notifyChangedValue: any,
+) => {
+  console.log('[mybricks-graph] compiled data', {
+    graphFileName,
+    sourceFileName: graph.fileName,
+    data: graph.data,
+  })
+  console.log('[mybricks-graph] notifyChanged data', {
+    fileName: notifyFileName,
+    value: notifyChangedValue,
+  })
 }
 
 export interface LogMessage {
@@ -200,8 +227,9 @@ class Context {
 
     if (type === "delete") {
       const deleteIndex = files.findIndex((f) => f.fileName === fileName);
+      const deletedFile = deleteIndex === -1 ? undefined : files[deleteIndex]
       const fileSystem = this.fileSystem
-      if (fileSystem) {
+      if (fileSystem && deleteIndex !== -1) {
         fileSystem.delete(files[deleteIndex].fileName)
       }
       if (deleteIndex !== -1) {
@@ -212,15 +240,39 @@ class Context {
       if ( ['jsx', 'tsx'].includes(suffix)) {
         this.notifyChanged(fileName, 'delete')
       }
+      if (isMybricksGraphFile(fileName)) {
+        let graph
+        try {
+          graph = deletedFile?.source
+            ? parseMybricksGraph(decodeURIComponent(deletedFile.source))
+            : undefined
+        } catch {}
+        const targetFile = resolveGraphSourceFile(fileName, graph ?? { data: {} }, files)
+        const sourceFile = findSourceFile(targetFile, files)
+        const jsDocMap = getStoredJsDocMap(sourceFile)
+        if (targetFile) {
+          const value = transformNewFormatForNotifyChanged(jsDocMap, targetFile)
+          this.notifyChanged(targetFile, 'update', value)
+        }
+      }
       aiCom.events.emit('compileError', aiComParams.data._errors)
     } else {
       switch (suffix) {
         case 'jsx':
         case 'tsx':
           try {
+            // 先检查固定目录；目录不存在时完全跳过 YAML 文档查找。
+            const hasGraphFiles = hasMybricksGraphDirectory(files) && hasMybricksGraphFile(files)
             const { transformCode, jsDocMap } = transformTsx(content, { fileName });
             const transformJsDoc = Object.fromEntries(jsDocMap)
-            const notifyChangedValue = transformNewFormatForNotifyChanged(transformJsDoc, fileName)
+            const graphEntry = hasGraphFiles
+              ? findGraphForSourceFile(fileName, files)
+              : undefined
+            // JSDoc 是第一优先级；只有当前文件没有可用 JSDoc 时才回退到 graph YAML。
+            const notifyData = Object.keys(transformJsDoc).length > 0
+              ? transformJsDoc
+              : graphEntry?.graph.data ?? {}
+            const notifyChangedValue = transformNewFormatForNotifyChanged(notifyData, fileName)
             // if (notifyChangedValue.docs?.length) {
             //   notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
             //     return {
@@ -231,6 +283,14 @@ class Context {
             //     }
             //   })
             // }
+            if (graphEntry) {
+              printMybricksGraphCompilation(
+                graphEntry.fileName,
+                graphEntry.graph,
+                fileName,
+                notifyChangedValue,
+              )
+            }
             this.notifyChanged(fileName, 'update', notifyChangedValue);
             updateFileContent({
               fileName,
@@ -349,6 +409,54 @@ class Context {
           break;
         case 'yaml':
         case 'yml':
+          if (isMybricksGraphFile(fileName)) {
+            try {
+              const graph = parseMybricksGraph(content)
+              updateFileContent({
+                fileName,
+                files,
+                content: {
+                  source: encodeURIComponent(content),
+                  compiled: graph.data,
+                  graphFileName: graph.fileName,
+                }
+              })
+              aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName)
+
+              const targetFileName = resolveGraphSourceFile(fileName, graph, files)
+              const sourceFile = findSourceFile(targetFileName, files)
+              const jsDocMap = getStoredJsDocMap(sourceFile)
+              const selectedData = Object.keys(jsDocMap).length > 0 ? jsDocMap : graph.data
+              const notifyFileName = targetFileName || fileName
+              const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
+
+              if (hasMybricksGraphDirectory(files) && hasMybricksGraphFile(files)) {
+                printMybricksGraphCompilation(fileName, graph, notifyFileName, notifyChangedValue)
+              }
+
+              const fileSystem = this.fileSystem
+              if (fileSystem) {
+                const file = files.find((f) => f.fileName === fileName);
+                fileSystem.update(fileName, { ...file, filename: fileName })
+              }
+              this.notifyChanged(notifyFileName, 'update', notifyChangedValue)
+            } catch (e: any) {
+              updateFileContent({
+                fileName,
+                files,
+                content: { source: encodeURIComponent(content) }
+              })
+              aiComParams.data._errors = [
+                ...aiComParams.data._errors.filter(err => err.file !== fileName),
+                {
+                  file: fileName,
+                  message: typeof e === 'string' ? e : (e?.message ?? e?.toString?.() ?? 'YAML 文档解析失败'),
+                  type: 'compile'
+                }
+              ]
+            }
+            break
+          }
         case 'txt':
         case 'json':
         case 'md':
