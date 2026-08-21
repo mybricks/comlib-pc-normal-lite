@@ -149,7 +149,7 @@ const LocalIframe = (props) => {
   return (
     <iframe
       id={'local-iframe'}
-      src={'/__local/lingchuang/bellossom/settle/auditresult'}
+      src={'/__local/lingchuang'}
       style={{ border: 'none', width: '100vw', height: '100vh' }}
       onLoad={(ref) => {
         props.onIframeLoad(ref.target.contentDocument)
