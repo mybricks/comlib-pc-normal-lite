@@ -287,4 +287,153 @@ const transformNewFormatForNotifyChanged = (
   }
 }
 
-export { transformNewFormatForNotifyChanged }
+const transformLocalIframeFormatForNotifyChanged = (
+  data: NewSummaryData,
+  filename: string,
+) => {
+  const events: Array<{
+    refSelector: string
+    title: string
+    mermaid: string
+    description: string
+    relations?: Array<{
+      type: string
+      refSelector: string
+    }>
+  }> = []
+  const services: Array<{ title: string; refSelector: string; description: string; type: 'up'; refType: string }> = []
+  const state: Array<{ refSelector: string; field: string; description: string }> = []
+  const docs: Array<{ refSelector: string; name: string; title: string; summary: string; type: string }> = []
+  const fileSelector = `[data-loc*="${filename}"]`
+
+  function transformElementSelector(selector: string): string {
+    const value = selector.trim()
+    if (value.startsWith('.') || value.startsWith('#')) {
+      return value.replace(/\.([A-Za-z_][\w-]*)/g, '[class*="$1"]')
+    }
+    const className = value.startsWith('.') ? value.slice(1) : value
+    return `[class*="${className}"]`
+  }
+
+  Object.entries(data).forEach(([componentName, info]) => {
+    const { name, summary, title, type } = info
+    // const widgetSelector = `[data-widget-name="${componentName}"]`
+
+    // 接口
+    if (info.datasource) {
+      Object.entries(info.datasource).forEach(([classname, apis]) => {
+        Object.entries(apis).forEach(([apiName, { desc }]) => {
+          const classSelector = transformElementSelector(classname)
+
+          if (classname === 'root') {
+            return
+          }
+
+          const refSelector = excludeWrapContainer(
+            `${fileSelector}${classSelector}` +
+            `, ${fileSelector} ${classSelector}`
+          )
+
+          services.push({
+            title: apiName,
+            type: 'up',
+            refSelector,
+            description: desc || '',
+            refType: type
+          })
+        })
+      })
+    }
+
+    // 事件
+    if (info.events) {
+      Object.entries(info.events).forEach(([classname, handlers]) => {
+        const classSelector = transformElementSelector(classname)
+        /**
+         * 1. dom fileSelector widgetSelector classSelector 同时满足
+         * 
+         * 2. dom fileSelector widgetSelector
+         *      dom classSelector
+         * 3. dom fileSelector
+         *      dom widgetSelector classSelector
+         * 4. dom fileSelector
+         *      dom widgetSelector
+         *        dom  classSelector
+         */
+
+        if (classname === 'root') {
+          return
+        }
+
+        const refSelector = excludeWrapContainer(
+          `${fileSelector}${classSelector}` +
+          `, ${fileSelector} ${classSelector}`
+        )
+
+        Object.entries(handlers).forEach(([eventName, { title, mermaid, relations }]) => {
+          const result: any = {
+            refSelector,
+            title: eventName,
+            mermaid: mermaid || '',
+            description: title || ''
+          }
+          if (relations) {
+            // result.relations = Object.entries(relations).map(([name, { type }]) => {
+            //   return {
+            //     type,
+            //     refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
+            //   }
+            // })
+          }
+          events.push(result)
+        })
+      })
+    }
+
+    // state
+    if (info.state) {
+      Object.entries(info.state).forEach(([classname, fields]) => {
+        const classSelector = transformElementSelector(classname)
+
+        if (classname === 'root') {
+          return
+        }
+
+        const refSelector = excludeWrapContainer(
+          `${fileSelector}${classSelector}` +
+          `, ${fileSelector} ${classSelector}`
+        )
+
+        Object.entries(fields).forEach(([field, { desc }]) => {
+          state.push({
+            field,
+            refSelector,
+            description: desc || ''
+          })
+        })
+      })
+    }
+
+    if (type !== 'app' && type !== 'application') {
+      // 当前仅处理组件
+      // docs.push({
+      //   refSelector: excludeWrapContainer(`${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}`),
+
+      //   name,
+      //   title,
+      //   summary,
+      //   type
+      // })
+    }
+  })
+
+  return {
+    events,
+    services,
+    state,
+    store: state,
+    docs
+  }
+}
+
+export { transformNewFormatForNotifyChanged, transformLocalIframeFormatForNotifyChanged  }

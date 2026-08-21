@@ -1,5 +1,5 @@
 import context from '../context'
-import { transformNewFormatForNotifyChanged } from '../../utils/ai-code/md/transformForNotifyChanged'
+import { transformLocalIframeFormatForNotifyChanged } from '../../utils/ai-code/md/transformForNotifyChanged'
 import {
   hasMybricksGraphDirectory,
   hasMybricksGraphFile,
@@ -76,7 +76,7 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
     try {
       const graph = parseMybricksGraph(graphFile.content)
       const targetFileName = resolveGraphSourceFile(graphFile.path, graph, files)
-      const notifyChangedValue = transformNewFormatForNotifyChanged(graph.data, targetFileName)
+      const notifyChangedValue = transformLocalIframeFormatForNotifyChanged(graph.data, targetFileName)
 
       console.log('[mybricks-graph][local-iframe] compiled data', {
         graphFileName: graphFile.path,
