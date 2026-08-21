@@ -1,5 +1,6 @@
 import React from 'react'
 import * as ReactDOM from 'react-dom'
+import { message } from 'antd'
 import babelPlugin from '../../../utils/ai-code/plugins/babelPlugin'
 import type { JSXElementDataAttributes } from '../../../utils/ai-code/plugins/babelPlugin'
 import styleAnalysisPlugin from '../../../utils/ai-code/plugins/styleAnalysisPlugin'
@@ -277,6 +278,7 @@ const createPreview = (code: InsertCode, location?: PreviewSourceLocation): Inse
     }
     return { container }
   } catch (_) {
+    console.error('Failed to create insert preview', _)
     return null
   }
 }
@@ -290,6 +292,12 @@ const mountPreview = (preview: InsertPreview, toEle: HTMLElement, type: 'before'
 
 const removePreview = (preview: InsertPreview | null) => {
   preview?.container.remove()
+}
+
+const handlePreviewFailure = () => {
+  const messageHack = window['@m-ui/react']?.message;
+  (messageHack || message).warning('插入组件失败，请检查该组件配置');
+  return { type: 'error' as const }
 }
 
 const validateSource = (source: string, fileName: string) => {
@@ -369,6 +377,8 @@ const shiftTargetStartAtInsertionBoundary = (target: HTMLElement, patch: SourceP
 }
 
 const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | null, title: string) => {
+  if (!preview) return handlePreviewFailure()
+
   const actionId = randomUUID()
   const targetLabel = getElementLabel(options.toEle, '节点')
   const chip = {
@@ -384,7 +394,7 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
       chips: [chip],
     },
     execute() {
-      if (preview) mountPreview(preview, options.toEle, options.type)
+      mountPreview(preview, options.toEle, options.type)
       context.component!.actions.addUserAction({
         id: actionId,
         type: 'insert',
@@ -465,6 +475,7 @@ const insert = (options: InsertOptions) => {
       contextElement: toEle,
       dataAttributes,
     })
+    if (!preview) return handlePreviewFailure()
 
     const sourcePatches: SourcePatch[] = [
       {
@@ -485,7 +496,7 @@ const insert = (options: InsertOptions) => {
           shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, patch)
           shiftTargetStartAtInsertionBoundary(toEle, patch)
         })
-        if (preview) mountPreview(preview, toEle, type)
+        mountPreview(preview, toEle, type)
         context.component!.actions.addUserAction({
           id: actionId,
           type: 'insert',
