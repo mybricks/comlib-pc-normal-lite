@@ -150,16 +150,16 @@ export default function (props: Props, actions: Actions) {
       style: [{ items: [] }],
     },
     '[data-library-source]': {},
-    '[data-zone-icon]': {
-      '@ai': {
-        title: aiSvgIcon5,
-        desc: '通过AI创作图标',
-        render(_data, { close }) {
-          return <AiEditPanel close={close} mode="SVG" />;
-        }
-      },
-      items: buildIconEditorItems(comId),
-    },
+    // '[data-zone-icon]': {
+    //   '@ai': {
+    //     title: aiSvgIcon5,
+    //     desc: '通过AI创作图标',
+    //     render(_data, { close }) {
+    //       return <AiEditPanel close={close} mode="SVG" />;
+    //     }
+    //   },
+    //   items: buildIconEditorItems(comId),
+    // },
     '[class]': {
       style: [
         {
@@ -219,33 +219,33 @@ export default function (props: Props, actions: Actions) {
       ]
       // items: buildElementReplacerItems(comId),
     },
-    'img': {
-      '@ai': {
-        title: aiImgIcon,
-        desc: '通过AI创作图片',
-        render(_data, { close }) {
-          return <AiEditPanel close={close} mode="IMG" />;
-        }
-      },
-      items: buildImgEditorItems(comId),
-    },
-    '[data-zone-type="page"] svg': {
-      '@ai': {
-        title: aiSvgIcon5,
-        desc: '通过AI创作图标',
-        render(_data, { close }) {
-          return <AiEditPanel close={close} mode="SVG" />;
-        }
-      },
-      style: [
-        {
-          items: [
-            genSvgResizer(),
-          ],
-        },
-      ],
-      items: buildSvgEditorItems(comId),
-    },
+    // 'img': {
+    //   '@ai': {
+    //     title: aiImgIcon,
+    //     desc: '通过AI创作图片',
+    //     render(_data, { close }) {
+    //       return <AiEditPanel close={close} mode="IMG" />;
+    //     }
+    //   },
+    //   items: buildImgEditorItems(comId),
+    // },
+    // '[data-zone-type="page"] svg': {
+    //   '@ai': {
+    //     title: aiSvgIcon5,
+    //     desc: '通过AI创作图标',
+    //     render(_data, { close }) {
+    //       return <AiEditPanel close={close} mode="SVG" />;
+    //     }
+    //   },
+    //   style: [
+    //     {
+    //       items: [
+    //         genSvgResizer(),
+    //       ],
+    //     },
+    //   ],
+    //   items: buildSvgEditorItems(comId),
+    // },
     // ...getDataZoneTextEditable(),
     ...undoRedo(),
     ...setStyle(),
