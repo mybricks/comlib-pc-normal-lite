@@ -53,6 +53,9 @@ export default function () {
           message,
           meta: {
             chips
+          },
+          extra: {
+            from: '@commitUserActions'
           }
         })
         return true
