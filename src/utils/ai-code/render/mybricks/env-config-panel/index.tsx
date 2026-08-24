@@ -319,6 +319,7 @@ export default function EnvConfigPanel({
         className={`${css.toggleButton} ${isPanelOpen ? css.toggleButtonActive : ''}`}
         type="button"
         data-zone-type="ai-fixed"
+        data-mybricks-tip="主题配置"
         aria-label={isPanelOpen ? '关闭主题配置' : '打开主题配置'}
         aria-pressed={isPanelOpen}
         title={isPanelOpen ? '关闭主题配置' : '打开主题配置'}
