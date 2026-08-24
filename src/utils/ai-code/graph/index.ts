@@ -1,5 +1,5 @@
 import YAML from 'yaml'
-import type { NewSummaryData, NewSummaryItem } from '../md/transformForNotifyChanged'
+import type { NewSummaryBind, NewSummaryData, NewSummaryItem } from '../md/transformForNotifyChanged'
 
 export const MYBRICKS_GRAPH_DIR = '.lingchuang/graph'
 
@@ -21,19 +21,19 @@ type GraphRelation = {
 }
 
 type GraphDatasourceEntry = {
-  selector: string
+  bind: NewSummaryBind
   api: string
   desc: string
 }
 
 type GraphStateEntry = {
-  selector: string
+  bind: NewSummaryBind
   field: string
   desc: string
 }
 
 type GraphEventEntry = {
-  selector: string
+  bind: NewSummaryBind
   name: string
   title: string
   mermaid: string
@@ -42,6 +42,7 @@ type GraphEventEntry = {
 
 type GraphNode = {
   name: string
+  fileName: string
   title: string
   summary: string
   type: 'component' | 'popup'
@@ -102,6 +103,40 @@ function parseSelector(value: unknown, path: string, allowRoot: boolean): string
   throw new Error(`MyBricks graph YAML 的 ${path} 必须使用以 ".className" 或 "#id" 开头的 CSS selector`)
 }
 
+/**
+ * loc 使用 JSXTag:startLine-endLine，例如 Button:42-44；单行可省略 -endLine。
+ */
+function parseLocation(value: unknown, path: string) {
+  if (typeof value !== 'string') {
+    throw new Error(`MyBricks graph YAML 的 ${path} 必须使用 "JSXTag:startLine-endLine" 字符串，例如 "Button:42-44"`)
+  }
+  const match = value.trim().match(/^([A-Za-z_$][\w$-]*(?:\.[A-Za-z_$][\w$]*)*):([1-9]\d*)(?:-([1-9]\d*))?$/)
+  if (!match) {
+    throw new Error(`MyBricks graph YAML 的 ${path} 必须使用 "JSXTag:startLine-endLine" 格式，例如 "Button:42-44"`)
+  }
+  const [, tag, startLineText, endLineText] = match
+  const startLine = Number(startLineText)
+  const endLine = endLineText ? Number(endLineText) : startLine
+  return { tag, startLine, endLine }
+}
+
+function parseEntryBind(entry: Record<string, any>, path: string, allowRoot: boolean): NewSummaryBind {
+  if (entry.bind !== undefined) {
+    throw new Error(`MyBricks graph YAML 的 ${path}.bind 已不支持，请将 loc 和 selector 提到当前条目顶层`)
+  }
+  if (entry.selector === undefined && entry.loc === undefined) {
+    throw new Error(`MyBricks graph YAML 的 ${path} 至少需要 loc 或 selector 之一`)
+  }
+  return {
+    ...(entry.selector === undefined ? {} : { selector: parseSelector(entry.selector, `${path}.selector`, allowRoot) }),
+    ...(entry.loc === undefined ? {} : { loc: parseLocation(entry.loc, `${path}.loc`) }),
+  }
+}
+
+function getBindKey(bind: NewSummaryBind): string {
+  return JSON.stringify(bind)
+}
+
 function parseRelations(value: unknown, path: string): GraphRelation[] | undefined {
   if (value === undefined) return undefined
 
@@ -125,15 +160,15 @@ function parseDatasource(value: unknown, path: string): GraphDatasourceEntry[] |
   const seen = new Set<string>()
   return entries.map((item, index) => {
     const entry = requiredRecord(item, `${path}[${index}]`)
-    const selector = parseSelector(entry.selector, `${path}[${index}].selector`, true)
+    const bind = parseEntryBind(entry, `${path}[${index}]`, true)
     const api = requiredString(entry.api, `${path}[${index}].api`)
-    const key = `${selector}\u0000${api}`
+    const key = `${getBindKey(bind)}\u0000${api}`
     if (seen.has(key)) {
-      throw new Error(`MyBricks graph YAML 的 ${path} 存在重复的 selector/api：${selector} + ${api}`)
+      throw new Error(`MyBricks graph YAML 的 ${path} 存在重复的 bind/api：${api}`)
     }
     seen.add(key)
     return {
-      selector,
+      bind,
       api,
       desc: requiredString(entry.desc, `${path}[${index}].desc`),
     }
@@ -147,15 +182,15 @@ function parseState(value: unknown, path: string): GraphStateEntry[] | undefined
   const seen = new Set<string>()
   return entries.map((item, index) => {
     const entry = requiredRecord(item, `${path}[${index}]`)
-    const selector = parseSelector(entry.selector, `${path}[${index}].selector`, true)
+    const bind = parseEntryBind(entry, `${path}[${index}]`, true)
     const field = requiredString(entry.field, `${path}[${index}].field`)
-    const key = `${selector}\u0000${field}`
+    const key = `${getBindKey(bind)}\u0000${field}`
     if (seen.has(key)) {
-      throw new Error(`MyBricks graph YAML 的 ${path} 存在重复的 selector/field：${selector} + ${field}`)
+      throw new Error(`MyBricks graph YAML 的 ${path} 存在重复的 bind/field：${field}`)
     }
     seen.add(key)
     return {
-      selector,
+      bind,
       field,
       desc: requiredString(entry.desc, `${path}[${index}].desc`),
     }
@@ -168,10 +203,10 @@ function parseEvents(value: unknown, path: string): GraphEventEntry[] | undefine
   const entries = requiredArray(value, path)
   return entries.map((item, index) => {
     const entry = requiredRecord(item, `${path}[${index}]`)
-    const selector = parseSelector(entry.selector, `${path}[${index}].selector`, false)
+    const bind = parseEntryBind(entry, `${path}[${index}]`, false)
     const name = requiredString(entry.name, `${path}[${index}].name`)
     return {
-      selector,
+      bind,
       name,
       title: requiredString(entry.title, `${path}[${index}].title`),
       mermaid: requiredString(entry.mermaid, `${path}[${index}].mermaid`),
@@ -186,6 +221,7 @@ function toSummaryItem(
 ): NewSummaryItem {
   const item: NewSummaryItem = {
     name: node.name,
+    fileName: node.fileName,
     title: node.title,
     summary: node.summary,
     type: node.type,
@@ -196,39 +232,21 @@ function toSummaryItem(
   const events = parseEvents(node.events, `${path}.events`)
 
   if (datasource?.length) {
-    item.datasource = {}
-    for (const entry of datasource) {
-      item.datasource[entry.selector] ??= {}
-      item.datasource[entry.selector][entry.api] = { desc: entry.desc }
-    }
+    item.datasource = datasource
   }
 
   if (state?.length) {
-    item.state = {}
-    for (const entry of state) {
-      item.state[entry.selector] ??= {}
-      item.state[entry.selector][entry.field] = { desc: entry.desc }
-    }
+    item.state = state
   }
 
   if (events?.length) {
-    item.events = {}
-    for (const entry of events) {
-      item.events[entry.selector] ??= {}
-      const event = {
-        title: entry.title,
-        mermaid: entry.mermaid,
-        ...(entry.relations ? { relations: Object.fromEntries(entry.relations.map(relation => [relation.name, { type: relation.type }])) } : {}),
-      }
-      const existing = item.events[entry.selector][entry.name]
-      if (!existing) {
-        item.events[entry.selector][entry.name] = event
-      } else if (Array.isArray(existing)) {
-        existing.push(event)
-      } else {
-        item.events[entry.selector][entry.name] = [existing, event]
-      }
-    }
+    item.events = events.map(entry => ({
+      bind: entry.bind,
+      name: entry.name,
+      title: entry.title,
+      mermaid: entry.mermaid,
+      ...(entry.relations ? { relations: Object.fromEntries(entry.relations.map(relation => [relation.name, { type: relation.type }])) } : {}),
+    }))
   }
 
   return item
@@ -257,6 +275,7 @@ function parseNode(value: unknown, index: number): GraphNode {
   }
   return {
     name: requiredString(node.name, `${path}.name`),
+    fileName: normalizeFileName(requiredString(node.fileName, `${path}.fileName`)),
     title: requiredString(node.title, `${path}.title`),
     summary: requiredString(node.summary, `${path}.summary`),
     type,

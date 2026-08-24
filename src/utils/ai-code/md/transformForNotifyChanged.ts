@@ -127,37 +127,141 @@ function transformElementSelector(selector: string): string {
   return `[data-zone-classnames*="${className}"]`
 }
 
-/** 新版 JSON 数据格式中每个组件/页面的结构 */
-export type NewSummaryEvent = {
+/** JSX 源码定位。fileName 由所属 page/node 提供，避免每条绑定重复填写。 */
+export type NewSummaryLocation = {
+  tag: string
+  startLine: number
+  endLine: number
+}
+
+/** Graph 中元素的两种绑定方式：优先 loc，selector 保留为兼容链路。 */
+export type NewSummaryBind = {
+  selector?: string
+  loc?: NewSummaryLocation
+}
+
+export type NewSummaryDatasourceEntry = {
+  bind: NewSummaryBind
+  api: string
+  desc?: string
+}
+
+export type NewSummaryStateEntry = {
+  bind: NewSummaryBind
+  field: string
+  desc?: string
+}
+
+export type NewSummaryEventEntry = {
+  bind: NewSummaryBind
+  name: string
   title?: string
   mermaid?: string
   relations?: Record<string, any>
 }
 
-type NewSummaryEventValue = NewSummaryEvent | NewSummaryEvent[]
+type LegacySummaryEvent = Omit<NewSummaryEventEntry, 'bind' | 'name'>
+type LegacySummaryEventValue = LegacySummaryEvent | LegacySummaryEvent[]
+type LegacySummaryDatasource = Record<string, Record<string, { desc?: string }>>
+type LegacySummaryState = Record<string, Record<string, { desc?: string }>>
+type LegacySummaryEvents = Record<string, Record<string, LegacySummaryEventValue>>
 
 export type NewSummaryItem = {
   name: string
   title: string
   summary: string
   type: string
-  /** state: classname → { fieldName → { desc } } */
-  state?: Record<string, Record<string, { desc?: string }>>
-  /**
-   * events: classname → { eventName → { title, mermaid } }。
-   * 同一 selector/name 可以对应多个事件定义，例如多个同名 class 的按钮
-   * 分别承担重置和查询动作，因此 value 也支持事件定义数组。
-   */
-  events?: Record<string, Record<string, NewSummaryEventValue>>
-  /** datasource: classname → { apiName → { desc } } */
-  datasource?: Record<string, Record<string, { desc?: string }>>
+  /** 节点对应的真实 TSX/JSX 文件；未填写时兼容调用方传入的页面文件。 */
+  fileName?: string
+  state?: NewSummaryStateEntry[] | LegacySummaryState
+  events?: NewSummaryEventEntry[] | LegacySummaryEvents
+  datasource?: NewSummaryDatasourceEntry[] | LegacySummaryDatasource
 }
 
 /** 新版 JSON 数据格式：组件名 → 组件描述 */
 export type NewSummaryData = Record<string, NewSummaryItem>
 
-function asEventDefinitions(value: NewSummaryEventValue): NewSummaryEvent[] {
+function asEventDefinitions(value: LegacySummaryEventValue): LegacySummaryEvent[] {
   return Array.isArray(value) ? value : [value]
+}
+
+function normalizeDatasourceEntries(value: NewSummaryItem['datasource']): NewSummaryDatasourceEntry[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  return Object.entries(value).flatMap(([selector, apis]) =>
+    Object.entries(apis).map(([api, { desc }]) => ({ bind: { selector }, api, desc })),
+  )
+}
+
+function normalizeStateEntries(value: NewSummaryItem['state']): NewSummaryStateEntry[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  return Object.entries(value).flatMap(([selector, fields]) =>
+    Object.entries(fields).map(([field, { desc }]) => ({ bind: { selector }, field, desc })),
+  )
+}
+
+function normalizeEventEntries(value: NewSummaryItem['events']): NewSummaryEventEntry[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  return Object.entries(value).flatMap(([selector, handlers]) =>
+    Object.entries(handlers).flatMap(([name, definitions]) =>
+      asEventDefinitions(definitions).map(({ title, mermaid, relations }) => ({
+        bind: { selector },
+        name,
+        title,
+        mermaid,
+        relations,
+      })),
+    ),
+  )
+}
+
+type NotifyLocation = NewSummaryLocation & { fileName: string }
+type NotifyBinding = { refSelector?: string; location?: NotifyLocation }
+
+function getNotifyLocation(bind: NewSummaryBind, fileName: string): NotifyLocation | undefined {
+  return bind.loc ? { fileName, ...bind.loc } : undefined
+}
+
+function addNotifyBinding<T extends Record<string, any>>(
+  result: T,
+  bind: NewSummaryBind,
+  fileName: string,
+  getRefSelector: (selector: string) => string | undefined,
+): T & NotifyBinding {
+  const bindingResult = result as T & NotifyBinding
+  if (bind.selector) {
+    const refSelector = getRefSelector(bind.selector)
+    if (refSelector) bindingResult.refSelector = refSelector
+  }
+  const location = getNotifyLocation(bind, fileName)
+  if (location) bindingResult.location = location
+  return bindingResult
+}
+
+function createMainRefSelector(selector: string, fileName: string, componentName: string): string {
+  const fileSelector = `[data-zone-filename="${fileName}"]`
+  const widgetSelector = `[data-widget-name="${componentName}"]`
+  const classSelector = transformElementSelector(selector)
+  return excludeWrapContainer(
+    selector === 'root'
+      ? `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}`
+      : `${fileSelector}${widgetSelector}${classSelector}` +
+        `, ${fileSelector}${widgetSelector} ${classSelector}` +
+        `, ${fileSelector} ${widgetSelector}${classSelector}` +
+        `, ${fileSelector} ${widgetSelector} ${classSelector}`,
+  )
+}
+
+function createLocalIframeRefSelector(selector: string, fileName: string): string | undefined {
+  if (selector === 'root') return undefined
+  const fileSelector = `[data-loc*="${fileName}"]`
+  const value = selector.trim()
+  const classSelector = (value.startsWith('.') || value.startsWith('#'))
+    ? value.replace(/\.([A-Za-z_][\w-]*)/g, '[class*="$1"]')
+    : `[class*="${value}"]`
+  return excludeWrapContainer(`${fileSelector}${classSelector}, ${fileSelector} ${classSelector}`)
 }
 
 /**
@@ -178,111 +282,47 @@ const transformNewFormatForNotifyChanged = (
   filename: string,
 ) => {
   const events: any[] = []
-  const services: Array<{ title: string; refSelector: string; description: string; type: 'up'; refType: string }> = []
-  const state: Array<{ refSelector: string; field: string; description: string }> = []
+  const services: Array<{ title: string; description: string; type: 'up'; refType: string } & NotifyBinding> = []
+  const state: Array<{ field: string; description: string } & NotifyBinding> = []
   const docs: Array<{ refSelector: string; name: string; title: string; summary: string; type: string }> = []
-
-  const fileSelector = `[data-zone-filename="${filename}"]`
 
   Object.entries(data).forEach(([componentName, info]) => {
     const { name, summary, title, type } = info
+    const itemFileName = info.fileName || filename
+    const fileSelector = `[data-zone-filename="${itemFileName}"]`
     const widgetSelector = `[data-widget-name="${componentName}"]`
+    const getRefSelector = (selector: string) => createMainRefSelector(selector, itemFileName, componentName)
 
     // 接口
-    if (info.datasource) {
-      Object.entries(info.datasource).forEach(([classname, apis]) => {
-        Object.entries(apis).forEach(([apiName, { desc }]) => {
-          const classSelector = transformElementSelector(classname)
-
-          const refSelector = excludeWrapContainer(
-            classname === 'root' ? 
-              `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
-              `${fileSelector}${widgetSelector}${classSelector}` +
-              `, ${fileSelector}${widgetSelector} ${classSelector}` + 
-              `, ${fileSelector} ${widgetSelector}${classSelector}` + 
-              `, ${fileSelector} ${widgetSelector} ${classSelector}`
-          )
-
-          services.push({
-            title: apiName,
-            type: 'up',
-            refSelector,
-            description: desc || '',
-            refType: type
-          })
-        })
-      })
-    }
+    normalizeDatasourceEntries(info.datasource).forEach(({ bind, api, desc }) => {
+      services.push(addNotifyBinding({
+        title: api,
+        type: 'up',
+        description: desc || '',
+        refType: type,
+      }, bind, itemFileName, getRefSelector))
+    })
 
     // 事件
-    if (info.events) {
-      Object.entries(info.events).forEach(([classname, handlers]) => {
-        const classSelector = transformElementSelector(classname)
-        /**
-         * 1. dom fileSelector widgetSelector classSelector 同时满足
-         * 
-         * 2. dom fileSelector widgetSelector
-         *      dom classSelector
-         * 3. dom fileSelector
-         *      dom widgetSelector classSelector
-         * 4. dom fileSelector
-         *      dom widgetSelector
-         *        dom  classSelector
-         */
-
-        const refSelector = excludeWrapContainer(
-          classname === 'root' ? 
-            `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
-            `${fileSelector}${widgetSelector}${classSelector}` +
-            `, ${fileSelector}${widgetSelector} ${classSelector}` + 
-            `, ${fileSelector} ${widgetSelector}${classSelector}` + 
-            `, ${fileSelector} ${widgetSelector} ${classSelector}`
-        )
-
-        Object.entries(handlers).forEach(([eventName, definitions]) => {
-          asEventDefinitions(definitions).forEach(({ title, mermaid, relations }) => {
-            const result: any = {
-              refSelector,
-              title: eventName,
-              mermaid: mermaid || '',
-              description: title || ''
-            }
-            if (relations) {
-              result.relations = Object.entries(relations).map(([name, { type }]) => {
-                return {
-                  type,
-                  refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
-                }
-              })
-            }
-            events.push(result)
-          })
-        })
-      })
-    }
+    normalizeEventEntries(info.events).forEach(({ bind, name: eventName, title, mermaid, relations }) => {
+      const result: any = addNotifyBinding({
+        title: eventName,
+        mermaid: mermaid || '',
+        description: title || '',
+      }, bind, itemFileName, getRefSelector)
+      if (relations) {
+        result.relations = Object.entries(relations).map(([name, { type }]) => ({
+          type,
+          refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
+        }))
+      }
+      events.push(result)
+    })
 
     // state
-    if (info.state) {
-      Object.entries(info.state).forEach(([classname, fields]) => {
-        const classSelector = transformElementSelector(classname)
-        const refSelector = excludeWrapContainer(
-          classname === 'root' ? 
-            `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 
-            `${fileSelector}${widgetSelector}${classSelector}` +
-            `, ${fileSelector}${widgetSelector} ${classSelector}` + 
-            `, ${fileSelector} ${widgetSelector}${classSelector}` + 
-            `, ${fileSelector} ${widgetSelector} ${classSelector}`
-        )
-
-        Object.entries(fields).forEach(([field, { desc }]) => {
-          state.push({
-            field,
-            refSelector,
-            description: desc || ''
-          })
-        })
-      })
-    }
+    normalizeStateEntries(info.state).forEach(({ bind, field, desc }) => {
+      state.push(addNotifyBinding({ field, description: desc || '' }, bind, itemFileName, getRefSelector))
+    })
 
     if (type !== 'app' && type !== 'application') {
       // 当前仅处理组件
@@ -310,130 +350,43 @@ const transformLocalIframeFormatForNotifyChanged = (
   data: NewSummaryData,
   filename: string,
 ) => {
-  const events: Array<{
-    refSelector: string
-    title: string
-    mermaid: string
-    description: string
-    relations?: Array<{
-      type: string
-      refSelector: string
-    }>
-  }> = []
-  const services: Array<{ title: string; refSelector: string; description: string; type: 'up'; refType: string }> = []
-  const state: Array<{ refSelector: string; field: string; description: string }> = []
+  const events: any[] = []
+  const services: Array<{ title: string; description: string; type: 'up'; refType: string } & NotifyBinding> = []
+  const state: Array<{ field: string; description: string } & NotifyBinding> = []
   const docs: Array<{ refSelector: string; name: string; title: string; summary: string; type: string }> = []
-  const fileSelector = `[data-loc*="${filename}"]`
 
-  function transformElementSelector(selector: string): string {
-    const value = selector.trim()
-    if (value.startsWith('.') || value.startsWith('#')) {
-      return value.replace(/\.([A-Za-z_][\w-]*)/g, '[class*="$1"]')
-    }
-    const className = value.startsWith('.') ? value.slice(1) : value
-    return `[class*="${className}"]`
-  }
-
-  Object.entries(data).forEach(([componentName, info]) => {
-    const { name, summary, title, type } = info
-    // const widgetSelector = `[data-widget-name="${componentName}"]`
+  Object.entries(data).forEach(([, info]) => {
+    const { type } = info
+    const itemFileName = info.fileName || filename
+    const getRefSelector = (selector: string) => createLocalIframeRefSelector(selector, itemFileName)
 
     // 接口
-    if (info.datasource) {
-      Object.entries(info.datasource).forEach(([classname, apis]) => {
-        Object.entries(apis).forEach(([apiName, { desc }]) => {
-          const classSelector = transformElementSelector(classname)
-
-          if (classname === 'root') {
-            return
-          }
-
-          const refSelector = excludeWrapContainer(
-            `${fileSelector}${classSelector}` +
-            `, ${fileSelector} ${classSelector}`
-          )
-
-          services.push({
-            title: apiName,
-            type: 'up',
-            refSelector,
-            description: desc || '',
-            refType: type
-          })
-        })
-      })
-    }
+    normalizeDatasourceEntries(info.datasource).forEach(({ bind, api, desc }) => {
+      services.push(addNotifyBinding({
+        title: api,
+        type: 'up',
+        description: desc || '',
+        refType: type,
+      }, bind, itemFileName, getRefSelector))
+    })
 
     // 事件
-    if (info.events) {
-      Object.entries(info.events).forEach(([classname, handlers]) => {
-        const classSelector = transformElementSelector(classname)
-        /**
-         * 1. dom fileSelector widgetSelector classSelector 同时满足
-         * 
-         * 2. dom fileSelector widgetSelector
-         *      dom classSelector
-         * 3. dom fileSelector
-         *      dom widgetSelector classSelector
-         * 4. dom fileSelector
-         *      dom widgetSelector
-         *        dom  classSelector
-         */
-
-        if (classname === 'root') {
-          return
-        }
-
-        const refSelector = excludeWrapContainer(
-          `${fileSelector}${classSelector}` +
-          `, ${fileSelector} ${classSelector}`
-        )
-
-        Object.entries(handlers).forEach(([eventName, definitions]) => {
-          asEventDefinitions(definitions).forEach(({ title, mermaid, relations }) => {
-            const result: any = {
-              refSelector,
-              title: eventName,
-              mermaid: mermaid || '',
-              description: title || ''
-            }
-            if (relations) {
-              // result.relations = Object.entries(relations).map(([name, { type }]) => {
-              //   return {
-              //     type,
-              //     refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
-              //   }
-              // })
-            }
-            events.push(result)
-          })
-        })
-      })
-    }
+    normalizeEventEntries(info.events).forEach(({ bind, name, title, mermaid, relations }) => {
+      const result = addNotifyBinding({
+        title: name,
+        mermaid: mermaid || '',
+        description: title || '',
+      }, bind, itemFileName, getRefSelector)
+      if (relations) {
+        // local iframe 当前不支持 relations 的 DOM selector，但保留 location/selector 事件信息。
+      }
+      events.push(result)
+    })
 
     // state
-    if (info.state) {
-      Object.entries(info.state).forEach(([classname, fields]) => {
-        const classSelector = transformElementSelector(classname)
-
-        if (classname === 'root') {
-          return
-        }
-
-        const refSelector = excludeWrapContainer(
-          `${fileSelector}${classSelector}` +
-          `, ${fileSelector} ${classSelector}`
-        )
-
-        Object.entries(fields).forEach(([field, { desc }]) => {
-          state.push({
-            field,
-            refSelector,
-            description: desc || ''
-          })
-        })
-      })
-    }
+    normalizeStateEntries(info.state).forEach(({ bind, field, desc }) => {
+      state.push(addNotifyBinding({ field, description: desc || '' }, bind, itemFileName, getRefSelector))
+    })
 
     if (type !== 'app' && type !== 'application') {
       // 当前仅处理组件
