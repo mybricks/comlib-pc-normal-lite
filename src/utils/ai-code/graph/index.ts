@@ -11,7 +11,7 @@ export type FileLike = {
 
 export interface MybricksGraphDocument {
   data: NewSummaryData
-  /** 页面对应的 TSX/JSX 文件名，必须来自 YAML 的 page.fileName。 */
+  /** 页面节点对应的 TSX/JSX 文件名，来自顶层数组里 type: page 的节点。 */
   fileName: string
 }
 
@@ -19,6 +19,8 @@ type GraphRelation = {
   name: string
   type: 'page' | 'popup'
 }
+
+type GraphNodeType = 'page' | 'component' | 'popup'
 
 type GraphDatasourceEntry = {
   bind: NewSummaryBind
@@ -45,18 +47,7 @@ type GraphNode = {
   fileName: string
   title: string
   summary: string
-  type: 'component' | 'popup'
-  datasource?: GraphDatasourceEntry[]
-  state?: GraphStateEntry[]
-  events?: GraphEventEntry[]
-}
-
-type GraphPage = {
-  name: string
-  fileName: string
-  title: string
-  summary: string
-  type: 'page'
+  type: GraphNodeType
   datasource?: GraphDatasourceEntry[]
   state?: GraphStateEntry[]
   events?: GraphEventEntry[]
@@ -216,7 +207,7 @@ function parseEvents(value: unknown, path: string): GraphEventEntry[] | undefine
 }
 
 function toSummaryItem(
-  node: GraphPage | GraphNode,
+  node: GraphNode,
   path: string,
 ): NewSummaryItem {
   const item: NewSummaryItem = {
@@ -252,26 +243,12 @@ function toSummaryItem(
   return item
 }
 
-function parsePage(value: unknown): GraphPage {
-  const page = requiredRecord(value, 'page')
-  return {
-    name: requiredString(page.name, 'page.name'),
-    fileName: normalizeFileName(requiredString(page.fileName, 'page.fileName')),
-    title: requiredString(page.title, 'page.title'),
-    summary: requiredString(page.summary, 'page.summary'),
-    type: 'page',
-    datasource: page.datasource,
-    state: page.state,
-    events: page.events,
-  }
-}
-
-function parseNode(value: unknown, index: number): GraphNode {
-  const path = `nodes[${index}]`
+function parseGraphNode(value: unknown, index: number): GraphNode {
+  const path = `[${index}]`
   const node = requiredRecord(value, path)
   const type = requiredString(node.type, `${path}.type`)
-  if (type !== 'component' && type !== 'popup') {
-    throw new Error(`MyBricks graph YAML 的 ${path}.type 只能是 component 或 popup`)
+  if (type !== 'page' && type !== 'component' && type !== 'popup') {
+    throw new Error(`MyBricks graph YAML 的 ${path}.type 只能是 page、component 或 popup`)
   }
   return {
     name: requiredString(node.name, `${path}.name`),
@@ -285,35 +262,51 @@ function parseNode(value: unknown, index: number): GraphNode {
   }
 }
 
-/** 解析一个 .lingchuang/graph 页面 YAML，并编译为设计器使用的节点 Map。 */
+/**
+ * 解析一个 .lingchuang/graph 页面 YAML，并编译为设计器使用的节点 Map。
+ *
+ * 顶层是一个节点数组：第一个元素是 version，后续每个元素是 page / component /
+ * popup 节点，三者平级、由 type 区分。不在使用独立的 page / nodes 两层。
+ * 页面对应文件的定位取自第一个 type: page 的节点；若 YAML 没有显式 page 节点
+ * （例如组件即页面、测试组件等场景），回退到第一个节点。
+ */
 export function parseMybricksGraph(content: string): MybricksGraphDocument {
-  const parsed = requiredRecord(YAML.parse(content), '根节点')
-  if (parsed.version !== 1) {
-    throw new Error('MyBricks graph YAML 的 version 必须是 1')
+  const raw = YAML.parse(content)
+  if (!Array.isArray(raw)) {
+    throw new Error('MyBricks graph YAML 顶层必须是节点数组')
   }
-  const unknownKeys = Object.keys(parsed).filter(key => !['version', 'page', 'nodes'].includes(key))
-  if (unknownKeys.length > 0) {
-    throw new Error(`MyBricks graph YAML 存在未知根字段：${unknownKeys.join(', ')}`)
+  if (raw.length === 0) {
+    throw new Error('MyBricks graph YAML 不能为空数组')
   }
 
-  const page = parsePage(parsed.page)
-  const nodes = requiredArray(parsed.nodes, 'nodes').map(parseNode)
+  // 第一个元素是 version 节点（`- version: 1`），跳过；其余都是图节点。
+  const nodes = raw.slice(1)
+  if (nodes.length === 0) {
+    throw new Error('MyBricks graph YAML 除 version 外至少需要一个节点')
+  }
+
   const data: NewSummaryData = {}
+  let pageFileName: string | null = null
+  let firstFileName: string | null = null
 
-  if (data[page.name]) {
-    throw new Error(`MyBricks graph YAML 存在重复节点：${page.name}`)
-  }
-  data[page.name] = toSummaryItem(page, 'page')
-
-  for (let index = 0; index < nodes.length; index++) {
-    const node = nodes[index]
+  nodes.forEach((value, index) => {
+    const node = parseGraphNode(value, index)
     if (data[node.name]) {
       throw new Error(`MyBricks graph YAML 存在重复节点：${node.name}`)
     }
-    data[node.name] = toSummaryItem(node, `nodes[${index}]`)
+    data[node.name] = toSummaryItem(node, `[${index}]`)
+    if (firstFileName === null) firstFileName = node.fileName
+    if (!pageFileName && node.type === 'page') {
+      pageFileName = node.fileName
+    }
+  })
+
+  const fileName = pageFileName ?? firstFileName
+  if (!fileName) {
+    throw new Error('MyBricks graph YAML 至少需要一个带 fileName 的节点')
   }
 
-  return { data, fileName: page.fileName }
+  return { data, fileName }
 }
 
 export function isMybricksGraphFile(fileName: string): boolean {
@@ -333,7 +326,7 @@ export function hasMybricksGraphFile(files: FileLike[]): boolean {
   return files.some(file => isMybricksGraphFile(file.fileName))
 }
 
-/** 页面文件只使用 YAML 中显式声明的 page.fileName，不按文件名猜测。 */
+/** 页面文件使用顶层数组中 type: page 节点的 fileName；没有时回退第一个节点。 */
 export function resolveGraphSourceFile(
   _graphFileName: string,
   graph: MybricksGraphDocument,
