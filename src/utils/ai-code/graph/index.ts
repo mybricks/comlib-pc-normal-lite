@@ -166,16 +166,10 @@ function parseEvents(value: unknown, path: string): GraphEventEntry[] | undefine
   if (value === undefined) return undefined
 
   const entries = requiredArray(value, path)
-  const seen = new Set<string>()
   return entries.map((item, index) => {
     const entry = requiredRecord(item, `${path}[${index}]`)
     const selector = parseSelector(entry.selector, `${path}[${index}].selector`, false)
     const name = requiredString(entry.name, `${path}[${index}].name`)
-    const key = `${selector}\u0000${name}`
-    if (seen.has(key)) {
-      throw new Error(`MyBricks graph YAML 的 ${path} 存在重复的 selector/name：${selector} + ${name}`)
-    }
-    seen.add(key)
     return {
       selector,
       name,
@@ -221,10 +215,18 @@ function toSummaryItem(
     item.events = {}
     for (const entry of events) {
       item.events[entry.selector] ??= {}
-      item.events[entry.selector][entry.name] = {
+      const event = {
         title: entry.title,
         mermaid: entry.mermaid,
         ...(entry.relations ? { relations: Object.fromEntries(entry.relations.map(relation => [relation.name, { type: relation.type }])) } : {}),
+      }
+      const existing = item.events[entry.selector][entry.name]
+      if (!existing) {
+        item.events[entry.selector][entry.name] = event
+      } else if (Array.isArray(existing)) {
+        existing.push(event)
+      } else {
+        item.events[entry.selector][entry.name] = [existing, event]
       }
     }
   }

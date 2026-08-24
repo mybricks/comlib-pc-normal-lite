@@ -128,6 +128,14 @@ function transformElementSelector(selector: string): string {
 }
 
 /** 新版 JSON 数据格式中每个组件/页面的结构 */
+export type NewSummaryEvent = {
+  title?: string
+  mermaid?: string
+  relations?: Record<string, any>
+}
+
+type NewSummaryEventValue = NewSummaryEvent | NewSummaryEvent[]
+
 export type NewSummaryItem = {
   name: string
   title: string
@@ -135,8 +143,12 @@ export type NewSummaryItem = {
   type: string
   /** state: classname → { fieldName → { desc } } */
   state?: Record<string, Record<string, { desc?: string }>>
-  /** events: classname → { eventName → { title, mermaid } } */
-  events?: Record<string, Record<string, { title?: string; mermaid?: string; relations?: Record<string, any> }>>
+  /**
+   * events: classname → { eventName → { title, mermaid } }。
+   * 同一 selector/name 可以对应多个事件定义，例如多个同名 class 的按钮
+   * 分别承担重置和查询动作，因此 value 也支持事件定义数组。
+   */
+  events?: Record<string, Record<string, NewSummaryEventValue>>
   /** datasource: classname → { apiName → { desc } } */
   datasource?: Record<string, Record<string, { desc?: string }>>
 }
@@ -144,13 +156,18 @@ export type NewSummaryItem = {
 /** 新版 JSON 数据格式：组件名 → 组件描述 */
 export type NewSummaryData = Record<string, NewSummaryItem>
 
+function asEventDefinitions(value: NewSummaryEventValue): NewSummaryEvent[] {
+  return Array.isArray(value) ? value : [value]
+}
+
 /**
  * 将新版 JSON 格式的数据转换为 notifyChanged 所需的结构。
  *
  * 与旧版的差异：
  * - 新版数据为扁平结构，无页面节点/children 概念
  * - store 已变更为 state，结构改为 classname → fieldName → { desc }（去除了 storeFilePath 层级）
- * - events 结构改为 classname → eventName → { title, mermaid }（不再是 handler 数组）
+ * - events 结构改为 classname → eventName → { title, mermaid }；同一 selector/name
+ *   的多个定义使用数组保留
  * - 通过传入文件名 (filename) 构建 refSelector 前缀，确保全局唯一定位
  *
  * @param data      新版 JSON 格式的组件数据
@@ -222,22 +239,24 @@ const transformNewFormatForNotifyChanged = (
             `, ${fileSelector} ${widgetSelector} ${classSelector}`
         )
 
-        Object.entries(handlers).forEach(([eventName, { title, mermaid, relations }]) => {
-          const result: any = {
-            refSelector,
-            title: eventName,
-            mermaid: mermaid || '',
-            description: title || ''
-          }
-          if (relations) {
-            result.relations = Object.entries(relations).map(([name, { type }]) => {
-              return {
-                type,
-                refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
-              }
-            })
-          }
-          events.push(result)
+        Object.entries(handlers).forEach(([eventName, definitions]) => {
+          asEventDefinitions(definitions).forEach(({ title, mermaid, relations }) => {
+            const result: any = {
+              refSelector,
+              title: eventName,
+              mermaid: mermaid || '',
+              description: title || ''
+            }
+            if (relations) {
+              result.relations = Object.entries(relations).map(([name, { type }]) => {
+                return {
+                  type,
+                  refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
+                }
+              })
+            }
+            events.push(result)
+          })
         })
       })
     }
@@ -370,22 +389,24 @@ const transformLocalIframeFormatForNotifyChanged = (
           `, ${fileSelector} ${classSelector}`
         )
 
-        Object.entries(handlers).forEach(([eventName, { title, mermaid, relations }]) => {
-          const result: any = {
-            refSelector,
-            title: eventName,
-            mermaid: mermaid || '',
-            description: title || ''
-          }
-          if (relations) {
-            // result.relations = Object.entries(relations).map(([name, { type }]) => {
-            //   return {
-            //     type,
-            //     refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
-            //   }
-            // })
-          }
-          events.push(result)
+        Object.entries(handlers).forEach(([eventName, definitions]) => {
+          asEventDefinitions(definitions).forEach(({ title, mermaid, relations }) => {
+            const result: any = {
+              refSelector,
+              title: eventName,
+              mermaid: mermaid || '',
+              description: title || ''
+            }
+            if (relations) {
+              // result.relations = Object.entries(relations).map(([name, { type }]) => {
+              //   return {
+              //     type,
+              //     refSelector: `[data-widget-name="${name}"]:not([data-wrap-container])`,
+              //   }
+              // })
+            }
+            events.push(result)
+          })
         })
       })
     }
