@@ -262,13 +262,15 @@ const TEMP_TEST_NOTIFYCHANGED = [
             "title": "getConfig",
             "type": "up",
             "description": "页面初始化时拉取分类标签配置及数据最后更新时间",
-            "refType": "page"
+            "refType": "page",
+            "refSelector": "body"
         },
         {
             "title": "getList",
             "type": "up",
             "description": "页面初始化及查询/分页时拉取商品价格热度榜单列表",
-            "refType": "page"
+            "refType": "page",
+            "refSelector": "body"
         }
     ],
     "state": [
@@ -364,5 +366,5 @@ const TEMP_TEST_NOTIFYCHANGED = [
         }
     ],
     "docs": []
-  }
+}
 ]
