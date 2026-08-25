@@ -62,7 +62,7 @@ const RuntimeIframe = (props) => {
     })
 
     if (notify || previousRoute !== route) {
-      console.log('onIframeLoad', route)
+      // console.log('onIframeLoad', route, iframe.contentDocument)
       props.onIframeLoad({
         id: route,
         doc: iframe.contentDocument
@@ -120,7 +120,7 @@ const RuntimeIframe = (props) => {
     const handleMessage = (event: MessageEvent<any>) => {
     const message = event.data;
 
-    console.log('handleMessage:', message)
+    // console.log('handleMessage:', message)
 
     if (message?.type === '__LINGCHUANG_ROUTES__') {
       context.component?.actions.loaded({ pageList: message.routes.map((route) => {

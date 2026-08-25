@@ -220,6 +220,10 @@ function normalizeEventEntries(value: NewSummaryItem['events']): NewSummaryEvent
 type NotifyLocation = NewSummaryLocation & { fileName: string }
 type NotifyBinding = { refSelector?: string; location?: NotifyLocation }
 
+function escapeCssAttributeValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
 function getNotifyLocation(bind: NewSummaryBind, fileName: string): NotifyLocation | undefined {
   return bind.loc ? { fileName, ...bind.loc } : undefined
 }
@@ -236,7 +240,15 @@ function addNotifyBinding<T extends Record<string, any>>(
     if (refSelector) bindingResult.refSelector = refSelector
   }
   const location = getNotifyLocation(bind, fileName)
-  if (location) bindingResult.location = location
+  console.log('location', location)
+  if (location) {
+    bindingResult.location = location
+    const { startLine, endLine } = location
+    const codeLine = `"codeLine":{"start":${startLine},"end":${endLine}}`
+    bindingResult.refSelector =
+      `[data-loc*='${escapeCssAttributeValue(fileName)}']` +
+      `[data-loc*='${escapeCssAttributeValue(codeLine)}']`
+  }
   return bindingResult
 }
 

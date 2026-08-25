@@ -93,7 +93,7 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
       //   fileName: targetFileName,
       //   value: notifyChangedValue,
       // })
-      context.notifyChanged(targetFileName, 'update', notifyChangedValue)
+      context.notifyChanged(graph.route, 'update', notifyChangedValue)
     } catch (error) {
       console.error('[mybricks-graph][local-iframe] graph compile failed', {
         graphFileName: graphFile.path,
