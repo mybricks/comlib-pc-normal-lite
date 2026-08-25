@@ -101,9 +101,23 @@ const hasGapStyle = (style: Record<string, number>) => {
   return 'rowGap' in style || 'columnGap' in style || 'gap' in style
 }
 
+const getLayoutParent = (ele: HTMLElement | null): HTMLElement | null => {
+  let parent = ele?.parentElement ?? null
+  while (parent?.hasAttribute('data-wrap-container')) {
+    parent = parent.parentElement
+  }
+  return parent
+}
+
+const shouldUseGapMargins = (ele: HTMLElement | null, multiple?: boolean) => {
+  if (!multiple) return false
+  const parent = getLayoutParent(ele)
+  return !!parent && !isFlexLayout(parent)
+}
+
 const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>, multiple?: boolean) => {
-  if (hasGapStyle(style) && multiple) {
-    const parent = ele.parentElement!
+  const parent = getLayoutParent(ele)
+  if (hasGapStyle(style) && multiple && parent && !shouldUseGapMargins(ele, multiple)) {
     // if (parent.dataset['customComWrapper']) {
     //   return parent.parentElement
     // }
@@ -112,8 +126,13 @@ const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>, multi
   return ele
 }
 
-const resolveStyle = (style: Record<string, number>, multiple?: boolean) => {
-  if (multiple || !hasGapStyle(style)) return style
+const resolveStyle = (
+  style: Record<string, number>,
+  multiple?: boolean,
+  sourceEle?: HTMLElement | null,
+) => {
+  if (!hasGapStyle(style)) return style
+  if (multiple && !shouldUseGapMargins(sourceEle ?? null, multiple)) return style
 
   return Object.entries(style).reduce<Record<string, number>>((nextStyle, [key, value]) => {
     if (key === 'rowGap') {
@@ -146,7 +165,8 @@ const subtractParentGapFromStyle = (
   if (!sourceEle?.parentElement) return rawStyle
   if (!hasGapStyle(rawStyle)) return rawStyle
 
-  const parent = sourceEle.parentElement
+  const parent = getLayoutParent(sourceEle)
+  if (!parent) return rawStyle
   const computed = window.getComputedStyle(parent)
   const colGap = parseFloat(computed.columnGap) || 0
   const rowGap = parseFloat(computed.rowGap) || 0
@@ -793,8 +813,6 @@ export default function createSetStyleHandler(
    * - needsAI: 样式由三方组件 prop 控制（非 CSS/JSX style），需交由 AI 修改源码
    */
   let styleKeyRoutes: Record<string, StyleKeyRoute> = {}
-  let shouldAddFlexDisplay = false
-  let flexDisplaySelector = ''
   let previewStyleSheet: CSSStyleSheet | null = null
   let ruleStyleSnapshots: CssRuleStyleSnapshot[] = []
   let previewInlineSnapshots: InlineStyleSnapshot[] = []
@@ -926,12 +944,12 @@ export default function createSetStyleHandler(
             ? getStyle(ctx, params)
             : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
           multiple,
+          getEle(ctx, params),
         )
 
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
-          shouldAddFlexDisplay = hasGapStyle(style) && !isFlexLayout(ele)
           // initialInlineCssText = ele.style?.cssText ?? ''
           // initialInlineStyleValues = {}
           Object.keys(style as Record<string, number>).forEach((key) => {
@@ -941,13 +959,6 @@ export default function createSetStyleHandler(
               initialValue,
             }
           })
-          if (shouldAddFlexDisplay) {
-            const initialValue = ele.style.getPropertyValue('display')
-            initialInlineStyleValues.display = {
-              hadInitialValue: initialValue !== '',
-              initialValue,
-            }
-          }
           const componentID = context.component!.params.id
           // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
           const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
@@ -1125,10 +1136,6 @@ export default function createSetStyleHandler(
               }
             }
           })
-          flexDisplaySelector = Object.entries(styleKeyRoutes)
-            .find(([key, route]) => GAP_KEYS.has(key) && !route.needsAI && route.selector)?.[1].selector
-            ?? winningRule.selectorText
-
         }
 
         if (!multiple) {
@@ -1146,7 +1153,6 @@ export default function createSetStyleHandler(
           inlineStyleEntries.forEach(([key, val]) => {
             ele.style.setProperty(convertCamelToHyphen(key), `${val}px`)
           })
-          if (shouldAddFlexDisplay) ele.style.setProperty('display', 'flex')
           return
         }
 
@@ -1181,14 +1187,6 @@ export default function createSetStyleHandler(
 
           setRulePreviewStyle(route, key, cssValue)
         })
-        if (shouldAddFlexDisplay && flexDisplaySelector) {
-          const flexRoute = Object.values(styleKeyRoutes).find(route => route.selector === flexDisplaySelector)
-          setRulePreviewStyle(flexRoute ?? {
-            selector: flexDisplaySelector,
-            isJsx: false,
-            source: 'less',
-          }, 'display', 'flex')
-        }
       } else if (state === 'finish') {
         isStart = false
         const rawFinishStyle = getStyle(ctx, params) || style
@@ -1197,6 +1195,7 @@ export default function createSetStyleHandler(
             ? rawFinishStyle
             : subtractParentGapFromStyle(rawFinishStyle, ele),
           multiple,
+          getEle(ctx, params),
         )
         // 本地接口写回有延迟，保留 CSSOM 预览直到 Less 重新编译接管，避免 finish 时闪回旧样式。
         if (config.getFrontendMode() !== 'local-iframe') {
@@ -1218,8 +1217,6 @@ export default function createSetStyleHandler(
               inlineStyle[key] = value
             }
           })
-          if (shouldAddFlexDisplay) inlineStyle.display = 'flex'
-
           // Snapshot the current data-style-info BEFORE patching so undo can restore it.
           const prevStyleInfoStr = ele.dataset.styleInfo
 
@@ -1453,13 +1450,6 @@ export default function createSetStyleHandler(
             pushLessStyle(lessStyle, selector, key, value)
           }
         })
-        if (shouldAddFlexDisplay && flexDisplaySelector) {
-          pushLessStyle(lessStyle, flexDisplaySelector, 'display', 'flex')
-        }
-        if (shouldAddFlexDisplay && Object.keys(fallbackInlineStyle).length) {
-          fallbackInlineStyle.display = 'flex'
-        }
-
         const jsxs: FileUpdate[] = []
         const isLocalIframe = config.getFrontendMode() === 'local-iframe'
 

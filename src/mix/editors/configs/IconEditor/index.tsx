@@ -185,7 +185,7 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
 export function buildIconEditorItems(comId: string) {
   return [
     {
-      title: '',
+      title: '图标',
       type: 'editorRender',
       options: {
         render(editConfig: any) {
