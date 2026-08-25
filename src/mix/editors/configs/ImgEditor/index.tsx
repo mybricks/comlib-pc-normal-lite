@@ -177,7 +177,7 @@ function ImgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
 export function buildImgEditorItems(comId: string) {
   return [
     {
-      title: '',
+      title: '图片',
       type: 'editorRender',
       options: {
         render(editConfig: any) {

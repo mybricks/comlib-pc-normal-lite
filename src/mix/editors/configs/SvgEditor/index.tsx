@@ -141,7 +141,7 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
 export function buildSvgEditorItems(comId: string) {
   return [
     {
-      title: '',
+      title: '图标',
       type: 'editorRender',
       options: {
         render(editConfig: any) {
