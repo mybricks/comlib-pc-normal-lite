@@ -267,7 +267,9 @@ function createMainRefSelector(selector: string, fileName: string, componentName
 }
 
 function createLocalIframeRefSelector(selector: string, fileName: string): string | undefined {
-  if (selector === 'root') return undefined
+  if (selector === 'root') {
+    return 'body'
+  }
   const fileSelector = `[data-loc*="${fileName}"]`
   const value = selector.trim()
   const classSelector = (value.startsWith('.') || value.startsWith('#'))
