@@ -204,6 +204,7 @@ const RuntimeIframe = (props) => {
             onLoad={(event) => {
               watchIframeRoute(item.key, event.currentTarget)
               syncIframeRoute(item.key, event.currentTarget, true)
+              context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED)
             }}
           />
         )
@@ -213,3 +214,155 @@ const RuntimeIframe = (props) => {
 }
 
 export default RuntimeIframe
+
+const TEMP_TEST_NOTIFYCHANGED = [
+  '/pricescreen',
+  'update',
+  {
+    "events": [
+        {
+            "title": "onChange",
+            "mermaid": "flowchart LR; A[\"点击分类标签\"] --> B[\"更新 selectedTag 状态\"]; B --> C[\"setSelectedTag([tag.categoryId])\"]",
+            "description": "切换分类标签",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "CheckableTag",
+                "startLine": 246,
+                "endLine": 252
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":246,\"end\":252}']"
+        },
+        {
+            "title": "onClick",
+            "mermaid": "flowchart LR; A[\"点击查询按钮\"] --> B[\"pageChange(1, pageSize)\"]; B --> C[\"更新 params 分页状态\"]; C --> D[\"调用 getList 接口\"]; D --> E{\"接口返回是否有数据\"}; E -->|\"有数据\"| F[\"setPriceList + setTotal 更新列表\"]; E -->|\"无数据或失败\"| G[\"setPriceList([]) + setTotal(0)\"]",
+            "description": "查询",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "Button",
+                "startLine": 257,
+                "endLine": 259
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":257,\"end\":259}']"
+        },
+        {
+            "title": "onClick",
+            "mermaid": "flowchart LR; A[\"点击重置按钮\"] --> B[\"重置表单字段\"]; B --> C[\"setParams 恢复默认分页\"]; C --> D[\"setSelectedTag([-1]) 恢复全部分类\"]; D --> E[\"调用 getList 接口重新查询\"]",
+            "description": "重置",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "Button",
+                "startLine": 260,
+                "endLine": 262
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":260,\"end\":262}']"
+        }
+    ],
+    "services": [
+        {
+            "title": "getConfig",
+            "type": "up",
+            "description": "页面初始化时拉取分类标签配置及数据最后更新时间",
+            "refType": "page"
+        },
+        {
+            "title": "getList",
+            "type": "up",
+            "description": "页面初始化及查询/分页时拉取商品价格热度榜单列表",
+            "refType": "page"
+        }
+    ],
+    "state": [
+        {
+            "field": "selectedTag",
+            "description": "当前选中的一级分类标签，控制 CheckableTag 高亮状态",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "CheckableTag",
+                "startLine": 246,
+                "endLine": 252
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":246,\"end\":252}']"
+        },
+        {
+            "field": "priceList",
+            "description": "商品热度榜单列表数据，渲染到表格",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "Table",
+                "startLine": 274,
+                "endLine": 293
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":274,\"end\":293}']"
+        },
+        {
+            "field": "total",
+            "description": "列表总条数，用于分页展示",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "Table",
+                "startLine": 274,
+                "endLine": 293
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":274,\"end\":293}']"
+        },
+        {
+            "field": "updateTime",
+            "description": "数据最后更新时间，展示在商品列表区域右上角",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "div",
+                "startLine": 269,
+                "endLine": 271
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":269,\"end\":271}']"
+        }
+    ],
+    "store": [
+        {
+            "field": "selectedTag",
+            "description": "当前选中的一级分类标签，控制 CheckableTag 高亮状态",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "CheckableTag",
+                "startLine": 246,
+                "endLine": 252
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":246,\"end\":252}']"
+        },
+        {
+            "field": "priceList",
+            "description": "商品热度榜单列表数据，渲染到表格",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "Table",
+                "startLine": 274,
+                "endLine": 293
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":274,\"end\":293}']"
+        },
+        {
+            "field": "total",
+            "description": "列表总条数，用于分页展示",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "Table",
+                "startLine": 274,
+                "endLine": 293
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":274,\"end\":293}']"
+        },
+        {
+            "field": "updateTime",
+            "description": "数据最后更新时间，展示在商品列表区域右上角",
+            "location": {
+                "fileName": "src/pages/PriceScreen/index.tsx",
+                "tag": "div",
+                "startLine": 269,
+                "endLine": 271
+            },
+            "refSelector": "[data-loc*='src/pages/PriceScreen/index.tsx'][data-loc*='\"codeLine\":{\"start\":269,\"end\":271}']"
+        }
+    ],
+    "docs": []
+  }
+]
