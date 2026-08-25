@@ -1104,8 +1104,6 @@ export default function createSetStyleHandler(
           multiple,
           getEle(ctx, params),
         )
-        console.log(1, style)
-        console.log(2, ele)
         // 拖拽预览只改 CSSOM；源码写回前先还原，最终样式由重新编译的 Less 接管。
         clearPreviewStyles()
         const aiKeys = Object.entries(styleKeyRoutes)
