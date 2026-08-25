@@ -32,6 +32,8 @@ import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 import context, { config } from '../context';
 import type {Props} from './types';
 
+import { localIframeEvents } from '../runtime.iframe'
+
 const errorSet = new Set();
 
 function getDebugEnvOptions(data: any) {
@@ -322,6 +324,9 @@ export function buildHooks(props: Props) {
       const index = data._showPages.find((item) => item === id)
       data._showPages.splice(index, 1)
       data._showPages = [...data._showPages]
+    },
+    '@openPage'(_, params) {
+      localIframeEvents.emit('openPage', params)
     },
     ...hooks
   };

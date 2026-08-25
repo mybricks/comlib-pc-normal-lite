@@ -9,6 +9,8 @@ import {
   type FileLike,
 } from '../../utils/ai-code/graph'
 
+(window as any)._local_iframe_notify_map_ = {} as any;
+
 function formatParsedElementChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: any }> }): string {
   let resolved = message;
   const infoBlocks: string[] = [];
@@ -76,17 +78,21 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
     try {
       const graph = parseMybricksGraph(graphFile.content)
       const targetFileName = resolveGraphSourceFile(graphFile.path, graph, files)
+      console.log('graph', graph)
       const notifyChangedValue = transformLocalIframeFormatForNotifyChanged(graph.data, targetFileName)
+      console.log('notifyChangedValue', notifyChangedValue);
 
-      console.log('[mybricks-graph][local-iframe] compiled data', {
-        graphFileName: graphFile.path,
-        sourceFileName: graph.fileName,
-        data: graph.data,
-      })
-      console.log('[mybricks-graph][local-iframe] notifyChanged data', {
-        fileName: targetFileName,
-        value: notifyChangedValue,
-      })
+      (window as any)._local_iframe_notify_map_[graph.route!] = notifyChangedValue
+
+      // console.log('[mybricks-graph][local-iframe] compiled data', {
+      //   graphFileName: graphFile.path,
+      //   sourceFileName: graph.fileName,
+      //   data: graph.data,
+      // })
+      // console.log('[mybricks-graph][local-iframe] notifyChanged data', {
+      //   fileName: targetFileName,
+      //   value: notifyChangedValue,
+      // })
       context.notifyChanged(targetFileName, 'update', notifyChangedValue)
     } catch (error) {
       console.error('[mybricks-graph][local-iframe] graph compile failed', {
@@ -97,7 +103,7 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
   }
 }
 
-async function refreshLocalGraph(): Promise<void> {
+export async function refreshLocalGraph(): Promise<void> {
   const files = await fetchLocalFiles()
   await compileLocalGraphFiles(files)
 }

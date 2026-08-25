@@ -13,6 +13,8 @@ export interface MybricksGraphDocument {
   data: NewSummaryData
   /** 页面节点对应的 TSX/JSX 文件名，来自顶层数组里 type: page 的节点。 */
   fileName: string
+  /** 页面节点的路由，来自顶层数组里 type: page 的节点。 */
+  route?: string
 }
 
 type GraphRelation = {
@@ -45,6 +47,7 @@ type GraphEventEntry = {
 type GraphNode = {
   name: string
   fileName: string
+  route?: string
   title: string
   summary: string
   type: GraphNodeType
@@ -253,6 +256,7 @@ function parseGraphNode(value: unknown, index: number): GraphNode {
   return {
     name: requiredString(node.name, `${path}.name`),
     fileName: normalizeFileName(requiredString(node.fileName, `${path}.fileName`)),
+    ...(node.route === undefined ? {} : { route: requiredString(node.route, `${path}.route`) }),
     title: requiredString(node.title, `${path}.title`),
     summary: requiredString(node.summary, `${path}.summary`),
     type,
@@ -287,6 +291,7 @@ export function parseMybricksGraph(content: string): MybricksGraphDocument {
 
   const data: NewSummaryData = {}
   let pageFileName: string | null = null
+  let pageRoute: string | undefined
   let firstFileName: string | null = null
 
   nodes.forEach((value, index) => {
@@ -298,6 +303,7 @@ export function parseMybricksGraph(content: string): MybricksGraphDocument {
     if (firstFileName === null) firstFileName = node.fileName
     if (!pageFileName && node.type === 'page') {
       pageFileName = node.fileName
+      pageRoute = node.route
     }
   })
 
@@ -306,7 +312,7 @@ export function parseMybricksGraph(content: string): MybricksGraphDocument {
     throw new Error('MyBricks graph YAML 至少需要一个带 fileName 的节点')
   }
 
-  return { data, fileName }
+  return { data, fileName, ...(pageRoute === undefined ? {} : { route: pageRoute }) }
 }
 
 export function isMybricksGraphFile(fileName: string): boolean {
