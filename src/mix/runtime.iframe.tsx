@@ -62,7 +62,7 @@ const RuntimeIframe = (props) => {
     })
 
     if (notify || previousRoute !== route) {
-      // console.log('onIframeLoad', route, iframe.contentDocument)
+      props.onIframeDestory(previousRoute)
       props.onIframeLoad({
         id: route,
         doc: iframe.contentDocument
