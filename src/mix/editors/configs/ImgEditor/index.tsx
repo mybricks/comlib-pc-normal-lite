@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import context from '../../../context';
 import { STATIC_SRC_RE, genImgSrcReplacer, registerImgAppliedCallback } from '../../styleProxy';
 import { AiBlingblingIcon } from '../../icons/ai-svg-blingbling';
@@ -65,13 +66,46 @@ async function downloadImage(src: string): Promise<void> {
 }
 
 function ImgPreview({ src }: { src: string }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   if (!src) return null;
+
   return (
-    <div className={css.preview}>
-      <div className={css.previewInner}>
-        <img src={src} alt="" />
+    <>
+      <div
+        className={css.preview}
+        role="button"
+        tabIndex={0}
+        data-mybricks-tip="点击查看大图"
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
+        <div className={css.previewInner}>
+          <img src={src} alt="" />
+        </div>
       </div>
-    </div>
+      {open &&
+        ReactDOM.createPortal(
+          <div className={css.lightbox} onClick={() => setOpen(false)}>
+            <img className={css.lightboxImg} src={src} alt="" />
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 

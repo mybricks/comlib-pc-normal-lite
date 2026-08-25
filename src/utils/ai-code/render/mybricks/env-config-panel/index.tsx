@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { CaretRightOutlined } from '@ant-design/icons'
 import { ColorPicker, Input, InputNumber, Select } from 'antd'
+import { useDarkMode } from '../../../../../utils/hooks'
 import css from './index.less'
 
 export interface CssVariable {
@@ -122,6 +123,7 @@ export default function EnvConfigPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const [selectedStyleId, setSelectedStyleId] = useState(parsedEnv.style.active)
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({})
+  const [isPanelOpen, setIsPanelOpen] = useState(false)
 
   useEffect(() => {
     const styles = parsedEnv.style.styles
@@ -189,11 +191,20 @@ export default function EnvConfigPanel({
     })
   }
 
+  const isDark = useDarkMode();
+
   const rootClassName = [css.panel, className].filter(Boolean).join(' ')
 
   return (
-    <div ref={panelRef} data-zone-kind="config" style={{ width: 480, maxHeight: '100vh' }}>
-      <div className={rootClassName} aria-label="环境主题配置" data-zone-type='ai-fixed'>
+    <div
+      ref={panelRef}
+      className={css.container}
+      data-zone-kind="config"
+      style={{
+        '--text': isDark ? '#f0f6fc' : '#1f2328',
+      }}
+    >
+      {isPanelOpen && <div className={rootClassName} aria-label="环境主题配置" data-zone-type='ai-fixed'>
         <header className={css.header}>
           <div>
             <h3 className={css.title}>主题配置</h3>
@@ -303,7 +314,21 @@ export default function EnvConfigPanel({
             {selectedStyle.cssVariables.length === 0 && <p className={css.emptyVariables}>此主题还没有 CSS 变量。</p>}
           </div>
         )}
-      </div>
+      </div>}
+      <button
+        className={`${css.toggleButton} ${isPanelOpen ? css.toggleButtonActive : ''}`}
+        type="button"
+        data-zone-type="ai-fixed"
+        data-mybricks-tip="主题配置"
+        aria-label={isPanelOpen ? '关闭主题配置' : '打开主题配置'}
+        aria-pressed={isPanelOpen}
+        title={isPanelOpen ? '关闭主题配置' : '打开主题配置'}
+        onClick={() => setIsPanelOpen(open => !open)}
+      >
+        {envConfigIcon}
+      </button>
     </div>
   )
 }
+
+const envConfigIcon = <svg viewBox="0 0 1024 1024" width="32" height="32" aria-hidden="true"><path d="M512 65C264.6 65 64 265.6 64 513.1a448.9 448.9 0 0 0 19.2 130.3c28.8 43.7 88.5 57.2 124.8 64.8 198 41 235 20 348.8 250.8C783.2 936.5 960 745.5 960 513.1 960 265.6 759.4 65 512 65z m278.1 701.3a375.3 375.3 0 0 1-193 113.2c-17.2-32.3-32.6-58.4-47.3-80.2-24.6-36.2-48.6-62.6-75.8-83.2s-54.6-33.6-90.4-44.4c-29.3-8.8-61.4-14.9-98.6-21.9-19.5-3.7-39.7-7.4-62.4-12.1-16.4-3.4-35.3-7.7-51.7-14.6-9.6-4.1-17.2-8.7-22.4-13.4a377.6 377.6 0 0 1-12.5-96.6 376 376 0 1 1 725.9 138.1 377.6 377.6 0 0 1-71.8 115.1zM512 208a48 48 0 1 0 48 48 48 48 0 0 0-48-48z m-181 75a48 48 0 1 0 0 96 48 48 0 1 0 0-96z m-75 181a48 48 0 1 0 48 48 48 48 0 0 0-48-48z m437 157a72 72 0 1 0 50.9 21.1A71.5 71.5 0 0 0 693 621z m75-157a48 48 0 1 0 48 48 48 48 0 0 0-48-48z m-75-85a48.1 48.1 0 1 0-33.9-14.1A47.9 47.9 0 0 0 693 379z" fill="currentColor"></path></svg>

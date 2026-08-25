@@ -842,9 +842,9 @@ export function createDesignerLoading(
   };
 
   // AI 请求统一使用全局进度锁。保留 component 分支，便于后续恢复区域锁定策略。
-  const resolveMode = (): 'progress' | 'component' => 'progress';
-  // const resolveMode = (): 'progress' | 'component' =>
-  //   !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.source === '@updateSegment:changeOrder') ? 'progress' : 'component';
+  // const resolveMode = (): 'progress' | 'component' => 'progress';
+  const resolveMode = (): 'progress' | 'component' =>
+    !focusArea || compileError || runtimeError || hasErrorOccurred || (extra.from === '@commitUserActions') ? 'progress' : 'component';
 
   const applyLock = (mode: 'progress' | 'component') => {
     if (mode === 'progress') {
@@ -1148,14 +1148,40 @@ async function registerSandboxInternal(comId: string): Promise<void> {
 
         context.component?.events.emit('vibing', false);
       },
-      async afterTurnSummary(turn: { id?: string }, summary: string) {
+      async afterTurnSummary(
+        turn: { id?: string },
+        summary: string,
+        result?: { status: 'success'; versionId?: string } | { status: 'error'; error: unknown },
+      ) {
         turnLogs.setLog({
           message: '[轮次/afterTurnSummary] 收到 summary 回调 — 开始更新版本摘要',
           summary
         });
         if (isRemoteAgent) {
+          const versionId = result?.status === 'success' ? result.versionId : undefined
+          if (!versionId) {
+            turnLogs.setLog({
+              message: '[轮次/afterTurnSummary] 服务端没有关联版本，跳过版本列表更新',
+            });
+            return
+          }
+          const record: VersionRecord = {
+            id: versionId,
+            turnId: turn?.id ?? '',
+            label: `V${context.version?.total ?? 0}`,
+            type: 'ai',
+            createdAt: Date.now(),
+            summary,
+          }
+          const notifyExternalVersion = (window as any)._sandbox_?.helpers?.notifyExternalVersion
+          if (typeof notifyExternalVersion === 'function') {
+            notifyExternalVersion(record)
+          } else {
+            context.notifyVersionsChange(record)
+          }
           turnLogs.setLog({
-            message: '[轮次/afterTurnSummary] 收到服务端 turn:summary 通知；版本摘要已落库，跳过客户端写入',
+            message: '[轮次/afterTurnSummary] 收到服务端 turn:summary 通知；更新版本列表展示',
+            record,
           });
           return
         }

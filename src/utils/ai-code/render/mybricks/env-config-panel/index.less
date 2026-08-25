@@ -1,3 +1,67 @@
+.container {
+  --env-config-toggle-color: var(--mybricks-text-color-sub, #666);
+  --env-config-toggle-hover-color: var(--mybricks-color-primary, #1677ff);
+  --env-config-toggle-active-color: var(--mybricks-color-primary, #1677ff);
+  --env-config-toggle-background: var(--mybricks-bg-color-main, #fff);
+  --env-config-toggle-hover-background: var(--mybricks-bg-color-hover, #f5f5f5);
+  --env-config-toggle-active-background: color-mix(in srgb, var(--mybricks-color-primary, #1677ff) 12%, var(--mybricks-bg-color-main, #fff));
+  --env-config-toggle-border: var(--mybricks-border-color-main, #d9d9d9);
+  // position: relative;
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  max-height: 100vh;
+  position: absolute;
+  left: 0;
+}
+
+.toggleButton {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid var(--env-config-toggle-border);
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer !important;
+  // color: var(--env-config-toggle-color);
+  color: var(--text);
+  background: var(--env-config-toggle-background);
+  box-shadow: var(--mybricks-shadow-main);
+
+  * {
+    cursor: pointer !important;
+  }
+
+  svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.toggleButtonActive {
+  background: var(--mybricks-color-primary) !important;
+  font-weight: bold;
+  svg {
+    color: #FFF;
+  }
+  border-color: var(--env-config-toggle-active-color);
+}
+
+.toggleButton:disabled {
+  cursor: not-allowed;
+  color: var(--mybricks-text-color-disabled, #bfbfbf);
+  background: var(--env-config-toggle-background);
+}
+
 .panel {
   --env-config-primary-muted: color-mix(in srgb, var(--mybricks-color-primary, #1677ff) 10%, var(--mybricks-bg-color-main, #fff));
   --env-config-primary-strong: color-mix(in srgb, var(--mybricks-color-primary, #1677ff) 18%, var(--mybricks-bg-color-main, #fff));
@@ -13,6 +77,11 @@
   color: var(--mybricks-text-color-main);
   font-size: 13px;
   line-height: 1.5;
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 40px;
+  width: 480px;
   display: flex;
   flex-direction: column;
   min-height: 0;
