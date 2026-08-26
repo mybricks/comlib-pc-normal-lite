@@ -7,7 +7,19 @@ export const localIframeEvents = new Events<{
 	'openPage': { id: string }
 }>();
 
-const LOCAL_IFRAME_PATH = '/__local/lingchuang'
+const LOCAL_IFRAME_PATH = '/lingchuang'
+
+const normalizeBasePath = (basePath: string) => {
+	const normalized = basePath.trim()
+	if (!normalized || normalized === '/') {
+		return ''
+	}
+	const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`
+	return withLeadingSlash.replace(/\/+$/, '')
+}
+
+const routerBasename = normalizeBasePath(window.__LINGCHUANG_CONFIG__?.router?.basename || '')
+const iframeRouteBasePath = routerBasename || LOCAL_IFRAME_PATH
 
 const normalizeRoute = (route: string) => {
 	const normalized = route.trim()
@@ -21,12 +33,15 @@ const normalizeRoute = (route: string) => {
 const getIframeRoute = (iframe: HTMLIFrameElement) => {
 	try {
 		const pathname = iframe.contentWindow?.location.pathname
-		if (!pathname || pathname === LOCAL_IFRAME_PATH || pathname === `${LOCAL_IFRAME_PATH}/`) {
+		if (!pathname || (iframeRouteBasePath
+			? pathname === iframeRouteBasePath || pathname === `${iframeRouteBasePath}/`
+			: pathname === '/')) {
 			return '/'
 		}
-		const route = pathname.startsWith(`${LOCAL_IFRAME_PATH}/`)
-			? pathname.slice(LOCAL_IFRAME_PATH.length) || '/'
+		const route = iframeRouteBasePath && pathname.startsWith(`${iframeRouteBasePath}/`)
+			? pathname.slice(iframeRouteBasePath.length) || '/'
 			: pathname
+		console.log('normalizeRoute(route)', normalizeRoute(route))
 		return normalizeRoute(route)
 	} catch {
 		// 跨源 iframe 无法读取 location，使用 load 时记录的路由兜底。
@@ -35,32 +50,30 @@ const getIframeRoute = (iframe: HTMLIFrameElement) => {
 }
 
 const RuntimeIframe = (props) => {
-	// const [iframes, setIframes] = useState(() => [{ key: 'default', route: '/', srcRoute: '/' }])
-	const [iframes, setIframes] = useState(() => [
-		{ key: '/pricescreen', route: '/pricescreen', srcRoute: '/pricescreen' },
-		{ key: '/productpool', route: '/productpool', srcRoute: '/productpool' },
-	])
+	const [iframes, setIframes] = useState<{route: string}[]>(() => [{ route: '/' }])
 	const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
-	const iframeRoutesRef = useRef<Record<string, string>>({ default: '/' })
+	const iframeRoutesRef = useRef<Record<string, string>>({})
 	const iframeRouteCleanupsRef = useRef<Record<string, (() => void) | undefined>>({})
-	const nextIframeIdRef = useRef(0)
+	const [debugRoute, setDebugRoute] = useState('')
 
-	const syncIframeRoute = (key: string, iframe: HTMLIFrameElement, notify = false) => {
+	const syncIframeRoute = (routeKey: string, iframe: HTMLIFrameElement, notify = false) => {
 		const route = getIframeRoute(iframe)
 		if (!route) {
 			return
 		}
 
-		const previousRoute = iframeRoutesRef.current[key]
-		iframeRoutesRef.current[key] = route
+		const previousRoute = iframeRoutesRef.current[routeKey] || routeKey
+		// 保留旧 route 索引，直到旧 iframe 的 ref 被清理，避免连续 history 事件重复通知。
+		iframeRoutesRef.current[routeKey] = route
+		iframeRoutesRef.current[route] = route
 		setIframes((current) => {
 			let changed = false
 			const next = current.map((item) => {
-				if (item.key !== key || item.route === route) {
+				if (item.route !== routeKey || item.route === route) {
 					return item
 				}
 				changed = true
-				return { ...item, route }
+				return { route }
 			})
 			return changed ? next : current
 		})
@@ -74,8 +87,8 @@ const RuntimeIframe = (props) => {
 		}
 	}
 
-	const watchIframeRoute = (key: string, iframe: HTMLIFrameElement) => {
-		iframeRouteCleanupsRef.current[key]?.()
+	const watchIframeRoute = (routeKey: string, iframe: HTMLIFrameElement) => {
+		iframeRouteCleanupsRef.current[routeKey]?.()
 
 		const iframeWindow = iframe.contentWindow
 		if (!iframeWindow) {
@@ -87,7 +100,7 @@ const RuntimeIframe = (props) => {
 		const originalReplaceState = history.replaceState
 		const notifyRouteChange = () => {
 			// 路由库通常会在 history 调用后再更新 DOM，放到微任务中读取最终地址。
-			Promise.resolve().then(() => syncIframeRoute(key, iframe))
+			Promise.resolve().then(() => syncIframeRoute(routeKey, iframe))
 		}
 		const pushState = function (this: History, ...args: Parameters<History['pushState']>) {
 			const result = originalPushState.apply(this, args)
@@ -105,7 +118,7 @@ const RuntimeIframe = (props) => {
 		iframeWindow.addEventListener('popstate', notifyRouteChange)
 		iframeWindow.addEventListener('hashchange', notifyRouteChange)
 
-		iframeRouteCleanupsRef.current[key] = () => {
+		iframeRouteCleanupsRef.current[routeKey] = () => {
 			if (history.pushState === pushState) {
 				history.pushState = originalPushState
 			}
@@ -114,7 +127,7 @@ const RuntimeIframe = (props) => {
 			}
 			iframeWindow.removeEventListener('popstate', notifyRouteChange)
 			iframeWindow.removeEventListener('hashchange', notifyRouteChange)
-			delete iframeRouteCleanupsRef.current[key]
+			delete iframeRouteCleanupsRef.current[routeKey]
 		}
 	}
 
@@ -146,57 +159,68 @@ const RuntimeIframe = (props) => {
 			}
 
 			const route = normalizeRoute(id)
-			const hasRoute = Object.entries(iframeRefs.current).some(([key, iframe]) => {
+			const hasRoute = route in iframeRoutesRef.current || Object.entries(iframeRefs.current).some(([routeKey, iframe]) => {
 				if (!iframe) {
-					return iframeRoutesRef.current[key] === route
+					return routeKey === route
 				}
 
 				const currentRoute = getIframeRoute(iframe)
-				if (currentRoute) {
-					iframeRoutesRef.current[key] = currentRoute
-				}
-				return (currentRoute || iframeRoutesRef.current[key]) === route
+				return (currentRoute || iframeRoutesRef.current[routeKey] || routeKey) === route
 			})
 
 			if (hasRoute) {
 				return
 			}
 
-			const key = `route-${nextIframeIdRef.current++}`
-			iframeRoutesRef.current[key] = route
-			setIframes((current) => current.concat({ key, route, srcRoute: route }))
+			iframeRoutesRef.current[route] = route
+			setIframes((current) => current.some((item) => item.route === route)
+				? current
+				: current.concat({ route }))
+		})
+
+		const events = context.component!.events;
+
+		const onEventsDebugTargetCancel = events.on('debugTarget', ({ route }) => {
+			setDebugRoute(route)
 		})
 
 		return () => {
 			window.removeEventListener('message', handleMessage);
 			onOpenPageCancel()
+			onEventsDebugTargetCancel()
 		};
 	}, [])
+
+	console.log('iframes', iframes)
 
 	return (
 		<>
 			{iframes.map((item) => {
-				const src = item.srcRoute
-					? `${LOCAL_IFRAME_PATH}${item.srcRoute === '/' ? '' : item.srcRoute}`
-					: LOCAL_IFRAME_PATH
+				// const src = `${LOCAL_IFRAME_PATH}${item.route === '/' ? '' : item.route}`
+				const src = `${window.location.origin}${routerBasename}${item.route === '/' ? '' : item.route}`
 
 				return (
 					<div
-						key={item.key}
-						style={{ width: '100%', height: '100%' }}
+						key={item.route}
+						style={{
+							width: '100%',
+							height: '100%',
+							visibility: debugRoute ? (item.route === debugRoute ? 'visible' : 'hidden') : 'visible'
+						}}
 						data-zone-type="page"
 						data-zone-kind="iframe"
-						data-zone-title={item.key}
+						data-zone-title={item.route}
 					>
 						<iframe
-							id={item.key === 'default' ? 'local-iframe' : `local-iframe-${item.key}`}
+							id={item.route === '/' ? 'local-iframe' : `local-iframe-${item.route}`}
 							ref={(element) => {
-								iframeRefs.current[item.key] = element
+								iframeRefs.current[item.route] = element
 								if (element) {
-									iframeRoutesRef.current[item.key] = getIframeRoute(element) || item.route
+									iframeRoutesRef.current[item.route] = getIframeRoute(element) || item.route
 								} else {
-									iframeRouteCleanupsRef.current[item.key]?.()
-									delete iframeRoutesRef.current[item.key]
+									iframeRouteCleanupsRef.current[item.route]?.()
+									delete iframeRefs.current[item.route]
+									delete iframeRoutesRef.current[item.route]
 								}
 							}}
 							src={src}
@@ -206,10 +230,10 @@ const RuntimeIframe = (props) => {
 								height: '2000px'
 							}}
 							onLoad={(event) => {
-								watchIframeRoute(item.key, event.currentTarget)
-								syncIframeRoute(item.key, event.currentTarget, true)
-								context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED)
-								context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED2)
+								watchIframeRoute(item.route, event.currentTarget)
+								syncIframeRoute(item.route, event.currentTarget, true)
+								// context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED)
+								// context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED2)
 							}}
 						/>
 					</div>

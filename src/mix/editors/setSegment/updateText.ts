@@ -20,7 +20,7 @@ const toSafeJSXText = (content: string) => {
     .join('<br/>')
 }
 
-const LOCAL_FILE_TEXT_UPDATE_ENDPOINT = '/__lingchuang-local-file/text'
+const LOCAL_FILE_TEXT_UPDATE_ENDPOINT = '/lingchuang/api/text'
 
 const getUpdateTextShadowRoot = () => {
   const shadowRoot = getShadowRoot()

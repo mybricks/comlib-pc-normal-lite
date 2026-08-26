@@ -30,9 +30,9 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
 
 let registerSuccess = false
 
-const LOCAL_FILES_ENDPOINT = '/__lingchuang-local-file/files'
-const LOCAL_FILES_UPDATE_ENDPOINT = '/__lingchuang-local-file/update'
-const LOCAL_FILES_DELETE_ENDPOINT = '/__lingchuang-local-file/delete-files'
+const LOCAL_FILES_ENDPOINT = '/lingchuang/api/files'
+const LOCAL_FILES_UPDATE_ENDPOINT = '/lingchuang/api/update'
+const LOCAL_FILES_DELETE_ENDPOINT = '/lingchuang/api/delete-files'
 
 type LocalFile = {
   path: string

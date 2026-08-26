@@ -32,7 +32,7 @@ export type LocalStyleFileSnapshot = {
   newCode: string
 }
 
-const LOCAL_FILE_STYLE_UPDATE_ENDPOINT = '/__lingchuang-local-file/style'
+const LOCAL_FILE_STYLE_UPDATE_ENDPOINT = '/lingchuang/api/style'
 let restoreQueue = Promise.resolve()
 
 export const updateLocalFileStyles = async (

@@ -9,7 +9,7 @@ import {
   shiftDOMSourceLocationsAfterReplacement,
 } from './sourceLocation'
 
-const LOCAL_FILE_DELETE_ENDPOINT = '/__lingchuang-local-file/delete'
+const LOCAL_FILE_DELETE_ENDPOINT = '/lingchuang/api/delete'
 
 const getDeleteShadowRoot = () => {
   const shadowRoot = getShadowRoot()

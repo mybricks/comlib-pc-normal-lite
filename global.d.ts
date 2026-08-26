@@ -15,4 +15,9 @@ declare module '*.less' {
 
 interface Window {
   eslint: typeof import('eslint');
+  __LINGCHUANG_CONFIG__: {
+    router?: {
+      basename?: string;
+    }
+  }
 }
