@@ -214,8 +214,8 @@ const RuntimeIframe = (props) => {
               onLoad={(event) => {
                 watchIframeRoute(item.key, event.currentTarget)
                 syncIframeRoute(item.key, event.currentTarget, true)
-                context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED)
-                context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED2)
+                // context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED)
+                // context.notifyChanged(...TEMP_TEST_NOTIFYCHANGED2)
               }}
             />
           </div>

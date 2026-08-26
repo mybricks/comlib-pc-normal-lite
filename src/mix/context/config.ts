@@ -62,6 +62,7 @@ class Config {
    * default
    */
   getFrontendMode() {
+    return 'local-iframe'
     if (window.MYBRICKS_LOCAL_IFRAME) {
       return 'local-iframe'
     }
