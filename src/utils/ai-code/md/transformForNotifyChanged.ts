@@ -240,7 +240,6 @@ function addNotifyBinding<T extends Record<string, any>>(
     if (refSelector) bindingResult.refSelector = refSelector
   }
   const location = getNotifyLocation(bind, fileName)
-  console.log('location', location)
   if (location) {
     bindingResult.location = location
     const { startLine, endLine } = location

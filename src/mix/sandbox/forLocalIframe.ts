@@ -80,7 +80,10 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
       const targetFileName = resolveGraphSourceFile(graphFile.path, graph, files)
       console.log('graph', graph)
       const notifyChangedValue = transformLocalIframeFormatForNotifyChanged(graph.data, targetFileName)
-      console.log('notifyChangedValue', notifyChangedValue);
+      console.log('notifyChangedValue', {
+        id: graph.route,
+        value: notifyChangedValue
+      });
 
       (window as any)._local_iframe_notify_map_[graph.route!] = notifyChangedValue
 
