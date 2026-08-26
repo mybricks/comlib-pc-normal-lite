@@ -116,6 +116,10 @@ export default function (props: Props, actions: Actions) {
     }
   }
 
+  if (config.getFrontendMode() === 'local-iframe') {
+    delete focusAreaConfigs[':root']
+  }
+
   context.setComponent({ params: props, actions });
 
   (window as any).__mybricksEslintVerify = () => eslintVerify(props.data.files);

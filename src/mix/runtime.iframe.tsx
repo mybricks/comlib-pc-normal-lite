@@ -203,8 +203,8 @@ const RuntimeIframe = (props) => {
 					<div
 						key={item.route}
 						style={{
-							width: '100%',
-							height: '100%',
+							width: '1440px',
+							height: '100vh',
 							visibility: debugRoute ? (item.route === debugRoute ? 'visible' : 'hidden') : 'visible'
 						}}
 						data-zone-type="page"
@@ -226,8 +226,8 @@ const RuntimeIframe = (props) => {
 							src={src}
 							style={{
 								border: 'none',
-								width: '1440px',
-								height: '2000px'
+								width: '100%',
+								height: '100%'
 							}}
 							onLoad={(event) => {
 								watchIframeRoute(item.route, event.currentTarget)

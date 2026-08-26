@@ -343,6 +343,9 @@ export function buildHooks(props: Props) {
     '@openPage'(_, params) {
       localIframeEvents.emit('openPage', params)
     },
+    '@resizePage'(...args) {
+      // console.log('@resizePage', args)
+    },
     ...hooks
   };
 }
