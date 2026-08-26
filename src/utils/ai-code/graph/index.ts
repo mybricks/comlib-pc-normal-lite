@@ -1,4 +1,5 @@
 import YAML from 'yaml'
+import { parse as parseCssSelector } from 'css-tree'
 import type { NewSummaryBind, NewSummaryData, NewSummaryItem } from '../md/transformForNotifyChanged'
 
 export const MYBRICKS_GRAPH_DIR = '.lingchuang/graph'
@@ -19,7 +20,7 @@ export interface MybricksGraphDocument {
 
 type GraphRelation = {
   name: string
-  type: 'page' | 'popup'
+  type: string
 }
 
 type GraphNodeType = 'page' | 'component' | 'popup'
@@ -88,12 +89,17 @@ function requiredArray(value: unknown, path: string): unknown[] {
 function parseSelector(value: unknown, path: string, allowRoot: boolean): string {
   const selector = requiredString(value, path)
   if (allowRoot && selector === 'root') return selector
-  // 首个 selector token 必须是 class 或 id；后续 token 允许使用标签名及其
-  // class/id 组合，例如 ".wait_content button"、"#dialog button.primary"。
-  const firstSelectorToken = '(?:[.#][A-Za-z_][\\w-]*)+'
-  const selectorToken = '(?:(?:(?:[A-Za-z_][\\w-]*|\\*)?(?:[.#][A-Za-z_][\\w-]*)+)|[A-Za-z_][\\w-]*|\\*)'
-  const selectorPattern = new RegExp(`^${firstSelectorToken}(?:(?:\\s*(?:[>+~])\\s*|\\s+)${selectorToken})*$`)
-  if (selectorPattern.test(selector)) return selector
+  // 元素定位必须从 class 或 id 开始；其余部分交给 CSS 解析器校验，支持
+  // 属性选择器、伪类/伪元素、嵌套后代等合法 CSS selector 写法。
+  const startsWithClassOrId = /^(?:\.[A-Za-z_][\w-]*|#[A-Za-z_][\w-]*)/.test(selector)
+  if (startsWithClassOrId) {
+    try {
+      parseCssSelector(selector, { context: 'selector' })
+      return selector
+    } catch {
+      // 统一使用 graph YAML 的字段路径报告格式错误。
+    }
+  }
   throw new Error(`MyBricks graph YAML 的 ${path} 必须使用以 ".className" 或 "#id" 开头的 CSS selector`)
 }
 
@@ -138,7 +144,9 @@ function parseRelations(value: unknown, path: string): GraphRelation[] | undefin
     const relation = requiredRecord(item, `${path}[${index}]`)
     const type = requiredString(relation.type, `${path}[${index}].type`)
     if (type !== 'page' && type !== 'popup') {
-      throw new Error(`MyBricks graph YAML 的 ${path}[${index}].type 只能是 page 或 popup`)
+      console.warn(
+        'MyBricks graph YAML 的 ' + path + '[' + index + '].type 只能是 page 或 popup，当前值为 "' + type + '"',
+      )
     }
     return {
       name: requiredString(relation.name, `${path}[${index}].name`),
