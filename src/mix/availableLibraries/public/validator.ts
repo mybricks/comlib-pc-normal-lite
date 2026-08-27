@@ -9,6 +9,11 @@ const BUILTIN_LIBRARIES: readonly string[] = [
   'mybricks/testing',
 ];
 
+export interface PublicValidatorOptions {
+  /** 跳过 dataSource.ts 的全部公共校验规则 */
+  disableDataSourceValidation?: boolean;
+}
+
 /** react/react-dom 始终允许，与具体注册的三方库无关 */
 // const ALWAYS_ALLOWED: readonly string[] = ['react', 'react-dom'];
 
@@ -16,8 +21,12 @@ const BUILTIN_LIBRARIES: readonly string[] = [
 /**
  * 创建公共依赖校验器。
  * @param thirdPartyLibNames 允许使用的三方库名称列表，由 index.ts 从 BUILTIN_LIBS 派生后传入
+ * @param options 公共校验器行为配置
  */
-export function createPublicValidator(thirdPartyLibNames: string[]): LibraryValidator {
+export function createPublicValidator(
+  thirdPartyLibNames: string[],
+  options: PublicValidatorOptions = {},
+): LibraryValidator {
   const ALLOWED_LIBRARIES: readonly string[] = [
     ...BUILTIN_LIBRARIES,
     // ...ALWAYS_ALLOWED,
@@ -85,6 +94,10 @@ export function createPublicValidator(thirdPartyLibNames: string[]): LibraryVali
       const isDataSourceJs = fileName === 'dataSource.ts';
 
       return function publicDepsValidatorPlugin(_babel: any) {
+        if (isDataSourceJs && options.disableDataSourceValidation) {
+          return { visitor: {} };
+        }
+
         const staticImportSources = new Set<string>();
 
         return {

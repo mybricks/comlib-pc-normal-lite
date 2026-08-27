@@ -1,4 +1,3 @@
-import React from 'react'
 import babelPlugin from './plugins/babelPlugin'
 import { getValidatorPlugins } from '../../mix/availableLibraries'
 import functionPropsPlugin from './plugins/functionPropsPlugin'
@@ -344,19 +343,6 @@ function decodeCssIdentifier(value: string): string {
   })
 }
 
-function extractFrameStyle(css: string): { width?: number } | undefined {
-  const match = css.match(/:frame\s*\{([^}]*)\}/);
-  if (!match) return undefined;
-
-  const block = match[1];
-  // 仅匹配纯 px 整数/小数，排除 min-width / max-width 以及 %、auto、fit-content 等非 px 值
-  const widthMatch = block.match(/(?<![a-z-])width:\s*(\d+(?:\.\d+)?)px\b/);
-
-  if (!widthMatch) return undefined;
-
-  return { width: Number(widthMatch[1]) };
-}
-
 async function requireFromCdn(cdnUrl) {
   return new Promise((resolve, reject) => {
     const el = document.createElement('script');
@@ -369,13 +355,6 @@ async function requireFromCdn(cdnUrl) {
       reject(new Error(`加载${cdnUrl}失败`))
     }
   })
-}
-
-async function loadLess() {
-  if (window?.less) {
-    return
-  }
-  await requireFromCdn('https://f2.beckwai.com/udata/pkg/eshop/fangzhou/asset/less/4.2.0/less.js')
 }
 
 async function loadBabel() {

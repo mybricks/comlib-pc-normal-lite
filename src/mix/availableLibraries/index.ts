@@ -56,7 +56,9 @@ function getEffectiveValidators(ctx: import('./types').ValidateContext): import(
   }
 
   return [
-    createPublicValidator(effectiveNames),
+    createPublicValidator(effectiveNames, {
+      disableDataSourceValidation: config.getDisableDataSourceValidation(),
+    }),
     ...BASE_LIBS.map((lib) => lib.validator).filter(Boolean) as import('./types').LibraryValidator[],
     ...addonValidators,
   ]
