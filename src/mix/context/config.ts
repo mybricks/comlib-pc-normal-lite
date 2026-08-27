@@ -429,6 +429,11 @@ class Config {
     return (window as any)._sandbox_?.config?.componentRuntime?.eslint
   }
 
+  /** 是否跳过 dataSource.ts 的公共依赖校验 */
+  getDisableDataSourceValidation() {
+    return (window as any)._sandbox_?.config?.componentRuntime?.disableDataSourceValidation === true
+  }
+
   getFrontEndDataSouce() {
     const componentRuntime = window._sandbox_.config.componentRuntime
 

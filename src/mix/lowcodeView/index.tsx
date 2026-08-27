@@ -295,7 +295,7 @@ function LowcodeView(params: Params) {
 
   const debugState = componentId ? context.comDebugStateMap : null;
   const isDebugging = debugState?.isDebugging ?? false;
-  const bottomTab = debugState?.bottomTab ?? 'source';
+  const bottomTab = debugState?.bottomTab ?? 'version';
   const consoleLogs = debugState?.logs ?? [];
 
   const setBottomTab = useCallback((tab: 'source' | 'console' | 'version') => {
@@ -964,16 +964,16 @@ function LowcodeView(params: Params) {
               </div>
             )}
             <div
-              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-              onClick={() => setBottomTab('source')}
-            >
-              源代码
-            </div>
-            <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('version')}
             >
               版本
+            </div>
+            <div
+              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+              onClick={() => setBottomTab('source')}
+            >
+              源代码
             </div>
           </div>
         </div>
