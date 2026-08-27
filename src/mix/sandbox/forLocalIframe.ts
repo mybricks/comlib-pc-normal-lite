@@ -31,16 +31,42 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
 let registerSuccess = false
 
 const LOCAL_FILES_ENDPOINT = '/lingchuang/api/files'
+const LOCAL_FILES_LIST_ENDPOINT = '/lingchuang/api/files/list'
+const LOCAL_FILES_READ_ENDPOINT = '/lingchuang/api/files/read'
 const LOCAL_FILES_UPDATE_ENDPOINT = '/lingchuang/api/update'
 const LOCAL_FILES_DELETE_ENDPOINT = '/lingchuang/api/delete-files'
+const LOCAL_COMMANDS_ENDPOINT = '/lingchuang/api/commands'
 
 type LocalFile = {
   path: string
   content: string
 }
 
+type LocalFileEntry = {
+  path: string
+  type: 'file' | 'directory'
+  size?: number
+}
+
+type LocalCommandResult = {
+  stdout: string
+  stderr?: string
+  exitCode: number
+  metadata?: Record<string, unknown>
+}
+
+type AgentSandboxCommandOptions = {
+  cwd?: string
+  env?: Record<string, string>
+  inheritEnv?: boolean
+  timeoutMs?: number
+  signal?: AbortSignal
+  onStdout?: (chunk: string) => void
+  onStderr?: (chunk: string) => void
+}
+
 async function fetchLocalFiles(): Promise<LocalFile[]> {
-  console.log(0, 'designerFs:getFiles')
+  console.log(0, 'localGraph:getFiles')
   const response = await fetch(LOCAL_FILES_ENDPOINT)
   if (!response.ok) {
     throw new Error(`Local files request failed: ${response.status}`)
@@ -60,6 +86,108 @@ async function fetchLocalFiles(): Promise<LocalFile[]> {
   }
 
   return files as LocalFile[]
+}
+
+async function getResponseError(response: Response): Promise<string> {
+  try {
+    const body = await response.json() as { error?: unknown }
+    if (typeof body.error === 'string') return body.error
+  } catch {}
+  return `Request failed: ${response.status}`
+}
+
+async function listLocalFiles(path = '', options: { recursive?: boolean } = {}): Promise<LocalFileEntry[]> {
+  const params = new URLSearchParams({ path })
+  if (options.recursive) params.set('recursive', 'true')
+  const response = await fetch(`${LOCAL_FILES_LIST_ENDPOINT}?${params.toString()}`)
+  if (!response.ok) throw new Error(await getResponseError(response))
+  const payload = await response.json() as { entries?: unknown }
+  if (!Array.isArray(payload.entries) || payload.entries.some((entry) => !entry || typeof entry !== 'object' || typeof (entry as LocalFileEntry).path !== 'string' || !['file', 'directory'].includes((entry as LocalFileEntry).type))) {
+    throw new Error('Local file list returned an invalid response')
+  }
+  return payload.entries as LocalFileEntry[]
+}
+
+async function readLocalFiles(paths: string[]): Promise<LocalFile[]> {
+  if (!paths.length) return []
+  const response = await fetch(LOCAL_FILES_READ_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  })
+  if (response.status === 404) return []
+  if (!response.ok) throw new Error(await getResponseError(response))
+  const payload = await response.json() as { files?: unknown }
+  if (!Array.isArray(payload.files) || payload.files.some((file) => !file || typeof file !== 'object' || typeof (file as LocalFile).path !== 'string' || typeof (file as LocalFile).content !== 'string')) {
+    throw new Error('Local file read returned an invalid response')
+  }
+  return payload.files as LocalFile[]
+}
+
+async function updateLocalFiles(files: Array<{ path: string; content: string }>): Promise<void> {
+  const response = await fetch(LOCAL_FILES_UPDATE_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files }),
+  })
+  if (!response.ok) throw new Error(await getResponseError(response))
+  await refreshLocalGraph()
+}
+
+async function deleteLocalFiles(paths: string[]): Promise<void> {
+  const response = await fetch(LOCAL_FILES_DELETE_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  })
+  if (!response.ok) throw new Error(await getResponseError(response))
+  await refreshLocalGraph()
+}
+
+async function executeLocalShellCommand(command: string, options: AgentSandboxCommandOptions = {}): Promise<LocalCommandResult> {
+  const response = await fetch(LOCAL_COMMANDS_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: options.signal,
+    body: JSON.stringify({
+      command,
+      cwd: options.cwd,
+      env: options.env,
+      inheritEnv: options.inheritEnv,
+      timeoutMs: options.timeoutMs,
+    }),
+  })
+  if (!response.ok) return { stdout: await getResponseError(response), stderr: '', exitCode: 1 }
+  if (!response.body) throw new Error('Local command did not return a stream')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: LocalCommandResult | undefined
+  const consume = (line: string) => {
+    if (!line) return
+    const event = JSON.parse(line) as { type?: string; chunk?: unknown; stdout?: unknown; stderr?: unknown; exitCode?: unknown; timedOut?: unknown; aborted?: unknown; message?: unknown }
+    if (event.type === 'stdout' && typeof event.chunk === 'string') options.onStdout?.(event.chunk)
+    else if (event.type === 'stderr' && typeof event.chunk === 'string') options.onStderr?.(event.chunk)
+    else if (event.type === 'error') throw new Error(typeof event.message === 'string' ? event.message : 'Local command failed')
+    else if (event.type === 'result' && typeof event.stdout === 'string' && typeof event.stderr === 'string' && typeof event.exitCode === 'number') {
+      result = { stdout: event.stdout, stderr: event.stderr, exitCode: event.exitCode, metadata: { timedOut: event.timedOut === true, aborted: event.aborted === true } }
+    }
+  }
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value, { stream: !done })
+    let newline = buffer.indexOf('\n')
+    while (newline >= 0) {
+      consume(buffer.slice(0, newline))
+      buffer = buffer.slice(newline + 1)
+      newline = buffer.indexOf('\n')
+    }
+    if (done) break
+  }
+  if (buffer) consume(buffer)
+  if (!result) throw new Error('Local command stream ended without a result')
+  return result
 }
 
 async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
@@ -116,7 +244,8 @@ export function registerSandbox(comId: string) {
     return
   }
   registerSuccess = true
-  const connectToAI = (window as any)._sandbox_?.connectToAI;
+  const sandboxAPI = (window as any)._sandbox_;
+  const connectToAI = sandboxAPI?.connectToAI;
   if (typeof connectToAI !== 'function') {
     // console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
@@ -129,138 +258,31 @@ export function registerSandbox(comId: string) {
   // const projectRef = getProjectRef(comId);
   // refreshProjectBaseline(comId, projectRef);
 
-  const designerFs = {
-      // ── 文件系统 ──────────────────────────────────────────────────────────
-
-      async getFiles(): Promise<LocalFile[]> {
-        const files = await fetchLocalFiles()
-        await compileLocalGraphFiles(files)
-        return files
+  const files = {
+      list: listLocalFiles,
+      async read(path: string) {
+        return (await readLocalFiles([path]))[0] ?? null
       },
-
-      async verify() {
-        console.log(1, 'designerFs:verify')
-        return []
-        // const aiComParams = context.component?.params;
-        // const messages: any[] = [];
-        // const files: any[] = aiComParams?.data?.files ?? [];
-        // const componentRuntime = window._sandbox_?.config?.componentRuntime
-        // const VERIFY_CONFIG = {
-        //   rules: {
-        //     // [RULE_IDS.README_CHECK]: 'off' as const,
-        //     [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
-        //   },
-        // };
-
-        // if (componentRuntime) {
-        //   const { eslint, modules } = componentRuntime
-        //   if (eslint) {
-        //     const { rules, verify } = eslint
-        //     if (rules) {
-        //       Object.assign(VERIFY_CONFIG.rules, eslint.rules)
-        //     }
-        //     if (verify) {
-        //       messages.push(...await verify(files))
-        //     }
-        //   }
-        //   if (modules) {
-        //     await Promise.all(Object.entries(modules).map(async ([key, value]: any) => {
-        //       const eslintVerify = value.eslint.verify
-        //       if (eslintVerify) {
-        //         messages.push(...await eslintVerify(files))
-        //       }
-        //     }))
-        //   }
-        // }
-
-        // messages.push(...await eslintVerify(files, VERIFY_CONFIG))
-
-        // return messages;
+      readFiles: readLocalFiles,
+      async write(file: LocalFile) {
+        await updateLocalFiles([file])
       },
-
-      async updateFiles(files: Array<{ path: string; content: string }>) {
-        console.log(2, 'designerFs:updateFiles', files)
-        const response = await fetch(LOCAL_FILES_UPDATE_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files }),
-        })
-        if (!response.ok) {
-          throw new Error(`Local files update failed: ${response.status}`)
-        }
-        await refreshLocalGraph()
+      writeFiles: updateLocalFiles,
+      async remove(path: string) {
+        await deleteLocalFiles([path])
       },
+      removeFiles: deleteLocalFiles,
+  }
+  const agentSandbox = {
+    files,
+    commands: {
+      execute: executeLocalShellCommand,
+    },
+  }
 
-      async deleteFiles(paths: string[]) {
-        console.log(3, 'designerFs:deleteFiles', paths)
-        const response = await fetch(LOCAL_FILES_DELETE_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paths }),
-        })
-        if (!response.ok) {
-          throw new Error(`Local files delete failed: ${response.status}`)
-        }
-        await refreshLocalGraph()
-      },
-
-      async exportResourceCode(): Promise<string> {
-        console.log(4, 'designerFs:exportResourceCode')
-        return ''
-        // const project = projectRef.current;
-        // if (!project) return '';
-        // return project.exportResourceCode();
-      },
-
-      getEffectiveLibraries() {
-        console.log(5, 'designerFs:getEffectiveLibraries')
-        return []
-        // const project = projectRef.current;
-        // if (!project) return [];
-        // return project.getEffectiveLibraries();
-      },
-
-      // ── 设计器状态 ────────────────────────────────────────────────────────
-
-      async exportDesignerToMessage(): Promise<string> {
-        console.log(6, 'designerFs:exportDesignerToMessage')
-        return ''
-        // const project = projectRef.current;
-        // if (!project) return '';
-        // return project.exportDesignerToMessage();
-      },
-
-      getLogList(query?: { page?: number; pageSize?: number; like?: Record<string, string> }) {
-        console.log(7, 'designerFs:getLogList', query)
-        // const project = projectRef.current;
-        // if (!project) return { total: 0, page: query?.page ?? 1, pageSize: query?.pageSize ?? 20, items: [] };
-        // return project.getLogList(query);
-      },
-
-      getLogDetail(id: string) {
-        console.log(8, 'designerFs:getLogDetail', id)
-        // const project = projectRef.current;
-        // if (!project) return undefined;
-        // return project.getLogDetail(id);
-      },
-
-      getRuntimeMode(): string | undefined {
-        console.log(9, 'designerFs:getRuntimeMode')
-        return ''
-        // return context.component?.params?.data?.runtimeMode;
-      },
-
-      // /**
-      //  * 与 vibeCoding 请求相同的 loading控制器；focusArea 无选区时走 params.onProgress。
-      //  */
-      // loading(focusArea: any, opts?: DesignerLoadingOptions) {
-      //   return createDesignerLoading(comId, focusArea, opts);
-      // },
-  };
-
-  // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
+  // 直接注册 AgentSandbox，避免通过 V1 getFiles() 全量加载文件内容。
   const { history, isRemoteAgent } = connectToAI(comId, {
-    designer: designerFs,
+    agentSandbox,
     hooks: {
       async beforeRequest({ meta, extra }) {
         console.log(10, 'hooks:beforeRequest', {
