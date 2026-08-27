@@ -37,6 +37,7 @@ export interface LogMessage {
 export interface ComDebugState {
   isDebugging: boolean;
   bottomTab: 'source' | 'console' | 'version';
+  bottomTabBeforeDebug: 'source' | 'console' | 'version';
   logs: LogMessage[];
   logIdCounter: number;
 }
@@ -515,7 +516,8 @@ class Context {
   /** 每个组件的调试/日志状态，keyed by componentId */
   comDebugStateMap: ComDebugState = {
     isDebugging: false,
-    bottomTab: 'source',
+    bottomTab: 'version',
+    bottomTabBeforeDebug: 'version',
     logs: [],
     logIdCounter: 0,
   };
@@ -534,10 +536,10 @@ class Context {
         _: {}
       }];
     } else {
-      // 取消调试：清空日志，切回源代码
+      // 取消调试：清空日志，恢复调试开始前的面板
       state.logs = [];
       state.logIdCounter = 0;
-      state.bottomTab = 'source';
+      state.bottomTab = state.bottomTabBeforeDebug;
     }
     this.notifyComDebugState();
   }
@@ -554,6 +556,9 @@ class Context {
   setComBottomTab(tab: 'source' | 'console' | 'version') {
     const state = this.comDebugStateMap;
     state.bottomTab = tab;
+    if (!(state.isDebugging && tab === 'console')) {
+      state.bottomTabBeforeDebug = tab;
+    }
     this.notifyComDebugState();
   }
 
