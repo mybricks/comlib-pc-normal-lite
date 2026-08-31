@@ -356,9 +356,10 @@ export function buildHooks(props: Props) {
 
       const message = getAuditPageMessage(options);
       const detail = message ? `的${message}文档` : '文档';
+      const ele = hookContext.focusArea.ele;
 
       (window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
-        message: `更新页面「${id}」${detail}`,
+        message: `更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`,
         extra: {
           onComplete,
           onError,
