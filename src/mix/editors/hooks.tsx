@@ -32,8 +32,6 @@ import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 import context, { config } from '../context';
 import type {Props} from './types';
 
-import { localIframeEvents } from '../runtime.iframe'
-
 const errorSet = new Set();
 
 function getDebugEnvOptions(data: any) {
@@ -222,14 +220,14 @@ export function buildHooks(props: Props) {
         const events = context.component!.events;
         if (stop) {
           events.emit('debugTarget', {
-            route: undefined
+            src: undefined
           });
           return;
         }
         const page = params.focusArea.ele.closest('[data-zone-title]');
-        const route = page?.getAttribute('data-zone-title');
+        const src = page?.getAttribute('data-zone-title');
          events.emit('debugTarget', {
-          route
+          src
          })
         return
       }
@@ -341,10 +339,17 @@ export function buildHooks(props: Props) {
       data._showPages = [...data._showPages]
     },
     '@openPage'(_, params) {
-      localIframeEvents.emit('openPage', params)
+
     },
     '@resizePage'(...args) {
-      // console.log('@resizePage', args)
+      console.log('@resizePage', args)
+    },
+    '@auditPage'(context, { id }) {
+      // console.log('@auditPage', args)
+      ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.id, {
+        message: `更新页面「${id}」文档`,
+        mentionFocus: true
+      })
     },
     ...hooks
   };
