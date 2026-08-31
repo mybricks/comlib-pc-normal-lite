@@ -457,6 +457,40 @@ function simpleSpecificity(selector: string): number {
 }
 
 /**
+ * 计算两个选择器分支的结构匹配程度。
+ * actualSelector 可以是带作用域前缀或运行时路径的选择器，candidate 是 Less 中的分支。
+ */
+function getSelectorBranchMatchScore(actualSelector: string, candidate: string): number {
+  const actual = actualSelector.replace(/\s+/g, ' ').trim();
+  const target = candidate.replace(/\s+/g, ' ').trim();
+  if (!actual || !target) return 0;
+  if (actual === target) return 4;
+  if (actual.endsWith(' ' + target)) return 3;
+  if (target.endsWith(' ' + actual)) return 2;
+  return getSelectorLastClassToken(actual) === getSelectorLastClassToken(target) ? 1 : 0;
+}
+
+/**
+ * 从逗号选择器中选出当前编辑元素对应的目标分支。
+ * 不直接对所有分支取 max，避免未命中的高特指度分支抬高当前目标的基准。
+ */
+function getActualTargetBranches(targetKey: string, actualSelector: string): string[] {
+  const branches = splitTopLevelCommaKeys(targetKey);
+  if (branches.length <= 1) return branches;
+
+  const actualBranches = splitTopLevelCommaKeys(actualSelector);
+  const scores = branches.map(branch => Math.max(
+    ...actualBranches.map(actual => getSelectorBranchMatchScore(actual, branch)),
+  ));
+  const bestScore = Math.max(...scores);
+
+  // 末尾 class 相同只能说明候选可能相关，不能据此判定实际分支；
+  // 没有完整路径匹配时不抬高目标特指度，避免误加或漏加 important。
+  if (bestScore < 2) return [];
+  return branches.filter((_, index) => scores[index] === bestScore);
+}
+
+/**
  * `background` 简写属性展开后会影响的所有 longhand（连字符格式）。
  * antd 写 `background: #1677ff` 时，浏览器会隐式将 background-image 等 reset 为初始值。
  */
@@ -483,53 +517,107 @@ const PSEUDO_TAIL_RE = /:(hover|focus|active|visited|disabled|checked|focus-with
 function collectCSSOMOverriddenProps(
   ele: Element,
   targetKey: string,
+  actualSelector = targetKey,
 ): Set<string> {
   const result = new Set<string>();
 
-  // 提取 targetKey 中的伪类尾缀（如 '.addBtn:hover' → ':hover'）
-  const pseudoMatch = targetKey.match(PSEUDO_TAIL_RE);
-  const targetPseudo = pseudoMatch ? pseudoMatch[0].trim() : null;
-  const targetBase   = targetPseudo
-    ? targetKey.slice(0, targetKey.lastIndexOf(targetPseudo)).trim()
-    : targetKey;
+  // 竞争扫描也需要支持嵌套规则展开后的完整选择器（如
+  // `.statGroup .statValueGreen`），否则只能按最后一个单类匹配，
+  // 会把当前组件自身的嵌套规则误判成更高特指度的外部规则。
+  if (!targetKey.trim()) return result;
 
-  // 非伪类情况：仅处理简单单类选择器
-  if (!targetPseudo && !/^\.[\w-]+$/.test(targetKey)) return result;
-  // 伪类情况：base 部分必须包含类名
-  if (targetPseudo && !targetBase) return result;
+  // 目标选择器存在逗号分支时，只按当前实际匹配的分支计算基准特指度。
+  const actualTargetBranches = getActualTargetBranches(targetKey, actualSelector);
+  if (actualTargetBranches.length === 0) return result;
+  const targetSpec = Math.max(
+    ...actualTargetBranches.map(branch => simpleSpecificity(branch)),
+  );
+  const targetPseudos = new Set(
+    actualTargetBranches.map(branch => {
+      const pseudoMatch = branch.match(PSEUDO_TAIL_RE);
+      return pseudoMatch ? pseudoMatch[0].trim().toLowerCase() : null;
+    }),
+  );
+  const hasTargetPseudo = [...targetPseudos].some(Boolean);
+  const hasPlainTarget = targetPseudos.has(null);
 
-  const targetSpec = simpleSpecificity(targetKey);
+  const getMatchingBranchSpecificity = (selectorText: string): number => {
+    let maxSpecificity = -1;
+    splitTopLevelCommaKeys(selectorText).forEach(branch => {
+      const branchPseudoMatch = branch.match(PSEUDO_TAIL_RE);
+      const branchPseudo = branchPseudoMatch ? branchPseudoMatch[0].trim() : null;
+
+      if (hasTargetPseudo && branchPseudo) {
+        // 伪类规则沿用原有逻辑：只要求 base selector 命中当前元素，
+        // 不要求当前时刻真的处于 hover/focus 状态。
+        if (!branchPseudo || !targetPseudos.has(branchPseudo.toLowerCase())) return;
+        const branchBase = branch.slice(0, branch.lastIndexOf(branchPseudo)).trim();
+        try {
+          if (!branchBase || !ele.matches(branchBase)) return;
+        } catch {
+          return;
+        }
+      } else if (hasTargetPseudo && !hasPlainTarget) {
+        return;
+      } else {
+        try {
+          if (!ele.matches(branch)) return;
+        } catch {
+          return;
+        }
+      }
+
+      maxSpecificity = Math.max(maxSpecificity, simpleSpecificity(branch));
+    });
+    return maxSpecificity;
+  };
 
   try {
     const shadowDoc = getShadowDoc();
     for (const sheet of Array.from(shadowDoc.styleSheets)) {
       try {
-        for (const rule of Array.from(sheet.cssRules || [])) {
-          if (!(rule instanceof CSSStyleRule)) continue;
+        const visitRules = (rules: CSSRuleList) => {
+          for (const rule of Array.from(rules || [])) {
+            if (rule instanceof CSSStyleRule) {
+              // 逗号选择器的每个分支拥有独立特指度；只比较当前元素实际命中的分支。
+              if (getMatchingBranchSpecificity(rule.selectorText) <= targetSpec) continue;
 
-          if (targetPseudo) {
-            // 伪类模式：规则必须以相同伪类结尾，再用 base selector 验证 ele
-            const rulePseudoM = rule.selectorText.match(PSEUDO_TAIL_RE);
-            const rulePseudo  = rulePseudoM ? rulePseudoM[0].trim() : null;
-            if (!rulePseudo || rulePseudo.toLowerCase() !== targetPseudo.toLowerCase()) continue;
-            const ruleBase = rule.selectorText.slice(0, rule.selectorText.lastIndexOf(rulePseudo)).trim();
-            try { if (!ruleBase || !ele.matches(ruleBase)) continue; } catch { continue; }
-          } else {
-            // 普通模式：直接 element.matches（天然过滤未激活的 :hover 等）
-            try { if (!ele.matches(rule.selectorText)) continue; } catch { continue; }
-          }
+              const st = rule.style;
+              for (let i = 0; i < st.length; i++) {
+                result.add(st[i]);
+              }
+              // background 简写会隐式覆盖所有 background-* longhand
+              if (st.getPropertyValue('background')) {
+                BACKGROUND_LONGHAND_PROPS.forEach(p => result.add(p));
+              }
+              continue;
+            }
 
-          if (simpleSpecificity(rule.selectorText) <= targetSpec) continue;
+            const ruleType = rule.constructor?.name;
+            if (ruleType === 'CSSMediaRule' && typeof window.matchMedia === 'function') {
+              try {
+                if (!window.matchMedia((rule as CSSMediaRule).media.mediaText).matches) continue;
+              } catch {
+                // 条件解析失败时保守地继续扫描，保持原有兜底行为。
+              }
+            } else if (
+              ruleType === 'CSSSupportsRule' &&
+              typeof CSS !== 'undefined' &&
+              typeof CSS.supports === 'function'
+            ) {
+              try {
+                if (!CSS.supports((rule as CSSSupportsRule).conditionText)) continue;
+              } catch {
+                // 条件解析失败时保守地继续扫描。
+              }
+            }
 
-          const st = rule.style;
-          for (let i = 0; i < st.length; i++) {
-            result.add(st[i]);
+            // @media / @container 等 CSS 分组规则中的 CSSStyleRule 也参与竞争扫描。
+            const nestedRules = (rule as CSSRule & { cssRules?: CSSRuleList }).cssRules;
+            if (nestedRules) visitRules(nestedRules);
           }
-          // background 简写会隐式覆盖所有 background-* longhand
-          if (st.getPropertyValue('background')) {
-            BACKGROUND_LONGHAND_PROPS.forEach(p => result.add(p));
-          }
-        }
+        };
+        visitRules(sheet.cssRules);
       } catch { /* 跨域样式表 SecurityError，跳过 */ }
     }
   } catch { /* shadowDoc 访问异常，兜底 */ }
@@ -623,6 +711,127 @@ function resolveTargetKey(params: {
   const cssModulesKey = tryResolveCSSModulesHashedSelector(cssObj, rawSelector ?? fullSelector);
 
   return cssModulesKey ?? suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? fullSelector;
+}
+
+type NestedRuleTarget = {
+  container: Record<string, any>;
+  key: string;
+  selector: string;
+  score: number;
+  branch?: string;
+};
+
+function expandNestedSelector(parentSelector: string, nestedSelector: string): string {
+  const expanded = nestedSelector.includes('&')
+    ? nestedSelector.replace(/&/g, parentSelector)
+    : `${parentSelector} ${nestedSelector}`;
+  return expanded.replace(/\s+/g, ' ').trim();
+}
+
+function getNestedSelectorMatchScore(fullSelector: string, candidate: string): number {
+  const full = fullSelector.replace(/\s+/g, ' ').trim();
+  const expanded = candidate.replace(/\s+/g, ' ').trim();
+  if (!full || !expanded) return 0;
+  if (full === expanded) return 4;
+  if (full.endsWith(' ' + expanded)) return 3;
+  if (expanded.endsWith(' ' + full)) return 2;
+  return getSelectorLastClassToken(full) === getSelectorLastClassToken(expanded) ? 1 : 0;
+}
+
+/**
+ * 选择用于 CSSOM 特指度比较的嵌套选择器。
+ * 若运行时选择器还带有 `:where(.component)` 等作用域前缀，应保留该前缀；
+ * 若面板只传了末段类名，则使用 Less 展开后的完整嵌套路径。
+ */
+function getNestedConflictSelector(fullSelector: string, nestedSelector: string): string {
+  const full = fullSelector.replace(/\s+/g, ' ').trim();
+  const nested = nestedSelector.replace(/\s+/g, ' ').trim();
+  if (!full) return nested;
+  if (!nested) return full;
+  return full === nested || full.endsWith(' ' + nested) ? full : nested;
+}
+
+/**
+ * 在 parseLess 保留的嵌套对象中定位目标规则。
+ *
+ * 普通写入只查 cssObj 顶层；`.section { .value { .green {} } }` 因此会漏掉
+ * `.green`，随后在文件末尾创建同名规则。这里按 Less 展开后的选择器递归匹配，
+ * 且仅在最佳候选唯一时返回，避免同一个短类名出现在多个父级时误写。
+ */
+function resolveNestedRuleTarget(
+  cssObj: Record<string, any>,
+  fullSelector: string,
+  eleClassList: string[],
+): NestedRuleTarget | undefined {
+  const candidates: NestedRuleTarget[] = [];
+  const sourceClassNames = new Set(
+    eleClassList
+      .filter(Boolean)
+      .map(className => extractOriginalClassName(className) ?? className),
+  );
+
+  const visit = (
+    container: Record<string, any>,
+    parentSelectors: string[],
+    depth: number,
+    atRuleDepth: number,
+  ) => {
+    Object.entries(container).forEach(([key, value]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+      // at-rule 不改变选择器祖先路径，但要继续递归其内部规则，
+      // 这样目标声明会写回原来的 @media / @container 块。
+      if (key.startsWith('@')) {
+        visit(value, parentSelectors, depth, atRuleDepth + 1);
+        return;
+      }
+
+      const branches = splitTopLevelCommaKeys(key);
+      const expandedSelectorEntries = parentSelectors.length > 0
+        ? parentSelectors.flatMap(parent => branches.map(branch => ({
+          branch,
+          selector: expandNestedSelector(parent, branch),
+        })))
+        : branches.map(branch => ({ branch, selector: branch }));
+      const expandedSelectors = expandedSelectorEntries.map(({ selector }) => selector);
+
+      if (depth > 0 || atRuleDepth > 0) {
+        expandedSelectorEntries.forEach(({ branch, selector }) => {
+          const finalSegment = selector.trim().split(/\s+/).pop() || selector;
+          const finalClasses = (finalSegment.match(/\.([^.#[:]+)/g) ?? []).map(item => item.slice(1));
+          if (
+            sourceClassNames.size > 0 &&
+            finalClasses.length > 0 &&
+            !finalClasses.every(className => sourceClassNames.has(className))
+          ) {
+            return;
+          }
+
+          const score = getNestedSelectorMatchScore(fullSelector, selector);
+          if (score > 0) {
+            candidates.push({
+              container,
+              key,
+              selector,
+              score,
+              branch: branches.length > 1 ? branch : undefined,
+            });
+          }
+        });
+      }
+
+      visit(value, expandedSelectors, depth + 1, atRuleDepth);
+    });
+  };
+
+  visit(cssObj, [], 0, 0);
+  if (candidates.length === 0) return undefined;
+
+  const bestScore = Math.max(...candidates.map(candidate => candidate.score));
+  const bestCandidates = candidates.filter(candidate => candidate.score === bestScore);
+  const uniqueTargets = bestCandidates.filter((candidate, index) =>
+    bestCandidates.findIndex(item => item.container === candidate.container && item.key === candidate.key) === index
+  );
+  return uniqueTargets.length === 1 ? uniqueTargets[0] : undefined;
 }
 
 /**
@@ -1810,14 +2019,24 @@ export function genStyleValue(props) {
       }
       // ─────────────────────────────────────────────────────────────
 
+      // 先定位嵌套规则，竞争扫描需要使用 Less 展开后的完整选择器，
+      // 否则 `.parent .child` 会被错误地按 `.child` 与自身规则比较。
+      const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
+
       // 嵌套伪类写入前：检测是否存在更高特指度的外部规则（如 antd hover），
       // 若有竞争则给 lessValue 中对应属性追加 !important，确保写入值能生效。
       const _pseudoTailM = fullSelector.match(PSEUDO_TAIL_RE);
       if (_pseudoTailM && ele) {
         const _segs = fullSelector.trim().split(/\s+/).filter(Boolean);
-        // 取最后一段（如 '.addBtn:hover'）作为 targetKey，特指度与组件自身规则对齐
-        const _pseudoTargetKey = _segs[_segs.length - 1];
-        const _cssomOverriddenForPseudo = collectCSSOMOverriddenProps(ele as Element, _pseudoTargetKey);
+        // 使用实际嵌套路径（并保留运行时作用域前缀）与组件自身规则对齐
+        const _pseudoTargetKey = nestedCandidate
+          ? getNestedConflictSelector(fullSelector, nestedCandidate.selector)
+          : _segs[_segs.length - 1];
+        const _cssomOverriddenForPseudo = collectCSSOMOverriddenProps(
+          ele as Element,
+          _pseudoTargetKey,
+          fullSelector,
+        );
         if (_cssomOverriddenForPseudo.size > 0) {
           Object.keys(lessValue).forEach(key => {
             const hyphenKey = convertCamelToHyphen(key);
@@ -1866,11 +2085,38 @@ export function genStyleValue(props) {
       }
 
       const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList, rawSelector });
+      const topLevelTarget = cssObj[targetKey] && typeof cssObj[targetKey] === 'object'
+        ? cssObj[targetKey] as Record<string, any>
+        : undefined;
+      const nestedCandidateStyle = nestedCandidate
+        ? nestedCandidate.container[nestedCandidate.key] as Record<string, any> | undefined
+        : undefined;
+      const topLevelDeclarations = topLevelTarget
+        ? Object.keys(topLevelTarget).filter(key => typeof topLevelTarget[key] !== 'object')
+        : [];
+      const isLikelyNestedOrphan = !!nestedCandidateStyle && !!topLevelTarget &&
+        topLevelDeclarations.length > 0 &&
+        topLevelDeclarations.length === Object.keys(topLevelTarget).length &&
+        topLevelDeclarations.every(key => nestedCandidateStyle[key] !== undefined);
+      const nestedTarget = nestedCandidate && (
+        !topLevelTarget ||
+        nestedCandidate.score > getNestedSelectorMatchScore(fullSelector, targetKey) ||
+        isLikelyNestedOrphan
+      )
+        ? nestedCandidate
+        : undefined;
+      const targetContainer = nestedTarget?.container ?? cssObj;
+      let resolvedTargetKey = nestedTarget?.key ?? targetKey;
+
+      // 清理旧逻辑已经追加到文件末尾、并覆盖嵌套规则同名声明的重复短规则。
+      if (nestedTarget && isLikelyNestedOrphan) {
+        delete cssObj[targetKey];
+      }
 
       // 若 targetKey 是独立单类（如 ".cyan"），清除 cssObj 中可能残留的旧版复合选择器键。
       // 例：历史写入产生了 ".topFeatureItem.cyan" 或 ".topFeatureItem.pages_xxx--cyan"，
       // 它们的 CSS 优先级（0,2,0）高于 ".cyan"（0,1,0），会覆盖新写入的规则。
-      if (/^\.[\w-]+$/.test(targetKey)) {
+      if (!nestedTarget && /^\.[\w-]+$/.test(targetKey)) {
         const targetClass = targetKey.slice(1);
         Object.keys(cssObj).forEach(key => {
           if (key === targetKey) return;
@@ -1888,23 +2134,44 @@ export function genStyleValue(props) {
         });
       }
 
-      absorbOrphans(cssObj, targetKey);
-
-      if (!cssObj[targetKey]) {
-        cssObj[targetKey] = {};
+      if (!nestedTarget) {
+        absorbOrphans(cssObj, targetKey);
       }
+
+      // 嵌套逗号规则也要拆分后只修改当前分支，且拆分发生在原 at-rule/父规则容器内。
+      if (nestedTarget?.branch && nestedTarget.key !== nestedTarget.branch) {
+        const sharedStyle = targetContainer[nestedTarget.key];
+        if (sharedStyle && typeof sharedStyle === 'object' && !Array.isArray(sharedStyle)) {
+          splitTopLevelCommaKeys(nestedTarget.key).forEach(branchKey => {
+            const existing = targetContainer[branchKey];
+            targetContainer[branchKey] = existing && typeof existing === 'object' && !Array.isArray(existing)
+              ? { ...sharedStyle, ...existing }
+              : { ...sharedStyle };
+          });
+          delete targetContainer[nestedTarget.key];
+          resolvedTargetKey = nestedTarget.branch;
+        }
+      }
+
+      if (!targetContainer[resolvedTargetKey]) {
+        targetContainer[resolvedTargetKey] = {};
+      }
+      const targetStyle = targetContainer[resolvedTargetKey] as Record<string, any>;
 
       const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
       const eleTagName = ele ? (ele as HTMLElement).tagName : '';
 
-      // 扫描 CSSOM（shadow DOM）中匹配 ele 且特指度高于 targetKey 的竞争规则（如 antd 复合类）。
+      // 扫描 CSSOM（shadow DOM）中匹配 ele 且特指度高于实际目标选择器的竞争规则（如 antd 复合类）。
       // 每次写入动作扫描一次，供下方 forEach 使用，避免重复扫描。
+      const conflictTargetKey = nestedTarget
+        ? getNestedConflictSelector(fullSelector, nestedTarget.selector)
+        : targetKey;
       const cssomOverriddenProps: Set<string> = ele
-        ? collectCSSOMOverriddenProps(ele as Element, targetKey)
+        ? collectCSSOMOverriddenProps(ele as Element, conflictTargetKey, fullSelector)
         : new Set();
 
       Object.entries(lessValue).forEach(([key, val]) => {
-        const existing = cssObj[targetKey]?.[key];
+        const existing = targetStyle[key];
         // 当前 Less 文件中该属性是 Less 变量引用（@xxx）时，判断是否真正被用户改动：
         // - 无法取到计算值 → 变量未解析 → 保留变量
         // - 计算值与写入值归一化后相同 → editConfig 里只是旧缓存，用户未真正改动 → 保留变量
@@ -1921,7 +2188,9 @@ export function genStyleValue(props) {
         // 2. 外部样式表规则：antd 复合类选择器（如 .css-xxx.ant-btn-variant-solid > .headerStockInBtn）
         let writeVal = val;
         const hyphenKey = convertCamelToHyphen(key);
-        const hasInternalConflict = eleTagName && hasTagBasedCompetingRule(cssObj, targetKey, eleTagName, key);
+        // 嵌套目标本身已包含父级选择器，不能再按单类规则扫描标签竞争，
+        // 否则会把当前组件的嵌套声明误判为覆盖源。
+        const hasInternalConflict = !nestedTarget && eleTagName && hasTagBasedCompetingRule(cssObj, targetKey, eleTagName, key);
         const hasExternalConflict = cssomOverriddenProps.has(hyphenKey);
         if (
           writeVal !== null &&
@@ -1932,19 +2201,19 @@ export function genStyleValue(props) {
           writeVal = String(writeVal) + ' !important';
         }
 
-        cssObj[targetKey][key] = writeVal;
+        targetStyle[key] = writeVal;
       });
 
       // 若写入了 background-image: none（表示用户切换到纯色背景），
       // 自动清除 background 简写属性，避免简写残留导致渐变未被覆盖。
       // CSS 中 shorthand + longhand 同规则共存时行为不稳定，删除简写是最可靠的做法。
       if (
-        cssObj[targetKey] &&
+        targetStyle &&
         'backgroundImage' in value &&
         (value as any)['backgroundImage'] === 'none' &&
-        'background' in cssObj[targetKey]
+        'background' in targetStyle
       ) {
-        delete cssObj[targetKey]['background'];
+        delete targetStyle['background'];
       }
 
       if (deletions && deletions.length > 0) {
@@ -1986,9 +2255,9 @@ export function genStyleValue(props) {
         }
         const expandedDeletions = filterExpandedDeletions(deletions, value);
         expandedDeletions.forEach(key => {
-          delete cssObj[targetKey][key];
-          delete cssObj[targetKey][kebabToCamelProp(key)];
-          delete cssObj[targetKey][camelToKebab(key)];
+          delete targetStyle[key];
+          delete targetStyle[kebabToCamelProp(key)];
+          delete targetStyle[camelToKebab(key)];
         });
 
         // ── 逗号合并规则拆分删除 ──────────────────────────────────────────────
@@ -2055,11 +2324,11 @@ export function genStyleValue(props) {
         }
       }
 
-      if (Object.keys(cssObj[targetKey] || {}).length === 0) {
+      if (Object.keys(targetStyle).length === 0) {
         // 这段代码会强制转为baseselector，导致误删selector尾部的:hover等伪类
         // const orphanKeys = findOrphanKeys(cssObj, targetKey);
         // orphanKeys.forEach(key => delete cssObj[key]);
-        delete cssObj[targetKey];
+        delete targetContainer[resolvedTargetKey];
       }
 
       const cssStr = stringifyLess(cssObj);
