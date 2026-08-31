@@ -240,6 +240,11 @@ export default function (props: Props, actions: Actions) {
       style: [
         {
           items: [
+            {
+              title: '样式',
+              autoOptions: true,
+              valueProxy: genStyleValue(props),
+            },
             genSvgResizer(),
           ],
         },
