@@ -354,7 +354,7 @@ export function buildHooks(props: Props) {
         ['services', '接口'],
         ['crScope', '变更影响'],
         ['store', '状态'],
-        ['crComplete', '完成度']
+        // ['crComplete', '完成度']
       ];
 
       function getAuditPageMessage(options: AuditPageOptions = {}) {
@@ -379,7 +379,7 @@ export function buildHooks(props: Props) {
       const detail = message ? `的${message}文档` : '文档';
 
       (window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
-        message: `更新或生成页面「${id}」${detail}`,
+        message: `更新页面「${id}」${detail}`,
         extra: {
           onComplete,
           onError,
