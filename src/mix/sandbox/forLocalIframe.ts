@@ -303,8 +303,9 @@ export function registerSandbox(comId: string) {
         // loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
         // refreshProjectBaseline(comId, projectRef);
       },
-      async afterTurn(turn: { id?: string }) {
-        console.log(12, 'hooks:afterTurn')
+      async afterTurn(turn: any) {
+        console.log(12, 'hooks:afterTurn', turn)
+        turn.extra?.onComplete?.()
         // (window as any)._sendToAgent_source_ = null
         // turnLogs.turnID = turn.id
         // turnLogs.setLog({
