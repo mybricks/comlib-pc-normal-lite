@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { registerSandbox } from './sandbox/forLocalIframe'
 import context from './context'
 
@@ -32,6 +32,10 @@ const normalizeBasePath = (basePath: string) => {
 
 const routerBasename = normalizeBasePath(window.__LINGCHUANG_CONFIG__?.router?.basename || '')
 
+const buildIframeSrc = (itemSrc: string) => {
+	return `${window.location.origin}${routerBasename}${itemSrc === '/' ? '' : itemSrc}`
+}
+
 type RuntimeIframeItem = {
 	title: string
 	path: string
@@ -48,16 +52,36 @@ type RuntimeRouteEventItem = {
 const RuntimeIframe = (props) => {
 	const [iframes, setIframes] = useState<RuntimeIframeItem[]>([])
 	const [debugSrc, setDebugSrc] = useState('')
-	const [debugReloadKey, setDebugReloadKey] = useState(0)
+	const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
+	const pendingRefreshSrcRef = useRef('')
 	const debugSrcRef = useRef('')
+
+	const refreshIframe = useCallback((itemSrc: string) => {
+		const iframe = iframeRefs.current[itemSrc]
+		if (!iframe) return false
+
+		const expectedSrc = buildIframeSrc(itemSrc)
+
+		try {
+			const currentSrc = iframe.contentWindow?.location?.href || iframe.src
+			if (currentSrc && currentSrc !== expectedSrc) {
+				iframe.src = expectedSrc
+				return true
+			}
+
+			iframe.contentWindow?.location.reload()
+			return true
+		} catch {
+			iframe.src = expectedSrc
+			return true
+		}
+	}, [])
 
 	useEffect(() => {
 		registerSandbox(props.id)
 
 		const routesEvents = (window as any).__APP__!.routesEvents
 		const cancelRoutesEventsRoutes = routesEvents.on('routes', (routes: RuntimeRouteEventItem[]) => {
-			console.log('routes', routes)
-
 			const nextRoutes = routes.map((route) => {
 				return {
 					...route,
@@ -79,11 +103,11 @@ const RuntimeIframe = (props) => {
 
 		const events = context.component!.events;
 		const onEventsDebugTargetCancel = events.on('debugTarget', (props) => {
-			if (props.src && props.src !== debugSrcRef.current) {
-				setDebugReloadKey((key) => key + 1)
-			}
-			debugSrcRef.current = props.src || ''
-			setDebugSrc(props.src)
+			const nextSrc = props.src || ''
+			const previousSrc = debugSrcRef.current
+			pendingRefreshSrcRef.current = nextSrc || previousSrc
+			debugSrcRef.current = nextSrc
+			setDebugSrc(nextSrc)
 		})
 
 		return () => {
@@ -92,14 +116,22 @@ const RuntimeIframe = (props) => {
 		}
 	}, [])
 
+	useEffect(() => {
+		const targetSrc = pendingRefreshSrcRef.current
+		if (!targetSrc) return
+
+		pendingRefreshSrcRef.current = ''
+		refreshIframe(targetSrc)
+	}, [debugSrc, refreshIframe])
+
 	return (
 		<>
 			{iframes.map((item) => {
-				const src = `${window.location.origin}${routerBasename}${item.src === '/' ? '' : item.src}`
+				const src = buildIframeSrc(item.src)
 
 				return (
 					<div
-						key={item.src === debugSrc ? `${item.src}-${debugReloadKey}` : item.src}
+						key={item.src}
 						style={{
 							width: '1440px',
 							height: '100vh',
@@ -112,6 +144,9 @@ const RuntimeIframe = (props) => {
 						<iframe
 							id={item.src}
 							src={src}
+							ref={(node) => {
+								iframeRefs.current[item.src] = node
+							}}
 							style={{
 								border: 'none',
 								width: '100%',
