@@ -1,4 +1,5 @@
 import context from '../context'
+import type { UserTaskInfo } from '../context'
 import { parse as parseYaml } from 'yaml'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
 import { transformLocalIframeFormatForNotifyChanged } from '../../utils/ai-code/md/transformForNotifyChanged'
@@ -135,6 +136,36 @@ async function getCurrentBranch(): Promise<string | undefined> {
   return branch ? branch.replace(/[^a-zA-Z0-9]/g, '_') : undefined
 }
 
+function parseTasksForNotify(content: string): UserTaskInfo[] {
+  const tasks: UserTaskInfo[] = []
+  const sections = content.split(/(?=^## )/m).filter(s => s.startsWith('## '))
+  for (const section of sections) {
+    const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
+    if (!title) continue
+    const statusMatch = section.match(/\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*(.+)/i)
+    const summaryMatch = section.match(/^>\s*(.+)/m)
+    const rawState = statusMatch?.[1]?.replace(/[*_`]/g, '').trim() ?? ''
+    const id = title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || String(tasks.length)
+
+    let state: -1 | 0 | 1 = 0
+    if (/已完成|完成|done|completed/i.test(rawState)) state = 1
+    else if (/待交接|交接|handover/i.test(rawState)) state = -1
+
+    tasks.push({ id, title, desc: summaryMatch?.[1]?.trim() ?? '', state })
+  }
+  return tasks
+}
+
+async function getCurrentAuditReviewPath(): Promise<string | undefined> {
+  const branch = await getCurrentBranch().catch(() => undefined)
+  return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md` : undefined
+}
+
+async function getCurrentTasksPath(): Promise<string | undefined> {
+  const branch = await getCurrentBranch().catch(() => undefined)
+  return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/tasks/TASKS.md` : undefined
+}
+
 async function readAuditReview(): Promise<string> {
   const entries = await listLocalFiles(AUDIT_REVIEW_ROOT, { recursive: true })
   const reviewPaths = entries
@@ -145,8 +176,7 @@ async function readAuditReview(): Promise<string> {
     throw new Error('本轮审查未生成 .lingchuang/<分支名>/reviews/REVIEW.md')
   }
 
-  const branch = await getCurrentBranch().catch(() => undefined)
-  const expectedPath = branch ? `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md` : undefined
+  const expectedPath = await getCurrentAuditReviewPath()
   const reviewPath = expectedPath && reviewPaths.includes(expectedPath)
     ? expectedPath
     : reviewPaths.length === 1
@@ -154,7 +184,7 @@ async function readAuditReview(): Promise<string> {
       : undefined
 
   if (!reviewPath) {
-    throw new Error(`无法确定当前分支的审查报告${branch ? `（期望 ${expectedPath}）` : ''}`)
+    throw new Error(`无法确定当前分支的审查报告${expectedPath ? `（期望 ${expectedPath}）` : ''}`)
   }
 
   const review = (await readLocalFiles([reviewPath]))[0]
@@ -164,22 +194,63 @@ async function readAuditReview(): Promise<string> {
   return review.content
 }
 
+function parseAuditResult(review: string): AuditResult {
+  return {
+    process: getAuditSection(review, '总体结论'),
+    scope: getAuditSection(review, '影响范围'),
+    detail: formatAuditDetail(review),
+  }
+}
+
 async function resolveAuditResult(): Promise<AuditResult> {
   try {
     const review = await readAuditReview()
-    console.log('auditReview', {
-      process: getAuditSection(review, '总体结论'),
-      scope: getAuditSection(review, '影响范围'),
-      detail: formatAuditDetail(review),
-    })
-    return {
-      process: getAuditSection(review, '总体结论'),
-      scope: getAuditSection(review, '影响范围'),
-      detail: formatAuditDetail(review),
-    }
+    const auditInfo = parseAuditResult(review)
+    console.log('auditReview', auditInfo)
+    return auditInfo
   } catch (error) {
     throw toError(error, '审查报告解析失败')
   }
+}
+
+async function syncInitialAuditInfo(): Promise<void> {
+  if (hasActiveAuditTransaction()) return
+  try {
+    const review = await readAuditReview()
+    context.setReviewContent(review)
+  } catch {}
+}
+
+async function syncInitialTasksContent(): Promise<void> {
+  try {
+    const tasksPath = await getCurrentTasksPath()
+    if (!tasksPath) return
+    const files = await readLocalFiles([tasksPath])
+    const content = files[0]?.content
+    if (content !== undefined) {
+      context.setTasksContent(content)
+      context.notifyUserTaskInfo(parseTasksForNotify(content))
+    }
+  } catch {}
+}
+
+async function syncUpdatedAuditInfo(files: LocalFile[]): Promise<void> {
+  const branch = await getCurrentBranch().catch(() => undefined)
+  if (!branch) return
+
+  const tasksPath = `${AUDIT_REVIEW_ROOT}/${branch}/tasks/TASKS.md`
+  const tasksFile = files.find((file) => file.path === tasksPath)
+  if (tasksFile) {
+    context.setTasksContent(tasksFile.content)
+    context.notifyUserTaskInfo(parseTasksForNotify(tasksFile.content))
+  }
+
+  if (hasActiveAuditTransaction()) return
+
+  const reviewPath = `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md`
+  const reviewFile = files.find((file) => file.path === reviewPath)
+  if (!reviewFile) return
+  context.setReviewContent(reviewFile.content)
 }
 
 async function fetchLocalFiles(): Promise<LocalFile[]> {
@@ -248,7 +319,10 @@ async function updateLocalFiles(files: Array<{ path: string; content: string }>)
     body: JSON.stringify({ files }),
   })
   if (!response.ok) throw new Error(await getResponseError(response))
-  await refreshLocalGraph()
+  await Promise.all([
+    refreshLocalGraph(),
+    syncUpdatedAuditInfo(files),
+  ])
 }
 
 async function deleteLocalFiles(paths: string[]): Promise<void> {
@@ -424,7 +498,8 @@ export function registerSandbox(comId: string) {
         console.log(12, 'hooks:afterTurn', turn)
         if (hasActiveAuditTransaction()) {
           try {
-            completeActiveAuditTransaction(await resolveAuditResult())
+            const auditInfo = await resolveAuditResult()
+            completeActiveAuditTransaction(auditInfo)
           } catch (error) {
             failActiveAuditTransaction(toError(error, '审查报告解析失败'))
           }
@@ -593,4 +668,6 @@ export function registerSandbox(comId: string) {
   void refreshLocalGraph().catch((error) => {
     console.error('[mybricks-graph][local-iframe] initial compile failed', error)
   })
+  void syncInitialAuditInfo()
+  void syncInitialTasksContent()
 }

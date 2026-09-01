@@ -87,6 +87,7 @@ class Context {
       lock: (id: string, focus: any) => () => void
       unlock: (id: string, focus: any) => void
       notifyChanged: (...params: any) => void
+      notifyUserTaskInfo?: (tasks: UserTaskInfo[]) => void
 
       updatePages: (...params: any) => any
       updateDocs: (...params: any) => any
@@ -167,6 +168,13 @@ class Context {
       } else {
         this.component?.actions?.notifyChanged?.(filename, changeType, value)
       }
+    } catch {}
+  }
+
+  /** 通知引擎更新用户任务列表。 */
+  notifyUserTaskInfo(tasks: UserTaskInfo[]) {
+    try {
+      this.component?.actions?.notifyUserTaskInfo?.(tasks)
     } catch {}
   }
 
@@ -605,7 +613,25 @@ class Context {
     return versionRecord
   }
 
-  /** 
+  tasksContent: string | null = null
+  reviewContent: string | null = null
+  tasksEvents: Events<{ 'change': string | null }> = new Events()
+  reviewEvents: Events<{ 'change': string | null }> = new Events()
+
+  /** 组件 ID，用于向 AI agent 发送消息 */
+  comId?: string
+
+  setTasksContent(content: string | null): void {
+    this.tasksContent = content
+    this.tasksEvents.emit('change', content)
+  }
+
+  setReviewContent(content: string | null): void {
+    this.reviewContent = content
+    this.reviewEvents.emit('change', content)
+  }
+
+  /**
    * 版本管理
    */
   versionStateEvents: Events<{ 'change': VersionRecord }> = new Events();
@@ -710,6 +736,13 @@ export interface VersionRecord {
   type: 'ai' | 'manual' | 'rollback' | 'init';
   createdAt: number;
   summary?: string;
+}
+
+export interface UserTaskInfo {
+  id: string;
+  title: string;
+  desc: string;
+  state: -1 | 0 | 1;
 }
 export class Version {
   total: number

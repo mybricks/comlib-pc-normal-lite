@@ -14,6 +14,7 @@ export type AuditResult = {
 
 type ProjectAuditTransaction = {
   kind: 'project'
+  hasOnComplete: boolean
   complete: (result: AuditResult) => void
   fail: (error: Error) => void
 }
@@ -39,6 +40,7 @@ export function createAuditTransaction(
 
   activeTransaction = {
     kind: 'project',
+    hasOnComplete: typeof onComplete === 'function',
     complete(result) {
       settle(() => onComplete?.(result))
     },
@@ -53,8 +55,12 @@ export function hasActiveAuditTransaction(): boolean {
   return Boolean(activeTransaction)
 }
 
-export function completeActiveAuditTransaction(result: AuditResult): void {
-  activeTransaction?.complete(result)
+export function completeActiveAuditTransaction(result: AuditResult): boolean {
+  const transaction = activeTransaction
+  if (!transaction) return false
+  const { hasOnComplete } = transaction
+  transaction.complete(result)
+  return hasOnComplete
 }
 
 export function failActiveAuditTransaction(error: Error): void {

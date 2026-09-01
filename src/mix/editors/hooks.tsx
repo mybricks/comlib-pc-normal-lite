@@ -408,7 +408,7 @@ export function buildHooks(props: Props) {
 
       try {
         const request = sendToAgent(hookContext.id, {
-          message: `对这个项目进行变更评估`,
+          message: `校准下当前的变更影响文档`,
         });
         void Promise.resolve(request).catch((error) => {
           failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
