@@ -1,6 +1,7 @@
 import React from 'react';
 import { buildGuiCardHooks } from './configs/guiCard';
 import { buildHooks as buildPrototypeHooks } from './configs/prototype';
+import buildLocalIframeHooks from '../localIframe/buildHooks';
 import LowcodeView, {lowcodeViewEvents} from '../lowcodeView';
 import lowcodeViewCss from '../lowcodeView/index.lazy.less';
 import consoleViewCss from '../lowcodeView/console/index.lazy.less';
@@ -70,9 +71,12 @@ function getDefaultDebugEnv(data: any) {
 
 export function buildHooks(props: Props) {
   const frontendMode = config.getFrontendMode()
+  console.log('frontendMode', frontendMode)
   const hooks = {}
   if (frontendMode === 'gui_card') {
     Object.assign(hooks, buildGuiCardHooks())
+  } else if (frontendMode === 'local-iframe') {
+    Object.assign(hooks, buildLocalIframeHooks())
   } else {
     Object.assign(hooks, buildPrototypeHooks())
   }
