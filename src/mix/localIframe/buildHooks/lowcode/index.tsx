@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import context from '../../../context'
-import lowcodeViewCss from './view.lazy.less'
-import * as lowcodeViewCssNS from './view.lazy.less'
+import lowcodeViewCss from './index.lazy.less'
+import * as lowcodeViewCssNS from './index.lazy.less'
 
 type TabKey = 'task' | 'version'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
