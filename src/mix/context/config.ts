@@ -77,6 +77,27 @@ class Config {
     }
   }
 
+  /**
+   * Skill 仍需使用 gui_card 保持卡片发现、API 和 SKILL.md 校验能力；
+   * RN 仅改变代码编译与画布选择节点的适配，不能改写为页面级 react-native mode。
+   * 新增渲染类型时需同时验证 React Skill 未进入 RN 编译分支。
+   */
+  isReactNativeRender() {
+    const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return false
+    }
+
+    const modules = componentRuntime.modules
+
+    if (modules) {
+      const frontend: any = Object.entries(modules).find(([key, module]: any) => module.type === MODULE_FRONTEND_TYPE)?.[1]
+      return frontend?.renderType === 'react-native'
+    }
+
+    return componentRuntime?.renderType === 'react-native'
+  }
+
   getFrontendModeConfig() {
      const componentRuntime = window._sandbox_.config.componentRuntime
     if (!componentRuntime) {

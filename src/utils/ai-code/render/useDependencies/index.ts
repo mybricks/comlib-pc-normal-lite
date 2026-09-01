@@ -86,7 +86,7 @@ const useDependencies = (params: Params) => {
     (createMyBricksTestingModule as any)[DYNAMIC_MODULE] = DYNAMIC_MODULE;
 
     const customDependencies = window._sandbox_.config.componentRuntime?.getDependencies?.({ mybricks }) || {}
-    
+
     const dependencies: Dependencies = {
       ...params.dependencies,
       ...Object.entries(customDependencies).reduce((pre, [key, value]: any) => {
