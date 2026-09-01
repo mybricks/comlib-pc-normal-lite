@@ -23,7 +23,10 @@ import setSegment from './setSegment';
 import setStyle from './style/setStyle'
 import resizer from './style/resizer'
 
-function getElementRefSelector(ele: Element | null | undefined) {
+function getElementRefSelectorCandidates(ele: Element | null | undefined) {
+  const escapeSelectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const splitZoneClassnames = (value: string) => value.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean)
+
   const getNearestAttribute = (attribute: string) => {
     if (!ele) {
       return null
@@ -40,31 +43,65 @@ function getElementRefSelector(ele: Element | null | undefined) {
   const widgetName = getNearestAttribute('data-widget-name')
   const classnames = getNearestAttribute('data-zone-classnames')
 
-  // if (!filename || !widgetName) {
-  //   return ''
-  // }
-
   const fileSelector = filename ? `[data-zone-filename="${filename}"]` : ''
   const widgetSelector = widgetName ? `[data-widget-name="${widgetName}"]` : ''
-  const classSelector = classnames && classnames !== 'root'
-    ? `[data-zone-classnames*="${classnames}"]`
+  const classTokens = classnames && classnames !== 'root'
+    ? splitZoneClassnames(classnames)
+    : []
+  const normalizedClassnames = classTokens.join(' ')
+  const exactClassSelector = normalizedClassnames
+    ? `[data-zone-classnames="${escapeSelectorValue(normalizedClassnames)}"]`
+    : ''
+  const legacyClassSelector = classTokens.length
+    ? `[data-zone-classnames*="${escapeSelectorValue(classTokens.join(','))}"]`
     : ''
 
-  const selectors = classSelector
-    ? [
-      `${fileSelector}${widgetSelector}${classSelector}`,
-      `${fileSelector}${widgetSelector} ${classSelector}`,
-      `${fileSelector} ${widgetSelector}${classSelector}`,
-      `${fileSelector} ${widgetSelector} ${classSelector}`,
-    ]
-    : [
+  const buildSelectors = (classSelector: string) => {
+    if (classSelector) {
+      return [
+        `${fileSelector}${widgetSelector}${classSelector}`,
+        `${fileSelector}${widgetSelector} ${classSelector}`,
+        `${fileSelector} ${widgetSelector}${classSelector}`,
+        `${fileSelector} ${widgetSelector} ${classSelector}`,
+      ]
+    }
+
+    return [
       `${fileSelector}${widgetSelector}`,
       `${fileSelector} ${widgetSelector}`,
     ]
+  }
 
-  return selectors
-    .map((selector) => `${selector.trim()}:not([data-wrap-container])`)
-    .join(', ')
+  return {
+    exactSelectors: buildSelectors(exactClassSelector)
+      .map((selector) => `${selector.trim()}:not([data-wrap-container])`),
+    legacySelectors: buildSelectors(legacyClassSelector)
+      .map((selector) => `${selector.trim()}:not([data-wrap-container])`),
+  }
+}
+
+function getElementRefSelector(ele: Element | null | undefined, noteRender?: Record<string, any>) {
+  const { exactSelectors, legacySelectors } = getElementRefSelectorCandidates(ele)
+  if (noteRender) {
+    const legacyKey = legacySelectors.find((key) => Object.prototype.hasOwnProperty.call(noteRender, key))
+    if (legacyKey) {
+      const value = noteRender[legacyKey]
+      const exactKey = exactSelectors[0] ?? legacyKey
+
+      if (exactKey !== legacyKey) {
+        noteRender[exactKey] = value
+        delete noteRender[legacyKey]
+      }
+
+      return exactKey
+    }
+
+    const exactKey = exactSelectors.find((key) => Object.prototype.hasOwnProperty.call(noteRender, key))
+    if (exactKey) {
+      return exactKey
+    }
+  }
+  return exactSelectors[0] ?? legacySelectors[0] ?? ''
 }
 
 export default function (props: Props, actions: Actions) {
@@ -183,7 +220,7 @@ export default function (props: Props, actions: Actions) {
               if (!data._noteRender) {
                 data._noteRender = {}
               }
-              const key = getElementRefSelector(params.focusArea?.ele)
+              const key = getElementRefSelector(params.focusArea?.ele, data._noteRender)
 
               return data._noteRender[key] || []
             },

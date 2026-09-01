@@ -269,7 +269,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               // 同时支持 className="foo" 字符串字面量 与 className={css.foo} CSS Module
               // 保持 cnList 为 string[]，data-loc 的下游消费者无需改动
               const cnList = [...new Set(extractCssClassNamesFromJSXElement(node, cssModuleNames).map(c => c.name))];
-              pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(','));
+              pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(' '));
               const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
               // fullComponentName 保留完整 JSX 组件名（如 "Input.Search"），用于 data-figma-props 变体库匹配
               const fullComponentName = getJSXElementNameString(node.openingElement.name);

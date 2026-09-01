@@ -1,5 +1,13 @@
 import { parsemd, SummaryBlock } from "./index";
 
+function escapeSelectorValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+function buildZoneClassSelector(classname: string) {
+  return `[data-zone-classnames~="${escapeSelectorValue(classname)}"]`
+}
+
 const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
   const events: any = []
   const services: Array<{ title: string; refSelector: string; description: string; type: 'up' }>= []
@@ -26,7 +34,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
     if (info.datasource) {
       Object.entries(info.datasource).forEach(([classname, value]) => {
         Object.entries(value).forEach(([api, { desc }]) => {
-          const classSelector = `[data-zone-classnames*="${classname}"]`
+          const classSelector = buildZoneClassSelector(classname)
           services.push({
             title: api,
             type: 'up',
@@ -41,7 +49,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
     if (Array.isArray(info.events)) {
       info.events.forEach((event) => {
         const { id, handlers } = event
-        const classSelector = `[data-zone-classnames*="${id}"]`
+        const classSelector = buildZoneClassSelector(id)
 
         handlers.forEach(({ handler, title, mermaid, relations }) => {
           const refSelector = `${widgetSelector}${classSelector}:not([data-wrap-container]), ${widgetSelector} ${classSelector}:not([data-wrap-container])`
@@ -68,7 +76,7 @@ const transformForNotifyChanged = (compiled: ReturnType<typeof parsemd>) => {
     if (info.store) {
       Object.entries(info.store).forEach(([classname, value]) => {
         value.forEach(({ desc, field }) => {
-          const classSelector = `[data-zone-classnames*="${classname}"]`
+          const classSelector = buildZoneClassSelector(classname)
 
           store.push({
             field,
@@ -161,7 +169,7 @@ const transformNewFormatForNotifyChanged = (
     if (info.datasource) {
       Object.entries(info.datasource).forEach(([classname, apis]) => {
         Object.entries(apis).forEach(([apiName, { desc }]) => {
-          const classSelector = `[data-zone-classnames*="${classname}"]`
+          const classSelector = buildZoneClassSelector(classname)
 
           const refSelector = excludeWrapContainer(
             classname === 'root' ? 
@@ -186,7 +194,7 @@ const transformNewFormatForNotifyChanged = (
     // 事件
     if (info.events) {
       Object.entries(info.events).forEach(([classname, handlers]) => {
-        const classSelector = `[data-zone-classnames*="${classname}"]`
+        const classSelector = buildZoneClassSelector(classname)
         /**
          * 1. dom fileSelector widgetSelector classSelector 同时满足
          * 
@@ -231,7 +239,7 @@ const transformNewFormatForNotifyChanged = (
     // state
     if (info.state) {
       Object.entries(info.state).forEach(([classname, fields]) => {
-        const classSelector = `[data-zone-classnames*="${classname}"]`
+        const classSelector = buildZoneClassSelector(classname)
         const refSelector = excludeWrapContainer(
           classname === 'root' ? 
             `${fileSelector}${widgetSelector}, ${fileSelector} ${widgetSelector}` : 

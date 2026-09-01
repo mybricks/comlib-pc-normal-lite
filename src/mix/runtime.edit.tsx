@@ -59,8 +59,8 @@ const dataCompatible = (props) => {
     }
 
     const version = config.getVersion()
-    if (!data.version || data.version < 41 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 41
+    if (!data.version || data.version < 42 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 42
       data._componentRuntime.version = version
       console.log('[com:update]', data)
       console.log('mode', mode)
