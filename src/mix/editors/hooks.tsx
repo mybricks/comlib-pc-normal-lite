@@ -30,6 +30,7 @@ import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 
 
 import context, { config } from '../context';
+import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
 import type {Props} from './types';
 
 const errorSet = new Set();
@@ -385,6 +386,32 @@ export function buildHooks(props: Props) {
           onError,
         },
       });
+    },
+    '@audit'(hookContext, params) {
+      const { onComplete, onError } = params ?? {};
+      try {
+        createAuditTransaction(onComplete, onError);
+      } catch (error) {
+        onError?.(error);
+        return;
+      }
+      const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent;
+
+      if (typeof sendToAgent !== 'function') {
+        failActiveAuditTransaction(new Error('AI 审查服务当前不可用'));
+        return;
+      }
+
+      try {
+        const request = sendToAgent(hookContext.id, {
+          message: `对这个项目进行变更评估`,
+        });
+        void Promise.resolve(request).catch((error) => {
+          failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
+        });
+      } catch (error) {
+        failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
+      }
     },
     ...hooks
   };

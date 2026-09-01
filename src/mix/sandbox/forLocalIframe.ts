@@ -1,4 +1,6 @@
 import context from '../context'
+import { parse as parseYaml } from 'yaml'
+import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
 import { transformLocalIframeFormatForNotifyChanged } from '../../utils/ai-code/md/transformForNotifyChanged'
 import {
   hasMybricksGraphDirectory,
@@ -63,6 +65,121 @@ type AgentSandboxCommandOptions = {
   signal?: AbortSignal
   onStdout?: (chunk: string) => void
   onStderr?: (chunk: string) => void
+}
+
+const AUDIT_REVIEW_ROOT = '.lingchuang'
+const AUDIT_STATE_LABELS: Record<AuditState, string> = {
+  [-1]: '禁止上线',
+  0: '需要修复',
+  1: '允许上线',
+}
+
+function toError(error: unknown, fallbackMessage: string): Error {
+  return error instanceof Error ? error : new Error(typeof error === 'string' ? error : fallbackMessage)
+}
+
+function getAuditSection(review: string, title: string): AuditSection {
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const sectionMatch = review.match(new RegExp('^## ' + escapedTitle + '\\s*\\n```ya?ml\\s*\\n([\\s\\S]*?)\\n```', 'm'))
+  if (!sectionMatch) {
+    throw new Error(`审查报告缺少「${title}」章节的 YAML 元信息`)
+  }
+
+  let metadata: unknown
+  try {
+    metadata = parseYaml(sectionMatch[1])
+  } catch (error) {
+    throw new Error(`审查报告「${title}」章节的 YAML 无法解析：${toError(error, '未知错误').message}`)
+  }
+
+  if (!metadata || typeof metadata !== 'object') {
+    throw new Error(`审查报告「${title}」章节的 YAML 元信息格式无效`)
+  }
+
+  const { state, desc } = metadata as { state?: unknown; desc?: unknown }
+  if (state !== -1 && state !== 0 && state !== 1) {
+    throw new Error(`审查报告「${title}」章节的 state 必须是 -1、0 或 1`)
+  }
+  if (typeof desc !== 'string' || !desc.trim()) {
+    throw new Error(`审查报告「${title}」章节缺少 desc`)
+  }
+
+  return { state, desc }
+}
+
+function formatAuditDetail(review: string): string {
+  return review.replace(/^(## [^\n]+)\s*\n```ya?ml\s*\n([\s\S]*?)\n```/gm, (block, heading: string, yaml: string) => {
+    try {
+      const metadata = parseYaml(yaml) as { state?: unknown; desc?: unknown }
+      if (
+        !metadata
+        || typeof metadata !== 'object'
+        || (metadata.state !== -1 && metadata.state !== 0 && metadata.state !== 1)
+        || typeof metadata.desc !== 'string'
+        || !metadata.desc.trim()
+      ) {
+        return block
+      }
+
+      return `${heading}\n\n**评估状态：${AUDIT_STATE_LABELS[metadata.state]}**\n\n${metadata.desc.trim()}`
+    } catch {
+      return block
+    }
+  })
+}
+
+async function getCurrentBranch(): Promise<string | undefined> {
+  const result = await executeLocalShellCommand('git branch --show-current', { timeoutMs: 10_000 })
+  if (result.exitCode !== 0) return undefined
+  const branch = result.stdout.trim()
+  return branch ? branch.replace(/[^a-zA-Z0-9]/g, '_') : undefined
+}
+
+async function readAuditReview(): Promise<string> {
+  const entries = await listLocalFiles(AUDIT_REVIEW_ROOT, { recursive: true })
+  const reviewPaths = entries
+    .filter((entry) => entry.type === 'file' && /(?:^|\/)REVIEW\.md$/.test(entry.path))
+    .map((entry) => entry.path)
+
+  if (!reviewPaths.length) {
+    throw new Error('本轮审查未生成 .lingchuang/<分支名>/reviews/REVIEW.md')
+  }
+
+  const branch = await getCurrentBranch().catch(() => undefined)
+  const expectedPath = branch ? `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md` : undefined
+  const reviewPath = expectedPath && reviewPaths.includes(expectedPath)
+    ? expectedPath
+    : reviewPaths.length === 1
+      ? reviewPaths[0]
+      : undefined
+
+  if (!reviewPath) {
+    throw new Error(`无法确定当前分支的审查报告${branch ? `（期望 ${expectedPath}）` : ''}`)
+  }
+
+  const review = (await readLocalFiles([reviewPath]))[0]
+  if (!review) {
+    throw new Error(`无法读取审查报告：${reviewPath}`)
+  }
+  return review.content
+}
+
+async function resolveAuditResult(): Promise<AuditResult> {
+  try {
+    const review = await readAuditReview()
+    console.log('auditReview', {
+      process: getAuditSection(review, '总体结论'),
+      scope: getAuditSection(review, '影响范围'),
+      detail: formatAuditDetail(review),
+    })
+    return {
+      process: getAuditSection(review, '总体结论'),
+      scope: getAuditSection(review, '影响范围'),
+      detail: formatAuditDetail(review),
+    }
+  } catch (error) {
+    throw toError(error, '审查报告解析失败')
+  }
 }
 
 async function fetchLocalFiles(): Promise<LocalFile[]> {
@@ -305,7 +422,15 @@ export function registerSandbox(comId: string) {
       },
       async afterTurn(turn: any) {
         console.log(12, 'hooks:afterTurn', turn)
-        turn.extra?.onComplete?.()
+        if (hasActiveAuditTransaction()) {
+          try {
+            completeActiveAuditTransaction(await resolveAuditResult())
+          } catch (error) {
+            failActiveAuditTransaction(toError(error, '审查报告解析失败'))
+          }
+        } else {
+          turn.extra?.onComplete?.()
+        }
         // (window as any)._sendToAgent_source_ = null
         // turnLogs.turnID = turn.id
         // turnLogs.setLog({
