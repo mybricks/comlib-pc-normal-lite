@@ -82,6 +82,7 @@ export type JSXElementDataAttributes = {
 
 type BabelPluginOptions = {
   fileName?: string
+  reactNative?: boolean
   /**
    * Compile a JSX segment in a virtual module while retaining its coordinates
    * in the original source file.
@@ -91,11 +92,90 @@ type BabelPluginOptions = {
   onJSXElement?: (metadata: JSXElementDataAttributes) => void
 }
 
+function dataSetKeyToDataAttrName(key: string) {
+  if (!key) return key;
+  if (key.startsWith('data-')) return key;
+  return `data-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
+}
+
+function expressionToStaticValue(node: any): any {
+  if (!node) return undefined;
+
+  switch (node.type) {
+    case 'StringLiteral':
+      return node.value;
+    case 'NumericLiteral':
+      return node.value;
+    case 'BooleanLiteral':
+      return node.value;
+    case 'NullLiteral':
+      return null;
+    case 'TemplateLiteral':
+      if (node.expressions?.length === 0) {
+        return node.quasis?.[0]?.value?.cooked ?? node.quasis?.[0]?.value?.raw ?? '';
+      }
+      return undefined;
+    case 'ArrayExpression':
+      return (node.elements || [])
+        .filter((item: any) => item != null)
+        .map((item: any) => expressionToStaticValue(item));
+    case 'ObjectExpression': {
+      const result: Record<string, any> = {};
+      for (const property of node.properties || []) {
+        if (property?.type !== 'ObjectProperty') continue;
+        const key = typeof property.key?.name === 'string'
+          ? property.key.name
+          : typeof property.key?.value === 'string'
+            ? property.key.value
+            : null;
+        if (!key) continue;
+        const value = expressionToStaticValue(property.value);
+        if (value === undefined) continue;
+        result[key] = value;
+      }
+      return result;
+    }
+    default:
+      return undefined;
+  }
+}
+
+function staticValueToString(value: any): string | null {
+  if (value === undefined) return null;
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+}
+
 const getStaticDataAttributes = (attributes: any[]) => {
   const result: Record<string, string> = {}
 
   attributes.forEach((attribute) => {
     if (attribute?.type !== 'JSXAttribute' || typeof attribute.name?.name !== 'string') return
+
+    if (attribute.name.name === 'dataSet') {
+      const expression = attribute.value?.type === 'JSXExpressionContainer'
+        ? attribute.value.expression
+        : null
+      if (expression?.type !== 'ObjectExpression') return
+
+      expression.properties.forEach((property: any) => {
+        if (property?.type !== 'ObjectProperty') return
+
+        const key = typeof property.key?.name === 'string'
+          ? property.key.name
+          : typeof property.key?.value === 'string'
+            ? property.key.value
+            : null
+        if (!key) return
+
+        const staticValue = staticValueToString(expressionToStaticValue(property.value))
+        if (staticValue == null) return
+
+        result[dataSetKeyToDataAttrName(key)] = staticValue
+      })
+      return
+    }
+
     if (!attribute.name.name.startsWith('data-')) return
 
     if (attribute.value?.type === 'StringLiteral') {
@@ -106,7 +186,7 @@ const getStaticDataAttributes = (attributes: any[]) => {
   return result
 }
 
-export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElement }: BabelPluginOptions) {
+export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElement, reactNative = false }: BabelPluginOptions) {
   const fallbackName = deriveNameFromFilePath(fileName);
   return function () {
     const importRelyMap = new Map();
@@ -126,6 +206,14 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
     const lessMap = new Map();
     /** CSS Module 导入的本地变量名集合，如 import styles from './index.less' 则记录 'styles' */
     const cssModuleNames = new Set<string>();
+    const dataAttrOptions = reactNative ? { mode: 'react-native' as const } : undefined;
+    const valueForDataAttr = (name: string, value: any) => {
+      return typeof value === 'string' ? value : JSON.stringify(value);
+    };
+    const pushDataAttrForMode = (attributes: any[], name: string, value: any) =>
+      pushDataAttr(attributes, name, value, dataAttrOptions);
+    const pushDataAttrExpressionForMode = (attributes: any[], name: string, identifierName: string) =>
+      pushDataAttrExpression(attributes, name, identifierName, dataAttrOptions);
 
     return {
       visitor: {
@@ -243,7 +331,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               }
 
               if (dataZoneTextEditable) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-text-editable", JSON.stringify(dataZoneTextEditable));
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-text-editable", valueForDataAttr("data-zone-text-editable", dataZoneTextEditable));
               }
               const dataLocValueObject: any = {
                 jsx: { start: node.start, end: node.end },
@@ -269,7 +357,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               // 同时支持 className="foo" 字符串字面量 与 className={css.foo} CSS Module
               // 保持 cnList 为 string[]，data-loc 的下游消费者无需改动
               const cnList = [...new Set(extractCssClassNamesFromJSXElement(node, cssModuleNames).map(c => c.name))];
-              pushDataAttr(node.openingElement.attributes, "data-zone-classnames", cnList.join(' '));
+              pushDataAttrForMode(node.openingElement.attributes, "data-zone-classnames", cnList.join(' '));
               const selectors = getCssSelectorForJSXPath(path, importRelyMap, cssModuleNames);
               // fullComponentName 保留完整 JSX 组件名（如 "Input.Search"），用于 data-figma-props 变体库匹配
               const fullComponentName = getJSXElementNameString(node.openingElement.name);
@@ -280,32 +368,32 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               }
 
               if (tagName === 'svg') {
-                pushDataAttr(node.openingElement.attributes, 'data-zone-svg', 'true');
+                pushDataAttrForMode(node.openingElement.attributes, 'data-zone-svg', 'true');
               }
               const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
 
               const pageRef = getPageRefForJSXPath(path, pageRefCache, fallbackName);
               if (pageRef) {
                 const pageTitle = pageRef.jsdoc?.summary ?? pageRef.name ?? lastSelector;
-                pushDataAttr(node.openingElement.attributes, "data-zone-title", pageTitle);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-title", pageTitle);
                 // pushDataAttr(node.openingElement.attributes, "title", pageTitle);
-                pushDataAttr(node.openingElement.attributes, "data-widget-name", pageRef.name);
+                pushDataAttrForMode(node.openingElement.attributes, "data-widget-name", pageRef.name);
               } else {
-                pushDataAttr(node.openingElement.attributes, "data-zone-title", lastSelector);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-title", lastSelector);
               }
 
               const popupRef = getPopupRefForJSXPath(path, popupRefCache, fallbackName);
               if (popupRef) {
                 const dialogTitle = popupRef.jsdoc?.summary ?? popupRef.name ?? lastSelector;
-                pushDataAttr(node.openingElement.attributes, "data-zone-title", dialogTitle);
-                pushDataAttr(node.openingElement.attributes, "data-widget-name", popupRef.name);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-title", dialogTitle);
+                pushDataAttrForMode(node.openingElement.attributes, "data-widget-name", popupRef.name);
               }
 
               const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
 
               // [观察下三方库的样式编辑问题]
               if (cnList.length > 0) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(selectors));
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-selector", valueForDataAttr("data-zone-selector", selectors));
               } else if (
                 source === 'html' &&
                 INLINE_TEXT_TAGS.has(tagName) &&
@@ -323,9 +411,9 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 // 使其能被样式编辑器的 [data-zone-selector] 配置识别并展示样式面板。
                 // 写入时 styleProxy 会走内联 style 注入路径，不会生成全局标签选择器规则。
                 const tagSelectors = selectors.map((s: string) => `${s} ${tagName}`);
-                pushDataAttr(node.openingElement.attributes, "data-zone-selector", JSON.stringify(tagSelectors));
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-selector", valueForDataAttr("data-zone-selector", tagSelectors));
               } else {
-                pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-noselector", "true");
               }
   
               if (source === "html") {
@@ -335,20 +423,20 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 //   pushDataAttr(node.openingElement.attributes, "data-zone-noselector", "true");
                 // }
               } else {
-                pushDataAttr(node.openingElement.attributes, "data-library-source", source);
+                pushDataAttrForMode(node.openingElement.attributes, "data-library-source", source);
                 // 提取静态 JSX props，供 dom-to-figma 的变体库匹配使用。
                 // 格式：{ component: "Button", props: { type: "primary", size: "large" } }
                 // component 字段在消费侧用于确定性地筛选同类组件候选，避免跨组件类型误匹配。
                 if (tagName && /^[A-Z]/.test(tagName)) {
                   // 使用完整组件名（如 "Input.Search"）而非基础名（"Input"），确保变体库匹配时能区分子组件
                   const figmaPropsPayload = extractFigmaProps(node, fullComponentName || tagName);
-                  pushDataAttr(node.openingElement.attributes, "data-figma-props", JSON.stringify(figmaPropsPayload));
+                  pushDataAttrForMode(node.openingElement.attributes, "data-figma-props", valueForDataAttr("data-figma-props", figmaPropsPayload));
                 }
                 // 识别第三方图标组件：包名含 icon(s) 或组件名以图标风格后缀结尾
                 const isIconPkg = /icons?$/i.test(source);
                 const isIconName = /(?:Line|Fill|Filled|Outlined|Solid|Outline|TwoTone|Sharp|Icon)$/.test(tagName);
                 if (isIconPkg || isIconName) {
-                  pushDataAttr(node.openingElement.attributes, "data-zone-icon", tagName);
+                  pushDataAttrForMode(node.openingElement.attributes, "data-zone-icon", tagName);
                 }
               }
   
@@ -380,7 +468,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
   
                 const mapIndexParam = getMapCallbackIndexParam(path);
                 if (mapIndexParam != null) {
-                  pushDataAttrExpression(node.openingElement.attributes, "data-map-index", mapIndexParam);
+                  pushDataAttrExpressionForMode(node.openingElement.attributes, "data-map-index", mapIndexParam);
                 }
               }
   
@@ -396,9 +484,9 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
 
                 zoneType = "com";
                 // pushDataAttr(node.openingElement.attributes, "data-zone-docs", JSON.stringify(comRef.jsdoc));
-                pushDataAttr(node.openingElement.attributes, "data-com-name", comRef.name);
+                pushDataAttrForMode(node.openingElement.attributes, "data-com-name", comRef.name);
 
-                pushDataAttr(node.openingElement.attributes, "data-widget-name", comRef.name);
+                pushDataAttrForMode(node.openingElement.attributes, "data-widget-name", comRef.name);
 
   
                 // const events = comRef.jsdoc?.events;
@@ -428,17 +516,17 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               // })
 
               if (events.length > 0) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-events", JSON.stringify(events));
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-events", valueForDataAttr("data-zone-events", events));
                 // 用于展示事件小黄点
-                pushDataAttr(node.openingElement.attributes, "data-zone-docs-events", JSON.stringify(events.length));
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-docs-events", valueForDataAttr("data-zone-docs-events", events.length));
               }
 
               if (datasource) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-datasource", datasource);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-datasource", datasource);
               }
 
               if (store) {
-                pushDataAttr(node.openingElement.attributes, "data-zone-store", store);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-store", store);
               }
 
               // if (comRef) {
@@ -448,7 +536,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               // }
   
               if (zoneType !== "page") {
-                pushDataAttr(node.openingElement.attributes, "data-zone-type", zoneType);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-type", zoneType);
               }
 
               // ── 可交换性标记 ────────────────────────────────────────────────
@@ -481,7 +569,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               dataLocValueObject.swappable = !isAssignmentRhs && !isInsideJSXExpression;
               // ────────────────────────────────────────────────────────────────
 
-              pushDataAttr(node.openingElement.attributes, "data-loc", JSON.stringify(dataLocValueObject));
+              pushDataAttrForMode(node.openingElement.attributes, "data-loc", valueForDataAttr("data-loc", dataLocValueObject));
 
               let foundDeclaratorPath: any = null;
               path.findParent(p => {
@@ -499,7 +587,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 : null;
 
               if (popupName) {
-                pushDataAttr(node.openingElement.attributes, "data-widge-name", popupName);
+                pushDataAttrForMode(node.openingElement.attributes, "data-widge-name", popupName);
               }
 
               onJSXElement?.({

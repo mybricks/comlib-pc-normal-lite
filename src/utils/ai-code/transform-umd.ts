@@ -24,12 +24,13 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
   const { fileName } = ctx
   const jsDocMap = new Map()
   const frontendMode = config.getFrontendMode()
+  const reactNative = frontendMode === 'react-native'
 
   try {
     const validatorPlugins = getValidatorPlugins({ ...ctx, fileName, onError })
 
     const babelPlugins = window._sandbox_.config.componentRuntime?.babelPlugins?.map((babelPlugin) => {
-      return babelPlugin({ filename: fileName, onError })
+      return babelPlugin({ filename: fileName, onError, reactNative })
     }) || []
 
     const options = {
@@ -56,12 +57,14 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         ],
         ...babelPlugins,
         ...(frontendMode === 'prototype' ? [appConfigCheckPlugin(fileName, onError),] : []),
-        ...(frontendMode !== 'react-native' ? [babelPlugin({ fileName: ctx?.fileName }), wrapThirdPartyPlugin(), styleAnalysisPlugin()] : []),
+        babelPlugin({ fileName: ctx?.fileName, reactNative }),
+        wrapThirdPartyPlugin({ reactNative }),
+        styleAnalysisPlugin({ reactNative }),
         ...validatorPlugins,
         functionPropsPlugin(),
         [collectJsDocPlugin, { result: jsDocMap, fileName }],
         loggerPlugin({ fileName }),
-        zoneIndexPlugin({ fileName }),
+        zoneIndexPlugin({ fileName, reactNative }),
         ...(frontendMode === 'gui_card' ? [skillBoundaryPlugin({ fileName, onError })] : [])
       ],
       retainLines: true,

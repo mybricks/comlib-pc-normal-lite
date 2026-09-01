@@ -42,6 +42,12 @@ interface Config {
 
 // [TEMP] 临时兼容，后续删除
 const tempFN = (data: ComponentData) => {
+  return data.files.map(({ fileName, source }) => {
+    return {
+      fileName,
+      content: decodeURIComponent(source)
+    }
+  })
   const files: FileItem[] = [];
 
   data.files.forEach((file) => {

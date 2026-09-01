@@ -59,8 +59,8 @@ const dataCompatible = (props) => {
     }
 
     const version = config.getVersion()
-    if (!data.version || data.version < 42 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 42
+    if (!data.version || data.version < 43 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 43
       data._componentRuntime.version = version
       console.log('[com:update]', data)
       console.log('mode', mode)
@@ -159,6 +159,10 @@ const dataCompatible = (props) => {
           }
 
 
+          context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
+        })
+      } else if (mode === 'react-native') {
+        data.files.forEach((file) => {
           context.updateFile({ fileName: file.fileName, content: decodeURIComponent(file.source) })
         })
       } else {

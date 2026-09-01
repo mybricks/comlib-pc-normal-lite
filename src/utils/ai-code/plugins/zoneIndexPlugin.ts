@@ -15,8 +15,9 @@
  *       <span data-zone-filename="src/components/Button/index.tsx">Hello</span>
  *     </div>
  */
+import { pushDataAttr } from './utils';
 
-export default function zoneIndexPlugin({ fileName }: { fileName?: string }) {
+export default function zoneIndexPlugin({ fileName, reactNative = false }: { fileName?: string; reactNative?: boolean }) {
   return function ({ types: t }: { types: any }) {
     return {
       visitor: {
@@ -34,12 +35,9 @@ export default function zoneIndexPlugin({ fileName }: { fileName?: string }) {
 
             // 注入 data-zone-filename
             if (fileName) {
-              attributes.push(
-                t.jsxAttribute(
-                  t.jsxIdentifier('data-zone-filename'),
-                  t.stringLiteral(fileName)
-                )
-              );
+              pushDataAttr(attributes, 'data-zone-filename', fileName, {
+                mode: reactNative ? 'react-native' : 'web',
+              });
             }
           } catch {
             // 静默处理解析错误

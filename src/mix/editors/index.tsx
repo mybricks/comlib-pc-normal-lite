@@ -22,6 +22,7 @@ import { verify as eslintVerify } from '../eslint';
 import setSegment from './setSegment';
 import setStyle from './style/setStyle'
 import resizer from './style/resizer'
+import getEditors from '../../platforms/react-native/editors'
 
 function getElementRefSelectorCandidates(ele: Element | null | undefined) {
   const escapeSelectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -111,6 +112,19 @@ export default function (props: Props, actions: Actions) {
   const comId = props.id;
   const focusAreaConfigs = {};
   const exportCodeConfig = buildExportCodeConfig(props);
+  context.setComponent({ params: props, actions });
+  (window as any).__mybricksEslintVerify = () => eslintVerify(props.data.files);
+  if ((window as any)._getProjectConfig_) {
+    context.projectConfig = (window as any)._getProjectConfig_();
+  }
+
+  const frontendMode = config.getFrontendMode()
+
+  console.log('frontendMode', frontendMode)
+
+  // if (frontendMode === 'react-native') {
+  //   return getEditors()
+  // }
 
 
   if (config.getFrontendMode() === 'gui_card') {
@@ -151,14 +165,6 @@ export default function (props: Props, actions: Actions) {
     } else {
       focusAreaConfigs[':root'].items.push(...rootItems);
     }
-  }
-
-  context.setComponent({ params: props, actions });
-
-  (window as any).__mybricksEslintVerify = () => eslintVerify(props.data.files);
-
-  if ((window as any)._getProjectConfig_) {
-    context.projectConfig = (window as any)._getProjectConfig_();
   }
 
   return {
@@ -288,6 +294,9 @@ export default function (props: Props, actions: Actions) {
       ],
       items: buildSvgEditorItems(comId),
     },
+    ...(frontendMode === 'react-native' ? {
+      '[style]': {}
+    } : {}),
     // ...getDataZoneTextEditable(),
     ...undoRedo(),
     ...setStyle(),

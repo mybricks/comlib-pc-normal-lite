@@ -28,6 +28,7 @@
  *             data-style-info='{"color":{"kind":"static","valueStart":20,"valueEnd":25},"width":{"kind":"dynamic"}}'
  *           />
  */
+import { pushDataAttr } from './utils';
 
 /** 判断 AST value 节点是否为静态字面量 */
 function isStaticValue(valueNode: any): boolean {
@@ -111,9 +112,10 @@ export type StyleAnalysisPluginOptions = {
    * synthetic wrapper.
    */
   sourceOffset?: number
+  reactNative?: boolean
 }
 
-export default function styleAnalysisPlugin({ sourceOffset = 0 }: StyleAnalysisPluginOptions = {}) {
+export default function styleAnalysisPlugin({ sourceOffset = 0, reactNative = false }: StyleAnalysisPluginOptions = {}) {
   return function ({ types: t }: { types: any }) {
     return {
       visitor: {
@@ -152,12 +154,9 @@ export default function styleAnalysisPlugin({ sourceOffset = 0 }: StyleAnalysisP
             // 将结果序列化为 JSON 字符串，写入 data-style-info 属性
             const infoJson = JSON.stringify(styleInfo);
 
-            attributes.push(
-              t.jsxAttribute(
-                t.jsxIdentifier('data-style-info'),
-                t.stringLiteral(infoJson)
-              )
-            );
+            pushDataAttr(attributes, 'data-style-info', infoJson, {
+              mode: reactNative ? 'react-native' : 'web',
+            });
           } catch {
             // 静默处理解析错误
           }
