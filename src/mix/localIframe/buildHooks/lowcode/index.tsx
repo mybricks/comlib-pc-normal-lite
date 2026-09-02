@@ -3,7 +3,7 @@ import context from '../../../context'
 import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
 
-type TabKey = 'task' | 'version' | 'review'
+type TabKey = 'task' | 'review'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
 
 type TaskStatus = '待处理' | '进行中' | '待交接' | '已完成'
@@ -76,7 +76,7 @@ const REVIEW_STATUS_STYLE: Record<ReviewStatus, { dot: string; badgeBg: string; 
 
 const TAB_LABELS: Record<TabKey, string> = {
   task: '任务',
-  version: '版本',
+  // version: '版本',
   review: '影响',
 }
 
@@ -512,11 +512,11 @@ function LowcodeViewShell() {
       </div>
       <div className={css['lowcode-view']}>
         {activeTab === 'task' && <TaskPanel content={tasksContent} />}
-        {activeTab === 'version' && (
+        {/* {activeTab === 'version' && (
           <div className={css['panel-empty']}>
             <span className={css['panel-empty-text']}>版本</span>
           </div>
-        )}
+        )} */}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
       </div>
     </div>
