@@ -14,7 +14,9 @@ function isInternalOrLocalSource(source: string) {
     source.startsWith("react-native/") ||
     source.startsWith(".") ||
     source.startsWith("/") ||
-    source.startsWith("@mybricks/")
+    source.startsWith("@mybricks/") ||
+    source === '@es/pro-components' || 
+    source === '@m-ui/react'
   );
 }
 
