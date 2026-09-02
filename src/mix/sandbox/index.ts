@@ -74,6 +74,7 @@ function hasSourceChanged(files: any[], previousSnapshot?: Map<string, string>):
 function applyFileDiff(
   comId: string,
   targetFiles: Array<{ path: string; content: string }>,
+  config?: { updateSource: string }
 ) {
   const updateFileNames: string[] = []
   const currentData = context.component?.params?.data;
@@ -89,14 +90,14 @@ function applyFileDiff(
   for (const fileName of currentMap.keys()) {
     if (!targetMap.has(fileName)) {
       updateFileNames.push(fileName)
-      context.updateFile({ fileName, type: 'delete' });
+      context.updateFile({ fileName, type: 'delete', updateSource: config?.updateSource });
     }
   }
   // 新增或变更的文件
   for (const [fileName, content] of targetMap) {
     if (currentMap.get(fileName) !== content) {
       updateFileNames.push(fileName)
-      context.updateFile({ fileName, content });
+      context.updateFile({ fileName, content, updateSource: config?.updateSource });
     }
   }
 
@@ -1323,7 +1324,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     if (!targetMeta || !files.length) return;
 
     // diff 比对，按需更新文件（新增 / 变更 / 删除）
-    applyFileDiff(comId, files);
+    applyFileDiff(comId, files, { updateSource: 'rollback' });
 
     // 3. 新增一条 rollback 类型版本记录
     const version = context.version

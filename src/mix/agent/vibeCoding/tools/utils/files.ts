@@ -172,10 +172,10 @@ function updateComponentFiles(
   const mergeSuccess = fileResults.every((r) => r.success);
   if (mergeSuccess) {
     pendingWrites.forEach(({ fileName, content }) =>
-      context.updateFile({ fileName, content })
+      context.updateFile({ fileName, content, updateSource: 'ai' })
     );
     deleteFileNames.forEach((fileName) => {
-      context.updateFile({ fileName, type: "delete" });
+      context.updateFile({ fileName, type: "delete", updateSource: 'ai' });
     });
     aiComParams.data.document = '';
   }

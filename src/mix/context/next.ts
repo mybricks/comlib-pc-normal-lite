@@ -226,7 +226,7 @@ class Context {
   }
 
   /** 更新文件 */
-  updateFile({ fileName, content, type, noUpdateFileSystem }: any) {
+  updateFile({ fileName, content, type, noUpdateFileSystem, updateSource }: any) {
     // 现在只有 jsx、less、js 三种文件
     const aiCom = this.component!
 
