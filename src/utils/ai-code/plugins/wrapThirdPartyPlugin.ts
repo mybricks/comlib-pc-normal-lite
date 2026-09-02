@@ -98,6 +98,20 @@ function getJSXRuntimeTagSource(tag: any, importRelyMap: Map<string, string>) {
   return "html";
 }
 
+function isProPageItemFromProComponents(tag: any, importRelyMap: Map<string, string>) {
+  if (getJSXRuntimeTagSource(tag, importRelyMap) !== "@es/pro-components") {
+    return false;
+  }
+
+  return (
+    tag?.type === "MemberExpression" &&
+    tag.object?.type === "Identifier" &&
+    tag.object.name === "ProPage" &&
+    tag.property?.type === "Identifier" &&
+    tag.property.name === "Item"
+  );
+}
+
 function collectReactNativeImportDeclaration(path: any, reactNativeBindingMap: Map<string, ReactNativeBinding>) {
   const source = path.node.source?.value;
   if (!isReactNativeSource(source)) return;
@@ -466,6 +480,7 @@ function wrapCreateElementCall(path: any, importRelyMap: Map<string, string>, re
   const [tag, props] = node.arguments || [];
   const source = getJSXRuntimeTagSource(tag, importRelyMap);
   if (!isThirdPartySource(source)) return;
+  if (isProPageItemFromProComponents(tag, importRelyMap)) return;
 
   const wrapperTag = reactNative
     ? { type: "Identifier", name: reactNativeViewLocalName || "View" }
