@@ -120,8 +120,6 @@ export default function (props: Props, actions: Actions) {
 
   const frontendMode = config.getFrontendMode()
 
-  console.log('frontendMode', frontendMode)
-
   // if (frontendMode === 'react-native') {
   //   return getEditors()
   // }
@@ -165,6 +163,10 @@ export default function (props: Props, actions: Actions) {
     } else {
       focusAreaConfigs[':root'].items.push(...rootItems);
     }
+  }
+
+  if (config.getFrontendMode() === 'local-iframe') {
+    delete focusAreaConfigs[':root']
   }
 
   return {

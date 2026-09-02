@@ -3,6 +3,9 @@ import Runtime from './runtime';
 import context, { config } from './context';
 import { registerSandbox } from './sandbox';
 import { parseFrameSize } from '../utils/ai-code/render/mybricks/utils'
+import RuntimeIframe from './runtime.iframe'
+
+(window as any)._hack_pluginai_ = ['12333', 'c3fcce707fb1e218feca2510cff9d2c5']
 
 const dataCompatible = (props) => {
   try {
@@ -182,16 +185,8 @@ const dataCompatible = (props) => {
 }
 
 export default (props: any) => {
-  if (window.MYBRICKS_LOCAL_IFRAME) {
-    return (
-      <iframe
-        src={'/__local/lingchuang'}
-        style={{ border: 'none', width: '100vw', height: '100vh' }}
-        onLoad={(ref) => {
-          props.onIframeLoad(ref.target.contentDocument)
-        }}
-      />
-    )
+  if (config.getFrontendMode() === 'local-iframe') {
+    return <RuntimeIframe {...props} />
   }
 
   const { env, data } = props;
