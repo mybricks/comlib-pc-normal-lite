@@ -23,6 +23,7 @@ import setSegment from './setSegment';
 import setStyle from './style/setStyle'
 import resizer from './style/resizer'
 import getEditors from '../../platforms/react-native/editors'
+import getLocalIframeEditors from '../../platforms/local-iframe/editors'
 
 function getElementRefSelectorCandidates(ele: Element | null | undefined) {
   const escapeSelectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -167,6 +168,10 @@ export default function (props: Props, actions: Actions) {
 
   if (config.getFrontendMode() === 'local-iframe') {
     delete focusAreaConfigs[':root']
+  }
+
+  if (config.getFrontendMode() === 'local-iframe') {
+    return getLocalIframeEditors()
   }
 
   return {
