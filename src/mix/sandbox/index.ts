@@ -1299,7 +1299,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     }
   }) ?? {};
 
-  const { history, disabledHandler, isRemoteAgent, workspaceReady } = connectToAIRef
+  const { history, disabledHandler, isRemoteAgent, workspaceReady, remoteFs } = connectToAIRef
 
   // remote Agent 的首个 workspace 快照会异步回写 data.files。等待它完成后再让
   // registerSandbox 结束，runtime.edit.tsx 才会挂载 Runtime，避免先闪出空 StartView。
@@ -1390,6 +1390,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   context.rollback = rollbackToVersion
   context.history = history;
   context.connectToAIRef = connectToAIRef
+  context.remoteFs = isRemoteAgent ? remoteFs : undefined
   context.diff = (...versionIds: string[]) => diffVersions(history, ...versionIds);
 
   // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）

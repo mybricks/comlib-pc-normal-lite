@@ -33,6 +33,17 @@ const updateFileContent = ({ fileName, files, content }) => {
   }
 }
 
+async function hashFileContent(content: string): Promise<string | undefined> {
+  if (!globalThis.crypto?.subtle) return undefined
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(content),
+  )
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 const printMybricksGraphCompilation = (
   graphFileName: string,
   graph: ReturnType<typeof parseMybricksGraph>,
@@ -548,6 +559,19 @@ class Context {
     }
   }
 
+  /** 仅 remote Agent 注入的实时文件系统能力。 */
+  remoteFs?: {
+      applyOperations: (operations: Array<
+        | { type: 'write'; path: string; content: string; baseHash?: string | null }
+        | { type: 'delete'; path: string; baseHash?: string | null }
+      >) => Promise<{
+        conflicts: Array<{
+          path: string
+          current: { path: string; content: string } | null
+        }>
+      }>
+  }
+
   /** 注册的回滚方法 */
   rollback: any
 
@@ -559,7 +583,62 @@ class Context {
 
   /** 手动编辑保存后，添加 manual 类型版本记录。 */
   async saveManualVersion(updateFiles: string[]): Promise<void> {
+    if (!await this.syncManualFilesToRemoteFs(updateFiles)) return
     this.saveVisualEditVersion(updateFiles, 'manual')
+  }
+
+  /**
+   * 手动提交前同步本次变更到 remote FS，不创建版本。
+   * 有可视化分支时，用 cancel 会回到的 branchInitialFiles 做 baseHash；
+   * 没有分支快照则直写。冲突时静默放弃本次保存，不修改本地文件。
+   */
+  private async syncManualFilesToRemoteFs(updateFiles: string[]): Promise<boolean> {
+    const remoteFs = this.remoteFs
+    const fileNames = [...new Set(updateFiles)]
+    if (!remoteFs || !fileNames.length) {
+      return true
+    }
+
+    const files = this.component?.params?.data?.files ?? []
+    const beforeFiles = undoRedoManager.getBranchInitialFiles()
+    const beforeMap = beforeFiles
+      ? new Map(beforeFiles.map((file) => [file.path, file.content]))
+      : null
+
+    const operations = await Promise.all(
+      fileNames.map(async (path) => {
+        const file = files.find((item: any) => item.fileName === path)
+        const baseHash = !beforeMap
+          ? undefined
+          : beforeMap.has(path)
+            ? await hashFileContent(beforeMap.get(path) ?? '')
+            : null
+
+        if (!file?.source) {
+          return {
+            type: 'delete' as const,
+            path,
+            ...(baseHash !== undefined ? { baseHash } : {}),
+          }
+        }
+
+        return {
+          type: 'write' as const,
+          path,
+          content: decodeURIComponent(file.source),
+          ...(baseHash !== undefined ? { baseHash } : {}),
+        }
+      }),
+    )
+
+    try {
+      const { conflicts } = await remoteFs.applyOperations(operations)
+      return conflicts.length === 0
+    } catch (error) {
+      // 不能因 remote FS 暂不可用阻断已有的手动版本保存流程。
+      console.warn('[remote-fs] failed to apply manual file operations', error)
+      return true
+    }
   }
 
   /** 可视化编辑提交后保存版本，可标记为手动或 AI 修改。 */
