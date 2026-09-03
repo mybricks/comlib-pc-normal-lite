@@ -25,6 +25,9 @@ export default function () {
     '[data-zone-noselector]': {
       // style: [{ items: [] }],
     },
+    '[class]': {
+
+    },
     '@commitUserActions': commitUserActions,
     '@cancelUserActions': cancelUserActions,
     '@updateSegment': updateSegment,
