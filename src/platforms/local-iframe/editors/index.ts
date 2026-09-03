@@ -22,10 +22,13 @@ export default function () {
         },
       ],
     },
+    '[data-zone-noselector]': {
+      // style: [{ items: [] }],
+    },
     '@commitUserActions': commitUserActions,
     '@cancelUserActions': cancelUserActions,
     '@updateSegment': updateSegment,
-    '@setStyle': setStyle,
+    '@setStyle': setStyle(),
     '@runTest': runTest
   }
 }
