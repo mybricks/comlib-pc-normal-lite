@@ -1,3 +1,5 @@
+import { randomUUID } from "../../utils/uuid"
+
 const DOM_SUMMARY_SINGLE_TEXT_MAX = 20
 const DOM_SUMMARY_TOTAL_MAX = 300
 const DOM_SUMMARY_MAX_CHILDREN = 8
@@ -511,7 +513,7 @@ export function parseElementInfo(ele: Element | undefined, label: string, option
 }
 
 export function buildElementDeleteChipData(ele: Element, label = getElementLabel(ele, '节点1')): ParsedElementDeleteChipData {
-  const opLabel = '元素删除操作1'
+  const opLabel = randomUUID()
   const target = parseElementInfo(ele, label)
   const changeRequirements = [
     '1. 从 JSX 中完整移除【被删除元素】节点（含其所有子节点）',
@@ -555,7 +557,7 @@ export function buildElementDeleteChipData(ele: Element, label = getElementLabel
 }
 
 export function buildElementTextUpdateChipData(ele: Element, content: string, label = getElementLabel(ele, '节点1')): ParsedElementTextUpdateChipData {
-  const opLabel = '文本修改操作1'
+  const opLabel = randomUUID()
   const target = parseElementInfo(ele, label, { includeCurrentText: true })
   const nextText = content ?? ''
   const changeRequirements = [
@@ -609,7 +611,7 @@ export function buildElementImageUpdateChipData(
   nextSrc: string,
   label = getElementLabel(ele, '图片'),
 ): ParsedElementImageUpdateChipData {
-  const opLabel = '图片修改操作1'
+  const opLabel = randomUUID()
   const target = parseElementInfo(ele, label)
   const currentSrc = ele.getAttribute('src') ?? ''
 
@@ -651,7 +653,7 @@ export function buildElementSvgUpdateChipData(
   nextSvg: string,
   label = getElementLabel(ele, '图标'),
 ): ParsedElementSvgUpdateChipData {
-  const opLabel = 'SVG 图标修改操作1'
+  const opLabel = randomUUID()
   const target = parseElementInfo(ele, label)
 
   return {
@@ -693,7 +695,7 @@ export function buildElementStyleUpdateChipData(
   styles: Array<{ key: string; value: number | string | null | undefined }>,
   label = getElementLabel(ele, '节点1'),
 ): ParsedElementStyleUpdateChipData {
-  const opLabel = '元素样式调整操作1'
+  const opLabel = randomUUID()
   const target = parseElementInfo(ele, label)
   const classNames = getElementClassNames(ele)
   const normalizedStyles = styles.map(({ key, value }) => ({
@@ -751,7 +753,7 @@ export function buildElementMoveChipData(
   fromLabel = getElementLabel(fromEle, '节点1'),
   toLabel = getElementLabel(toEle, '节点2')
 ): ParsedElementMoveChipData {
-  const opLabel = '元素移动操作1'
+  const opLabel = randomUUID()
   const direction = PLACEMENT_LABEL[placement] ?? placement
   const from = parseElementInfo(fromEle, fromLabel)
   const to = parseElementInfo(toEle, toLabel)
@@ -814,7 +816,7 @@ export function buildElementInsertChipData(
   importCode = '',
   label = getElementLabel(ele, '节点1'),
 ): ParsedElementInsertChipData {
-  const opLabel = '元素插入操作1'
+  const opLabel = randomUUID()
   const direction = placement === 'before' ? '前面（上方）' : '后面（下方）'
   const target = parseElementInfo(ele, label)
   const normalizedImports = importCode.trim()
