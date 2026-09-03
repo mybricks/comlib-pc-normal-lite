@@ -121,6 +121,7 @@ export default function () {
           '## 目标元素',
           `- 名称：${displayEle.tagName.toLowerCase()}`,
           `- 类名：${getElementClassNames(displayEle) || '无'}`,
+          '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
           `- 代码位置：${getElementCodeLocation(displayEle)}`,
           '',
           '## 需要修改的内容',

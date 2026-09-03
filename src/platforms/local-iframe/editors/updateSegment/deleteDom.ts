@@ -8,25 +8,18 @@ function buildLabel(ele: HTMLElement) {
   const rawClassNames = Array.from(ele.classList).filter(Boolean)
   const lastClassName = rawClassNames[rawClassNames.length - 1] ?? ''
   const labelTarget = lastClassName ? formatDisplayClassName(lastClassName) : ele.tagName.toLowerCase()
-  return `修改 ${labelTarget} 内容`
+  return `删除 ${labelTarget}`
 }
 
-export default function ({ fromEle: ele, content }) {
+export default function ({ fromEle: ele }) {
   if (!ele) {
     return {
       type: 'success',
     }
   }
 
-  const nextHTML = typeof content === 'string' ? content : String(content ?? '')
-  const previousHTML = ele.innerHTML
-
-  if (previousHTML === nextHTML) {
-    return {
-      type: 'success',
-    }
-  }
-
+  const parent = ele.parentNode
+  const nextSibling = ele.nextSibling
   const actionId = randomUUID()
   const chipId = randomUUID()
   const label = buildLabel(ele)
@@ -35,13 +28,13 @@ export default function ({ fromEle: ele, content }) {
   const chip = {
     id: chipId,
     label,
-    type: 'element-text-update',
+    type: 'element-delete',
     data: {
       inlineText: `执行「${chipId}」，`,
       detailText: [
-        `<element-text-update id="${chipId}">`,
+        `<element-delete id="${chipId}">`,
         '## 操作意图',
-        '修改目标元素的 文本 内容',
+        '删除目标 DOM 元素及其完整子树。',
         '',
         '## 目标元素',
         `- 名称：${ele.tagName.toLowerCase()}`,
@@ -50,8 +43,8 @@ export default function ({ fromEle: ele, content }) {
         `- 代码位置：${codeLocation}`,
         '',
         '## 需要修改的内容',
-        nextHTML || '清空内容',
-        '</element-text-update>',
+        '从页面结构中移除该元素。',
+        '</element-delete>',
       ].join('\n'),
     },
   }
@@ -62,16 +55,18 @@ export default function ({ fromEle: ele, content }) {
       chips: [chip],
     },
     execute() {
-      ele.innerHTML = nextHTML
+      ele.remove()
       context.component?.actions.addUserAction({
         id: actionId,
-        type: 'update-text',
+        type: 'delete',
         title: label,
         refElement: ele,
       })
     },
     undo() {
-      ele.innerHTML = previousHTML
+      if (parent) {
+        parent.insertBefore(ele, nextSibling?.parentNode === parent ? nextSibling : null)
+      }
       context.component?.actions.removeUserAction(actionId)
     },
   })

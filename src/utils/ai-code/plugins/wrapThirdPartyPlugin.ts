@@ -1,4 +1,5 @@
 import { toDataSetKey } from './utils';
+import { findRelyAndSource } from './utils/rely';
 
 type ReactNativeBinding = {
   kind: "component" | "namespace";
@@ -84,17 +85,19 @@ function createRequireCall(source: string) {
 }
 
 function getJSXRuntimeTagSource(tag: any, importRelyMap: Map<string, string>) {
+  const resolveSource = (relyName: string) => findRelyAndSource(relyName, importRelyMap).source;
+
   if (!tag || tag.type === "StringLiteral") {
     return "html";
   }
 
   if (tag.type === "Identifier") {
-    return importRelyMap.get(tag.name) || "html";
+    return resolveSource(tag.name);
   }
 
   if (tag.type === "MemberExpression") {
     const rootName = getRootIdentifierName(tag);
-    return rootName ? importRelyMap.get(rootName) || "html" : "html";
+    return rootName ? resolveSource(rootName) : "html";
   }
 
   return "html";
@@ -374,13 +377,17 @@ function collectVariableDeclarator(path: any, importRelyMap: Map<string, string>
 
   if (id?.type === "ObjectPattern") {
     const requireSource = createRequireSourceFromExpression(init);
-    if (!requireSource) return;
+    const rootName = getRootIdentifierName(init);
+    if (!requireSource && !rootName) return;
 
     for (const property of id.properties || []) {
       if (property?.type !== "ObjectProperty") continue;
       const localName = property.value?.type === "Identifier" ? property.value.name : null;
       if (localName) {
-        importRelyMap.set(localName, requireSource);
+        const relySource = requireSource || rootName;
+        if (relySource) {
+          importRelyMap.set(localName, relySource);
+        }
       }
     }
     return;

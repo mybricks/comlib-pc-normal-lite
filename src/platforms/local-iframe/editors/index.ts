@@ -7,6 +7,7 @@ import cancelUserActions from './cancelUserActions'
 import updateSegment from './updateSegment'
 import runTest from './runTest'
 import setStyle from './setStyle'
+import { undoRedoManager } from '../../../mix/editors/undoRedo'
 
 export default function () {
   return {
@@ -34,5 +35,11 @@ export default function () {
     '@setStyle': setStyle(),
     '@runTest': runTest,
     '@resizePage'() {},
+    '@undo'() {
+      undoRedoManager.undo()
+    },
+    '@redo'() {
+      undoRedoManager.redo()
+    }
   }
 }

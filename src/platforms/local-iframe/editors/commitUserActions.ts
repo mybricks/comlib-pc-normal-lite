@@ -53,6 +53,6 @@ export default function (props) {
   //   command.execute()
   //   undoRedoManager.record(command)
   // }
-  // undoRedoManager.clearBranch()
+  undoRedoManager.clearBranch()
   return true
 }

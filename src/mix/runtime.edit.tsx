@@ -62,8 +62,8 @@ const dataCompatible = (props) => {
     }
 
     const version = config.getVersion()
-    if (!data.version || data.version < 44 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
-      data.version = 44
+    if (!data.version || data.version < 45 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+      data.version = 45
       data._componentRuntime.version = version
       console.log('[com:update]', data)
       console.log('mode', mode)
@@ -188,6 +188,16 @@ export default (props: any) => {
   if (config.getFrontendMode() === 'local-iframe') {
     return <RuntimeIframe {...props} />
   }
+
+  // return (
+  //   <iframe
+  //     src={'/lingchuang'}
+  //     style={{ border: 'none', width: 1200, height: 1000 }}
+  //     onLoad={(ref) => {
+  //       props.onIframeLoad(ref.target.contentDocument)
+  //     }}
+  //   />
+  // )
 
   const { env, data } = props;
 
