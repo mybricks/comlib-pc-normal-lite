@@ -8,9 +8,9 @@ import { getElementCodeLocation } from '../../../helpers/dom'
 import { convertCamelToHyphen } from '../../../utils/string'
 import { debounce } from '../../../helpers/debounce'
 
-type StyleEntry = [string, any]
+export type StyleEntry = [string, any]
 
-type StyleTarget =
+export type StyleTarget =
   | {
       kind: 'inline'
       target: HTMLElement
@@ -51,7 +51,7 @@ type PendingStyleBranch = {
   entries: Map<string, PendingStyleEntry>
 }
 
-function getElementClassNames(ele) {
+export function getElementClassNames(ele) {
   const classNames: string[] = Array.from(ele.classList)
   return classNames.map((className) => {
     if (className.match('%2F')) {
@@ -63,7 +63,7 @@ function getElementClassNames(ele) {
 }
 
 // 把传入的样式值整理成可直接写入 CSS 的字符串。
-function formatStyleValue(value: any) {
+export function formatStyleValue(value: any) {
   if (value === null || value === undefined || value === '') return ''
   return typeof value === 'number' ? `${value}px` : String(value)
 }
@@ -119,7 +119,7 @@ function splitSelectorList(selectorText: string): string[] {
   return parts.filter(Boolean)
 }
 
-function formatDisplayClassName(className: string): string {
+export function formatDisplayClassName(className: string): string {
   if (!className) return className
 
   if (!className.includes('%2F')) return className
@@ -269,7 +269,7 @@ function findWinningStyleRule(ele: HTMLElement): CSSStyleRule | null {
 }
 
 // 决定这次修改应该写到行内样式，还是写回当前生效的 CSS 规则。
-function resolveStyleTarget(ele: HTMLElement, property: string): StyleTarget {
+export function resolveStyleTarget(ele: HTMLElement, property: string): StyleTarget {
   const previousInlineValue = ele.style.getPropertyValue(property)
   if (previousInlineValue !== '') {
     return {
@@ -302,7 +302,7 @@ function resolveStyleTarget(ele: HTMLElement, property: string): StyleTarget {
 }
 
 // 按目标位置写入样式，并保留原来的优先级标记。
-function applyStyleTarget(target: StyleTarget, value: any) {
+export function applyStyleTarget(target: StyleTarget, value: any) {
   const nextValue = formatStyleValue(value)
   if (target.kind === 'inline') {
     if (!nextValue) {
@@ -321,7 +321,7 @@ function applyStyleTarget(target: StyleTarget, value: any) {
 }
 
 // 撤销时，把样式恢复成修改前的状态。
-function restoreStyleTarget(target: StyleTarget) {
+export function restoreStyleTarget(target: StyleTarget) {
   if (target.kind === 'inline') {
     if (target.previousValue !== '') {
       target.target.style.setProperty(target.property, target.previousValue, target.previousPriority)

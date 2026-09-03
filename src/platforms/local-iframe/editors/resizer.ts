@@ -1,128 +1,160 @@
-import { undoRedoManager } from '../../../mix/editors/undoRedo'
-import { convertCamelToHyphen } from '../../../utils/string'
-import { randomUUID } from '../../../mix/utils/uuid'
-import { buildElementStyleUpdateChipData } from '../../../mix/editors/setSegment/elementChip'
 import context from '../../../mix/context'
+import { undoRedoManager } from '../../../mix/editors/undoRedo'
+import { randomUUID } from '../../../mix/utils/uuid'
+import { getElementCodeLocation } from '../../../helpers/dom'
+import { convertCamelToHyphen } from '../../../utils/string'
+import {
+  applyStyleTarget,
+  formatDisplayClassName,
+  formatStyleValue,
+  getElementClassNames,
+  restoreStyleTarget,
+  resolveStyleTarget,
+} from './style'
+import type { StyleEntry, StyleTarget } from './style'
 
-type StyleEntry = [string, any]
-
-function applyStyleEntries(ele: HTMLElement, styleEntries: StyleEntry[]) {
-  console.log('applyStyleEntries', { ele, styleEntries })
-  styleEntries.forEach(([key, value]) => {
-    const property = convertCamelToHyphen(key)
-    if (value === null || value === '') {
-      ele.style.removeProperty(property)
-    } else {
-      ele.style.setProperty(property, String(value))
-    }
-  })
+type PendingStyleEntry = {
+  key: string
+  value: any
+  target: StyleTarget
 }
 
-function snapshotPreviousStyles(ele: HTMLElement, styleEntries: StyleEntry[]) {
-  return styleEntries.map(([key]) => {
-    const property = convertCamelToHyphen(key)
-    const previousValue = ele.style.getPropertyValue(property)
-
-    return {
-      property,
-      hadValue: previousValue !== '',
-      value: previousValue,
-      priority: ele.style.getPropertyPriority(property),
-    }
-  })
+type PendingStyleBranch = {
+  ele: HTMLElement
+  actionId: string
+  chipId: string
+  classNames: string
+  codeLocation: string
+  label: string
+  entries: Map<string, PendingStyleEntry>
 }
 
-function getStyleActionTitle(ele: HTMLElement) {
-  return `调整 ${Array.from(ele.classList).slice(-1).join('') || '节点1'} 样式`
+function buildLabel(ele: HTMLElement) {
+  const rawClassNames = Array.from(ele.classList).filter(Boolean)
+  const lastClassName = rawClassNames[rawClassNames.length - 1] ?? ''
+  const labelTarget = lastClassName ? formatDisplayClassName(lastClassName) : ele.tagName.toLowerCase()
+  return `调整 ${labelTarget} 样式`
 }
 
 export default function () {
-  let previousStyles: Array<{
-    property: string
-    hadValue: boolean
-    value: string
-    priority: string
-  }> = []
-  let latestStyleEntries: StyleEntry[] = []
+  let pendingStyleBranch: PendingStyleBranch | null = null
+
+  const commitPendingStyleBranch = () => {
+    const branch = pendingStyleBranch
+    if (!branch || !branch.entries.size) return
+
+    pendingStyleBranch = null
+
+    const resolvedEntries = Array.from(branch.entries.values())
+    const styleChangeLines = resolvedEntries.map(({ key, value }) => {
+      const property = convertCamelToHyphen(key)
+      const nextValue =
+        value === null || value === undefined || value === ''
+          ? '删除'
+          : formatStyleValue(value)
+      return `- ${property}：${nextValue}`
+    })
+    const previousTargets = resolvedEntries.map(({ target }) => target)
+    const chip = {
+      id: branch.chipId,
+      label: branch.label,
+      type: 'element-style-update',
+      data: {
+        inlineText: `执行「${branch.chipId}」，`,
+        detailText: [
+          `<element-style-update-operation id="${branch.chipId}">`,
+          '## 操作意图',
+          'dom 样式修改。请优先修改样式文件（Less/CSS）中的对应规则；只有在样式文件不存在、无法可靠定位，或该样式确实只能由运行时 prop 生效时，才修改 JSX 源码中对应的 prop。',
+          '',
+          '## 目标元素',
+          `- 名称：${branch.ele.tagName.toLowerCase()}`,
+          `- 类名：${branch.classNames || '无'}`,
+          `- 代码位置：${branch.codeLocation}`,
+          '',
+          '## 需要修改的内容',
+          ...styleChangeLines,
+          '</element-style-update-operation>',
+        ].join('\n'),
+      },
+    }
+
+    undoRedoManager.executeBranch({
+      aiRequest: {
+        message: `[[chip:${chip.id}]]`,
+        chips: [chip],
+      },
+      execute() {
+        resolvedEntries.forEach(({ value, target }) => {
+          applyStyleTarget(target, value)
+        })
+        context.component?.actions.addUserAction({
+          id: branch.actionId,
+          type: 'update-style',
+          title: branch.label,
+          refElement: branch.ele,
+        })
+      },
+      undo() {
+        previousTargets.forEach((target) => {
+          restoreStyleTarget(target)
+        })
+        context.component?.actions.removeUserAction(branch.actionId)
+      },
+    })
+  }
+
+  const applyPendingStyleEntries = (ele: HTMLElement, styleEntries: StyleEntry[]) => {
+    if (!pendingStyleBranch) {
+      pendingStyleBranch = {
+        ele,
+        actionId: randomUUID(),
+        chipId: randomUUID(),
+        classNames: getElementClassNames(ele),
+        codeLocation: getElementCodeLocation(ele),
+        label: buildLabel(ele),
+        entries: new Map(),
+      }
+    }
+
+    styleEntries.forEach(([key, value]) => {
+      const property = convertCamelToHyphen(key)
+      const target = resolveStyleTarget(ele, property)
+      const pendingEntry = pendingStyleBranch!.entries.get(target.property)
+
+      if (!pendingEntry) {
+        pendingStyleBranch!.entries.set(target.property, {
+          key,
+          value,
+          target,
+        })
+      } else {
+        pendingEntry.key = key
+        pendingEntry.value = value
+      }
+
+      applyStyleTarget(target, value)
+    })
+  }
 
   return {
     type: '_resizer',
     value: {
-      set({ focusArea }: any, style: any, status: any) {
-        const ele = focusArea?.ele as HTMLElement | undefined
+      set(params: any, style: Record<string, any>, { state }: { state?: string }) {
+        const ele = params?.focusArea?.ele as HTMLElement | undefined
         if (!ele) return
 
-        const state = status?.state
-        const styleEntries = Object.entries(style ?? {}).filter(([, value]) => value !== undefined) as StyleEntry[]
-        if (!styleEntries.length && state !== 'finish') return
-
-        if (state === 'start') {
-          previousStyles = snapshotPreviousStyles(ele, styleEntries)
-          latestStyleEntries = styleEntries
-          return
-        }
-
         if (state === 'ing') {
-          if (!previousStyles.length) {
-            previousStyles = snapshotPreviousStyles(ele, styleEntries)
-          }
-          latestStyleEntries = styleEntries
-          applyStyleEntries(ele, latestStyleEntries)
+          const styleEntries = Object.entries(style ?? {}).filter(([, value]) => value !== undefined) as StyleEntry[]
+          if (!styleEntries.length) return
+          applyPendingStyleEntries(ele, styleEntries)
           return
         }
 
         if (state === 'finish') {
-          if (!previousStyles.length) {
-            previousStyles = snapshotPreviousStyles(ele, styleEntries)
-          }
-          latestStyleEntries = styleEntries.length ? styleEntries : latestStyleEntries
-          if (!latestStyleEntries.length) return
-
-          const undoStyles = previousStyles.map((item) => ({ ...item }))
-          const nextStyleEntries = latestStyleEntries.slice()
-
-          const actionId = randomUUID()
-          const chip = {
-            id: randomUUID(),
-            type: 'element-style-update',
-            title: getStyleActionTitle(ele),
-            data: buildElementStyleUpdateChipData(
-              ele,
-              nextStyleEntries.map(([key, value]) => ({ key, value })),
-              'hello',
-            ),
-          }
-          const addAction = {
-            id: actionId,
-            type: 'update-style',
-            title: getStyleActionTitle(ele),
-            refElement: ele,
-          }
-
           try {
-            undoRedoManager.executeBranch({
-              aiRequest: {
-                message: `[[chip:${chip.id}]]`,
-                chips: [chip],
-              },
-              execute() {
-                applyStyleEntries(ele, nextStyleEntries)
-                context.component!.actions.addUserAction(addAction)
-              },
-              undo() {
-                undoStyles.forEach(({ property, hadValue, value, priority }) => {
-                  if (hadValue) {
-                    ele.style.setProperty(property, value, priority)
-                  } else {
-                    ele.style.removeProperty(property)
-                  }
-                })
-                context.component!.actions.removeUserAction(actionId)
-              },
-            })
+            commitPendingStyleBranch()
           } finally {
-            previousStyles = []
-            latestStyleEntries = []
+            pendingStyleBranch = null
           }
         }
       },

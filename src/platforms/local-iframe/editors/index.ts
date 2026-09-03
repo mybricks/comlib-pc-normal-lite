@@ -32,6 +32,7 @@ export default function () {
     '@cancelUserActions': cancelUserActions,
     '@updateSegment': updateSegment,
     '@setStyle': setStyle(),
-    '@runTest': runTest
+    '@runTest': runTest,
+    '@resizePage'() {},
   }
 }
