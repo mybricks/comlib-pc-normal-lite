@@ -5,6 +5,7 @@ import resizer from './resizer'
 import commitUserActions from './commitUserActions'
 import cancelUserActions from './cancelUserActions'
 import updateSegment from './updateSegment'
+import runTest from './runTest'
 
 export default function () {
   return {
@@ -23,10 +24,9 @@ export default function () {
     '@commitUserActions': commitUserActions,
     '@cancelUserActions': cancelUserActions,
     '@updateSegment': updateSegment,
-    '@setStyle'() {},
-    '@runTest'(...args) {
-      console.log('runTest', args)
-      // .ownerDocument.defaultView
-    }
+    '@setStyle'(...args) {
+      console.log('@setStyle', args)
+    },
+    '@runTest': runTest
   }
 }

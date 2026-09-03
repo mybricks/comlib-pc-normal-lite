@@ -659,6 +659,12 @@ export function registerSandbox(comId: string) {
           context.chipPromiseIds.delete(params.id)
           context.component!.actions!.promiseCancel(params.id)
         }
+      },
+      ['element-test']: {
+        def: {
+          type: 'element-test',
+          format: formatParsedElementChipMessage,
+        },
       }
     }
   }) ?? {};
