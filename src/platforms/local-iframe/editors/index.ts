@@ -6,6 +6,7 @@ import commitUserActions from './commitUserActions'
 import cancelUserActions from './cancelUserActions'
 import updateSegment from './updateSegment'
 import runTest from './runTest'
+import setStyle from './setStyle'
 
 export default function () {
   return {
@@ -24,9 +25,7 @@ export default function () {
     '@commitUserActions': commitUserActions,
     '@cancelUserActions': cancelUserActions,
     '@updateSegment': updateSegment,
-    '@setStyle'(...args) {
-      console.log('@setStyle', args)
-    },
+    '@setStyle': setStyle,
     '@runTest': runTest
   }
 }

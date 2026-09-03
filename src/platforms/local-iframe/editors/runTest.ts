@@ -17,7 +17,7 @@ export default function ({ id, focusArea }) {
 
   const chip = {
     id: chipId,
-    label: '测试',
+    label: `测试 ${label}`,
     type: 'element-test',
     data: {
       inlineText: `执行「${chipId}」，`,
