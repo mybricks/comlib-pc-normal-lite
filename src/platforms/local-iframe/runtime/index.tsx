@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { registerSandbox } from './sandbox/forLocalIframe'
-import context from './context'
+import { registerSandbox } from '../../../mix/sandbox/forLocalIframe'
+import context from '../../../mix/context'
 
 type RouteParamDraft = {
   key: string
@@ -69,7 +69,7 @@ const RuntimeIframe = (props) => {
 				return true
 			}
 
-			iframe.contentWindow?.location.reload()
+			// iframe.contentWindow?.location.reload()
 			return true
 		} catch {
 			iframe.src = expectedSrc
@@ -90,15 +90,6 @@ const RuntimeIframe = (props) => {
 			})
 
 			setIframes(nextRoutes)
-
-			context.component?.actions.loaded({
-				pageList: nextRoutes.map((route) => {
-					return {
-						...route,
-						id: route.src
-					}
-				})
-			})
 		})
 
 		const events = context.component!.events;
@@ -123,6 +114,17 @@ const RuntimeIframe = (props) => {
 		pendingRefreshSrcRef.current = ''
 		refreshIframe(targetSrc)
 	}, [debugSrc, refreshIframe])
+
+	useEffect(() => {
+		context.component?.actions.loaded({
+			pageList: iframes.map((route) => {
+				return {
+					...route,
+					id: route.src
+				}
+			})
+		})
+	}, [iframes])
 
 	return (
 		<>
