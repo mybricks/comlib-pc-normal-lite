@@ -87,6 +87,18 @@ const hasGapStyle = (style: Record<string, number>) => {
   return 'rowGap' in style || 'columnGap' in style || 'gap' in style
 }
 
+const normalizeGapStyle = (style: Record<string, number>) => {
+  if (!hasGapStyle(style)) return style
+  return Object.entries(style).reduce<Record<string, number>>((nextStyle, [key, value]) => {
+    if (key === 'rowGap' || key === 'columnGap' || key === 'gap') {
+      nextStyle[key] = Math.max(0, value)
+    } else {
+      nextStyle[key] = value
+    }
+    return nextStyle
+  }, {})
+}
+
 const getLayoutParent = (ele: HTMLElement | null): HTMLElement | null => {
   let parent = ele?.parentElement ?? null
   while (parent?.hasAttribute('data-wrap-container')) {
@@ -834,6 +846,7 @@ export default function createSetStyleHandler(
   }
 
   return function handler(ctx: any, params: any) {
+    console.log('setStyle params', params)
     const { state, multiple } = params
     /**
      * multiple
@@ -850,9 +863,11 @@ export default function createSetStyleHandler(
         initialInlineStyleValues = {}
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
         style = resolveStyle(
-          multiple
-            ? getStyle(ctx, params)
-            : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
+          normalizeGapStyle(
+            multiple
+              ? getStyle(ctx, params)
+              : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
+          ),
           multiple,
           getEle(ctx, params),
         )
@@ -1098,9 +1113,11 @@ export default function createSetStyleHandler(
         isStart = false
         const rawFinishStyle = getStyle(ctx, params) || style
         style = resolveStyle(
-          multiple
-            ? rawFinishStyle
-            : subtractParentGapFromStyle(rawFinishStyle, ele),
+          normalizeGapStyle(
+            multiple
+              ? rawFinishStyle
+              : subtractParentGapFromStyle(rawFinishStyle, ele),
+          ),
           multiple,
           getEle(ctx, params),
         )

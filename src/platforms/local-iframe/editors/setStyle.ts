@@ -57,10 +57,13 @@ function resolvePendingStyleEntries(ele: HTMLElement, key: string, value: any): 
   const property = convertCamelToHyphen(key)
   if (!property) return []
 
+  // gap 相关属性如果拿到负值，统一按 0 处理。
+  const nextValue = isGapProperty(property) ? Math.max(0, value) : value
+
   if (!isGapProperty(property)) {
     return [{
       key,
-      value,
+      value: nextValue,
       target: resolveStyleTarget(ele, property),
       targetEle: ele,
     }]
@@ -70,7 +73,7 @@ function resolvePendingStyleEntries(ele: HTMLElement, key: string, value: any): 
   if (parentEle && isFlexContainer(parentEle)) {
     return [{
       key,
-      value,
+      value: nextValue,
       target: resolveStyleTarget(parentEle, property),
       targetEle: parentEle,
     }]
@@ -78,7 +81,7 @@ function resolvePendingStyleEntries(ele: HTMLElement, key: string, value: any): 
 
   return (GAP_MARGIN_MAP[property] ?? []).map((marginKey) => ({
     key: marginKey,
-    value,
+    value: nextValue,
     target: resolveStyleTarget(ele, convertCamelToHyphen(marginKey)),
     targetEle: ele,
   }))
