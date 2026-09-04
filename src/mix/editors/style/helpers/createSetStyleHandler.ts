@@ -846,7 +846,6 @@ export default function createSetStyleHandler(
   }
 
   return function handler(ctx: any, params: any) {
-    console.log('setStyle params', params)
     const { state, multiple } = params
     /**
      * multiple
