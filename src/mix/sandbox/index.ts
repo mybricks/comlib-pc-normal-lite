@@ -1456,5 +1456,5 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     }
   }
 
-  context.events.emit('ready', true);
+  context.events.emit('lowcodeViewReady', true);
 }

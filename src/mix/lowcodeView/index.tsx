@@ -1125,7 +1125,7 @@ function LowcodeView(params: Params) {
 export default function(params: Params) {
   const [render, setRender] = useState(false)
   useEffect(() => {
-    const off = context.events.on('ready', () => {
+    const off = context.events.on('lowcodeViewReady', () => {
       setRender(true)
     })
 

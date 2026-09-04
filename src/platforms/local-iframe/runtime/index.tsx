@@ -69,7 +69,7 @@ const RuntimeIframe = (props) => {
 				return true
 			}
 
-			// iframe.contentWindow?.location.reload()
+			iframe.contentWindow?.location.reload()
 			return true
 		} catch {
 			iframe.src = expectedSrc
@@ -112,7 +112,7 @@ const RuntimeIframe = (props) => {
 		if (!targetSrc) return
 
 		pendingRefreshSrcRef.current = ''
-		refreshIframe(targetSrc)
+		// refreshIframe(targetSrc)
 	}, [debugSrc, refreshIframe])
 
 	useEffect(() => {

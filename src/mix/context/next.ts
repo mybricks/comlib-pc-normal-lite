@@ -141,7 +141,10 @@ class Context {
   }
 
   /** 全局事件 */
-  events = new Events<{ 'ready': boolean }>();
+  events = new Events<{
+    'componentReady': boolean
+    'lowcodeViewReady': boolean
+  }>();
 
   /** 设置组件 */
   setComponent({ params, actions }) {
@@ -158,6 +161,7 @@ class Context {
           actions: this.createComponentActions(actions),
           events
         }
+        this.events.emit('componentReady', true)
         events.on('debugTarget', (debugTarget: any) => {
           this.setComDebugging(!!debugTarget);
         }, false);

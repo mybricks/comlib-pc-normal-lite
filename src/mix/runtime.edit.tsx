@@ -184,7 +184,7 @@ const dataCompatible = (props) => {
   }
 }
 
-export default (props: any) => {
+function Component(props) {
   if (config.getFrontendMode() === 'local-iframe') {
     return <RuntimeIframe {...props} />
   }
@@ -273,4 +273,21 @@ export default (props: any) => {
   }
 
   return render && <Runtime key={runtimeKey} {...props} env={effectiveEnv} />;
+}
+
+export default (props: any) => {
+
+  const [ready, setReady] = useState(false)
+
+  useLayoutEffect(() => {
+    const cancel = context.events.on("componentReady", (ready) => {
+      setReady(ready)
+    })
+
+    return () => {
+      cancel()
+    }
+  }, [])
+
+  return ready && <Component {...props}/>
 };
