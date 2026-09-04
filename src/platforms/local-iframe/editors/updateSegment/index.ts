@@ -1,20 +1,15 @@
 import updateText from './updateText'
 import deleteDom from './deleteDom'
+import moveDom from './moveDom'
 
 export default function (_, type, options) {
-  console.log('updateSegment', options)
+  console.log('updateSegment', { type, options })
   if (type === 'updateText') {
     return updateText(options)
   } else if (type === 'delete') {
     return deleteDom(options)
+  } else if (type === 'cutTo') {
+    return moveDom(options)
   }
-  //   if (type === 'cutTo') {
-  //     return changeOrder(options)
-  //   } else if (type === 'updateText') {
-  //     return updateText(options)
-  //   } else if (type === 'delete') {
-  //     return runDelete(options)
-  //   } else if (type === 'insert') {
-  //     return insert(options)
-  //   }
+  // type === 'insert' 组件拖入
 }
