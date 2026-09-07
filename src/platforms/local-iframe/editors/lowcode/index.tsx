@@ -6,11 +6,13 @@ import * as lowcodeViewCssNS from './index.lazy.less'
 type TabKey = 'task' | 'review' | 'version'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
 
-type TaskStatus = '待处理' | '进行中' | '待交接' | '已完成'
+type TaskStatus = '待处理' | '待交接' | '待验收' | '已完成'
 interface TaskItem {
   title: string
   status: TaskStatus
   handoverTo?: string
+  handoverReason?: string
+  acceptanceProgress?: string
   summary?: string
   detail?: string
 }
@@ -36,41 +38,41 @@ interface FilterChip {
 const TASK_STATUS_STYLE: Record<TaskStatus, { dot: string; badgeBg: string; badgeText: string }> = {
   '待处理': {
     dot: 'var(--mybricks-text-color-disabled, #ccc)',
-    badgeBg: 'var(--mybricks-bg-color-active)',
-    badgeText: 'var(--mybricks-text-color-disabled, #999)',
+    badgeBg: 'var(--mybricks-bg-color-active, #DFE1E6)',
+    badgeText: 'var(--mybricks-text-color-disabled, #42526E)',
   },
-  '进行中': {
+  '待验收': {
     dot: '#1677ff',
-    badgeBg: 'rgba(22, 119, 255, 0.1)',
-    badgeText: '#1677ff',
+    badgeBg: '#1677ff',
+    badgeText: '#fff',
   },
   '待交接': {
     dot: '#fa8c16',
-    badgeBg: 'rgba(250, 140, 22, 0.1)',
-    badgeText: '#fa8c16',
+    badgeBg: '#fa8c16',
+    badgeText: '#fff',
   },
   '已完成': {
     dot: '#52c41a',
-    badgeBg: 'rgba(82, 196, 26, 0.1)',
-    badgeText: '#52c41a',
+    badgeBg: '#52c41a',
+    badgeText: '#fff',
   },
 }
 
 const REVIEW_STATUS_STYLE: Record<ReviewStatus, { dot: string; badgeBg: string; badgeText: string }> = {
   '通过': {
     dot: '#52c41a',
-    badgeBg: 'rgba(82, 196, 26, 0.1)',
-    badgeText: '#52c41a',
+    badgeBg: '#52c41a',
+    badgeText: '#fff',
   },
   '需修复': {
     dot: '#fa8c16',
-    badgeBg: 'rgba(250, 140, 22, 0.1)',
-    badgeText: '#fa8c16',
+    badgeBg: '#fa8c16',
+    badgeText: '#fff',
   },
   '严重问题': {
     dot: '#ff4d4f',
-    badgeBg: 'rgba(255, 77, 79, 0.1)',
-    badgeText: '#ff4d4f',
+    badgeBg: '#ff4d4f',
+    badgeText: '#fff',
   },
 }
 
@@ -82,7 +84,7 @@ const TAB_LABELS: Record<TabKey, string> = {
 
 const TASK_STATUS_KEYWORDS: Array<[TaskStatus, string[]]> = [
   ['已完成', ['已完成', '完成', 'done', 'completed']],
-  ['进行中', ['进行中', '进行', 'in progress', 'in-progress', 'doing']],
+  ['待验收', ['待验收', '验收', 'review', 'pending review']],
   ['待交接', ['待交接', '交接', 'handover', 'hand over']],
   ['待处理', ['待处理', '待', 'todo', 'pending', 'backlog']],
 ]
@@ -160,6 +162,8 @@ function parseTasks(content: string): TaskItem[] {
       title,
       status: normalizeStatus(extractMetaField(section, '状态'), TASK_STATUS_KEYWORDS, '待处理'),
       handoverTo: extractMetaField(section, '交接给'),
+      handoverReason: extractMetaField(section, '交接原因'),
+      acceptanceProgress: extractMetaField(section, '验收进展'),
       summary: extractSummary(section),
       detail: extractDetail(section),
     })
@@ -241,7 +245,7 @@ function SummaryBar({
       )}
       <button className={css['calibrate-btn']} onClick={onCalibrate} title="校准文档">
         <SyncIcon />
-        校准文档
+        文档不准？校准一下
       </button>
     </div>
   )
@@ -287,38 +291,71 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
   )
 }
 
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+      <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 14c0-2.5 2.5-4 5.5-4s5.5 1.5 5.5 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
 function TaskRow({ task }: { task: TaskItem }) {
   const [expanded, setExpanded] = useState(false)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['待处理']
   const hasDetail = !!task.detail
 
   return (
-    <div
-      className={`${css['panel-item']} ${hasDetail ? css['panel-item-expandable'] : ''} ${expanded ? css['panel-item-expanded'] : ''}`}
-      onClick={hasDetail ? () => setExpanded(v => !v) : undefined}
-    >
-      <span className={css['panel-item-dot']} style={{ background: style.dot }} />
-      <div className={css['panel-item-body']}>
-        <div className={css['panel-item-header']}>
-          <span className={css['panel-item-title']}>{task.title}</span>
-          <div className={css['panel-item-right']}>
-            <span
-              className={css['panel-item-badge']}
-              style={{ background: style.badgeBg, color: style.badgeText }}
-            >
-              {task.status}
-            </span>
-            {hasDetail && <ChevronIcon expanded={expanded} />}
-          </div>
-        </div>
-        {task.summary && (
-          <div className={css['panel-item-desc']}>{task.summary}</div>
-        )}
+    <div className={css['task-card']}>
+      <div className={css['task-card-header']}>
+        <span
+          className={css['task-status-badge']}
+          style={{ background: style.badgeBg, color: style.badgeText }}
+        >
+          {task.status}
+        </span>
+        <span className={css['task-title']}>{task.title}</span>
         {task.handoverTo && (
-          <div className={css['panel-item-meta']}>交接给：{task.handoverTo}</div>
+          <div className={css['task-assignee']}>
+            <span className={css['task-assignee-label']}>交接给</span>
+            <UserIcon />
+            <span className={css['task-assignee-name']}>{task.handoverTo}</span>
+          </div>
         )}
-        {hasDetail && expanded && <DetailContent detail={task.detail!} />}
       </div>
+
+      {task.summary && (
+        <div className={css['task-summary']}>{task.summary}</div>
+      )}
+
+      {(task.handoverReason || task.acceptanceProgress) && (
+        <div className={css['task-meta-list']}>
+          {task.handoverReason && (
+            <div className={css['task-meta-item']}>
+              <span className={css['task-meta-label']}>交接原因</span>
+              <span className={css['task-meta-value']}>{task.handoverReason}</span>
+            </div>
+          )}
+          {task.acceptanceProgress && (
+            <div className={css['task-meta-item']}>
+              <span className={css['task-meta-label']}>{task.status === '已完成' ? '验收结论' : '验收进展'}</span>
+              <span className={css['task-meta-value']}>{task.acceptanceProgress}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasDetail && (
+        <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+          <ChevronIcon expanded={expanded} />
+          <span>{expanded ? '收起详情' : '展开详情'}</span>
+        </div>
+      )}
+
+      {hasDetail && expanded && (
+        <div className={css['task-detail-wrapper']}>
+          <DetailContent detail={task.detail!} />
+        </div>
+      )}
     </div>
   )
 }
@@ -329,29 +366,32 @@ function ReviewRow({ item }: { item: ReviewItem }) {
   const hasDetail = !!item.detail
 
   return (
-    <div
-      className={`${css['panel-item']} ${hasDetail ? css['panel-item-expandable'] : ''} ${expanded ? css['panel-item-expanded'] : ''}`}
-      onClick={hasDetail ? () => setExpanded(v => !v) : undefined}
-    >
-      <span className={css['panel-item-dot']} style={{ background: style.dot }} />
-      <div className={css['panel-item-body']}>
-        <div className={css['panel-item-header']}>
-          <span className={css['panel-item-title']}>{item.title}</span>
-          <div className={css['panel-item-right']}>
-            <span
-              className={css['panel-item-badge']}
-              style={{ background: style.badgeBg, color: style.badgeText }}
-            >
-              {item.status}
-            </span>
-            {hasDetail && <ChevronIcon expanded={expanded} />}
-          </div>
-        </div>
-        {item.summary && (
-          <div className={css['panel-item-desc']}>{item.summary}</div>
-        )}
-        {hasDetail && expanded && <DetailContent detail={item.detail!} />}
+    <div className={css['task-card']}>
+      <div className={css['task-card-header']}>
+        <span
+          className={css['task-status-badge']}
+          style={{ background: style.badgeBg, color: style.badgeText }}
+        >
+          {item.status}
+        </span>
+        <span className={css['task-title']}>{item.title}</span>
       </div>
+      {item.summary && (
+        <div className={css['task-summary']}>{item.summary}</div>
+      )}
+
+      {hasDetail && (
+        <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+          <ChevronIcon expanded={expanded} />
+          <span>{expanded ? '收起详情' : '展开详情'}</span>
+        </div>
+      )}
+
+      {hasDetail && expanded && (
+        <div className={css['task-detail-wrapper']}>
+          <DetailContent detail={item.detail!} />
+        </div>
+      )}
     </div>
   )
 }
@@ -402,7 +442,12 @@ function TaskPanel({ content }: { content: string | null }) {
       />
       <div className={css['panel-list']}>
         {filtered.length > 0
-          ? filtered.map((task, i) => <TaskRow key={i} task={task} />)
+          ? filtered
+              .sort((a, b) => {
+                const order: Record<TaskStatus, number> = { '待处理': 1, '进行中': 2, '待交接': 3, '待验收': 4, '已完成': 5 }
+                return order[a.status] - order[b.status]
+              })
+              .map((task, i) => <TaskRow key={i} task={task} />)
           : <div className={css['panel-filter-empty']}>无匹配结果</div>
         }
       </div>
@@ -471,7 +516,12 @@ function ReviewPanel({ content }: { content: string | null }) {
       />
       <div className={css['panel-list']}>
         {filtered.length > 0
-          ? filtered.map((item, i) => <ReviewRow key={i} item={item} />)
+          ? filtered
+              .sort((a, b) => {
+                const order: Record<ReviewStatus, number> = { '严重问题': 1, '需修复': 2, '通过': 3 }
+                return order[a.status] - order[b.status]
+              })
+              .map((item, i) => <ReviewRow key={i} item={item} />)
           : <div className={css['panel-filter-empty']}>无匹配结果</div>
         }
       </div>
