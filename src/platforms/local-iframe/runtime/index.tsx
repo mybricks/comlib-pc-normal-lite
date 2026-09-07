@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { registerSandbox } from '../../../mix/sandbox/forLocalIframe'
+import { registerSandbox } from '../sandbox'
 import context from '../../../mix/context'
 
 type RouteParamDraft = {

@@ -1,8 +1,7 @@
-import context from '../context'
-import type { UserTaskInfo } from '../context'
+import context, { type UserTaskInfo } from '../../../mix/context'
 import { parse as parseYaml } from 'yaml'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
-import { transformLocalIframeFormatForNotifyChanged } from '../../utils/ai-code/md/transformForNotifyChanged'
+import { transformLocalIframeFormatForNotifyChanged } from '../../../utils/ai-code/md/transformForNotifyChanged'
 import {
   hasMybricksGraphDirectory,
   hasMybricksGraphFile,
@@ -10,7 +9,7 @@ import {
   parseMybricksGraph,
   resolveGraphSourceFile,
   type FileLike,
-} from '../../utils/ai-code/graph'
+} from '../../../utils/ai-code/graph'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -549,7 +548,10 @@ export function registerSandbox(comId: string) {
         // context.component?.events.emit('vibing', false);
       },
       async afterTurnSummary(turn: { id?: string }, summary: string) {
-        console.log(13, 'hooks:afterTurnSummary')
+        console.log(13, 'hooks:afterTurnSummary', {
+          turn,
+          summary
+        })
         // turnLogs.setLog({
         //   message: '[轮次/afterTurnSummary] 收到 summary 回调 — 开始更新版本摘要',
         //   summary

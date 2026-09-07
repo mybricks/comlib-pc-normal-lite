@@ -1,7 +1,6 @@
 import React from 'react';
 import { buildGuiCardHooks } from './configs/guiCard';
 import { buildHooks as buildPrototypeHooks } from './configs/prototype';
-import buildLocalIframeHooks from '../localIframe/buildHooks';
 import LowcodeView, {lowcodeViewEvents} from '../lowcodeView';
 import lowcodeViewCss from '../lowcodeView/index.lazy.less';
 import consoleViewCss from '../lowcodeView/console/index.lazy.less';
@@ -31,7 +30,7 @@ import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 
 
 import context, { config } from '../context';
-import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
+// import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
 import type {Props} from './types';
 
 const errorSet = new Set();
@@ -74,8 +73,6 @@ export function buildHooks(props: Props) {
   const hooks = {}
   if (frontendMode === 'gui_card') {
     Object.assign(hooks, buildGuiCardHooks())
-  } else if (frontendMode === 'local-iframe') {
-    Object.assign(hooks, buildLocalIframeHooks())
   } else {
     Object.assign(hooks, buildPrototypeHooks())
   }
@@ -391,32 +388,32 @@ export function buildHooks(props: Props) {
         },
       });
     },
-    '@audit'(hookContext, params) {
-      const { onComplete, onError } = params ?? {};
-      try {
-        createAuditTransaction(onComplete, onError);
-      } catch (error) {
-        onError?.(error);
-        return;
-      }
-      const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent;
+    // '@audit'(hookContext, params) {
+    //   const { onComplete, onError } = params ?? {};
+    //   try {
+    //     createAuditTransaction(onComplete, onError);
+    //   } catch (error) {
+    //     onError?.(error);
+    //     return;
+    //   }
+    //   const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent;
 
-      if (typeof sendToAgent !== 'function') {
-        failActiveAuditTransaction(new Error('AI 审查服务当前不可用'));
-        return;
-      }
+    //   if (typeof sendToAgent !== 'function') {
+    //     failActiveAuditTransaction(new Error('AI 审查服务当前不可用'));
+    //     return;
+    //   }
 
-      try {
-        const request = sendToAgent(hookContext.id, {
-          message: `校准下当前的变更影响文档`,
-        });
-        void Promise.resolve(request).catch((error) => {
-          failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
-        });
-      } catch (error) {
-        failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
-      }
-    },
+    //   try {
+    //     const request = sendToAgent(hookContext.id, {
+    //       message: `校准下当前的变更影响文档`,
+    //     });
+    //     void Promise.resolve(request).catch((error) => {
+    //       failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
+    //     });
+    //   } catch (error) {
+    //     failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
+    //   }
+    // },
     ...hooks
   };
 }

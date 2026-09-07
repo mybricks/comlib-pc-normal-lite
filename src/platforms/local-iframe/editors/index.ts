@@ -1,4 +1,4 @@
-import lowcode from '../../../mix/localIframe/buildHooks/lowcode'
+import lowcode from './lowcode'
 import debug from './debug'
 import style from './style'
 import resizer from './resizer'
