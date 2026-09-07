@@ -145,7 +145,9 @@ export default function () {
         if (!ele) return
 
         if (state === 'ing') {
-          const styleEntries = Object.entries(style ?? {}).filter(([, value]) => value !== undefined) as StyleEntry[]
+          const styleEntries = (Object.entries(style ?? {}) as StyleEntry[])
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => ([key, Math.max(value, 0)] as StyleEntry))
           if (!styleEntries.length) return
           applyPendingStyleEntries(ele, styleEntries)
           return

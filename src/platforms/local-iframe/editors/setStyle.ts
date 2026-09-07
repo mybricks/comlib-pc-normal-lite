@@ -33,9 +33,9 @@ type PendingStyleBranch = {
 
 // gap 在不支持 flex gap 时，退化成的 margin 组合。
 const GAP_MARGIN_MAP: Record<string, string[]> = {
-  gap: ['marginRight', 'marginBottom'],
-  'row-gap': ['marginBottom'],
-  'column-gap': ['marginRight'],
+  gap: ['marginLeft', 'marginTop'],
+  'row-gap': ['marginTop'],
+  'column-gap': ['marginLeft'],
 }
 
 // 判断当前属性是不是 gap 系列。

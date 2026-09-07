@@ -63,6 +63,15 @@ const dataCompatible = (props) => {
 
     const version = config.getVersion()
     if (!data.version || data.version < 45 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+
+      if (!data.version && !data.files.length) {
+        // 初始化文件
+        const initialFiles = config.getInitialFiles()
+        if (initialFiles) {
+          data.files = initialFiles
+        }
+      }
+
       data.version = 45
       data._componentRuntime.version = version
       console.log('[com:update]', data)
@@ -188,16 +197,6 @@ function Component(props) {
   if (config.getFrontendMode() === 'local-iframe') {
     return <RuntimeIframe {...props} />
   }
-
-  // return (
-  //   <iframe
-  //     src={'/lingchuang'}
-  //     style={{ border: 'none', width: 1200, height: 1000 }}
-  //     onLoad={(ref) => {
-  //       props.onIframeLoad(ref.target.contentDocument)
-  //     }}
-  //   />
-  // )
 
   const { env, data } = props;
 

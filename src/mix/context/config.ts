@@ -446,6 +446,10 @@ class Config {
       return componentRuntime?.DataSource
     }
   }
+
+  getInitialFiles() {
+    return (window as any)._sandbox_?.config?.componentRuntime?.initialFiles
+  }
 }
 
 export default new Config()
