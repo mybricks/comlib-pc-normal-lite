@@ -223,7 +223,7 @@ export default function () {
     const styleEntries = Object.entries(style ?? {}).filter(([, value]) => value !== undefined) as StyleEntry[]
     if (!styleEntries.length && state !== 'finish') return
 
-    console.log('setstyle', style)
+    //console.log('setstyle', style)
 
     if (state === 'start') {
       applyPendingStyleEntries(targetEle, styleEntries)
