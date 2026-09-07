@@ -74,6 +74,107 @@ function deriveNameFromFilePath(filePath?: string): string {
   return stem || 'root';
 }
 
+function getJSXAttributeValue(node: any, attrName: string) {
+  return node?.openingElement?.attributes?.find(
+    (attribute: any) => attribute?.type === 'JSXAttribute' && attribute.name?.name === attrName,
+  )?.value;
+}
+
+function isImportNamespaceSpecifier(node: any) {
+  return node?.type === 'ImportNamespaceSpecifier';
+}
+
+function collectLessImportPathsFromClassNameValue(
+  valueNode: any,
+  lessImportPathByLocalName: Map<string, string>,
+): string[] {
+  const result: string[] = [];
+  const seenPaths = new Set<string>();
+
+  const visit = (node: any) => {
+    if (!node) return;
+
+    switch (node.type) {
+      case 'JSXExpressionContainer':
+        visit(node.expression);
+        return;
+      case 'MemberExpression': {
+        const objectNode = node.object;
+        if (objectNode?.type === 'Identifier') {
+          const lessPath = lessImportPathByLocalName.get(objectNode.name);
+          if (lessPath && !seenPaths.has(lessPath)) {
+            seenPaths.add(lessPath);
+            result.push(lessPath);
+          }
+        }
+        if (node.computed) {
+          visit(node.property);
+        }
+        if (objectNode?.type === 'MemberExpression') {
+          visit(objectNode);
+        }
+        return;
+      }
+      case 'ConditionalExpression':
+        visit(node.test);
+        visit(node.consequent);
+        visit(node.alternate);
+        return;
+      case 'LogicalExpression':
+      case 'BinaryExpression':
+        visit(node.left);
+        visit(node.right);
+        return;
+      case 'TemplateLiteral':
+        for (const expr of node.expressions || []) {
+          visit(expr);
+        }
+        return;
+      case 'ArrayExpression':
+        for (const element of node.elements || []) {
+          visit(element);
+        }
+        return;
+      case 'CallExpression':
+        visit(node.callee);
+        for (const arg of node.arguments || []) {
+          visit(arg);
+        }
+        return;
+      case 'ObjectExpression':
+        for (const property of node.properties || []) {
+          if (property?.type === 'ObjectProperty') {
+            if (property.computed) {
+              visit(property.key);
+            }
+            visit(property.value);
+          } else if (property?.type === 'SpreadElement') {
+            visit(property.argument);
+          }
+        }
+        return;
+      case 'ParenthesizedExpression':
+        visit(node.expression);
+        return;
+      default:
+        return;
+    }
+  };
+
+  visit(valueNode);
+  return result;
+}
+
+function getLessFileForJSXElement(
+  node: any,
+  lessImportPathByLocalName: Map<string, string>,
+  fallbackLessPath?: string | null,
+): string | undefined {
+  const classNameValue = getJSXAttributeValue(node, 'className');
+  const lessPaths = collectLessImportPathsFromClassNameValue(classNameValue, lessImportPathByLocalName);
+  return lessPaths[0] ?? fallbackLessPath ?? undefined;
+}
+
 export type JSXElementDataAttributes = {
   start: number
   end: number
@@ -202,8 +303,9 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
 
     const popupRefDeclarators = new Map();
 
-    // [TODO] 未来可能从多文件导入less
-    const lessMap = new Map();
+    /** 当前文件中所有 less import 的本地名 -> 解析后的文件路径 */
+    const lessImportPathByLocalName = new Map<string, string>();
+    let lastLessImportPath: string | undefined;
     /** CSS Module 导入的本地变量名集合，如 import styles from './index.less' 则记录 'styles' */
     const cssModuleNames = new Set<string>();
     const dataAttrOptions = reactNative ? { mode: 'react-native' as const } : undefined;
@@ -222,7 +324,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
             const { node } = path;
             // less 路径解析必须独立于 specifiers：
             // html-to-appref 等场景是副作用导入 `import './index.less'`（无 local 绑定），
-            // 若只在 forEach(specifiers) 内处理，lessMap 永远为空，
+            // 若只在 forEach(specifiers) 内处理，副作用导入会丢失，
             // 样式写入会走 resolveLessFilePath：入口 less import → 文件名兜底。
             if (node.source.value.endsWith('.less') && fileName) {
               let currentPath = fileName.split('/');
@@ -237,16 +339,31 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                   currentPath.push(seg);
                 }
               });
-              lessMap.set('less', currentPath.join('/'));
+              const resolvedLessPath = currentPath.join('/');
+              lastLessImportPath = resolvedLessPath;
+
+              node.specifiers.forEach((specifier) => {
+                if (
+                  types.isImportSpecifier(specifier) ||
+                  types.isImportDefaultSpecifier(specifier) ||
+                  isImportNamespaceSpecifier(specifier)
+                ) {
+                  const localName = specifier.local?.name;
+                  if (!localName) return;
+                  lessImportPathByLocalName.set(localName, resolvedLessPath);
+                  cssModuleNames.add(localName);
+                }
+              });
+              return;
             }
 
             node.specifiers.forEach((specifier) => {
-              if (types.isImportSpecifier(specifier) || types.isImportDefaultSpecifier(specifier)) {
+              if (
+                types.isImportSpecifier(specifier) ||
+                types.isImportDefaultSpecifier(specifier) ||
+                isImportNamespaceSpecifier(specifier)
+              ) {
                 importRelyMap.set(specifier.local.name, node.source.value);
-
-                if (node.source.value.endsWith('.less')) {
-                  cssModuleNames.add(specifier.local.name);
-                }
               }
             })
           } catch { }
@@ -333,6 +450,9 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
               if (dataZoneTextEditable) {
                 pushDataAttrForMode(node.openingElement.attributes, "data-zone-text-editable", valueForDataAttr("data-zone-text-editable", dataZoneTextEditable));
               }
+              // 优先按当前 JSXElement 的 className 追到实际引用的 less 文件；
+              // 若 className 里没有可识别的 less 引用，再回退到最后一个 less import。
+              const lessFileForElement = getLessFileForJSXElement(node, lessImportPathByLocalName, lastLessImportPath);
               const dataLocValueObject: any = {
                 jsx: { start: node.start, end: node.end },
                 tag: { end: node.openingElement.end },
@@ -342,7 +462,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 },
                 files: {
                   jsx: fileName,
-                  less: lessMap.get("less")
+                  less: lessFileForElement
                 }
               };
               if (sourceOffset !== 0) {

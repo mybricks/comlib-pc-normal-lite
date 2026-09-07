@@ -803,9 +803,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ...envCssVariables,
         }}
       >
-        {container && <PageContext.Provider value={container}>
-          {children}
-        </PageContext.Provider>}
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+          {container && <PageContext.Provider value={container}>
+            {children}
+          </PageContext.Provider>}
+        </div>
       </div>
     )
   }
@@ -1363,19 +1365,21 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }, {}),
               ...envCssVariables
             }}>
-            {container && (
-              <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
-                <ErrorView>
-                  <ObservedComponent
-                    {...props}
-                    {...realProps}
-                    _env={_env}
-                    popupNode={container}
-                    wrapper={container}
-                  />
-                </ErrorView>
-              </PageContext.Provider>
-            )}
+              <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+                {container && (
+                  <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
+                    <ErrorView>
+                      <ObservedComponent
+                        {...props}
+                        {...realProps}
+                        _env={_env}
+                        popupNode={container}
+                        wrapper={container}
+                      />
+                    </ErrorView>
+                  </PageContext.Provider>
+                )}
+              </div>
           </div>
         );
       } else {

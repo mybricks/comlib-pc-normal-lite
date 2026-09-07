@@ -14,7 +14,7 @@ function resolveRelativeLessPath(fromFile: string, importPath: string): string {
 
 /**
  * 从入口 tsx 源码提取 less import（含副作用导入）。
- * 多个 import 时取最后一个，与 babelPlugin lessMap 行为一致。
+ * 多个 import 时取最后一个，作为入口文件的兜底 less。
  */
 function extractLessImportFromSource(fileName: string, source?: string): string | null {
   if (!source) return null
