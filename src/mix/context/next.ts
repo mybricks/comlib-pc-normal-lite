@@ -814,7 +814,7 @@ export default nextContext
 
 export interface VersionRecord {
   id: string;
-  turnId: string;
+  turnId?: string;
   label: string;
   type: 'ai' | 'manual' | 'rollback' | 'init';
   createdAt: number;

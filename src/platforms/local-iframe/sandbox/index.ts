@@ -10,6 +10,8 @@ import {
   resolveGraphSourceFile,
   type FileLike,
 } from '../../../utils/ai-code/graph'
+import myContext from '../context'
+import { randomUUID } from '../../../mix/utils/uuid'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -334,7 +336,7 @@ async function deleteLocalFiles(paths: string[]): Promise<void> {
   await refreshLocalGraph()
 }
 
-async function executeLocalShellCommand(command: string, options: AgentSandboxCommandOptions = {}): Promise<LocalCommandResult> {
+export async function executeLocalShellCommand(command: string, options: AgentSandboxCommandOptions = {}): Promise<LocalCommandResult> {
   const response = await fetch(LOCAL_COMMANDS_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -474,11 +476,8 @@ export function registerSandbox(comId: string) {
   const { history, isRemoteAgent } = connectToAI(comId, {
     agentSandbox,
     hooks: {
-      async beforeRequest({ meta, extra }) {
-        console.log(10, 'hooks:beforeRequest', {
-          meta,
-          extra
-        })
+      async beforeRequest(params,) {
+        console.log(10, 'hooks:beforeRequest', params)
         // (window as any).__vibeCodingCallbacks__?.onStart?.();
         
         // loadingRef.current?.setExtra(extra);
@@ -486,8 +485,44 @@ export function registerSandbox(comId: string) {
 
         // context.component?.events.emit('vibing', true);
       },
-      async beforeTurn() {
-        console.log(11, 'hooks:beforeTurn')
+      async beforeTurn(params) {
+        console.log(11, 'hooks:beforeTurn', params)
+        const gitDiff = (await executeLocalShellCommand('git diff && git add .', { timeoutMs: 10_000 })).stdout
+        const versionList = myContext.version.getList()
+
+        if (!gitDiff) {
+          // 没有 diff
+          if (!versionList.length) {
+            // 版本列表为空，注入初始化版本
+            myContext.version.add({
+              id: randomUUID(),
+              label: `V${versionList.length}`,
+              type: 'init',
+              createdAt: Date.now(),
+              diff: '',
+            })
+          }
+        } else {
+          if (!versionList.length) {
+            // 版本列表为空，注入初始化版本
+            myContext.version.add({
+              id: randomUUID(),
+              label: `V${versionList.length}`,
+              type: 'init',
+              createdAt: Date.now(),
+              diff: '',
+            })
+          }
+
+          // 有 diff 认为是手动修改
+          myContext.version.add({
+            id: randomUUID(),
+            label: `V${versionList.length}`,
+            type: 'manual',
+            createdAt: Date.now(),
+            diff: gitDiff,
+          })
+        }
         // const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         // const onProgress = (window as any)?._ai_focus_params_?.onProgress;
         // loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
@@ -495,15 +530,30 @@ export function registerSandbox(comId: string) {
       },
       async afterTurn(turn: any) {
         console.log(12, 'hooks:afterTurn', turn)
-        if (hasActiveAuditTransaction()) {
-          try {
-            const auditInfo = await resolveAuditResult()
-            completeActiveAuditTransaction(auditInfo)
-          } catch (error) {
-            failActiveAuditTransaction(toError(error, '审查报告解析失败'))
-          }
-        } else {
-          turn.extra?.onComplete?.()
+        // if (hasActiveAuditTransaction()) {
+        //   try {
+        //     const auditInfo = await resolveAuditResult()
+        //     completeActiveAuditTransaction(auditInfo)
+        //   } catch (error) {
+        //     failActiveAuditTransaction(toError(error, '审查报告解析失败'))
+        //   }
+        // } else {
+        //   turn.extra?.onComplete?.()
+        // }
+        turn.extra?.onComplete?.()
+
+        const gitDiff = (await executeLocalShellCommand('git diff && git add .', { timeoutMs: 10_000 })).stdout
+        const versionList = myContext.version.getList()
+        console.log(666, "gitDiff", gitDiff || "❌")
+        if (gitDiff) {
+          myContext.version.add({
+            id: randomUUID(),
+            turnId: turn.id,
+            label: `V${versionList.length}`,
+            type: 'ai',
+            createdAt: Date.now(),
+            diff: gitDiff,
+          })
         }
         // (window as any)._sendToAgent_source_ = null
         // turnLogs.turnID = turn.id
@@ -547,11 +597,18 @@ export function registerSandbox(comId: string) {
 
         // context.component?.events.emit('vibing', false);
       },
-      async afterTurnSummary(turn: { id?: string }, summary: string) {
+      async afterTurnSummary(turn, summary: string) {
         console.log(13, 'hooks:afterTurnSummary', {
           turn,
           summary
         })
+
+        if (summary) {
+          myContext.version.update(turn.id, {
+            summary
+          })
+        }
+
         // turnLogs.setLog({
         //   message: '[轮次/afterTurnSummary] 收到 summary 回调 — 开始更新版本摘要',
         //   summary

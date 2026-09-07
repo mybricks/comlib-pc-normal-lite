@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import context from '../../../../mix/context'
 import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
+import myContext, { type VersionRecord } from '../../context'
+import VersionListView from '../../../../components/version-list'
+import versionListViewCss from '../../../../components/version-list/index.lazy.less'
+import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
 
 type TabKey = 'task' | 'review' | 'version'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
@@ -203,6 +207,16 @@ function SyncIcon() {
   )
 }
 
+function VersionListIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <path d="M3 4.5H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3 11.5H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function SummaryBar({
   chips,
   total,
@@ -247,6 +261,31 @@ function SummaryBar({
         <SyncIcon />
         文档不准？校准一下
       </button>
+    </div>
+  )
+}
+
+function VersionPanel() {
+  const [versions, setVersions] = useState<VersionRecord[]>([])
+
+  useEffect(() => {
+    const off = myContext.version.events.on('list', (list) => {
+      setVersions([...list])
+    })
+    return () => off()
+  }, [])
+
+  const handleRollback = useCallback((version: VersionRecord) => {
+    myContext.version.rollback(version.id)
+  }, [])
+
+  return (
+    <div className={css['version-panel']}>
+      <VersionListView
+        versions={versions}
+        onRollback={handleRollback}
+        enableInfiniteScroll={false}
+      />
     </div>
   )
 }
@@ -562,11 +601,7 @@ function LowcodeViewShell() {
       </div>
       <div className={css['lowcode-view']}>
         {activeTab === 'task' && <TaskPanel content={tasksContent} />}
-        {activeTab === 'version' && (
-          <div className={css['panel-empty']}>
-            <span className={css['panel-empty-text']}>版本</span>
-          </div>
-        )}
+        {activeTab === 'version' && <VersionPanel />}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
       </div>
     </div>
@@ -599,6 +634,10 @@ export default {
         css: transform(lowcodeViewCssNS),
         use: genUse(lowcodeViewCss)
       },
+      {
+        css: transform(versionListViewCssNS),
+        use: genUse(versionListViewCss)
+      }
     ]
   },
 }
