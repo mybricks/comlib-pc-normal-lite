@@ -4,7 +4,6 @@ import { buildHooks as buildPrototypeHooks } from './configs/prototype';
 import LowcodeView, {lowcodeViewEvents} from '../lowcodeView';
 import lowcodeViewCss from '../lowcodeView/index.lazy.less';
 import consoleViewCss from '../lowcodeView/console/index.lazy.less';
-import versionViewCss from '../lowcodeView/version/index.lazy.less';
 import treeViewCss from '../lowcodeView/tree/index.lazy.less';
 import exportCodeCss from './configs/style.lazy.less';
 import iconLibraryModalCss from './configs/IconLibraryModal/style.lazy.less';
@@ -17,7 +16,6 @@ import aiEditPanelCss from './components/AiEditPanel.lazy.less';
 
 import * as lowcodeViewCssNS from '../lowcodeView/index.lazy.less';
 import * as consoleViewCssNS from '../lowcodeView/console/index.lazy.less';
-import * as versionViewCssNS from '../lowcodeView/version/index.lazy.less';
 import * as treeViewCssNS from '../lowcodeView/tree/index.lazy.less';
 import * as exportCodeCssNS from './configs/style.lazy.less';
 import * as iconLibraryModalCssNS from './configs/IconLibraryModal/style.lazy.less';
@@ -27,6 +25,8 @@ import * as imgEditorCssNS from './configs/ImgEditor/style.lazy.less';
 import * as iconEditorCssNS from './configs/IconEditor/style.lazy.less';
 import * as aiSvgIconCssNS from './icons/aiSvgIcon.lazy.less';
 import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
+import versionListViewCss from '../../components/version-list/index.lazy.less';
+import * as versionListViewCssNS from '../../components/version-list/index.lazy.less';
 
 
 import context, { config } from '../context';
@@ -112,12 +112,12 @@ export function buildHooks(props: Props) {
             use: genUse(consoleViewCss)
           },
           {
-            css: transform(versionViewCssNS),
-            use: genUse(versionViewCss)
-          },
-          {
             css: transform(treeViewCssNS),
             use: genUse(treeViewCss)
+          },
+          {
+            css: transform(versionListViewCssNS),
+            use: genUse(versionListViewCss)
           },
           {
             css: transform(exportCodeCssNS),

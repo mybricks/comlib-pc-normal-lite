@@ -117,6 +117,7 @@ interface VersionItemProps {
   tagCls: string;
   parentElement?: HTMLDivElement | null;
   onRollback: (v: VersionRecord) => void;
+  rollbackDisabled?: boolean;
 }
 
 function VersionItem({
@@ -127,6 +128,7 @@ function VersionItem({
   tagCls,
   parentElement,
   onRollback,
+  rollbackDisabled,
 }: VersionItemProps) {
   const [popconfirmVisible, setPopconfirmVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -172,7 +174,7 @@ function VersionItem({
         </div>
         {version.summary && <div className={css["version-summary"]}>{version.summary}</div>}
       </div>
-      {!isCurrent && (
+      {!isCurrent && !rollbackDisabled && (
         <div>
           <Popconfirm
             title="确认回滚到该版本？该版本之后的内容将被删除且不可撤销。"
@@ -199,6 +201,9 @@ export interface VersionListViewProps {
   hasMore?: boolean;
   loadMore?: () => void | Promise<void>;
   scrollableTarget?: string;
+  rollbackDisabled?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 export default function VersionListView({
@@ -209,6 +214,9 @@ export default function VersionListView({
   hasMore = false,
   loadMore,
   scrollableTarget,
+  rollbackDisabled = false,
+  className,
+  style,
 }: VersionListViewProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const autoTargetId = useId().replace(/:/g, "-");
@@ -243,6 +251,7 @@ export default function VersionListView({
           dotCls={dotCls}
           tagCls={tagCls}
           onRollback={onRollback}
+          rollbackDisabled={rollbackDisabled}
           parentElement={rootRef.current}
         />
       );
@@ -250,7 +259,7 @@ export default function VersionListView({
   };
 
   return (
-    <div className={css["version-list"]} id={targetId} ref={rootRef}>
+    <div className={[css["version-list"], className].filter(Boolean).join(" ")} id={targetId} ref={rootRef} style={style}>
       {useInfiniteScroll ? (
         <InfiniteScroll
           loading={loading}
