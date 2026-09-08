@@ -55,6 +55,40 @@ const RuntimeIframe = (props) => {
 	const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
 	const pendingRefreshSrcRef = useRef('')
 	const debugSrcRef = useRef('')
+	const loadedSrcsRef = useRef<Set<string>>(new Set())
+	const prevIframesRef = useRef<RuntimeIframeItem[]>([])
+	const currentIframesRef = useRef<RuntimeIframeItem[]>([])
+	const lastLoadedSignatureRef = useRef('')
+	currentIframesRef.current = iframes
+
+	const emitLoadedIfReady = useCallback((nextIframes: RuntimeIframeItem[]) => {
+		if (!nextIframes.every((item) => loadedSrcsRef.current.has(item.src))) {
+			return
+		}
+
+		const signature = JSON.stringify(nextIframes.map((route) => {
+			return {
+				title: route.title,
+				path: route.path,
+				params: route.params,
+				src: route.src
+			}
+		}))
+
+		if (signature === lastLoadedSignatureRef.current) {
+			return
+		}
+
+		lastLoadedSignatureRef.current = signature
+		context.component?.actions.loaded?.({
+			pageList: nextIframes.map((route) => {
+				return {
+					...route,
+					id: route.src
+				}
+			})
+		})
+	}, [])
 
 	const refreshIframe = useCallback((itemSrc: string) => {
 		const iframe = iframeRefs.current[itemSrc]
@@ -102,6 +136,9 @@ const RuntimeIframe = (props) => {
 		})
 
 		return () => {
+			prevIframesRef.current.forEach((item) => {
+				props.onIframeDestory?.(item.src)
+			})
 			cancelRoutesEventsRoutes()
 			onEventsDebugTargetCancel()
 		}
@@ -116,14 +153,17 @@ const RuntimeIframe = (props) => {
 	}, [debugSrc, refreshIframe])
 
 	useEffect(() => {
-		// context.component?.actions.loaded({
-		// 	pageList: iframes.map((route) => {
-		// 		return {
-		// 			...route,
-		// 			id: route.src
-		// 		}
-		// 	})
-		// })
+		const currentSrcSet = new Set(iframes.map((item) => item.src))
+		const removedIframes = prevIframesRef.current.filter((item) => !currentSrcSet.has(item.src))
+
+		removedIframes.forEach((item) => {
+			props.onIframeDestory?.(item.src)
+			delete iframeRefs.current[item.src]
+			loadedSrcsRef.current.delete(item.src)
+		})
+
+		prevIframesRef.current = iframes
+		emitLoadedIfReady(iframes)
 	}, [iframes])
 
 	return (
@@ -155,10 +195,12 @@ const RuntimeIframe = (props) => {
 								height: '100%'
 							}}
 							onLoad={(event) => {
+								loadedSrcsRef.current.add(item.src)
 								props.onIframeLoad({
 									id: item.src,
 									doc: event.currentTarget.contentDocument
 								})
+								emitLoadedIfReady(currentIframesRef.current)
 							}}
 						/>
 					</div>
