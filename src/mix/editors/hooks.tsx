@@ -343,7 +343,7 @@ export function buildHooks(props: Props) {
 
     },
     '@resizePage'(...args) {
-      console.log('@resizePage', args)
+      // console.log('@resizePage', args)
     },
     '@auditPage'(hookContext, params) {
       type AuditPageOptionKey = 'events' | 'services' | 'crScope' | 'store' | 'crComplete';
