@@ -69,7 +69,7 @@ type AgentSandboxCommandOptions = {
   onStderr?: (chunk: string) => void
 }
 
-const AUDIT_REVIEW_ROOT = '.lingchuang'
+export const AUDIT_REVIEW_ROOT = '.lingchuang'
 const AUDIT_STATE_LABELS: Record<AuditState, string> = {
   [-1]: '禁止上线',
   0: '需要修复',
@@ -130,7 +130,7 @@ function formatAuditDetail(review: string): string {
   })
 }
 
-async function getCurrentBranch(): Promise<string | undefined> {
+export async function getCurrentBranch(): Promise<string | undefined> {
   const result = await executeLocalShellCommand('git branch --show-current', { timeoutMs: 10_000 })
   if (result.exitCode !== 0) return undefined
   const branch = result.stdout.trim()

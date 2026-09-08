@@ -1,6 +1,6 @@
 interface DomLoc {
-  codeLine?: { start?: number; end?: number }
-  files?: { jsx?: string; less?: string }
+  codeLine: { start: number; end: number }
+  files: { jsx: string; less?: string }
   cn?: string[]
 }
 
@@ -13,7 +13,7 @@ function safeParseJson<T>(value: string | null): T | undefined {
   }
 }
 
-function getClosestDomLoc<T extends DomLoc>(el: Element): T | undefined {
+export function getClosestDomLoc<T extends DomLoc>(el: Element): T | undefined {
   let current: Element | null = el
   while (current) {
     const loc = safeParseJson<T>(current.getAttribute('data-loc'))

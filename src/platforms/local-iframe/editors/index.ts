@@ -8,6 +8,7 @@ import updateSegment from './updateSegment'
 import runTest from './runTest'
 import setStyle from './setStyle'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
+import noteRender from './noteRender'
 
 export default function () {
   return {
@@ -27,7 +28,9 @@ export default function () {
       // style: [{ items: [] }],
     },
     '[class]': {
-
+      items: [
+        noteRender
+      ]
     },
     '@commitUserActions': commitUserActions,
     '@cancelUserActions': cancelUserActions,
