@@ -803,7 +803,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ...envCssVariables,
         }}
       >
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
           {container && <PageContext.Provider value={container}>
             {children}
           </PageContext.Provider>}
@@ -1365,7 +1365,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }, {}),
               ...envCssVariables
             }}>
-              <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
                 {container && (
                   <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
                     <ErrorView>
