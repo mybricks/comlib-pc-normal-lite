@@ -50,11 +50,6 @@ const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeTex
     badgeBg: 'var(--mybricks-bg-color-active, #DFE1E6)',
     badgeText: 'var(--mybricks-text-color-disabled, #42526E)',
   },
-  '待验收': {
-    dot: '#1677ff',
-    badgeBg: '#1677ff',
-    badgeText: '#fff',
-  },
   '待验证': {
     dot: '#1677ff',
     badgeBg: '#1677ff',
@@ -506,10 +501,6 @@ function TaskRow({ task }: { task: TaskItem }) {
       confirmText: '任务将标记为已完成，AI 后续不会再处理此任务',
       progress: `用户手动确认已完成（${formatTimestamp()}）`,
     },
-    '待验收': {
-      confirmText: '任务将重新进入验收流程，AI 会在下一轮对话中关注此任务',
-      progress: `用户认为未达成预期目标，手动改回待验收（${formatTimestamp()}）`,
-    },
     '待验证': {
       confirmText: '任务将重新进入验证流程，AI 会在下一轮对话中关注此任务',
       progress: `用户认为未达成预期目标，手动改回待验证（${formatTimestamp()}）`,
@@ -521,9 +512,8 @@ function TaskRow({ task }: { task: TaskItem }) {
   }
 
   const ALLOWED_TRANSITIONS: Partial<Record<TaskStatus, TaskStatus[]>> = {
-    '待验收': ['已完成'],
     '待验证': ['已完成'],
-    '已完成': ['待验收', '待验证', '待处理'],
+    '已完成': ['待验证', '待处理'],
   }
 
   const allowedTargets = ALLOWED_TRANSITIONS[task.status] ?? []
@@ -707,7 +697,6 @@ function TaskPanel({ content }: { content: string | null }) {
   const statusOrder: Record<string, number> = {
     '待处理': 1,
     '待验证': 2,
-    '待验收': 2,
     '待交接': 3,
     '已完成': 4,
   }
