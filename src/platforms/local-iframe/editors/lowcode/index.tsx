@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import ReactDOM from 'react-dom'
 import context from '../../../../mix/context'
 import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
@@ -6,6 +7,7 @@ import myContext, { type VersionRecord } from '../../context'
 import VersionListView from '../../../../components/version-list'
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
+import { readLocalFiles, updateLocalFiles, getCurrentTasksPath } from '../../sandbox'
 
 type TabKey = 'task' | 'review' | 'version'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
@@ -98,6 +100,60 @@ const REVIEW_STATUS_KEYWORDS: Array<[ReviewStatus, string[]]> = [
   ['需修复', ['需修复', '修复', '需要修复', 'fix', 'warning']],
   ['通过', ['通过', '允许上线', 'pass', 'ok', '✓', '✅']],
 ]
+
+function formatTimestamp(): string {
+  return new Date().toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+function rewriteTaskSection(
+  content: string,
+  title: string,
+  newStatus: TaskStatus,
+  appendProgress: string,
+): string {
+  const parts = content.split(/(?=^## )/m)
+  return parts.map(part => {
+    if (!/^## /.test(part)) return part
+    const sectionTitle = part.split('\n')[0].replace(/^#+\s*/, '').trim()
+    if (sectionTitle !== title) return part
+
+    let updated = part.replace(
+      /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*).+/im,
+      `$1${newStatus}`,
+    )
+
+    const progressRegex = /^(\s*-\s*\*{1,2}\s*验收进展\s*\*{0,2}\s*[：:]\s*)(.+)/im
+    if (progressRegex.test(updated)) {
+      updated = updated.replace(progressRegex, (_, prefix, existing) => {
+        return `${prefix}${existing}；${appendProgress}`
+      })
+    } else {
+      updated = updated.replace(
+        /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*.+)/im,
+        `$1\n- **验收进展**：${appendProgress}`,
+      )
+    }
+
+    return updated
+  }).join('')
+}
+
+async function setTaskStatus(
+  title: string,
+  newStatus: TaskStatus,
+  appendProgress: string,
+): Promise<void> {
+  const tasksPath = await getCurrentTasksPath()
+  if (!tasksPath) throw new Error('无法获取当前分支的任务文件路径')
+  const files = await readLocalFiles([tasksPath])
+  const content = files[0]?.content
+  if (content === undefined) throw new Error('无法读取任务文件')
+  const newContent = rewriteTaskSection(content, title, newStatus, appendProgress)
+  await updateLocalFiles([{ path: tasksPath, content: newContent }])
+}
 
 function normalizeStatus<T extends string>(
   raw: string | undefined,
@@ -194,6 +250,70 @@ function parseReview(content: string): ReviewData {
     updateTime: updateTimeMatch?.[1]?.trim(),
     items,
   }
+}
+
+
+
+interface PopconfirmProps {
+  title: string
+  visible: boolean
+  onVisible: (v: boolean) => void
+  onConfirm: () => void
+  children: React.ReactElement
+}
+
+function Popconfirm({ title, visible, onVisible, onConfirm, children }: PopconfirmProps) {
+  const triggerRef = useRef<HTMLSpanElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({})
+
+  useEffect(() => {
+    if (!visible) return
+    const updatePosition = () => {
+      if (!triggerRef.current) return
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPopupStyle({
+        position: 'fixed',
+        right: window.innerWidth - rect.right,
+        bottom: window.innerHeight - rect.top + 6,
+        zIndex: 99999,
+      })
+    }
+    updatePosition()
+    const handleClickOutside = (e: MouseEvent) => {
+      if (triggerRef.current?.contains(e.target as Node)) return
+      if (popupRef.current?.contains(e.target as Node)) return
+      onVisible(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [visible, onVisible])
+
+  const popup = visible
+    ? ReactDOM.createPortal(
+        <div ref={popupRef} className={css['popconfirm-popup']} style={popupStyle}>
+          <div className={css['popconfirm-title']}>{title}</div>
+          <div className={css['popconfirm-actions']}>
+            <span className={css['popconfirm-cancel']} onClick={(e) => { e.stopPropagation(); onVisible(false) }}>取消</span>
+            <span className={css['popconfirm-confirm']} onClick={(e) => { e.stopPropagation(); onVisible(false); onConfirm() }}>确认</span>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null
+
+  return (
+    <span ref={triggerRef}>
+      {React.cloneElement(children, {
+        onClick: (e: React.MouseEvent) => { e.stopPropagation(); onVisible(true) },
+      })}
+      {popup}
+    </span>
+  )
 }
 
 function SyncIcon() {
@@ -338,10 +458,66 @@ function UserIcon() {
   )
 }
 
+function DownChevronIcon() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ pointerEvents: 'none', flexShrink: 0 }}>
+      <path d="M1.5 3L4 5.5L6.5 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+      <path d="M2.5 1.5L8 5L2.5 8.5V1.5Z" fill="currentColor" />
+    </svg>
+  )
+}
+
 function TaskRow({ task }: { task: TaskItem }) {
   const [expanded, setExpanded] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
+  const [popconfirmVisible, setPopconfirmVisible] = useState(false)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['待处理']
   const hasDetail = !!task.detail
+
+  const TRANSITION_CONFIG: Partial<Record<TaskStatus, { confirmText: string; progress: string }>> = {
+    '已完成': {
+      confirmText: '任务将标记为已完成，AI 后续不会再处理此任务',
+      progress: `用户手动确认已完成（${formatTimestamp()}）`,
+    },
+    '待验收': {
+      confirmText: '任务将重新进入验收流程，AI 会在下一轮对话中关注此任务',
+      progress: `用户认为未达成预期目标，手动改回待验收（${formatTimestamp()}）`,
+    },
+    '待处理': {
+      confirmText: '任务将退回待处理，AI 会重新尝试实现此需求',
+      progress: `用户认为需求未完成，需重新处理（${formatTimestamp()}）`,
+    },
+  }
+
+  const ALLOWED_TRANSITIONS: Partial<Record<TaskStatus, TaskStatus[]>> = {
+    '待验收': ['已完成'],
+    '已完成': ['待验收', '待处理'],
+  }
+
+  const allowedTargets = ALLOWED_TRANSITIONS[task.status] ?? []
+
+  const handleConfirm = async () => {
+    if (!pendingStatus) return
+    const cfg = TRANSITION_CONFIG[pendingStatus]
+    if (!cfg) return
+    setLoading(true)
+    try {
+      await setTaskStatus(task.title, pendingStatus, cfg.progress)
+    } catch (e) {
+      console.error('[TaskPanel] setTaskStatus failed', e)
+    } finally {
+      setLoading(false)
+      setPendingStatus(null)
+    }
+  }
 
   return (
     <div className={css['task-card']}>
@@ -359,6 +535,51 @@ function TaskRow({ task }: { task: TaskItem }) {
             <UserIcon />
             <span className={css['task-assignee-name']}>{task.handoverTo}</span>
           </div>
+        )}
+        {task.status === '待处理' && (
+          <span
+            className={css['task-ai-trigger']}
+            onClick={(e) => {
+              e.stopPropagation()
+              ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+                message: `请处理任务「${task.title}」`,
+              })
+            }}
+          >
+            <PlayIcon />
+            让 AI 处理
+          </span>
+        )}
+        {allowedTargets.length > 0 && (
+          <Popconfirm
+            title={pendingStatus ? (TRANSITION_CONFIG[pendingStatus]?.confirmText ?? '') : ''}
+            visible={popconfirmVisible}
+            onVisible={(v) => { setPopconfirmVisible(v); if (!v) setPendingStatus(null) }}
+            onConfirm={handleConfirm}
+          >
+            <div className={css['task-status-selector']}>
+              <span className={css['task-status-selector-text']}>{task.status}</span>
+              <DownChevronIcon />
+              <select
+                className={css['task-status-select-overlay']}
+                value={task.status}
+                disabled={loading}
+                onChange={(e) => {
+                  const next = e.target.value as TaskStatus
+                  if (next !== task.status) {
+                    setPendingStatus(next)
+                    setPopconfirmVisible(true)
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value={task.status} disabled>{task.status}</option>
+                {allowedTargets.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          </Popconfirm>
         )}
       </div>
 

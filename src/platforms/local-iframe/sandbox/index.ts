@@ -162,7 +162,7 @@ async function getCurrentAuditReviewPath(): Promise<string | undefined> {
   return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md` : undefined
 }
 
-async function getCurrentTasksPath(): Promise<string | undefined> {
+export async function getCurrentTasksPath(): Promise<string | undefined> {
   const branch = await getCurrentBranch().catch(() => undefined)
   return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/tasks/TASKS.md` : undefined
 }
@@ -297,7 +297,7 @@ async function listLocalFiles(path = '', options: { recursive?: boolean } = {}):
   return payload.entries as LocalFileEntry[]
 }
 
-async function readLocalFiles(paths: string[]): Promise<LocalFile[]> {
+export async function readLocalFiles(paths: string[]): Promise<LocalFile[]> {
   if (!paths.length) return []
   const response = await fetch(LOCAL_FILES_READ_ENDPOINT, {
     method: 'POST',
@@ -313,7 +313,7 @@ async function readLocalFiles(paths: string[]): Promise<LocalFile[]> {
   return payload.files as LocalFile[]
 }
 
-async function updateLocalFiles(files: Array<{ path: string; content: string }>): Promise<void> {
+export async function updateLocalFiles(files: Array<{ path: string; content: string }>): Promise<void> {
   const response = await fetch(LOCAL_FILES_UPDATE_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
