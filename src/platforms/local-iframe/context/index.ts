@@ -1,6 +1,7 @@
 import { Events } from '../../../utils/events'
 import { executeLocalShellCommand } from '../sandbox'
 import { randomUUID } from '../../../mix/utils/uuid'
+import { Comment } from './comment'
 
 export interface VersionRecord {
   id: string;
@@ -88,6 +89,7 @@ class Version {
 
 class Context {
   version = new Version()
+  comment = new Comment()
 }
 
 const context = new Context();
