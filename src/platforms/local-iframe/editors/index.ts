@@ -9,6 +9,7 @@ import runTest from './runTest'
 import setStyle from './setStyle'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import noteRender from './noteRender'
+import auditPage from './auditPage'
 
 export default function () {
   return {
@@ -43,6 +44,7 @@ export default function () {
     },
     '@redo'() {
       undoRedoManager.redo()
-    }
+    },
+    '@auditPage': auditPage
   }
 }
