@@ -24,6 +24,11 @@ import setStyle from './style/setStyle'
 import resizer from './style/resizer'
 import getEditors from '../../platforms/react-native/editors'
 import getLocalIframeEditors from '../../platforms/local-iframe/editors'
+import { getClosestDomLoc } from '../../helpers/dom'
+
+function escapeCssAttributeValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
 
 function getElementRefSelectorCandidates(ele: Element | null | undefined) {
   const escapeSelectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -234,16 +239,52 @@ export default function (props: Props, actions: Actions) {
                 data._noteRender = {}
               }
               const key = getElementRefSelector(params.focusArea?.ele, data._noteRender)
+              const loc = getClosestDomLoc(params.focusArea.ele)
+              if (!loc) {
+                return []
+              }
+              const { files, codeLine } = loc;
+              const codeLineValue = `"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`
+              const nextKey = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(codeLineValue)}']` + ':not([data-wrap-container])'
 
-              return data._noteRender[key] || []
+              if (key in data._noteRender) {
+                const value = data._noteRender[key]
+                Reflect.deleteProperty(data._noteRender, key)
+                data._noteRender[nextKey] = value
+              }
+
+              context.component?.actions.notifyChanged("_noteRender", 'update', {
+                comments: Object.entries(data._noteRender)
+                  .filter(([key, value]) => {
+                    return value?.length
+                  })
+                  .map(([key, value]) => {
+                    const operator = value[0].operator
+                    return {
+                      refSelector: key,
+                      author: {
+                        name: operator?.name || operator?.userName || operator?.email || '-'
+                      }
+                    }
+                  }),
+                events: [],
+                services: [],
+                store: []
+              })
+
+              return data._noteRender[nextKey] || []
             },
             set(params, value) {
               const data = context.component!.params.data;
-              const key = getElementRefSelector(params.focusArea?.ele)
-              console.log('_noteRender', {
-                key,
-                value
-              })
+              // const key = getElementRefSelector(params.focusArea?.ele)
+              const loc = getClosestDomLoc(params.focusArea.ele)
+              if (!loc) {
+                return []
+              }
+              const { files, codeLine } = loc;
+              const codeLineValue = `"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`
+              const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(codeLineValue)}']` + ':not([data-wrap-container])'
+
               data._noteRender[key] = value
               context.component?.actions.notifyChanged("_noteRender", 'update', {
                 comments: Object.entries(data._noteRender)
