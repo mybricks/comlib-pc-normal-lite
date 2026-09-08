@@ -597,7 +597,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const [container, setContainer] = useState<PageContextValue | null>(null);
     const [style, setStyle] = useState<React.CSSProperties>({      
       width: canvasWidth,
-      minHeight: canvasHeight
+      // minHeight: canvasHeight
     });
     const lessRef = useRef<{ filename: string, off: () => void }>({
       filename: '',
@@ -784,8 +784,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ...style,
           ...(breakpoint && isDesign() ? {
             width: breakpoint.width,
-            minWidth: breakpoint.width,
-            maxWidth: breakpoint.width,
+            // minWidth: breakpoint.width,
+            // maxWidth: breakpoint.width,
           } : {}),
           // ...(data?.frameStyle?.width
           //   ? { width: data.frameStyle.width }
@@ -803,7 +803,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ...envCssVariables,
         }}
       >
-        <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+        <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
           {container && <PageContext.Provider value={container}>
             {children}
           </PageContext.Provider>}
@@ -1232,8 +1232,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
         const [style, setStyle] = useState<React.CSSProperties>({
           width: canvasWidth,
-          minWidth: canvasWidth,
-          maxWidth: canvasWidth,
+          // minWidth: canvasWidth,
+          // maxWidth: canvasWidth,
           height: canvasHeight
         });
         const lessRef = useRef<{ filename: string, off: () => void }>({
@@ -1255,8 +1255,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             const width = getPopupWidth(appConfig)
             setStyle((prev) => ({
               ...prev,
-              minWidth: width,
-              maxWidth: width,
+              // minWidth: width,
+              // maxWidth: width,
+              
               width
             }))
           })
@@ -1365,7 +1366,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
               }, {}),
               ...envCssVariables
             }}>
-              <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+              <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
                 {container && (
                   <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
                     <ErrorView>
