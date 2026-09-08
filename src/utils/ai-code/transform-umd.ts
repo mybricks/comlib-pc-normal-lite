@@ -220,7 +220,7 @@ export function transformLess(code, filename: string) {
       // console.error(error)
       throw new Error(`Less 代码编译失败: ${error.message}`)
     } else {
-      const { cssContent, mediaQueries } = extractMediaQueries(convertRemToPx(result?.css || ''))
+      const { cssContent, mediaQueries } = extractMediaQueries(convertCssUnits(result?.css || ''))
       cssModule.cssContent = cssContent
       cssModule.mediaQueries = mediaQueries
     }
@@ -230,11 +230,13 @@ export function transformLess(code, filename: string) {
 }
 
 const REM_BASE_PX = 16
+const VW_CSS_VARIABLE = '--mybricks-vw-unit'
+const VH_CSS_VARIABLE = '--mybricks-vh-unit'
 
-function convertRemToPx(css: string): string {
+function convertCssUnits(css: string): string {
   const cssAst = parseCss(css, { context: 'stylesheet' })
 
-  transformRemDimensions(cssAst)
+  transformDimensions(cssAst)
 
   // css-tree intentionally preserves unsupported and custom-property values as
   // Raw nodes. Parse those values separately so their dimensions are not missed.
@@ -243,7 +245,7 @@ function convertRemToPx(css: string): string {
     enter: (node: any) => {
       try {
         const valueAst = parseCss(node.value, { context: 'value' })
-        transformRemDimensions(valueAst)
+        transformDimensions(valueAst)
         node.value = generateCss(valueAst)
       } catch {
         // Keep syntaxes that css-tree does not understand unchanged.
@@ -254,13 +256,22 @@ function convertRemToPx(css: string): string {
   return generateCss(cssAst)
 }
 
-function transformRemDimensions(ast: any) {
+function transformDimensions(ast: any) {
   walkCss(ast, {
     visit: 'Dimension',
-    enter: (node: any) => {
-      if (node.unit.toLowerCase() === 'rem') {
+    enter: function (this: any, node: any) {
+      const unit = node.unit.toLowerCase()
+      if (unit === 'rem') {
         node.value = String(Number(node.value) * REM_BASE_PX)
         node.unit = 'px'
+      } else if (!this.atrulePrelude && (unit === 'vw' || unit === 'vh')) {
+        // Keep the compiled CSS responsive while allowing the host canvas to
+        // override the effective viewport unit through a CSS custom property.
+        node.type = 'Raw'
+        const cssVariable = unit === 'vw' ? VW_CSS_VARIABLE : VH_CSS_VARIABLE
+        const fallbackUnit = unit === 'vw' ? '1vw' : '1vh'
+        node.value = `calc(${node.value} * var(${cssVariable}, ${fallbackUnit}))`
+        delete node.unit
       }
     },
   })
