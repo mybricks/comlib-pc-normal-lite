@@ -116,14 +116,14 @@ const RuntimeIframe = (props) => {
 	}, [debugSrc, refreshIframe])
 
 	useEffect(() => {
-		context.component?.actions.loaded({
-			pageList: iframes.map((route) => {
-				return {
-					...route,
-					id: route.src
-				}
-			})
-		})
+		// context.component?.actions.loaded({
+		// 	pageList: iframes.map((route) => {
+		// 		return {
+		// 			...route,
+		// 			id: route.src
+		// 		}
+		// 	})
+		// })
 	}, [iframes])
 
 	return (
