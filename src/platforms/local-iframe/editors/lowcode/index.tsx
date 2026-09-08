@@ -12,13 +12,16 @@ import { readLocalFiles, updateLocalFiles, getCurrentTasksPath } from '../../san
 type TabKey = 'task' | 'review' | 'version'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
 
-type TaskStatus = '待处理' | '待交接' | '待验收' | '已完成'
+type TaskStatus = string
+interface TaskMetadata {
+  label: string
+  value: string
+}
 interface TaskItem {
   title: string
   status: TaskStatus
   handoverTo?: string
-  handoverReason?: string
-  acceptanceProgress?: string
+  metadata: TaskMetadata[]
   summary?: string
   detail?: string
 }
@@ -41,13 +44,18 @@ interface FilterChip {
   count: number
 }
 
-const TASK_STATUS_STYLE: Record<TaskStatus, { dot: string; badgeBg: string; badgeText: string }> = {
+const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
   '待处理': {
     dot: 'var(--mybricks-text-color-disabled, #ccc)',
     badgeBg: 'var(--mybricks-bg-color-active, #DFE1E6)',
     badgeText: 'var(--mybricks-text-color-disabled, #42526E)',
   },
   '待验收': {
+    dot: '#1677ff',
+    badgeBg: '#1677ff',
+    badgeText: '#fff',
+  },
+  '待验证': {
     dot: '#1677ff',
     badgeBg: '#1677ff',
     badgeText: '#fff',
@@ -87,13 +95,6 @@ const TAB_LABELS: Record<TabKey, string> = {
   version: '版本',
   review: '影响',
 }
-
-const TASK_STATUS_KEYWORDS: Array<[TaskStatus, string[]]> = [
-  ['已完成', ['已完成', '完成', 'done', 'completed']],
-  ['待验收', ['待验收', '验收', 'review', 'pending review']],
-  ['待交接', ['待交接', '交接', 'handover', 'hand over']],
-  ['待处理', ['待处理', '待', 'todo', 'pending', 'backlog']],
-]
 
 const REVIEW_STATUS_KEYWORDS: Array<[ReviewStatus, string[]]> = [
   ['严重问题', ['严重问题', '严重', 'critical', 'blocker']],
@@ -212,18 +213,36 @@ function splitSections(content: string): string[] {
   return content.split(/(?=^#{1,3}\s)/m).filter(s => /^#{1,3}\s/.test(s))
 }
 
+function extractMetadata(section: string): TaskMetadata[] {
+  const metadata: TaskMetadata[] = []
+  const regex = /^\s*-\s*\*{1,2}\s*([^*\n]+?)\s*\*{0,2}\s*[：:]\s*(.+)$/gm
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(section))) {
+    const label = match[1].trim()
+    const value = match[2].replace(/[*_`]/g, '').trim()
+    if (label && label !== '状态' && value) metadata.push({ label, value })
+  }
+  return metadata
+}
+
+function normalizeTaskStatus(raw: string | undefined): TaskStatus {
+  const status = raw?.replace(/[*_`]/g, '').trim() || '待处理'
+  return status === '待验收' ? '待验证' : status
+}
+
 function parseTasks(content: string): TaskItem[] {
   const tasks: TaskItem[] = []
   const sections = splitSections(content).filter(s => /^##\s/.test(s))
   for (const section of sections) {
     const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
     if (!title) continue
+    const metadata = extractMetadata(section)
+    const handoverTo = metadata.find(item => item.label === '交接给')?.value
     tasks.push({
       title,
-      status: normalizeStatus(extractMetaField(section, '状态'), TASK_STATUS_KEYWORDS, '待处理'),
-      handoverTo: extractMetaField(section, '交接给'),
-      handoverReason: extractMetaField(section, '交接原因'),
-      acceptanceProgress: extractMetaField(section, '验收进展'),
+      status: normalizeTaskStatus(extractMetaField(section, '状态')),
+      handoverTo,
+      metadata: metadata.filter(item => item.label !== '交接给'),
       summary: extractSummary(section),
       detail: extractDetail(section),
     })
@@ -491,6 +510,10 @@ function TaskRow({ task }: { task: TaskItem }) {
       confirmText: '任务将重新进入验收流程，AI 会在下一轮对话中关注此任务',
       progress: `用户认为未达成预期目标，手动改回待验收（${formatTimestamp()}）`,
     },
+    '待验证': {
+      confirmText: '任务将重新进入验证流程，AI 会在下一轮对话中关注此任务',
+      progress: `用户认为未达成预期目标，手动改回待验证（${formatTimestamp()}）`,
+    },
     '待处理': {
       confirmText: '任务将退回待处理，AI 会重新尝试实现此需求',
       progress: `用户认为需求未完成，需重新处理（${formatTimestamp()}）`,
@@ -499,7 +522,8 @@ function TaskRow({ task }: { task: TaskItem }) {
 
   const ALLOWED_TRANSITIONS: Partial<Record<TaskStatus, TaskStatus[]>> = {
     '待验收': ['已完成'],
-    '已完成': ['待验收', '待处理'],
+    '待验证': ['已完成'],
+    '已完成': ['待验收', '待验证', '待处理'],
   }
 
   const allowedTargets = ALLOWED_TRANSITIONS[task.status] ?? []
@@ -587,20 +611,14 @@ function TaskRow({ task }: { task: TaskItem }) {
         <div className={css['task-summary']}>{task.summary}</div>
       )}
 
-      {(task.handoverReason || task.acceptanceProgress) && (
+      {task.metadata.length > 0 && (
         <div className={css['task-meta-list']}>
-          {task.handoverReason && (
-            <div className={css['task-meta-item']}>
-              <span className={css['task-meta-label']}>交接原因</span>
-              <span className={css['task-meta-value']}>{task.handoverReason}</span>
+          {task.metadata.map((item) => (
+            <div key={item.label} className={css['task-meta-item']}>
+              <span className={css['task-meta-label']}>{item.label}</span>
+              <span className={css['task-meta-value']}>{item.value}</span>
             </div>
-          )}
-          {task.acceptanceProgress && (
-            <div className={css['task-meta-item']}>
-              <span className={css['task-meta-label']}>{task.status === '已完成' ? '验收结论' : '验收进展'}</span>
-              <span className={css['task-meta-value']}>{task.acceptanceProgress}</span>
-            </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -678,15 +696,21 @@ function TaskPanel({ content }: { content: string | null }) {
     )
   }
 
-  const chips: FilterChip[] = (Object.keys(TASK_STATUS_STYLE) as TaskStatus[])
-    .filter(s => tasks.some(t => t.status === s))
-    .map(s => ({
-      status: s,
-      dot: TASK_STATUS_STYLE[s].dot,
-      count: tasks.filter(t => t.status === s).length,
+  const chips: FilterChip[] = Array.from(new Set(tasks.map(t => t.status)))
+    .map(status => ({
+      status,
+      dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['待处理']).dot,
+      count: tasks.filter(t => t.status === status).length,
     }))
 
   const filtered = filter ? tasks.filter(t => t.status === filter) : tasks
+  const statusOrder: Record<string, number> = {
+    '待处理': 1,
+    '待验证': 2,
+    '待验收': 2,
+    '待交接': 3,
+    '已完成': 4,
+  }
 
   return (
     <div className={css['panel-container']}>
@@ -703,10 +727,8 @@ function TaskPanel({ content }: { content: string | null }) {
       <div className={css['panel-list']}>
         {filtered.length > 0
           ? filtered
-              .sort((a, b) => {
-                const order: Record<TaskStatus, number> = { '待处理': 1, '进行中': 2, '待交接': 3, '待验收': 4, '已完成': 5 }
-                return order[a.status] - order[b.status]
-              })
+              .slice()
+              .sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99))
               .map((task, i) => <TaskRow key={i} task={task} />)
           : <div className={css['panel-filter-empty']}>无匹配结果</div>
         }
