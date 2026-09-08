@@ -62,7 +62,9 @@ const design = (props: CreateMyBricksProps) => {
         data-desn-page={filename}
         {...rest}
       >
-        {children}
+        <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
+          {children}
+        </div>
       </div>
     )
   }
