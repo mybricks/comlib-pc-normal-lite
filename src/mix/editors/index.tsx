@@ -253,25 +253,6 @@ export default function (props: Props, actions: Actions) {
                 data._noteRender[nextKey] = value
               }
 
-              context.component?.actions.notifyChanged("_noteRender", 'update', {
-                comments: Object.entries(data._noteRender)
-                  .filter(([key, value]) => {
-                    return value?.length
-                  })
-                  .map(([key, value]) => {
-                    const operator = value[0].operator
-                    return {
-                      refSelector: key,
-                      author: {
-                        name: operator?.name || operator?.userName || operator?.email || '-'
-                      }
-                    }
-                  }),
-                events: [],
-                services: [],
-                store: []
-              })
-
               return data._noteRender[nextKey] || []
             },
             set(params, value) {
@@ -288,16 +269,14 @@ export default function (props: Props, actions: Actions) {
               data._noteRender[key] = value
               context.component?.actions.notifyChanged("_noteRender", 'update', {
                 comments: Object.entries(data._noteRender)
-                  .filter(([key, value]) => {
+                  .filter(([key, value]: any) => {
                     return value?.length
                   })
-                  .map(([key, value]) => {
-                    const operator = value[0].operator
+                  .map(([key, value]: any) => {
                     return {
                       refSelector: key,
-                      author: {
-                        name: operator?.name || operator?.userName || operator?.email || '-'
-                      }
+                      ...value[0],
+                      type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
                     }
                   }),
                 events: [],
@@ -349,5 +328,26 @@ export default function (props: Props, actions: Actions) {
     ...undoRedo(),
     ...setStyle(),
     ...setSegment(),
+    '@getCode'() {
+      return context.component?.params.data.files.map(({ fileName, source }) => {
+        return {
+          path: fileName,
+          content: decodeURIComponent(source)
+        }
+      })
+    },
+    '@setCode'(params: {
+      /** 相对于组件文件根目录的文件路径，例如 pages/Home/index.tsx */
+      path: string;
+      /** 未编码的源码内容；删除文件时可省略 */
+      content: string;
+      type: 'update' | 'delete';
+    }) {
+      context.updateFile({
+        fileName: params.path,
+        content: params.content,
+        type: params.type,
+      });
+    }
   };
 }

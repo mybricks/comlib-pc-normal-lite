@@ -105,12 +105,10 @@ export class Comment {
           return value?.length
         })
         .map(([key, value]: any) => {
-          const operator = value[0].operator
           return {
             refSelector: key,
-            author: {
-              name: operator?.name || operator?.userName || operator?.email || '-'
-            }
+            ...value[0],
+            type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
           }
         }),
       events: [],
