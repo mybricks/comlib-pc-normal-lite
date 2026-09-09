@@ -20,6 +20,7 @@ import {
   mergeLoggerBindings,
   type LoggerBindings,
 } from '../logger';
+import { useElementResizeObserver } from '../../../../hooks/useElementResizeObserver';
 import prototype from './prototype';
 import EnvConfigPanel from './env-config-panel';
 
@@ -594,6 +595,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     const theme = mixContext.resolveActiveTheme();
     const envCssVariables = useEnvCssVariables();
     const containerRef = useRef<HTMLDivElement>(null);
+    useElementResizeObserver(containerRef);
     const [container, setContainer] = useState<PageContextValue | null>(null);
     const [style, setStyle] = useState<React.CSSProperties>({      
       width: canvasWidth,
@@ -1229,6 +1231,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
+        useElementResizeObserver(containerRef);
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
         const [style, setStyle] = useState<React.CSSProperties>({
           width: canvasWidth,
