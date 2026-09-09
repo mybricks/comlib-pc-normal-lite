@@ -10,6 +10,7 @@ import setStyle from './setStyle'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import noteRender from './noteRender'
 import auditPage from './auditPage'
+import viewCode from './viewCode'
 
 export default function () {
   return {
@@ -37,7 +38,7 @@ export default function () {
     '@cancelUserActions': cancelUserActions,
     '@updateSegment': updateSegment,
     '@setStyle': setStyle(),
-    '@runTest': runTest,
+    // '@runTest': runTest,
     '@resizePage'() {},
     '@undo'() {
       undoRedoManager.undo()
@@ -45,6 +46,7 @@ export default function () {
     '@redo'() {
       undoRedoManager.redo()
     },
-    '@auditPage': auditPage
+    '@auditPage': auditPage,
+    '@viewCode': viewCode
   }
 }
