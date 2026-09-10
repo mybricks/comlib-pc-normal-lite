@@ -6,6 +6,7 @@ import {
   hasMybricksGraphDirectory,
   hasMybricksGraphFile,
   isMybricksGraphFile,
+  MYBRICKS_GRAPH_DIR,
   parseMybricksGraph,
   resolveGraphSourceFile,
   type FileLike,
@@ -34,7 +35,6 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
 
 let registerSuccess = false
 
-const LOCAL_FILES_ENDPOINT = '/lingchuang/api/files'
 const LOCAL_FILES_LIST_ENDPOINT = '/lingchuang/api/files/list'
 const LOCAL_FILES_READ_ENDPOINT = '/lingchuang/api/files/read'
 const LOCAL_FILES_UPDATE_ENDPOINT = '/lingchuang/api/update'
@@ -254,29 +254,6 @@ async function syncUpdatedAuditInfo(files: LocalFile[]): Promise<void> {
   context.setReviewContent(reviewFile.content)
 }
 
-async function fetchLocalFiles(): Promise<LocalFile[]> {
-  console.log(0, 'localGraph:getFiles')
-  const response = await fetch(LOCAL_FILES_ENDPOINT)
-  if (!response.ok) {
-    throw new Error(`Local files request failed: ${response.status}`)
-  }
-
-  const files: unknown = await response.json()
-  if (
-    !Array.isArray(files)
-    || files.some((file) => (
-      !file
-      || typeof file !== 'object'
-      || typeof (file as LocalFile).path !== 'string'
-      || typeof (file as LocalFile).content !== 'string'
-    ))
-  ) {
-    throw new Error('Local files request returned an invalid response')
-  }
-
-  return files as LocalFile[]
-}
-
 async function getResponseError(response: Response): Promise<string> {
   try {
     const body = await response.json() as { error?: unknown }
@@ -427,7 +404,11 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
 }
 
 export async function refreshLocalGraph(): Promise<void> {
-  const files = await fetchLocalFiles()
+  const entries = await listLocalFiles(MYBRICKS_GRAPH_DIR, { recursive: true })
+  const graphPaths = entries
+    .filter((entry) => entry.type === 'file')
+    .map((entry) => entry.path)
+  const files = await readLocalFiles(graphPaths)
   await compileLocalGraphFiles(files)
 }
 
