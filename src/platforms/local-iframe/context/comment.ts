@@ -117,7 +117,7 @@ export class Comment {
     }
   }
 
-  private notifyChanged(): void {
+  notifyChanged(): void {
     context.component?.actions.notifyChanged("_noteRender", 'update', this.getNotifyChangedValue())
   }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { registerSandbox } from '../sandbox'
 import context from '../../../mix/context'
+import myContext from '../context'
 
 type RouteParamDraft = {
   key: string
@@ -80,6 +81,7 @@ const RuntimeIframe = (props) => {
 		}
 
 		lastLoadedSignatureRef.current = signature
+		myContext.comment.notifyChanged()
 		context.component?.actions.loaded?.({
 			pageList: nextIframes.map((route) => {
 				return {
