@@ -76,6 +76,15 @@ const AUDIT_STATE_LABELS: Record<AuditState, string> = {
   1: '允许上线',
 }
 
+const TASK_NOTIFY_STATE: Record<string, UserTaskInfo['state']> = {
+  '处理中': 0,
+  '待处理': 0,
+  '待验证': 1,
+  '待验收': 1,
+  '待交接': 2,
+  '已完成': 3,
+}
+
 function toError(error: unknown, fallbackMessage: string): Error {
   return error instanceof Error ? error : new Error(typeof error === 'string' ? error : fallbackMessage)
 }
@@ -148,9 +157,7 @@ function parseTasksForNotify(content: string): UserTaskInfo[] {
     const rawState = statusMatch?.[1]?.replace(/[*_`]/g, '').trim() ?? ''
     const id = title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || String(tasks.length)
 
-    let state: -1 | 0 | 1 = 0
-    if (/已完成|完成|done|completed/i.test(rawState)) state = 1
-    else if (/待交接|交接|handover/i.test(rawState)) state = -1
+    const state = TASK_NOTIFY_STATE[rawState] ?? 0
 
     tasks.push({ id, title, desc: summaryMatch?.[1]?.trim() ?? '', state })
   }

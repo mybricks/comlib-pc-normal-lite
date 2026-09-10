@@ -825,7 +825,7 @@ export interface UserTaskInfo {
   id: string;
   title: string;
   desc: string;
-  state: -1 | 0 | 1;
+  state: 0 | 1 | 2 | 3;
 }
 export class Version {
   total: number
