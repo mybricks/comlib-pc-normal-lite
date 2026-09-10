@@ -230,7 +230,11 @@ const applyCompiledDataAttributes = (container: HTMLDivElement, attributes: JSXE
  */
 const markAIOnlyPreviewRoots = (container: HTMLDivElement) => {
   Array.from(container.children).forEach((element) => {
-    if (!element.hasAttribute('data-zone-selector') && !element.hasAttribute('data-zone-noselector')) {
+    const classList = Array.from(element.classList)
+    element.setAttribute('data-zone-type', 'zone')
+    if (classList.length) {
+      element.setAttribute('data-zone-selector', `${JSON.stringify(classList.map((classname) => `.${classname}`))}`)
+    } else {
       element.setAttribute('data-zone-noselector', 'true')
     }
   })
