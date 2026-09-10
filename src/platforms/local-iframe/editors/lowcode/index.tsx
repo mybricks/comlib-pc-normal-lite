@@ -37,11 +37,14 @@ interface ReviewData {
   items: ReviewItem[]
 }
 
-interface FilterChip {
+interface FlowStep {
   status: string
   dot: string
   count: number
+  disabled: boolean
 }
+
+const TASK_FLOW_ORDER: TaskStatus[] = ['处理中', '待验证', '待交接', '已完成']
 
 const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
   '处理中': {
@@ -238,15 +241,26 @@ function VersionListIcon() {
   )
 }
 
-function SummaryBar({
-  chips,
+function FlowArrow() {
+  return (
+    <svg className={css['flow-arrow']} width="14" height="10" viewBox="0 0 14 10" fill="none">
+      <path d="M1 5H11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeDasharray="2 2" />
+      <path d="M8.5 2L11.5 5L8.5 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+const ATTENTION_STATUS = '待验证'
+
+function FlowFilterBar({
+  steps,
   total,
   activeFilter,
   onFilter,
   updatedAt,
   onCalibrate,
 }: {
-  chips: FilterChip[]
+  steps: FlowStep[]
   total: number
   activeFilter: string | null
   onFilter: (s: string | null) => void
@@ -255,25 +269,35 @@ function SummaryBar({
 }) {
   return (
     <div className={css['summary-bar']}>
-      <div className={css['summary-chips']}>
+      <div className={css['flow-track']}>
         <div
-          className={`${css['summary-chip']} ${!activeFilter ? css['summary-chip-active'] : ''}`}
+          className={`${css['flow-node']} ${css['flow-node-all']} ${!activeFilter ? css['flow-node-active'] : ''}`}
           onClick={() => onFilter(null)}
+          title="全部"
         >
-          <span className={css['summary-chip-label']}>全部</span>
-          <span className={css['summary-chip-count']}>{total}</span>
+          <span className={css['flow-node-label']}>全部</span>
+          <span className={css['flow-node-count']}>{total}</span>
         </div>
-        {chips.map(chip => (
-          <div
-            key={chip.status}
-            className={`${css['summary-chip']} ${activeFilter === chip.status ? css['summary-chip-active'] : ''}`}
-            onClick={() => onFilter(activeFilter === chip.status ? null : chip.status)}
-          >
-            <span className={css['summary-chip-dot']} style={{ background: chip.dot }} />
-            <span className={css['summary-chip-label']}>{chip.status}</span>
-            <span className={css['summary-chip-count']}>{chip.count}</span>
-          </div>
-        ))}
+        {steps.map(step => {
+          return (
+            <React.Fragment key={step.status}>
+              <FlowArrow />
+              <div
+                className={[
+                  css['flow-node'],
+                  activeFilter === step.status ? css['flow-node-active'] : '',
+                  step.disabled ? css['flow-node-disabled'] : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => onFilter(activeFilter === step.status ? null : step.status)}
+                title={step.disabled ? `${step.status}（暂无）` : step.status}
+              >
+                <span className={css['flow-node-dot']} style={{ background: step.dot }} />
+                <span className={css['flow-node-label']}>{step.status}</span>
+                <span className={css['flow-node-count']}>{step.count}</span>
+              </div>
+            </React.Fragment>
+          )
+        })}
       </div>
       {updatedAt && (
         <span className={css['summary-updated-at']}>{updatedAt}</span>
@@ -282,6 +306,53 @@ function SummaryBar({
         <SyncIcon />
         文档不准？校准一下
       </button>
+    </div>
+  )
+}
+
+function AttentionHint({
+  steps,
+  onClick,
+  onHoverChange,
+}: {
+  steps: FlowStep[]
+  onClick: () => void
+  onHoverChange: (hovering: boolean) => void
+}) {
+  const count = steps.find(step => step.status === ATTENTION_STATUS)?.count ?? 0
+  if (!count) return null
+
+  const handleTellMe = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
+    const componentId = context.comId ?? context.component?.params?.id
+    if (typeof appendToSender === 'function' && componentId) {
+      ;(context.plugins as any)?.showAIDialog?.()
+      appendToSender(componentId, {
+        message: '',
+        mentionFocus: true,
+        attachments: [],
+      })
+      return
+    }
+    ;(context.plugins as any)?.showAIDialog?.()
+  }
+
+  return (
+    <div
+      className={css['attention-hint']}
+      onClick={onClick}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
+      title="点击查看待验证任务"
+    >
+      <span className={css['attention-hint-text']}>
+        有 <span className={css['attention-hint-count']}>{count}</span> 个任务已经改完了，需要您帮忙验证下结果，如果没问题可以
+      </span>
+      <span className={css['attention-hint-link']} onClick={handleTellMe} title="打开对话，告知我结果">
+        告知我
+      </span>
+      <span className={css['attention-hint-text']}>结果</span>
     </div>
   )
 }
@@ -426,7 +497,7 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
   return transitions[task.status]
 }
 
-function TaskRow({ task }: { task: TaskItem }) {
+function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgress?: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
   const hasDetail = !!task.detail
@@ -514,12 +585,19 @@ function TaskRow({ task }: { task: TaskItem }) {
 
       {task.metadata.length > 0 && (
         <div className={css['task-meta-list']}>
-          {task.metadata.map((item) => (
-            <div key={item.label} className={css['task-meta-item']}>
-              <span className={css['task-meta-label']}>{item.label}</span>
-              <span className={css['task-meta-value']}>{item.value}</span>
-            </div>
-          ))}
+          {task.metadata.map((item) => {
+            const isProgress = item.label === '验证进展'
+            const hl = isProgress && highlightProgress
+            return (
+              <div
+                key={item.label}
+                className={`${css['task-meta-item']} ${hl ? css['task-meta-item-highlight'] : ''}`}
+              >
+                <span className={css['task-meta-label']}>{item.label}</span>
+                <span className={css['task-meta-value']}>{item.value}</span>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -577,6 +655,7 @@ function ReviewRow({ item }: { item: ReviewItem }) {
 
 function TaskPanel({ content }: { content: string | null }) {
   const [filter, setFilter] = useState<string | null>(null)
+  const [hintHovering, setHintHovering] = useState(false)
 
   useEffect(() => { setFilter(null) }, [content])
 
@@ -597,12 +676,15 @@ function TaskPanel({ content }: { content: string | null }) {
     )
   }
 
-  const chips: FilterChip[] = Array.from(new Set(tasks.map(t => t.status)))
-    .map(status => ({
-      status,
-      dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['处理中']).dot,
-      count: tasks.filter(t => t.status === status).length,
-    }))
+  const countByStatus: Record<string, number> = {}
+  tasks.forEach(t => { countByStatus[t.status] = (countByStatus[t.status] ?? 0) + 1 })
+
+  const steps: FlowStep[] = TASK_FLOW_ORDER.map(status => ({
+    status,
+    dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['处理中']).dot,
+    count: countByStatus[status] ?? 0,
+    disabled: !countByStatus[status],
+  }))
 
   const filtered = filter ? tasks.filter(t => t.status === filter) : tasks
   const statusOrder: Record<string, number> = {
@@ -614,8 +696,8 @@ function TaskPanel({ content }: { content: string | null }) {
 
   return (
     <div className={css['panel-container']}>
-      <SummaryBar
-        chips={chips}
+      <FlowFilterBar
+        steps={steps}
         total={tasks.length}
         activeFilter={filter}
         onFilter={setFilter}
@@ -624,12 +706,22 @@ function TaskPanel({ content }: { content: string | null }) {
           message: '校准下当前的任务文档',
         })}
       />
+      <AttentionHint
+        steps={steps}
+        onHoverChange={setHintHovering}
+      />
       <div className={css['panel-list']}>
         {filtered.length > 0
           ? filtered
               .slice()
               .sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99))
-              .map((task, i) => <TaskRow key={i} task={task} />)
+              .map((task, i) => (
+                <TaskRow
+                  key={i}
+                  task={task}
+                  highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
+                />
+              ))
           : <div className={css['panel-filter-empty']}>无匹配结果</div>
         }
       </div>
@@ -676,20 +768,20 @@ function ReviewPanel({ content }: { content: string | null }) {
     )
   }
 
-  const chips: FilterChip[] = (Object.keys(REVIEW_STATUS_STYLE) as ReviewStatus[])
-    .filter(s => items.some(item => item.status === s))
-    .map(s => ({
-      status: s,
-      dot: REVIEW_STATUS_STYLE[s].dot,
-      count: items.filter(item => item.status === s).length,
-    }))
+  const reviewOrder: ReviewStatus[] = ['严重问题', '需修复', '通过']
+  const steps: FlowStep[] = reviewOrder.map(s => ({
+    status: s,
+    dot: REVIEW_STATUS_STYLE[s].dot,
+    count: items.filter(item => item.status === s).length,
+    disabled: !items.some(item => item.status === s),
+  }))
 
   const filtered = filter ? items.filter(item => item.status === filter) : items
 
   return (
     <div className={css['panel-container']}>
-      <SummaryBar
-        chips={chips}
+      <FlowFilterBar
+        steps={steps}
         total={items.length}
         activeFilter={filter}
         onFilter={setFilter}
