@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import ReactDOM from 'react-dom'
+import React, { useState, useEffect, useCallback } from 'react'
 import context from '../../../../mix/context'
 import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
@@ -7,12 +6,11 @@ import myContext, { type VersionRecord } from '../../context'
 import VersionListView from '../../../../components/version-list'
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
-import { readLocalFiles, updateLocalFiles, getCurrentTasksPath } from '../../sandbox'
 
 type TabKey = 'task' | 'review' | 'version'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
 
-type TaskStatus = string
+type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
 interface TaskMetadata {
   label: string
   value: string
@@ -21,6 +19,7 @@ interface TaskItem {
   title: string
   status: TaskStatus
   handoverTo?: string
+  handoverReason?: string
   metadata: TaskMetadata[]
   summary?: string
   detail?: string
@@ -45,19 +44,19 @@ interface FilterChip {
 }
 
 const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
-  '待处理': {
+  '处理中': {
     dot: 'var(--mybricks-text-color-disabled, #ccc)',
     badgeBg: 'var(--mybricks-bg-color-active, #DFE1E6)',
     badgeText: 'var(--mybricks-text-color-disabled, #42526E)',
   },
   '待验证': {
-    dot: '#1677ff',
-    badgeBg: '#1677ff',
+    dot: '#ff4d4f',
+    badgeBg: '#ff4d4f',
     badgeText: '#fff',
   },
   '待交接': {
-    dot: '#fa8c16',
-    badgeBg: '#fa8c16',
+    dot: '#faad14',
+    badgeBg: '#faad14',
     badgeText: '#fff',
   },
   '已完成': {
@@ -96,60 +95,6 @@ const REVIEW_STATUS_KEYWORDS: Array<[ReviewStatus, string[]]> = [
   ['需修复', ['需修复', '修复', '需要修复', 'fix', 'warning']],
   ['通过', ['通过', '允许上线', 'pass', 'ok', '✓', '✅']],
 ]
-
-function formatTimestamp(): string {
-  return new Date().toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
-
-function rewriteTaskSection(
-  content: string,
-  title: string,
-  newStatus: TaskStatus,
-  appendProgress: string,
-): string {
-  const parts = content.split(/(?=^## )/m)
-  return parts.map(part => {
-    if (!/^## /.test(part)) return part
-    const sectionTitle = part.split('\n')[0].replace(/^#+\s*/, '').trim()
-    if (sectionTitle !== title) return part
-
-    let updated = part.replace(
-      /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*).+/im,
-      `$1${newStatus}`,
-    )
-
-    const progressRegex = /^(\s*-\s*\*{1,2}\s*验收进展\s*\*{0,2}\s*[：:]\s*)(.+)/im
-    if (progressRegex.test(updated)) {
-      updated = updated.replace(progressRegex, (_, prefix, existing) => {
-        return `${prefix}${existing}；${appendProgress}`
-      })
-    } else {
-      updated = updated.replace(
-        /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*.+)/im,
-        `$1\n- **验收进展**：${appendProgress}`,
-      )
-    }
-
-    return updated
-  }).join('')
-}
-
-async function setTaskStatus(
-  title: string,
-  newStatus: TaskStatus,
-  appendProgress: string,
-): Promise<void> {
-  const tasksPath = await getCurrentTasksPath()
-  if (!tasksPath) throw new Error('无法获取当前分支的任务文件路径')
-  const files = await readLocalFiles([tasksPath])
-  const content = files[0]?.content
-  if (content === undefined) throw new Error('无法读取任务文件')
-  const newContent = rewriteTaskSection(content, title, newStatus, appendProgress)
-  await updateLocalFiles([{ path: tasksPath, content: newContent }])
-}
 
 function normalizeStatus<T extends string>(
   raw: string | undefined,
@@ -221,8 +166,12 @@ function extractMetadata(section: string): TaskMetadata[] {
 }
 
 function normalizeTaskStatus(raw: string | undefined): TaskStatus {
-  const status = raw?.replace(/[*_`]/g, '').trim() || '待处理'
-  return status === '待验收' ? '待验证' : status
+  const status = raw?.replace(/[*_`]/g, '').trim() || '处理中'
+  if (status === '待处理') return '处理中'
+  if (status === '待验收') return '待验证'
+  return ['处理中', '待验证', '待交接', '已完成'].includes(status)
+    ? status as TaskStatus
+    : '处理中'
 }
 
 function parseTasks(content: string): TaskItem[] {
@@ -233,11 +182,13 @@ function parseTasks(content: string): TaskItem[] {
     if (!title) continue
     const metadata = extractMetadata(section)
     const handoverTo = metadata.find(item => item.label === '交接给')?.value
+    const handoverReason = metadata.find(item => item.label === '交接原因')?.value
     tasks.push({
       title,
       status: normalizeTaskStatus(extractMetaField(section, '状态')),
       handoverTo,
-      metadata: metadata.filter(item => item.label !== '交接给'),
+      handoverReason,
+      metadata: metadata.filter(item => item.label !== '交接给' && item.label !== '交接原因'),
       summary: extractSummary(section),
       detail: extractDetail(section),
     })
@@ -264,70 +215,6 @@ function parseReview(content: string): ReviewData {
     updateTime: updateTimeMatch?.[1]?.trim(),
     items,
   }
-}
-
-
-
-interface PopconfirmProps {
-  title: string
-  visible: boolean
-  onVisible: (v: boolean) => void
-  onConfirm: () => void
-  children: React.ReactElement
-}
-
-function Popconfirm({ title, visible, onVisible, onConfirm, children }: PopconfirmProps) {
-  const triggerRef = useRef<HTMLSpanElement>(null)
-  const popupRef = useRef<HTMLDivElement>(null)
-  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({})
-
-  useEffect(() => {
-    if (!visible) return
-    const updatePosition = () => {
-      if (!triggerRef.current) return
-      const rect = triggerRef.current.getBoundingClientRect()
-      setPopupStyle({
-        position: 'fixed',
-        right: window.innerWidth - rect.right,
-        bottom: window.innerHeight - rect.top + 6,
-        zIndex: 99999,
-      })
-    }
-    updatePosition()
-    const handleClickOutside = (e: MouseEvent) => {
-      if (triggerRef.current?.contains(e.target as Node)) return
-      if (popupRef.current?.contains(e.target as Node)) return
-      onVisible(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    window.addEventListener('scroll', updatePosition, true)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      window.removeEventListener('scroll', updatePosition, true)
-    }
-  }, [visible, onVisible])
-
-  const popup = visible
-    ? ReactDOM.createPortal(
-        <div ref={popupRef} className={css['popconfirm-popup']} style={popupStyle}>
-          <div className={css['popconfirm-title']}>{title}</div>
-          <div className={css['popconfirm-actions']}>
-            <span className={css['popconfirm-cancel']} onClick={(e) => { e.stopPropagation(); onVisible(false) }}>取消</span>
-            <span className={css['popconfirm-confirm']} onClick={(e) => { e.stopPropagation(); onVisible(false); onConfirm() }}>确认</span>
-          </div>
-        </div>,
-        document.body,
-      )
-    : null
-
-  return (
-    <span ref={triggerRef}>
-      {React.cloneElement(children, {
-        onClick: (e: React.MouseEvent) => { e.stopPropagation(); onVisible(true) },
-      })}
-      {popup}
-    </span>
-  )
 }
 
 function SyncIcon() {
@@ -480,120 +367,144 @@ function DownChevronIcon() {
   )
 }
 
-function PlayIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
-      <path d="M2.5 1.5L8 5L2.5 8.5V1.5Z" fill="currentColor" />
-    </svg>
-  )
+interface TaskTransition {
+  target: TaskStatus
+  label: string
+  instruction: string
+  requiresReason?: boolean
+}
+
+function getTaskTransitions(task: TaskItem): TaskTransition[] {
+  const transitions: Record<TaskStatus, TaskTransition[]> = {
+    '处理中': [{
+      target: '待验证',
+      label: '代码已完成，等待我验证',
+      instruction: '代码已完成，等待我验证',
+      requiresReason: true,
+    }],
+    '待验证': [
+      {
+        target: '已完成',
+        label: '已验证完成',
+        instruction: '已验证完成',
+      },
+      {
+        target: '处理中',
+        label: '任务有问题，请重新修改',
+        instruction: '任务有问题，请重新修改',
+        requiresReason: true,
+      },
+    ],
+    '待交接': [
+      {
+        target: '处理中',
+        label: '任务有问题，请重新修改',
+        instruction: '任务有问题，请重新修改',
+        requiresReason: true,
+      },
+    ],
+    '已完成': [
+      {
+        target: '处理中',
+        label: '任务有问题，请重新修改',
+        instruction: '任务有问题，请重新修改',
+        requiresReason: true,
+      },
+    ],
+  }
+
+  if (task.status === '待验证' && task.handoverTo) {
+    return [
+      {
+        target: '待交接',
+        label: '已验证完成',
+        instruction: '已验证完成',
+      },
+      ...transitions['待验证'].filter(item => item.target !== '已完成'),
+    ]
+  }
+  return transitions[task.status]
 }
 
 function TaskRow({ task }: { task: TaskItem }) {
   const [expanded, setExpanded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null)
-  const [popconfirmVisible, setPopconfirmVisible] = useState(false)
-  const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['待处理']
+  const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
   const hasDetail = !!task.detail
+  const transitions = getTaskTransitions(task)
 
-  const TRANSITION_CONFIG: Partial<Record<TaskStatus, { confirmText: string; progress: string }>> = {
-    '已完成': {
-      confirmText: '任务将标记为已完成，AI 后续不会再处理此任务',
-      progress: `用户手动确认已完成（${formatTimestamp()}）`,
-    },
-    '待验证': {
-      confirmText: '任务将重新进入验证流程，AI 会在下一轮对话中关注此任务',
-      progress: `用户认为未达成预期目标，手动改回待验证（${formatTimestamp()}）`,
-    },
-    '待处理': {
-      confirmText: '任务将退回待处理，AI 会重新尝试实现此需求',
-      progress: `用户认为需求未完成，需重新处理（${formatTimestamp()}）`,
-    },
-  }
+  const handleTransition = (transition: TaskTransition) => {
+    const message = `任务「${task.title}」：${transition.instruction}`
 
-  const ALLOWED_TRANSITIONS: Partial<Record<TaskStatus, TaskStatus[]>> = {
-    '待验证': ['已完成'],
-    '已完成': ['待验证', '待处理'],
-  }
+    if (transition.requiresReason) {
+      const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
+      const componentId = context.comId ?? context.component?.params?.id
+      const requestPayload = {
+        message: `${message}\n\n原因：`,
+        mentionFocus: true,
+        attachments: [],
+      }
 
-  const allowedTargets = ALLOWED_TRANSITIONS[task.status] ?? []
+      if (typeof appendToSender === 'function' && componentId) {
+        ;(context.plugins as any)?.showAIDialog?.()
+        appendToSender(componentId, requestPayload)
+        return
+      }
 
-  const handleConfirm = async () => {
-    if (!pendingStatus) return
-    const cfg = TRANSITION_CONFIG[pendingStatus]
-    if (!cfg) return
-    setLoading(true)
-    try {
-      await setTaskStatus(task.title, pendingStatus, cfg.progress)
-    } catch (e) {
-      console.error('[TaskPanel] setTaskStatus failed', e)
-    } finally {
-      setLoading(false)
-      setPendingStatus(null)
+      const reason = window.prompt('请填写原因')?.trim()
+      if (!reason) return
+      ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+        message: `${message}\n\n原因：${reason}`,
+      })
+      return
     }
+
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+      message,
+    })
   }
 
   return (
     <div className={css['task-card']}>
       <div className={css['task-card-header']}>
-        <span
-          className={css['task-status-badge']}
-          style={{ background: style.badgeBg, color: style.badgeText }}
-        >
-          {task.status}
-        </span>
-        <span className={css['task-title']}>{task.title}</span>
-        {task.handoverTo && (
-          <div className={css['task-assignee']}>
-            <span className={css['task-assignee-label']}>交接给</span>
-            <UserIcon />
-            <span className={css['task-assignee-name']}>{task.handoverTo}</span>
-          </div>
-        )}
-        {task.status === '待处理' && (
+        <div className={css['task-card-header-main']}>
           <span
-            className={css['task-ai-trigger']}
-            onClick={(e) => {
-              e.stopPropagation()
-              ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-                message: `请处理任务「${task.title}」`,
-              })
-            }}
+            className={css['task-status-badge']}
+            style={{ background: style.badgeBg, color: style.badgeText }}
           >
-            <PlayIcon />
-            让 AI 处理
+            {task.status}
           </span>
-        )}
-        {allowedTargets.length > 0 && (
-          <Popconfirm
-            title={pendingStatus ? (TRANSITION_CONFIG[pendingStatus]?.confirmText ?? '') : ''}
-            visible={popconfirmVisible}
-            onVisible={(v) => { setPopconfirmVisible(v); if (!v) setPendingStatus(null) }}
-            onConfirm={handleConfirm}
-          >
-            <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>{task.status}</span>
-              <DownChevronIcon />
-              <select
-                className={css['task-status-select-overlay']}
-                value={task.status}
-                disabled={loading}
-                onChange={(e) => {
-                  const next = e.target.value as TaskStatus
-                  if (next !== task.status) {
-                    setPendingStatus(next)
-                    setPopconfirmVisible(true)
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <option value={task.status} disabled>{task.status}</option>
-                {allowedTargets.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          </Popconfirm>
+          <span className={css['task-title']} title={task.title}>{task.title}</span>
+          {task.handoverTo && (
+            <span className={css['task-handover-inline']}>
+              <span className={css['task-handover-label']}>交接给</span>
+              <UserIcon />
+              <span className={css['task-handover-name']}>{task.handoverTo}</span>
+              {task.handoverReason && (
+                <span className={css['task-handover-tooltip']}>{task.handoverReason}</span>
+              )}
+            </span>
+          )}
+        </div>
+        {transitions.length > 0 && (
+          <div className={css['task-status-selector']}>
+            <span className={css['task-status-selector-text']}>调整状态至</span>
+            <DownChevronIcon />
+            <select
+              className={css['task-status-select-overlay']}
+              value=""
+              onChange={(e) => {
+                const transition = transitions.find(item => item.target === e.target.value)
+                if (transition) handleTransition(transition)
+                e.currentTarget.value = ''
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <option value="" disabled>调整状态至</option>
+              {transitions.map(transition => (
+                <option key={transition.target} value={transition.target}>{transition.label}</option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
 
@@ -689,13 +600,13 @@ function TaskPanel({ content }: { content: string | null }) {
   const chips: FilterChip[] = Array.from(new Set(tasks.map(t => t.status)))
     .map(status => ({
       status,
-      dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['待处理']).dot,
+      dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['处理中']).dot,
       count: tasks.filter(t => t.status === status).length,
     }))
 
   const filtered = filter ? tasks.filter(t => t.status === filter) : tasks
   const statusOrder: Record<string, number> = {
-    '待处理': 1,
+    '处理中': 1,
     '待验证': 2,
     '待交接': 3,
     '已完成': 4,
