@@ -12,6 +12,7 @@ import noteRender from './noteRender'
 import auditPage from './auditPage'
 import viewCode from './viewCode'
 import resizePage from './resizePage'
+import doc from './doc'
 
 export default function () {
   return {
@@ -48,6 +49,7 @@ export default function () {
       undoRedoManager.redo()
     },
     '@auditPage': auditPage,
-    '@viewCode': viewCode
+    '@viewCode': viewCode,
+    ...doc()
   }
 }

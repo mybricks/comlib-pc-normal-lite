@@ -310,7 +310,7 @@ export async function updateLocalFiles(files: Array<{ path: string; content: str
   ])
 }
 
-async function deleteLocalFiles(paths: string[]): Promise<void> {
+export async function deleteLocalFiles(paths: string[]): Promise<void> {
   const response = await fetch(LOCAL_FILES_DELETE_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -532,7 +532,7 @@ export function registerSandbox(comId: string) {
 
         const gitDiff = (await executeLocalShellCommand('git diff && git add .', { timeoutMs: 10_000 })).stdout
         const versionList = myContext.version.getList()
-        console.log(666, "gitDiff", gitDiff || "❌")
+
         if (gitDiff) {
           myContext.version.add({
             id: randomUUID(),
@@ -710,6 +710,12 @@ export function registerSandbox(comId: string) {
       ['element-test']: {
         def: {
           type: 'element-test',
+          format: formatParsedElementChipMessage,
+        },
+      },
+      ['element-analyze']: {
+        def: {
+          type: 'element-analyze',
           format: formatParsedElementChipMessage,
         },
       }

@@ -1,6 +1,9 @@
 import { getClosestDomLoc, getElementCodeLocation, getElementClassNames } from '../../../helpers/dom'
 import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
+import { executeLocalShellCommand, readLocalFiles } from '../sandbox'
+
+const ANALYZE_FILE_PATH = '.lingchuang/.local/analyze.md'
 
 export default function () {
   return {
@@ -32,7 +35,7 @@ export default function () {
           detailText: [
             `<element-analyze id="${chipId}">`,
             '## 操作意图',
-            '分析目标元素的功能、数据流、事件流等信息，产出一份总结文档',
+            '分析目标元素及其数据流，将分析结果写入文件 .lingchuang/.local/analyze.md。',
             '',
             '## 目标元素',
             `- 名称：${label}`,
@@ -51,12 +54,18 @@ export default function () {
           chips: [chip],
         },
         extra: {
-          onComplete(md: string) {
-            console.log('onComplete', md)
-            if (md) {
-              myContext.doc.set(key, md)
+          async onComplete(md?: string) {
+            const analyzeFile = (await readLocalFiles([ANALYZE_FILE_PATH]))[0]
+            const result = analyzeFile?.content ?? md ?? ''
+
+            if (analyzeFile) {
+              executeLocalShellCommand(`rm -f "${ANALYZE_FILE_PATH}"`)
             }
-            onComplete(md)
+
+            if (result) {
+              myContext.doc.set(key, result)
+            }
+            onComplete(result)
           }
         }
       });
