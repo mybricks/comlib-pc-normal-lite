@@ -1,11 +1,12 @@
 import { Comment } from './comment'
 import { Version } from './version'
-
+import { Doc } from './doc'
 
 
 class Context {
   version = new Version()
   comment = new Comment()
+  doc = new Doc()
 }
 
 let context: Context | null = null

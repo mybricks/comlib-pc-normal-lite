@@ -24,11 +24,7 @@ import setStyle from './style/setStyle'
 import resizer from './style/resizer'
 import getEditors from '../../platforms/react-native/editors'
 import getLocalIframeEditors from '../../platforms/local-iframe/editors'
-import { getClosestDomLoc } from '../../helpers/dom'
-
-function escapeCssAttributeValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-}
+import { getClosestDomLoc, escapeCssAttributeValue } from '../../helpers/dom'
 
 function getElementRefSelectorCandidates(ele: Element | null | undefined) {
   const escapeSelectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')

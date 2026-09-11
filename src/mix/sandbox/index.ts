@@ -644,6 +644,29 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
   return `${resolved}\n\n${infoBlocks.join('\n\n')}`;
 }
 
+const CHIPS = [
+  'element-move',
+  'element-insert',
+  'element-text-update',
+  'element-delete',
+  'element-style-update',
+  'element-image-update',
+  'element-svg-update',
+  'element-analyze'
+].reduce((pre, type) => {
+  pre[type] = {
+    def: {
+      type,
+      format: formatParsedElementChipMessage,
+    },
+    onRemove(params) {
+      context.chipPromiseIds.delete(params.id)
+      context.component!.actions!.promiseCancel(params.id)
+    }
+  }
+  return pre
+}, {} as any)
+
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
 /** 视觉分支中只有本地代码变更的 turn 不应使用 AI summary 覆盖手动版本。 */
@@ -1147,6 +1170,8 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         loadingRef.current?.dispose();
         loadingRef.current = null;
 
+        turn.extra?.onComplete?.()
+
         context.component?.events.emit('vibing', false);
       },
       async afterTurnSummary(
@@ -1225,78 +1250,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         context.notifyVersionsChange(target);
       },
     },
-    chips: {
-      ['element-move']: {
-        def: {
-          type: 'element-move',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      },
-      ['element-insert']: {
-        def: {
-          type: 'element-insert',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      },
-      ['element-text-update']: {
-        def: {
-          type: 'element-text-update',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      },
-      ['element-delete']: {
-        def: {
-          type: 'element-delete',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      },
-      ['element-style-update']: {
-        def: {
-          type: 'element-style-update',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      },
-      ['element-image-update']: {
-        def: {
-          type: 'element-image-update',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      },
-      ['element-svg-update']: {
-        def: {
-          type: 'element-svg-update',
-          format: formatParsedElementChipMessage,
-        },
-        onRemove(params) {
-          context.chipPromiseIds.delete(params.id)
-          context.component!.actions!.promiseCancel(params.id)
-        }
-      }
-    }
+    chips: CHIPS
   }) ?? {};
 
   const { history, disabledHandler, isRemoteAgent, workspaceReady, remoteFs } = connectToAIRef

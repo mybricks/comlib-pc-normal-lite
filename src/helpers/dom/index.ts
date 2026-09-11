@@ -44,3 +44,18 @@ export function getElementCodeLocation(el?: Element): string {
 
   return jsxFile ? `${jsxFile}#${lineDesc}` : lineDesc
 }
+
+export function escapeCssAttributeValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+export function getElementClassNames(ele) {
+  const classNames: string[] = Array.from(ele.classList)
+  return classNames.map((className) => {
+    if (className.match('%2F')) {
+      return decodeURIComponent(className)
+    }
+
+    return className
+  }).join(' ')
+}
