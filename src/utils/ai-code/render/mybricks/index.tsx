@@ -292,7 +292,7 @@ interface CreateMyBricksProps {
 const createMyBricks = (props: CreateMyBricksProps) => {
   const frontendMode = config.getFrontendMode()
 
-  const Wrapper = config.getFrontendWrapper()
+  const Wrapper = config.getFrontendWrapper() || (({ children }) => children)
 
   // 配置的画布信息
   const { width: canvasWidth = 1440, height: canvasHeight = 900, update } = window._sandbox_.config.componentRuntime?.canvas || {}
@@ -806,9 +806,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         }}
       >
         <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
-          {container && <PageContext.Provider value={container}>
-            {children}
-          </PageContext.Provider>}
+          {container && (
+            <Wrapper container={containerRef.current}>
+              <PageContext.Provider value={container}>
+                {children}
+              </PageContext.Provider>
+            </Wrapper>
+          )}
         </div>
       </div>
     )
@@ -1196,16 +1200,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         useLayoutEffect(() => {
           pageContext.onPageInfo(params)
         }, [])
-      }
-
-      if (props['_mybricks_page'] && Wrapper) {
-        return (
-          <Wrapper
-            container={pageContext.container}
-          >
-            <ObservedComponent {...props} _env={_env} popupNode={pageContext.container}/>
-          </Wrapper>
-        )
       }
 
       return (

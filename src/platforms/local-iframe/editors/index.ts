@@ -11,6 +11,7 @@ import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import noteRender from './noteRender'
 import auditPage from './auditPage'
 import viewCode from './viewCode'
+import resizePage from './resizePage'
 
 export default function () {
   return {
@@ -39,7 +40,7 @@ export default function () {
     '@updateSegment': updateSegment,
     '@setStyle': setStyle(),
     // '@runTest': runTest,
-    '@resizePage'() {},
+    '@resizePage': resizePage,
     '@undo'() {
       undoRedoManager.undo()
     },
