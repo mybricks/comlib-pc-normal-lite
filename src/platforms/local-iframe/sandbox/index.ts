@@ -713,12 +713,6 @@ export function registerSandbox(comId: string) {
           format: formatParsedElementChipMessage,
         },
       },
-      ['element-analyze']: {
-        def: {
-          type: 'element-analyze',
-          format: formatParsedElementChipMessage,
-        },
-      }
     }
   }) ?? {};
 

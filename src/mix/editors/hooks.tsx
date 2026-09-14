@@ -37,12 +37,9 @@ import type {Props} from './types';
 import {
   getClosestDomLoc,
   escapeCssAttributeValue,
-  getElementCodeLocation,
-  getElementClassNames
 } from '../../helpers/dom'
 
 const errorSet = new Set();
-
 function getDebugEnvOptions(data: any) {
   const envNames: string[] = data?._debugEnvs ?? [];
   const disallowedDebugEnvs = new Set(config.getDisallowedDebugEnvs());
@@ -396,98 +393,65 @@ export function buildHooks(props: Props) {
         },
       });
     },
-    // '@audit'(hookContext, params) {
-    //   const { onComplete, onError } = params ?? {};
-    //   try {
-    //     createAuditTransaction(onComplete, onError);
-    //   } catch (error) {
-    //     onError?.(error);
-    //     return;
-    //   }
-    //   const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent;
+    '@getDoc'(params) {
+      const loc = getClosestDomLoc(params.focusArea.ele)
+      if (!loc) {
+        return Promise.resolve('')
+      }
+      const data = context.component!.params!.data;
+      if (!data._docs) {
+        data._docs = {}
+      }
+      const { files, codeLine } = loc;
+      const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
+      return Promise.resolve(data._docs[key] ?? '')
+    },
+    '@updateDoc'(params, { onComplete }) {
+      const ele = params.focusArea.ele
+      const loc = getClosestDomLoc(ele)
+      if (!loc) {
+        return ''
+      }
+      const data = context.component!.params!.data;
+      if (!data._docs) {
+        data._docs = {}
+      }
+      const { files, codeLine } = loc;
+      const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
+      const chipId = randomUUID()
+      const analyzeFilePath = `.agent/temp/analyse-${randomUUID().slice(0, 5)}.md`
+      const chip = {
+        id: chipId,
+        label: ele.tagName.toLowerCase(),
+        type: 'dom',
+        data: {
+          ele,
+        }
+      }
 
-    //   if (typeof sendToAgent !== 'function') {
-    //     failActiveAuditTransaction(new Error('AI 审查服务当前不可用'));
-    //     return;
-    //   }
+      window._sandbox_.helpers.sendToAgent(params.id, {
+        message: `[$mbs-template:analyze-selection] 分析下这个选择区域 [[chip:${chip.id}]]，整理出分析报告markdown 放到 ${analyzeFilePath} 里。\n 注意：这是一次性报告，直接写入即可，写入后会展示在设计器窗口编辑区的右侧，一段时间会被自动清理。`,
+        meta: {
+          chips: [chip],
+        },
+        extra: {
+          async onComplete(md?: string) {
+            const analyzeFile = data.files.find((file) => file.fileName === analyzeFilePath)
+            const result = analyzeFile ? decodeURIComponent(analyzeFile.source) : md ?? ''
 
-    //   try {
-    //     const request = sendToAgent(hookContext.id, {
-    //       message: `校准下当前的变更影响文档`,
-    //     });
-    //     void Promise.resolve(request).catch((error) => {
-    //       failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
-    //     });
-    //   } catch (error) {
-    //     failActiveAuditTransaction(error instanceof Error ? error : new Error('AI 审查请求失败'));
-    //   }
-    // },
-    // '@getDoc'(params) {
-    //   const loc = getClosestDomLoc(params.focusArea.ele)
-    //   if (!loc) {
-    //     return ''
-    //   }
-    //   const data = context.component!.params!.data;
-    //   if (!data._docs) {
-    //     data._docs = {}
-    //   }
-    //   const { files, codeLine } = loc;
-    //   const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
-    //   return data._docs[key]
-    // },
-    // '@updateDoc'(params, { onComplete }) {
-    //   const ele = params.focusArea.ele
-    //   const loc = getClosestDomLoc(ele)
-    //   if (!loc) {
-    //     return ''
-    //   }
-    //   const data = context.component!.params!.data;
-    //   if (!data._docs) {
-    //     data._docs = {}
-    //   }
-    //   const { files, codeLine } = loc;
-    //   const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
-    //   const chipId = randomUUID()
-    //   const label = ele.tagName.toLowerCase()
-    //   const chip = {
-    //     id: chipId,
-    //     label: `分析 ${label}，总结文档`,
-    //     type: 'element-analyze',
-    //     data: {
-    //       inlineText: `执行「${chipId}」，`,
-    //       detailText: [
-    //         `<element-analyze id="${chipId}">`,
-    //         '## 操作意图',
-    //         '分析目标元素的功能、数据流、事件流等信息，产出一份总结文档',
-    //         '',
-    //         '## 目标元素',
-    //         `- 名称：${label}`,
-    //         `- 类名：${getElementClassNames(ele) || '无'}`,
-    //         '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
-    //         `- 代码位置：${getElementCodeLocation(ele)}`,
-    //         '',
-    //         '</element-analyze>',
-    //       ].join('\n'),
-    //     }
-    //   }
-    
-    //   window._sandbox_.helpers.sendToAgent(params.id, {
-    //     message: `[[chip:${chip.id}]]`,
-    //     meta: {
-    //       chips: [chip],
-    //     },
-    //     extra: {
-    //       onComplete(md: string) {
-    //         console.log('onComplete', md)
-    //         const data = context.component!.params!.data;
-    //         if (md) {
-    //           data._docs[key] = md
-    //         }
-    //         onComplete(md)
-    //       }
-    //     }
-    //   });
-    // },
+            if (analyzeFile) {
+              context.updateFile({ fileName: analyzeFilePath, type: 'delete' })
+            }
+
+            if (result) {
+              data._docs[key] = result
+            }
+            await onComplete(result)
+          }
+        },
+        aiRole: "fast",
+      });
+    },
     ...hooks
   };
 }

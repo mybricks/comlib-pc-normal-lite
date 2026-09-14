@@ -54,6 +54,7 @@ export default function () {
           meta: {
             chips
           },
+          aiRole: 'fast',
           extra: {
             from: '@commitUserActions'
           }

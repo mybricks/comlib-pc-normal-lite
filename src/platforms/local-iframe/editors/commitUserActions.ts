@@ -21,6 +21,7 @@ export default function (props) {
       meta: {
         chips
       },
+      aiRole: 'fast',
       // extra: {
       //   from: '@commitUserActions'
       // }

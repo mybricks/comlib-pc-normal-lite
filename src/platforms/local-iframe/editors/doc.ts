@@ -1,9 +1,7 @@
-import { getClosestDomLoc, getElementCodeLocation, getElementClassNames } from '../../../helpers/dom'
+import { getClosestDomLoc } from '../../../helpers/dom'
 import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
 import { executeLocalShellCommand, readLocalFiles } from '../sandbox'
-
-const ANALYZE_FILE_PATH = '.lingchuang/.local/analyze.md'
 
 export default function () {
   return {
@@ -25,41 +23,29 @@ export default function () {
       const { files, codeLine } = loc
       const key = myContext.doc.buildKey(files, codeLine)
       const chipId = randomUUID()
+      const analyzeFilePath = `.lingchuang/temp/analyse-${randomUUID().slice(0, 5)}.md`
       const label = ele.tagName.toLowerCase()
       const chip = {
         id: chipId,
-        label: `分析 ${label}，总结文档`,
-        type: 'element-analyze',
+        label,
+        type: 'dom',
         data: {
-          inlineText: `执行「${chipId}」，`,
-          detailText: [
-            `<element-analyze id="${chipId}">`,
-            '## 操作意图',
-            '分析目标元素及其数据流，将分析结果写入文件 .lingchuang/.local/analyze.md。',
-            '',
-            '## 目标元素',
-            `- 名称：${label}`,
-            `- 类名：${getElementClassNames(ele) || '无'}`,
-            '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
-            `- 代码位置：${getElementCodeLocation(ele)}`,
-            '',
-            '</element-analyze>',
-          ].join('\n'),
+          ele,
         }
       }
     
       window._sandbox_.helpers.sendToAgent(params.id, {
-        message: `[[chip:${chip.id}]]`,
+        message: `[$mbs-template:analyze-selection] 分析下这个选择区域 [[chip:${chip.id}]]，整理出分析报告markdown 放到 ${analyzeFilePath} 里，注意：这是一次性报告，可以重复写入不同的报告，不论之前是否存在，直接写入即可，写入后会展示在设计器窗口编辑区的右侧`,
         meta: {
           chips: [chip],
         },
         extra: {
           async onComplete(md?: string) {
-            const analyzeFile = (await readLocalFiles([ANALYZE_FILE_PATH]))[0]
+            const analyzeFile = (await readLocalFiles([analyzeFilePath]))[0]
             const result = analyzeFile?.content ?? md ?? ''
 
             if (analyzeFile) {
-              executeLocalShellCommand(`rm -f "${ANALYZE_FILE_PATH}"`)
+              executeLocalShellCommand(`rm -f "${analyzeFilePath}"`)
             }
 
             if (result) {
@@ -67,7 +53,8 @@ export default function () {
             }
             onComplete(result)
           }
-        }
+        },
+        aiRole: "fast",
       });
     },
   }
