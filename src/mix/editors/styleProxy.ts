@@ -315,6 +315,42 @@ function getActualTargetBranches(targetKey: string, actualSelector: string): str
 }
 
 /**
+ * 普通写入命中顶层逗号规则时，先把共享声明复制到各个分支，再只返回当前分支。
+ * 例如编辑 `.first::after` 时，不能直接修改
+ * `.first::after, .last::after { ... }` 的共享声明块。
+ *
+ * 只有当前 selector 能唯一定位一个分支时才拆分；匹配存在歧义则保留原规则，
+ * 避免猜测性地改写多个具有相同末尾 selector 的分支。
+ */
+function splitCommaMergedTopLevelRuleForWrite(
+  cssObj: Record<string, any>,
+  targetKey: string,
+  fullSelector: string,
+): string {
+  if (!targetKey.includes(',')) return targetKey;
+
+  const branches = splitTopLevelCommaKeys(targetKey);
+  if (branches.length < 2) return targetKey;
+
+  const targetBranches = getActualTargetBranches(targetKey, fullSelector);
+  if (targetBranches.length !== 1) return targetKey;
+
+  const sharedStyle = cssObj[targetKey];
+  if (!sharedStyle || typeof sharedStyle !== 'object' || Array.isArray(sharedStyle)) {
+    return targetKey;
+  }
+
+  branches.forEach(branchKey => {
+    const existing = cssObj[branchKey];
+    cssObj[branchKey] = existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...sharedStyle, ...existing }
+      : { ...sharedStyle };
+  });
+  delete cssObj[targetKey];
+  return targetBranches[0];
+}
+
+/**
  * `background` 简写属性展开后会影响的所有 longhand（连字符格式）。
  * antd 写 `background: #1677ff` 时，浏览器会隐式将 background-image 等 reset 为初始值。
  */
@@ -508,9 +544,14 @@ function resolveTargetKey(params: {
   const { cssObj, fullSelector, eleClassList = [], rawSelector } = params;
   const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
 
-  // 后缀遍历匹配：取路径最长（最具体）的 key
+  // 独立完整 selector 精确匹配，优先级高于所有兼容性兜底策略。
+  const exactMatchKey = Object.prototype.hasOwnProperty.call(cssObj, fullSelector)
+    ? fullSelector
+    : undefined;
+
+  // 后缀遍历匹配：取路径最长（最具体）的 key；完整匹配已单独处理。
   const suffixMatchKey = Object.keys(cssObj)
-    .filter(k => k === fullSelector || k.endsWith(' ' + fullSelector))
+    .filter(k => k !== fullSelector && k.endsWith(' ' + fullSelector))
     .sort((a, b) => b.length - a.length)[0];
 
   const shrinkMatchKey = segments.slice(1).reduce((found: string | undefined, _, i) => {
@@ -534,7 +575,7 @@ function resolveTargetKey(params: {
   // 否则会写出特指度更高的复合选择器，反过来覆盖正确的规则。
   const cssModulesKey = tryResolveCSSModulesHashedSelector(cssObj, rawSelector ?? fullSelector);
 
-  return cssModulesKey ?? suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? commaMatchKey ?? fullSelector;
+  return cssModulesKey ?? exactMatchKey ?? commaMatchKey ?? suffixMatchKey ?? shrinkMatchKey ?? compoundMatchKey ?? fullSelector;
 }
 
 type NestedRuleTarget = {
@@ -1784,6 +1825,16 @@ export function genStyleValue(props) {
           delete targetContainer[nestedTarget.key];
           resolvedTargetKey = nestedTarget.branch;
         }
+      }
+
+      // 顶层逗号规则与嵌套规则采用相同的隔离语义：各分支继承原共享声明，
+      // 本次变更只落到面板当前选中的唯一分支。
+      if (!nestedTarget) {
+        resolvedTargetKey = splitCommaMergedTopLevelRuleForWrite(
+          cssObj,
+          resolvedTargetKey,
+          fullSelector,
+        );
       }
 
       if (!targetContainer[resolvedTargetKey]) {
