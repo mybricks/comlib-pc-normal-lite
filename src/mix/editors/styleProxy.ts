@@ -131,6 +131,26 @@ function kebabToCamelProp(str: string) {
 }
 
 /**
+ * 样式面板只提交属性值，不提交 CSS 声明的 priority。
+ * 如果原 Less 声明带有 !important，编辑同一属性时应继续保留它，
+ * 否则写回新值会把原来的优先级静默丢掉。
+ */
+function preserveExistingImportant(existing: unknown, next: any): any {
+  if (
+    typeof existing !== 'string' ||
+    !/!important\s*$/i.test(existing.trim()) ||
+    next === null ||
+    next === undefined ||
+    next === '' ||
+    /!important\s*$/i.test(String(next).trim())
+  ) {
+    return next;
+  }
+
+  return `${String(next).trimEnd()} !important`;
+}
+
+/**
  * expandDeletions 会把 longhand 删除连带上简写（如删 backgroundImage → 也删 background）。
  * 同批 value 正在写入的属性必须排除，否则「写入 background + 删除旧 backgroundImage」
  * 会在落盘时把刚写入的 background 立刻删掉，表现为编辑器有值但 less 未更新。
@@ -899,7 +919,9 @@ function tryWriteNestedPseudo(
 
     // 找到嵌套伪类，直接在原位写入，保留 Less 嵌套结构
     const target = cssObj[base][nestedKey] as Record<string, any>;
-    Object.entries(value).forEach(([k, v]) => { target[k] = v; });
+    Object.entries(value).forEach(([k, v]) => {
+      target[k] = preserveExistingImportant(target[k], v);
+    });
 
     if (deletions && deletions.length > 0) {
       const expandedDeletions = filterExpandedDeletions(deletions, value);
@@ -1885,7 +1907,7 @@ export function genStyleValue(props) {
           writeVal = String(writeVal) + ' !important';
         }
 
-        targetStyle[key] = writeVal;
+        targetStyle[key] = preserveExistingImportant(existing, writeVal);
       });
 
       // 若写入了 background-image: none（表示用户切换到纯色背景），
