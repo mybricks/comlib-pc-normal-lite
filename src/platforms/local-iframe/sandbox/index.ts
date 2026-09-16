@@ -33,6 +33,42 @@ function formatParsedElementChipMessage({ message, chips }: { message: string; c
   return `${resolved}\n\n${infoBlocks.join('\n\n')}`;
 }
 
+/**
+ * @任务 mention 的候选来源：直接读 `context.tasksContent`（同步字段，
+ * 每次任务面板更新都会同步写入），每次唤起 @ 菜单/输入 @ 都会重新调用，
+ * 天然拿到最新任务列表，不需要额外的事件桥接。
+ * 任务名本身可读性已经足够，直接用任务名做 chip id；format 只做占位符替换，
+ * 不额外拼接 detail/summary 之类的后置信息块。
+ */
+function buildTaskMentionProvider() {
+  return {
+    id: 'task',
+    label: '任务',
+    // 显式传空串（而非不传）以覆盖菜单默认的 @ 图标；不传的话 Sender 会 fallback 到内置 AtSign 图标。
+    icon: '',
+    menu: () => {
+      const tasks = parseTasksForNotify(context.tasksContent ?? '')
+      return tasks.map((task) => ({
+        id: task.title,
+        label: task.title,
+        data: task,
+      }))
+    },
+    chip: {
+      type: 'task',
+      render: (data: UserTaskInfo) => ({ content: `@任务:${data?.title ?? ''}` }),
+      format: ({ message, chips }: { message: string; chips: Array<{ id: string; data?: UserTaskInfo }> }) => {
+        let resolved = message
+        for (const chip of chips) {
+          resolved = resolved.split(`[[chip:${chip.id}]]`).join(`@任务:${chip.data?.title ?? chip.id}`)
+        }
+        return resolved
+      },
+    },
+  }
+}
+
+
 let registerSuccess = false
 
 const LOCAL_FILES_LIST_ENDPOINT = '/lingchuang/api/files/list'
@@ -463,6 +499,7 @@ export function registerSandbox(comId: string) {
   // 直接注册 AgentSandbox，避免通过 V1 getFiles() 全量加载文件内容。
   const { history, isRemoteAgent } = connectToAI(comId, {
     agentSandbox,
+    mentions: [buildTaskMentionProvider()],
     hooks: {
       async beforeRequest(params,) {
         console.log(10, 'hooks:beforeRequest', params)
