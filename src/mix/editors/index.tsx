@@ -197,9 +197,9 @@ export default function (props: Props, actions: Actions) {
         },
       ],
     },
-    '[data-zone-noselector]': {
-      style: [{ items: [] }],
-    },
+    // '[data-zone-noselector]': {
+    //   style: [{ items: [] }],
+    // },
     '[data-library-source]': {},
     '[data-zone-icon]': {
       // '@ai': {
@@ -211,7 +211,7 @@ export default function (props: Props, actions: Actions) {
       // },
       items: buildIconEditorItems(comId),
     },
-    '[class]': {
+    '[class],[data-zone-noselector]': {
       style: [
         {
           items: [
