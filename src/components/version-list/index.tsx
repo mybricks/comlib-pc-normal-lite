@@ -15,7 +15,7 @@ const TYPE_LABEL: Record<VersionRecord["type"], string> = {
   rollback: "回滚版本",
 };
 
-interface PopconfirmProps {
+export interface PopconfirmProps {
   title: string;
   visible: boolean;
   onVisible: (v: boolean) => void;
@@ -24,7 +24,7 @@ interface PopconfirmProps {
   parentElement?: HTMLDivElement | null;
 }
 
-function Popconfirm({ title, visible, onVisible, onConfirm, children, parentElement }: PopconfirmProps) {
+export function Popconfirm({ title, visible, onVisible, onConfirm, children, parentElement }: PopconfirmProps) {
   const triggerRef = useRef<HTMLSpanElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
