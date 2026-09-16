@@ -195,6 +195,7 @@ type InlineStyleSnapshot = {
   cssProp: string;
   hadInitialValue: boolean;
   initialValue: string;
+  initialPriority: string;
   nextValue: string;
 }
 type CssRuleStyleSnapshot = {
@@ -240,6 +241,8 @@ type StyleKeyRoute = {
   matchedElementCount?: number;
   /** selectorText 命中的 DOM 去重后的源码 JSX 位置数量；相同代码位置的 map 实例视为 1 个 */
   matchedSourceLocationCount?: number;
+  /** 普通优先级写入后未生效，需要在最终源码中保留 !important */
+  needsImportant?: boolean;
   /** 拖拽开始前，当前 DOM 元素该属性的实际数值，用于计算 delta */
   initialValue?: number;
   /** 拖拽开始前，Less 规则里该属性的数值；inline + multiple 时 Less 按该值叠加 delta */
@@ -263,6 +266,7 @@ const getInitialInlineStyleSnapshot = (
     cssProp,
     hadInitialValue: initial?.hadInitialValue ?? initialValue !== '',
     initialValue,
+    initialPriority: targetEle.style.getPropertyPriority(cssProp),
     nextValue,
   }
 }
@@ -270,12 +274,13 @@ const getInitialInlineStyleSnapshot = (
 const applyInlineStyleSnapshots = (snapshots: InlineStyleSnapshot[], phase: 'execute' | 'undo') => {
   snapshots.forEach((snapshot) => {
     if (phase === 'execute') {
-      snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.nextValue)
+      const nextValue = splitStyleValueAndPriority(snapshot.nextValue)
+      snapshot.ele.style.setProperty(snapshot.cssProp, nextValue.value, nextValue.priority)
       return
     }
 
     if (snapshot.hadInitialValue) {
-      snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.initialValue)
+      snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.initialValue, snapshot.initialPriority)
     } else {
       snapshot.ele.style.removeProperty(snapshot.cssProp)
     }
@@ -318,6 +323,44 @@ const getJsxFileInfo = (targetEle: HTMLElement) => {
 }
 
 const stringifyStyleValue = (value: StyleValue) => typeof value === 'number' ? `${value}px` : value
+
+const normalizeStyleValue = (value: string) => {
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, ' ')
+  const shortHex = normalized.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/)
+  if (shortHex) {
+    return `rgb(${parseInt(shortHex[1] + shortHex[1], 16)}, ${parseInt(shortHex[2] + shortHex[2], 16)}, ${parseInt(shortHex[3] + shortHex[3], 16)})`
+  }
+  const hex = normalized.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/)
+  if (hex) {
+    return `rgb(${parseInt(hex[1], 16)}, ${parseInt(hex[2], 16)}, ${parseInt(hex[3], 16)})`
+  }
+  const rgba = normalized.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*1(?:\.0*)?\s*\)$/)
+  if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`
+  return normalized
+}
+
+const stripImportant = (value: string) => value.replace(/\s*!important\s*$/i, '').trim()
+
+const isStyleValueEffective = (target: HTMLElement, cssProp: string, value: StyleValue) => {
+  const expected = normalizeStyleValue(stripImportant(stringifyStyleValue(value)))
+  const actual = normalizeStyleValue(getComputedStyle(target).getPropertyValue(cssProp))
+  return expected === actual
+}
+
+const splitStyleValueAndPriority = (value: string): { value: string; priority: string } => {
+  if (!/!important\s*$/i.test(value.trim())) {
+    return { value, priority: '' }
+  }
+  return {
+    value: value.replace(/\s*!important\s*$/i, '').trimEnd(),
+    priority: 'important',
+  }
+}
+
+const getStyleValueForRoute = (route: StyleKeyRoute | undefined, value: StyleValue): StyleValue => {
+  if (!route?.needsImportant) return value
+  return `${stringifyStyleValue(value)} !important`
+}
 
 const getJsxStyleValueLength = (value: StyleValue, asString = true) => {
   if (!asString) return String(value).length
@@ -786,7 +829,12 @@ export default function createSetStyleHandler(
     return null
   }
 
-  const setRulePreviewStyle = (route: StyleKeyRoute, key: string, value: StyleValue) => {
+  const setRulePreviewStyle = (
+    route: StyleKeyRoute,
+    key: string,
+    value: StyleValue,
+    target: HTMLElement,
+  ) => {
     const rule = getPreviewRule(route)
     if (!rule) return
 
@@ -804,18 +852,34 @@ export default function createSetStyleHandler(
       ruleStyleSnapshots.push(snapshot)
     }
 
-    // 继承原声明的 !important 语义，不因预览意外改变优先级。
-    rule.style.setProperty(cssProp, stringifyStyleValue(value), snapshot.initialPriority)
+    // 继承原声明的 !important 语义；普通优先级写入后若未生效，再提升为 !important。
+    const priority = route.needsImportant ? 'important' : snapshot.initialPriority
+    rule.style.setProperty(cssProp, stringifyStyleValue(value), priority)
+    if (!priority && !isStyleValueEffective(target, cssProp, value)) {
+      route.needsImportant = true
+      rule.style.setProperty(cssProp, stringifyStyleValue(value), 'important')
+    }
   }
 
-  const setInlinePreviewStyle = (target: HTMLElement, key: string, value: StyleValue) => {
+  const setInlinePreviewStyle = (
+    target: HTMLElement,
+    key: string,
+    value: StyleValue,
+    route?: StyleKeyRoute,
+  ) => {
     const cssProp = convertCamelToHyphen(key)
     let snapshot = previewInlineSnapshots.find(item => item.ele === target && item.cssProp === cssProp)
     if (!snapshot) {
       snapshot = getInitialInlineStyleSnapshot(target, key, stringifyStyleValue(value))
       previewInlineSnapshots.push(snapshot)
     }
-    target.style.setProperty(cssProp, stringifyStyleValue(value))
+    const nextValue = stringifyStyleValue(value)
+    const priority = route?.needsImportant ? 'important' : snapshot.initialPriority
+    target.style.setProperty(cssProp, nextValue, priority)
+    if (route && !priority && !isStyleValueEffective(target, cssProp, value)) {
+      route.needsImportant = true
+      target.style.setProperty(cssProp, nextValue, 'important')
+    }
   }
 
   const clearPreviewStyles = () => {
@@ -828,7 +892,7 @@ export default function createSetStyleHandler(
     })
     previewInlineSnapshots.forEach(snapshot => {
       if (snapshot.hadInitialValue) {
-        snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.initialValue)
+        snapshot.ele.style.setProperty(snapshot.cssProp, snapshot.initialValue, snapshot.initialPriority)
       } else {
         snapshot.ele.style.removeProperty(snapshot.cssProp)
       }
@@ -1065,14 +1129,14 @@ export default function createSetStyleHandler(
           Object.entries(style as Record<string, number>).forEach(([key, val]) => {
             const route = styleKeyRoutes[key]
             if (isSingleDomLessRoute(route)) {
-              setRulePreviewStyle(route!, key, val)
+              setRulePreviewStyle(route!, key, val, ele)
             } else {
               inlineStyleEntries.push([key, val])
             }
           })
 
           inlineStyleEntries.forEach(([key, val]) => {
-            ele.style.setProperty(convertCamelToHyphen(key), `${val}px`)
+            setInlinePreviewStyle(ele, key, val, styleKeyRoutes[key])
           })
           return
         }
@@ -1086,27 +1150,27 @@ export default function createSetStyleHandler(
             const delta = val - (route.initialValue ?? 0)
             cssValue = (route.lessInitialValue ?? 0) + delta
             ;(route.inlineSyncTargets?.length ? route.inlineSyncTargets : [{ ele, initialValue: route.initialValue ?? 0 }]).forEach((target) => {
-              setInlinePreviewStyle(target.ele, key, (target.initialValue ?? 0) + delta)
+              setInlinePreviewStyle(target.ele, key, (target.initialValue ?? 0) + delta, route)
             })
           } else if (route.source === 'less' && route.inlineSyncTargets?.length) {
             const delta = val - (route.initialValue ?? 0)
             route.inlineSyncTargets.forEach((target) => {
-              setInlinePreviewStyle(target.ele, key, target.initialValue + delta)
+              setInlinePreviewStyle(target.ele, key, target.initialValue + delta, route)
             })
           }
 
           if (route.source === 'jsx-inline' && !route.syncInline) {
             if (!route.selector) {
-              setInlinePreviewStyle(ele, key, cssValue)
+              setInlinePreviewStyle(ele, key, cssValue, route)
               return
             }
             getSelectorMatchedElements(route.selector, getShadowRoot())?.forEach((target) => {
-              setInlinePreviewStyle(target, key, cssValue)
+              setInlinePreviewStyle(target, key, cssValue, route)
             })
             return
           }
 
-          setRulePreviewStyle(route, key, cssValue)
+          setRulePreviewStyle(route, key, cssValue, ele)
         })
       } else if (state === 'finish') {
         isStart = false
@@ -1133,9 +1197,9 @@ export default function createSetStyleHandler(
           Object.entries(style as Record<string, number>).forEach(([key, value]) => {
             const route = styleKeyRoutes[key]
             if (isSingleDomLessRoute(route)) {
-              pushLessStyle(lessStyle, route!.selector, key, value)
+              pushLessStyle(lessStyle, route!.selector, key, getStyleValueForRoute(route, value))
             } else if (!route?.needsAI) {
-              inlineStyle[key] = value
+              inlineStyle[key] = getStyleValueForRoute(route, value)
             }
           })
           // Snapshot the current data-style-info BEFORE patching so undo can restore it.
@@ -1252,6 +1316,7 @@ export default function createSetStyleHandler(
         let jsxStyle: Array<{
           key: string;
           value: number;
+          important?: boolean;
           loc: { start: number; end: number };
           asString?: boolean;
           fileName?: string;
@@ -1267,7 +1332,7 @@ export default function createSetStyleHandler(
           if (needsAI) return  // 交给 AI，不写入 JSX/Less
           const value = style[key]
           if (route.source === 'jsx-inline' && !selector) {
-            fallbackInlineStyle[key] = value
+            fallbackInlineStyle[key] = getStyleValueForRoute(route, value)
           } else if (route.source === 'jsx-inline' && route.syncInline) {
             const delta = value - (route.initialValue ?? 0)
             const inlineTargets = route.inlineSyncTargets?.length
@@ -1287,6 +1352,7 @@ export default function createSetStyleHandler(
               jsxStyle.push({
                 key,
                 value: target.initialValue + delta,
+                important: route.needsImportant,
                 loc: target.loc,
                 asString: true,
                 fileName: target.fileName,
@@ -1295,13 +1361,19 @@ export default function createSetStyleHandler(
                 hadInitialInlineValue: target.hadInitialInlineValue,
               })
             })
-            pushLessStyle(lessStyle, selector, key, (route.lessInitialValue ?? 0) + delta)
+            pushLessStyle(
+              lessStyle,
+              selector,
+              key,
+              getStyleValueForRoute(route, (route.lessInitialValue ?? 0) + delta),
+            )
           } else if (route.source === 'less' && route.inlineSyncTargets?.length) {
             const delta = value - (route.initialValue ?? 0)
             route.inlineSyncTargets.forEach((target) => {
               jsxStyle.push({
                 key,
                 value: target.initialValue + delta,
+                important: route.needsImportant,
                 loc: target.loc,
                 asString: true,
                 fileName: target.fileName,
@@ -1310,16 +1382,17 @@ export default function createSetStyleHandler(
                 hadInitialInlineValue: target.hadInitialInlineValue,
               })
             })
-            pushLessStyle(lessStyle, selector, key, value)
+            pushLessStyle(lessStyle, selector, key, getStyleValueForRoute(route, value))
           } else if (isJsx && loc) {
             jsxStyle.push({
               key,
               value,
+              important: route.needsImportant,
               loc,
               ele
             })
           } else {
-            pushLessStyle(lessStyle, selector, key, value)
+            pushLessStyle(lessStyle, selector, key, getStyleValueForRoute(route, value))
           }
         })
         const jsxs: FileUpdate[] = []
@@ -1354,7 +1427,9 @@ export default function createSetStyleHandler(
               entries.map((entry) => {
                 return {
                   key: entry.key,
-                  val: entry.asString ? stringifyStyleValue(entry.value) : entry.value,
+                  val: entry.asString
+                    ? `${stringifyStyleValue(entry.value)}${entry.important ? ' !important' : ''}`
+                    : entry.value,
                   valueStart: entry.loc.start,
                   valueEnd: entry.loc.end,
                   asString: entry.asString,
@@ -1376,7 +1451,9 @@ export default function createSetStyleHandler(
                   start: entry.loc.start,
                   end: entry.loc.end,
                   newLength: getJsxStyleValueLength(
-                    entry.asString ? stringifyStyleValue(entry.value) : entry.value,
+                    entry.asString
+                      ? `${stringifyStyleValue(entry.value)}${entry.important ? ' !important' : ''}`
+                      : entry.value,
                     entry.asString,
                   ),
                 })),

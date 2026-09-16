@@ -669,7 +669,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                           style.width = width
                         }
                         if (height) {
-                          style.minHeight = height
+                          style.height = height
+                          Reflect.deleteProperty(style, 'minHeight')
                         } else {
                           const bcr = containerRef.current!.getBoundingClientRect()
                           if (bcr.height) {
