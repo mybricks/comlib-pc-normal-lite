@@ -507,6 +507,30 @@
   border-top: 1px dashed var(--mybricks-border-color-main, #e8e8e8);
 }
 
+.task-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.task-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--mybricks-text-color-disabled, #888);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--mybricks-text-color-main);
+    background: var(--mybricks-bg-color-active, #f0f1f3);
+  }
+}
+
 /* ─── Task status selector ───────────────────────── */
 
 .task-status-selector {

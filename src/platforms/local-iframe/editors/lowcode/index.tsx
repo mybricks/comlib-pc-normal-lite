@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import context from '../../../../mix/context'
+import { randomUUID } from '../../../../mix/utils/uuid'
 import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
 import myContext, { type VersionRecord } from '../../context'
-import VersionListView from '../../../../components/version-list'
+import VersionListView, { Popconfirm } from '../../../../components/version-list'
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
 
@@ -438,6 +439,23 @@ function DownChevronIcon() {
   )
 }
 
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+      <path d="M8 2.5V13.5M2.5 8H13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function UndoIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+      <path d="M4 4.5H10a3.5 3.5 0 0 1 0 7H6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 2L3.5 4.5L6 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 interface TaskTransition {
   target: TaskStatus
   label: string
@@ -499,9 +517,38 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
 
 function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgress?: boolean }) {
   const [expanded, setExpanded] = useState(false)
+  const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
   const hasDetail = !!task.detail
   const transitions = getTaskTransitions(task)
+
+  const handleAddToChat = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
+    const componentId = context.comId ?? context.component?.params?.id
+    if (typeof appendToSender === 'function' && componentId) {
+      ;(context.plugins as any)?.showAIDialog?.()
+      const chip = {
+        id: randomUUID(),
+        type: 'task',
+        label: task.title,
+        data: { title: task.title },
+      }
+      appendToSender(componentId, {
+        message: `[[chip:${chip.id}]]`,
+        meta: { chips: [chip] },
+        animation: true,
+      })
+      return
+    }
+    ;(context.plugins as any)?.showAIDialog?.()
+  }
+
+  const handleRevert = () => {
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+      message: `[$mbs-template:revoke-task] 撤销任务「${task.title}」`,
+    })
+  }
 
   const handleTransition = (transition: TaskTransition) => {
     const message = `任务「${task.title}」：${transition.instruction}`
@@ -556,27 +603,50 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
             </span>
           )}
         </div>
-        {transitions.length > 0 && (
-          <div className={css['task-status-selector']}>
-            <span className={css['task-status-selector-text']}>调整状态至</span>
-            <DownChevronIcon />
-            <select
-              className={css['task-status-select-overlay']}
-              value=""
-              onChange={(e) => {
-                const transition = transitions.find(item => item.target === e.target.value)
-                if (transition) handleTransition(transition)
-                e.currentTarget.value = ''
-              }}
-              onClick={(e) => e.stopPropagation()}
+        <div className={css['task-card-actions']}>
+          <span
+            className={css['task-action-icon']}
+            data-mybricks-tip="添加到对话"
+            onClick={handleAddToChat}
+          >
+            <PlusIcon />
+          </span>
+          <Popconfirm
+            title="撤销后任务和相关修改都会被删除，确认撤销此任务？"
+            visible={revertConfirmVisible}
+            onVisible={setRevertConfirmVisible}
+            onConfirm={handleRevert}
+          >
+            <span
+              className={css['task-action-icon']}
+              data-mybricks-tip="撤销此任务"
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              <option value="" disabled>调整状态至</option>
-              {transitions.map(transition => (
-                <option key={transition.target} value={transition.target}>{transition.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
+              <UndoIcon />
+            </span>
+          </Popconfirm>
+          {transitions.length > 0 && (
+            <div className={css['task-status-selector']}>
+              <span className={css['task-status-selector-text']}>调整状态至</span>
+              <DownChevronIcon />
+              <select
+                className={css['task-status-select-overlay']}
+                value=""
+                onChange={(e) => {
+                  const transition = transitions.find(item => item.target === e.target.value)
+                  if (transition) handleTransition(transition)
+                  e.currentTarget.value = ''
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value="" disabled>调整状态至</option>
+                {transitions.map(transition => (
+                  <option key={transition.target} value={transition.target}>{transition.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {task.summary && (
