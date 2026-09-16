@@ -20,10 +20,15 @@ const useElementResizeObserver = (eleRef: RefObject<HTMLElement>) => {
     let pendingSize: ElementSize | null = null
 
     // 3. 宽高都只取元素自身明确设置的 style 值，避免 contentRect 受 CSS 变量影响后反向放大自身。
-    const getFixedSize = () => ({
-      width: parseInt(element.style.width, 10),
-      height: parseInt(element.style.height, 10)
-    })
+    const getFixedSize = () => {
+      const width = parseInt(element.style.width, 10)
+      const height = parseInt(element.style.height, 10)
+
+      return {
+        width: Number.isNaN(width) ? element.clientWidth : width,
+        height: Number.isNaN(height) ? element.clientHeight : height
+      }
+    }
 
     // 4. 比较尺寸是否一致，一致时跳过后续写入，防止重复回调造成循环。
     const isSameSize = (prev: ElementSize | null, next: ElementSize) => (
