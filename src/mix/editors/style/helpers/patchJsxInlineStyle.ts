@@ -101,15 +101,28 @@ function appendPropsAtStyleObjectEnd(
     return null; // 没有找到 '}}' 结尾，偏移已失效
   }
 
+  // 检查 }} 前面是否已经有尾随逗号（忽略空白字符）
+  let hasTrailingComma = false;
+  let scanBack = insertPos - 1;
+  while (scanBack >= 0 && /[\s\n\r]/.test(source[scanBack])) scanBack--;
+  if (scanBack >= 0 && source[scanBack] === ',') {
+    hasTrailingComma = true;
+  }
+
   const styleInfoUpdates: Record<string, StyleInfoEntry> = {};
   let insertion = '';
 
-  filteredProps.forEach(([key, val]) => {
+  filteredProps.forEach(([key, val], index) => {
     const escaped = String(val).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const valStr = `'${escaped}'`;
     const keyPart = `${key}: `;
 
-    insertion += ', ';
+    // 仅在需要时才加逗号：前面没有尾随逗号且是第一个属性，或者不是第一个属性
+    if (index === 0 && !hasTrailingComma) {
+      insertion += ', ';
+    } else if (index > 0) {
+      insertion += ', ';
+    }
     insertion += keyPart;
 
     const valueStart = insertPos + insertion.length;
