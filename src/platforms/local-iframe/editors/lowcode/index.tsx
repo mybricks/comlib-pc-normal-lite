@@ -447,11 +447,10 @@ function PlusIcon() {
   )
 }
 
-function UndoIcon() {
+function DeleteIcon() {
   return (
     <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
-      <path d="M4 4.5H10a3.5 3.5 0 0 1 0 7H6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 2L3.5 4.5L6 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 4.5H13M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M6 7.5V11.5M10 7.5V11.5M4 4.5L4.7 13a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -546,7 +545,7 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
 
   const handleRevert = () => {
     ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-      message: `[$mbs-template:revoke-task] 撤销任务「${task.title}」`,
+      message: `[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`,
     })
   }
 
@@ -612,17 +611,17 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
             <PlusIcon />
           </span>
           <Popconfirm
-            title="撤销后任务和相关修改都会被删除，确认撤销此任务？"
+            title="删除后任务和相关修改都会被删除，确认删除此任务？"
             visible={revertConfirmVisible}
             onVisible={setRevertConfirmVisible}
             onConfirm={handleRevert}
           >
             <span
               className={css['task-action-icon']}
-              data-mybricks-tip="撤销此任务"
+              data-mybricks-tip="删除此任务"
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-              <UndoIcon />
+              <DeleteIcon />
             </span>
           </Popconfirm>
           {transitions.length > 0 && (
