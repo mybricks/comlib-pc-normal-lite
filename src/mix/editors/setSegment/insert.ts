@@ -204,6 +204,11 @@ const getLineIndent = (source: string, position: number) => {
   return /^[ \t]*$/.test(linePrefix) ? linePrefix : ''
 }
 
+const isAtLineStart = (source: string, position: number) => {
+  const lineStart = source.lastIndexOf('\n', Math.max(0, position - 1)) + 1
+  return /^[ \t]*$/.test(source.slice(lineStart, position))
+}
+
 const getChildIndent = (source: string, position: number) => {
   const parentIndent = getLineIndent(source, position)
   const content = source.slice(0, position)
@@ -226,7 +231,7 @@ const formatJsxInsertion = (
     ? `${formattedJsx}\n${indent}`
     : type === 'after'
       ? `\n${indent}${formattedJsx}`
-      : `\n${formattedJsx}\n${getLineIndent(source, position)}`
+      : `${isAtLineStart(source, position) ? '' : '\n'}${formattedJsx}\n${getLineIndent(source, position)}`
 }
 
 const applyCompiledDataAttributes = (container: HTMLDivElement, attributes: JSXElementDataAttributes[]) => {

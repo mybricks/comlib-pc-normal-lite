@@ -2,7 +2,6 @@ import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementMoveChipData, getElementLabel } from './elementChip'
-import { getShadowRoot } from '../../../helpers/designer'
 import {
   createSourceLineResolver,
   createDOMSourceLocationSnapshot,
@@ -265,6 +264,18 @@ const transformPositionAfterChildMove = (
   return position
 }
 
+const transformPositionWithinMovedRange = (
+  position: number,
+  fromRange: SourceRange,
+  insertPosition: number,
+) => {
+  const finalFromStart = insertPosition > fromRange.start
+    ? insertPosition - (fromRange.end - fromRange.start)
+    : insertPosition
+
+  return finalFromStart + position - fromRange.start
+}
+
 const transformRangeAfterChildMove = (
   range: SourceRange,
   fromRange: SourceRange,
@@ -296,13 +307,20 @@ const transformLocAfterChildMove = (
   if (!loc) return loc
 
   const nextLoc = { ...loc }
+  const isMovedNode = !!loc.jsx &&
+    typeof loc.jsx.start === 'number' &&
+    typeof loc.jsx.end === 'number' &&
+    isRangeInRange(loc.jsx, fromRange)
   if (nextLoc.jsx && typeof nextLoc.jsx.start === 'number' && typeof nextLoc.jsx.end === 'number') {
     nextLoc.jsx = transformRangeAfterChildMove(nextLoc.jsx, fromRange, insertPosition)
   }
   if (nextLoc.tag && typeof nextLoc.tag.end === 'number') {
+    const tagEnd = nextLoc.tag.end
     nextLoc.tag = {
       ...nextLoc.tag,
-      end: transformPositionAfterChildMove(nextLoc.tag.end, fromRange, insertPosition),
+      end: isMovedNode
+        ? transformPositionWithinMovedRange(tagEnd, fromRange, insertPosition)
+        : transformPositionAfterChildMove(tagEnd, fromRange, insertPosition),
     }
   }
 
@@ -389,6 +407,8 @@ const buildMoveDescription = (fromLabel: string, toLabel: string, type: MovePlac
   // return `将 ${fromLabel} 移到 ${toLabel}${type === 'before' ? '前' : '后'}`
 }
 
+const getWidgetRoot = (ele: Element) => ele.closest('[data-widget-name]')
+
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
   // console.log('[changeOrder]', options)
@@ -396,6 +416,11 @@ const changeOrder = (options) => {
 
   if (fromEle === toEle) {
     // 相对自己移动，无需处理
+    return
+  }
+
+  // 祖先节点不能移动到自己的后代内部，否则会形成 DOM 循环。
+  if (type === 'child' && fromEle.contains(toEle)) {
     return
   }
 
@@ -425,10 +450,6 @@ const changeOrder = (options) => {
 
   // 判断 1：before/after 只支持同父级快速重排；child 会把 fromEle 放入 toEle 内部。
   if (type !== 'child' && fromEle.parentElement !== toEle.parentElement) {
-    useAI = true
-  }
-
-  if (type === 'child' && fromEle.contains(toEle)) {
     useAI = true
   }
 
@@ -467,12 +488,18 @@ const changeOrder = (options) => {
   //      - children 中无 JSXExpressionContainer（{h1}、{items.map(...)} 等）
   const fileEntry = files.find((f) => f.fileName === fromFile)
   const source = fileEntry ? decodeURIComponent(fileEntry.source) : ''
+  const childWidgetRoot = type === 'child'
+    ? getWidgetRoot(fromEle)
+    : null
+  const canUseChildFastPath = type !== 'child'
+    || (childWidgetRoot != null && childWidgetRoot === getWidgetRoot(toEle))
 
   if (
     !useAI &&
     fromFile === toFile &&
     fromLoc.swappable === true &&
     toLoc.swappable === true
+    && canUseChildFastPath
   ) {
     if (fileEntry) {
       const fromRange = {
@@ -491,7 +518,9 @@ const changeOrder = (options) => {
         ? moveRangeIntoChildInSource(source, fromRange, toRange)
         : moveRangeInSource(source, fromRange, toRange, placement)
       if (newSource !== null && validateSource(newSource, fromFile)) {
-        const locSnapshotRoot = placement === 'child' ? getShadowRoot() : fromEle.parentElement
+        const locSnapshotRoot = placement === 'child'
+          ? childWidgetRoot
+          : fromEle.parentElement
         // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原移动前快照，
         // 否则源码已回退但 DOM 仍保留移动后的 data-loc，再次操作仍会错位。
         const locSnapshot = createDOMSourceLocationSnapshot(locSnapshotRoot, fromFile)

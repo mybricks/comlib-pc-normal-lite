@@ -24,6 +24,11 @@ export default function ({ fromEle, toEle, type }: Props) {
     }
   }
 
+  // 祖先节点不能移动到自己的后代内部，否则 appendChild 会抛出异常。
+  if (type === 'child' && fromEle.contains(toEle)) {
+    return
+  }
+
   const parent = fromEle.parentNode
   const nextSibling = fromEle.nextSibling
   const actionId = randomUUID()
