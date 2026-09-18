@@ -617,7 +617,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
     useLayoutEffect(() => {
       setContainer({
-        container: containerRef.current!,
+        container: containerRef.current!.querySelector('[data-container]')!,
         onPageInfo: (params) => {
           try {
             if (containerRef.current) {
@@ -771,7 +771,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
     return (
       <div
-        ref={containerRef}
+        ref={containerRef} 
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={path}
@@ -807,9 +807,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           ...envCssVariables,
         }}
       >
-        <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
+        <div data-container style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
           {container && (
-            <Wrapper container={containerRef.current}>
+            <Wrapper container={containerRef.current!.querySelector('[data-container]')!}>
               <PageContext.Provider value={container}>
                 {children}
               </PageContext.Provider>
