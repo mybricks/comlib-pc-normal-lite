@@ -579,6 +579,15 @@ const resolveLessFileName = (fileRaw: string, files: Array<{ fileName: string }>
   return fileRaw.replace(/__/g, '.').replace(/_/g, '/')
 }
 
+/**
+ * 普通 className 需要补充 "." 前缀；
+ * 属性选择器、伪类、ID 选择器和 Less 嵌套选择器已经包含自身的语法前缀，需原样保留。
+ */
+const normalizeLessSelectorPart = (value: string) => {
+  const selectorPrefixes = ['.', '#', '[', ':', '&', '>', '+', '~', '*']
+  return selectorPrefixes.some(prefix => value.startsWith(prefix)) ? value : `.${value}`
+}
+
 const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): FileUpdate[] => {
   const lesss: FileUpdate[] = []
 
@@ -615,7 +624,7 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
 
     const fileName = parsed[0].fileName
     // Less 嵌套路径：['.gridCard', '.topGrid']
-    const classPath = parsed.map(p => `.${p.className}`)
+    const classPath = parsed.map(p => normalizeLessSelectorPart(p.className))
 
     const lessFile = context.component!.params.data.files.find((f) => f.fileName === fileName)
     if (!lessFile) return

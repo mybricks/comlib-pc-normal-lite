@@ -951,7 +951,6 @@ function tryWriteNestedPseudo(
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 export function genStyleValue(props) {
-  let previousLess: string | null = null
   type AIStylePayload = {
     jsxFileName?: string;
     lineStart?: number;
@@ -1387,9 +1386,8 @@ export function genStyleValue(props) {
     current: string;
     previous: string;
     ele: Element | null;
-    callback: () => void;
   }) => {
-    const { path, current, previous, ele, callback } = params;
+    const { path, current, previous, ele } = params;
     let branch = pendingStyleFileBranch;
 
     if (!branch) {
@@ -1444,7 +1442,6 @@ export function genStyleValue(props) {
     }
 
     finalizeStyleFileBranch();
-    callback();
   };
 
   /** 三方内部 DOM 没有可安全落盘的 CSS 入口时，按 setSegment 的 chip 分支请求 AI。 */
@@ -1541,10 +1538,9 @@ export function genStyleValue(props) {
         ? aiComParams.data.files?.find((f: { fileName: string; source: string }) => f.fileName === lessPath)
         : undefined;
       const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
-      if (!previousLess) {
-        previousLess = rawLess ? decodeURIComponent(rawLess) : ''
-      }
-      const cssObj = rawLess ? parseLess(decodeURIComponent(rawLess)) : {};
+      // 固定本次 set 入口的源码；一次 set 可能同时写 JSX 和 Less，不能依赖跨文件回调维护的共享快照。
+      const previousLessSource = rawLess ? decodeURIComponent(rawLess) : '';
+      const cssObj = rawLess ? parseLess(previousLessSource) : {};
 
       // 样式面板可能传来 CSS Modules 运行时类名，先还原成源码类名再定位写入位置
       const rawSelector: string = params.selector;
@@ -1597,7 +1593,6 @@ export function genStyleValue(props) {
                 current: jsxNewSource,
                 previous: jsxPrevSource,
                 ele,
-                callback: () => { previousLess = null; },
               });
               // 同步更新 DOM 上的 data-style-info 偏移量，防止连续编辑时偏移量因字符长度变化而失效
               if (ele) {
@@ -1674,7 +1669,6 @@ export function genStyleValue(props) {
               current: jsxNewSource,
               previous: jsxPrevSource,
               ele,
-              callback: () => { previousLess = null; },
             });
             if (ele) {
               // newStyleInfo 为 null 表示 style 属性已被完全移除
@@ -1704,7 +1698,6 @@ export function genStyleValue(props) {
             current: jsxNewSource,
             previous: jsxPrevSource,
             ele,
-            callback: () => { previousLess = null; },
           });
           if (ele) {
             (ele as HTMLElement).dataset.styleInfo = JSON.stringify(injectedStyleInfo);
@@ -1720,7 +1713,6 @@ export function genStyleValue(props) {
             current: jsxNewSource,
             previous: jsxPrevSource,
             ele,
-            callback: () => { previousLess = null; },
           });
           // 把新属性的偏移合并进 DOM 上的 data-style-info
           if (ele) {
@@ -1771,11 +1763,8 @@ export function genStyleValue(props) {
         updateStyleFileInBranch({
           path: lessPath,
           current: cssStr,
-          previous: previousLess ?? '',
+          previous: previousLessSource,
           ele,
-          callback: () => {
-            previousLess = null
-          }
         });
         return;
       }
@@ -1950,7 +1939,6 @@ export function genStyleValue(props) {
                   current: jsxNewSrc,
                   previous: jsxPrevForDel,
                   ele,
-                  callback: () => { previousLess = null; },
                 });
                 if (ele) {
                   (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
@@ -2041,11 +2029,8 @@ export function genStyleValue(props) {
       updateStyleFileInBranch({
         path: lessPath,
         current: cssStr,
-        previous: previousLess ?? '',
+        previous: previousLessSource,
         ele,
-        callback: () => {
-          previousLess = null
-        }
       });
     },
     previewBatch(params: any, value: any) {
