@@ -125,6 +125,7 @@ export default function () {
           `- 名称：${displayEle.tagName.toLowerCase()}`,
           `- 类名：${getElementClassNames(displayEle) || '无'}`,
           '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
+          '       filepath已将非字母、数字、下划线、短横线的符号转为短横线。',
           `- 代码位置：${getElementCodeLocation(displayEle)}`,
           '',
           '## 需要修改的内容',

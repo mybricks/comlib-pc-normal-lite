@@ -54,12 +54,15 @@ type PendingStyleBranch = {
 export function getElementClassNames(ele) {
   const classNames: string[] = Array.from(ele.classList)
   return classNames.map((className) => {
-    if (className.match('%2F')) {
-      return decodeURIComponent(className)
-    }
-
-    return className
+    return className.replace(/^lingchuang-/, '')
   }).join(' ')
+  // return classNames.map((className) => {
+  //   if (className.match('%2F')) {
+  //     return decodeURIComponent(className)
+  //   }
+
+  //   return className
+  // }).join(' ')
 }
 
 // 把传入的样式值整理成可直接写入 CSS 的字符串。
@@ -122,20 +125,24 @@ function splitSelectorList(selectorText: string): string[] {
 export function formatDisplayClassName(className: string): string {
   if (!className) return className
 
-  if (!className.includes('%2F')) return className
+  if (!className.startsWith('lingchuang-')) return className
 
-  let decodedClassName = className
-  try {
-    decodedClassName = decodeURIComponent(className)
-  } catch (_) {
-    return className
-  }
+  return className.split('__')[1]
 
-  const firstSeparator = decodedClassName.indexOf('--')
-  const lastSeparator = decodedClassName.lastIndexOf('--')
-  if (firstSeparator < 0 || lastSeparator <= firstSeparator) return decodedClassName
+  // if (!className.includes('%2F')) return className
 
-  return decodedClassName.slice(firstSeparator + 2, lastSeparator) || decodedClassName
+  // let decodedClassName = className
+  // try {
+  //   decodedClassName = decodeURIComponent(className)
+  // } catch (_) {
+  //   return className
+  // }
+
+  // const firstSeparator = decodedClassName.indexOf('--')
+  // const lastSeparator = decodedClassName.lastIndexOf('--')
+  // if (firstSeparator < 0 || lastSeparator <= firstSeparator) return decodedClassName
+
+  // return decodedClassName.slice(firstSeparator + 2, lastSeparator) || decodedClassName
 }
 
 // 优先找和当前元素 class 相关的样式表，减少无关样式表的遍历。
@@ -146,8 +153,10 @@ function getPreferredStyleSheets(ele: HTMLElement): CSSStyleSheet[] {
   const seen = new Set<CSSStyleSheet>()
 
   classNames.forEach((className) => {
-    if (!className.includes('--')) return
-    const styleTagId = className.split('--')[0]
+    if (!className.startsWith('lingchuang-')) {
+      return
+    }
+    const styleTagId = className.split('__')[0]
     if (!styleTagId) return
     const styleTag = ownerDocument.getElementById(styleTagId) as HTMLStyleElement | null
     const sheet = styleTag?.sheet
@@ -376,6 +385,7 @@ export default function() {
           `- 名称：${branch.ele.tagName.toLowerCase()}`,
           `- 类名：${branch.classNames || '无'}`,
           '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
+          '       filepath已将非字母、数字、下划线、短横线的符号转为短横线。',
           `- 代码位置：${branch.codeLocation}`,
           '',
           '## 需要修改的内容',
