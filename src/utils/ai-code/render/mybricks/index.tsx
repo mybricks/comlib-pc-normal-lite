@@ -1135,7 +1135,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
           const event = prototype.events.getEvent('appConfig')
           const breakpoint = event.cache.viewports.find((item) => item.id === showType)
-          const value = breakpoint.width
+          const value = breakpoint?.width || canvasWidth
           Object.entries(fileSystem!.filesMap).forEach(([_, { file, module }]) => {
             if (file.filename.endsWith('.less')) {
               const { cssContent, mediaQueries } = module
