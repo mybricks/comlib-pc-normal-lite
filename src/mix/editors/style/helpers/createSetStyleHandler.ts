@@ -1,5 +1,6 @@
 import { calculate, compare } from 'specificity';
 import context, { config } from '../../../context'
+import { debounce } from '../../../../helpers/debounce'
 import { getShadowRoot } from '../../../../helpers/designer'
 import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
@@ -796,6 +797,7 @@ export default function createSetStyleHandler(
   let ruleStyleSnapshots: CssRuleStyleSnapshot[] = []
   let previewInlineSnapshots: InlineStyleSnapshot[] = []
   let temporaryPreviewRules: CSSStyleRule[] = []
+  let pendingImplicitStyleUpdate: { ctx: any; params: any } | null = null
 
   const findStyleRule = (sheet: CSSStyleSheet, selector: string) => {
     return Array.from(sheet.cssRules).find((rule): rule is CSSStyleRule => {
@@ -909,8 +911,45 @@ export default function createSetStyleHandler(
     previewStyleSheet = null
   }
 
-  return function handler(ctx: any, params: any) {
+  const finishImplicitStyleUpdate = debounce(() => {
+    const pending = pendingImplicitStyleUpdate
+    pendingImplicitStyleUpdate = null
+    if (!pending) return
+
+    handler(pending.ctx, {
+      ...pending.params,
+      state: 'finish',
+      __implicitState: true,
+    })
+  }, 500)
+
+  function handler(ctx: any, params: any) {
     const { state, multiple } = params
+    const isImplicitState = params.__implicitState === true
+    const hasState = state !== undefined && state !== null && state !== ''
+
+    if (!hasState) {
+      // 没有 state 时先复用 ing 的预览逻辑，保证样式立即生效；
+      // finish 交给 trailing debounce，避免连续触发重复创建 undo/redo 分支。
+      handler(ctx, {
+        ...params,
+        state: 'ing',
+        __implicitState: true,
+      })
+      pendingImplicitStyleUpdate = { ctx, params }
+      finishImplicitStyleUpdate()
+      return
+    }
+
+    // 显式状态开始新的编辑流程时，丢弃尚未完成的隐式流程。
+    pendingImplicitStyleUpdate = null
+
+    /**
+     * state
+     *  有值的情况：'start' | 'ing' | 'moving' | 'finish'
+     *  没有值的情况：样式仍然需要实时生效，但是需要加防抖，最终仅执行一次 undoRedoManager
+     */
+
     /**
      * multiple
      *  - true 批量修改样式
@@ -938,6 +977,10 @@ export default function createSetStyleHandler(
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
+          if (isImplicitState) {
+            initialInlineCssText = ele.style?.cssText ?? ''
+            initialInlineStyleValues = {}
+          }
           // initialInlineCssText = ele.style?.cssText ?? ''
           // initialInlineStyleValues = {}
           Object.keys(style as Record<string, number>).forEach((key) => {
@@ -1578,7 +1621,9 @@ export default function createSetStyleHandler(
       }
     } catch (e) {
       clearPreviewStyles()
-      console.error(e)
+      console.error('@setStyle', e)
     }
   }
+
+  return handler
 }
