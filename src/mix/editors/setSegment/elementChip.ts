@@ -42,6 +42,7 @@ const DOM_SUMMARY_NON_PAGE_CODE_ATTRS = ['data-mybricks-tip']
 const PLACEMENT_LABEL: Record<string, string> = {
   before: '前面（上方）',
   after: '后面（下方）',
+  child: '内部',
 }
 
 interface DomLoc {
@@ -89,13 +90,13 @@ export interface ParsedElementTextUpdateChipData extends ParsedElementChipData {
 export interface ParsedElementMoveChipData extends ParsedElementChipData {
   from: ParsedElementInfo
   to: ParsedElementInfo
-  placement: 'before' | 'after'
+  placement: 'before' | 'after' | 'child'
   direction: string
 }
 
 export interface ParsedElementInsertChipData extends ParsedElementChipData {
   target: ParsedElementInfo
-  placement: 'before' | 'after'
+  placement: 'before' | 'after' | 'child'
   direction: string
   importCode: string
   jsx: string
@@ -749,7 +750,7 @@ export function buildElementStyleUpdateChipData(
 export function buildElementMoveChipData(
   fromEle: Element,
   toEle: Element,
-  placement: 'before' | 'after',
+  placement: 'before' | 'after' | 'child',
   fromLabel = getElementLabel(fromEle, '节点1'),
   toLabel = getElementLabel(toEle, '节点2')
 ): ParsedElementMoveChipData {
@@ -811,13 +812,13 @@ export function buildElementMoveChipData(
 
 export function buildElementInsertChipData(
   ele: Element,
-  placement: 'before' | 'after',
+  placement: 'before' | 'after' | 'child',
   jsx: string,
   importCode = '',
   label = getElementLabel(ele, '节点1'),
 ): ParsedElementInsertChipData {
   const opLabel = randomUUID()
-  const direction = placement === 'before' ? '前面（上方）' : '后面（下方）'
+  const direction = placement === 'before' ? '前面（上方）' : placement === 'after' ? '后面（下方）' : '内部'
   const target = parseElementInfo(ele, label)
   const normalizedImports = importCode.trim()
   const normalizedJsx = jsx.trim()

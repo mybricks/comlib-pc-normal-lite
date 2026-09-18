@@ -26,8 +26,8 @@ type InsertCode = {
 interface InsertOptions {
   /** Target element. */
   toEle: HTMLElement;
-  /** Insert before or after the target element. */
-  type: 'before' | 'after';
+  /** Insert before, after, or into the target element. */
+  type: 'before' | 'after' | 'child';
   /** Code to insert. */
   code: InsertCode | (() => InsertCode)
 }
@@ -204,12 +204,29 @@ const getLineIndent = (source: string, position: number) => {
   return /^[ \t]*$/.test(linePrefix) ? linePrefix : ''
 }
 
-const formatJsxInsertion = (source: string, position: number, jsx: string, type: 'before' | 'after') => {
-  const indent = getLineIndent(source, position)
+const getChildIndent = (source: string, position: number) => {
+  const parentIndent = getLineIndent(source, position)
+  const content = source.slice(0, position)
+  const previousLineStart = content.lastIndexOf('\n', Math.max(0, content.length - 1)) + 1
+  const childIndent = content.slice(previousLineStart).match(/^[ \t]+/)?.[0]
+  return childIndent && childIndent.length > parentIndent.length
+    ? childIndent
+    : `${parentIndent}  `
+}
+
+const formatJsxInsertion = (
+  source: string,
+  position: number,
+  jsx: string,
+  type: 'before' | 'after' | 'child',
+) => {
+  const indent = type === 'child' ? getChildIndent(source, position) : getLineIndent(source, position)
   const formattedJsx = indentText(jsx.trim(), indent)
   return type === 'before'
     ? `${formattedJsx}\n${indent}`
-    : `\n${indent}${formattedJsx}`
+    : type === 'after'
+      ? `\n${indent}${formattedJsx}`
+      : `\n${formattedJsx}\n${getLineIndent(source, position)}`
 }
 
 const applyCompiledDataAttributes = (container: HTMLDivElement, attributes: JSXElementDataAttributes[]) => {
@@ -287,7 +304,12 @@ const createPreview = (code: InsertCode, location?: PreviewSourceLocation): Inse
   }
 }
 
-const mountPreview = (preview: InsertPreview, toEle: HTMLElement, type: 'before' | 'after') => {
+const mountPreview = (preview: InsertPreview, toEle: HTMLElement, type: 'before' | 'after' | 'child') => {
+  if (type === 'child') {
+    toEle.appendChild(preview.container)
+    return true
+  }
+
   const parent = toEle.parentNode
   if (!parent) return false
   parent.insertBefore(preview.container, type === 'before' ? toEle : toEle.nextSibling)
@@ -417,7 +439,7 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
 
 const insert = (options: InsertOptions) => {
   const { toEle, type } = options
-  if (!toEle || (type !== 'before' && type !== 'after') || !options.code) return
+  if (!toEle || (type !== 'before' && type !== 'after' && type !== 'child') || !options.code) return
 
   const code = typeof options.code === 'function' ? options.code() : options.code
   if (!code?.jsx?.trim()) return
@@ -425,7 +447,7 @@ const insert = (options: InsertOptions) => {
   const resolvedOptions: ResolvedInsertOptions = { ...options, code }
 
   const targetLabel = getElementLabel(toEle, '节点')
-  const title = `在 ${targetLabel}${type === 'before' ? '前' : '后'}插入内容`
+  const title = `在 ${targetLabel}${type === 'before' ? '前' : type === 'after' ? '后' : '内部'}插入内容`
 
   try {
     const locValue = toEle.dataset.loc
@@ -455,7 +477,25 @@ const insert = (options: InsertOptions) => {
       return runInsertByAI(resolvedOptions, createPreview(code), title)
     }
 
-    const insertPosition = type === 'before' ? start : end
+    let insertPosition: number
+    if (type === 'before') {
+      insertPosition = start
+    } else if (type === 'after') {
+      insertPosition = end
+    } else {
+      // A child is inserted immediately before the target's closing tag.
+      // Self-closing JSX cannot safely receive children without changing its
+      // source shape, so leave that case to the AI fallback.
+      const targetSource = source.slice(start, end)
+      if (/\/\s*>$/.test(targetSource)) {
+        return runInsertByAI(resolvedOptions, createPreview(code), title)
+      }
+      const closingTagOffset = targetSource.lastIndexOf('</')
+      if (closingTagOffset < 0) {
+        return runInsertByAI(resolvedOptions, createPreview(code), title)
+      }
+      insertPosition = start + closingTagOffset
+    }
     const jsxInsertion = formatJsxInsertion(source, insertPosition, code.jsx, type)
     const sourceWithJsx = source.slice(0, insertPosition) + jsxInsertion + source.slice(insertPosition)
     const imports = mergeImports(sourceWithJsx, code.import)

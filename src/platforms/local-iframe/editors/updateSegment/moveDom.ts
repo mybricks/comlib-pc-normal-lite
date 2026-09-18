@@ -11,7 +11,13 @@ function buildLabel(ele: HTMLElement) {
   return `移动 ${labelTarget}`
 }
 
-export default function ({ fromEle, toEle, type }) {
+interface Props {
+  fromEle: HTMLElement
+  toEle: HTMLElement
+  type: 'before' | 'after' | 'child'
+}
+
+export default function ({ fromEle, toEle, type }: Props) {
   if (!fromEle || !toEle || fromEle === toEle || !fromEle.parentNode || !toEle.parentNode) {
     return {
       type: 'success',
@@ -23,7 +29,7 @@ export default function ({ fromEle, toEle, type }) {
   const actionId = randomUUID()
   const chipId = randomUUID()
   const label = buildLabel(fromEle)
-  const placementText = type === 'before' ? '前面' : '后面'
+  const placementText = type === 'before' ? '前面' : type === 'after' ? '后面' : '内部'
   const fromCodeLocation = getElementCodeLocation(fromEle)
   const toCodeLocation = getElementCodeLocation(toEle)
 
@@ -62,7 +68,11 @@ export default function ({ fromEle, toEle, type }) {
     },
     execute() {
       if (!toEle.parentNode) return
-      toEle.parentNode.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
+      if (type === 'child') {
+        toEle.appendChild(fromEle)
+      } else {
+        toEle.parentNode.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
+      }
       context.component?.actions.addUserAction({
         id: actionId,
         type: 'move',

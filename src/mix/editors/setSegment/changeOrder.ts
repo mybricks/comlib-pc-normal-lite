@@ -2,6 +2,7 @@ import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementMoveChipData, getElementLabel } from './elementChip'
+import { getShadowRoot } from '../../../helpers/designer'
 import {
   createSourceLineResolver,
   createDOMSourceLocationSnapshot,
@@ -10,6 +11,9 @@ import {
   type SourceRange,
   updateElementSourceLocationCodeLine,
 } from './sourceLocation'
+
+type MovePlacement = 'before' | 'after' | 'child'
+type SiblingMovePlacement = Exclude<MovePlacement, 'child'>
 
 /**
  * `swappable` 仅描述 JSX 节点自身是否适合重排，不能保证完整模块在替换后仍然合法。
@@ -41,7 +45,7 @@ const moveRangeInSource = (
   source: string,
   fromRange: SourceRange,
   toRange: SourceRange,
-  type: 'before' | 'after',
+  type: SiblingMovePlacement,
 ): string | null => {
   if (
     !Number.isInteger(fromRange.start) ||
@@ -76,6 +80,56 @@ const moveRangeInSource = (
     : source.slice(0, toRange.end) + fromSnippet + middle + source.slice(fromRange.end)
 }
 
+const getChildInsertPosition = (source: string, toRange: SourceRange) => {
+  const targetSource = source.slice(toRange.start, toRange.end)
+  if (/\/\s*>$/.test(targetSource)) return null
+
+  const closingTagOffset = targetSource.lastIndexOf('</')
+  if (closingTagOffset < 0) return null
+
+  return toRange.start + closingTagOffset
+}
+
+const moveRangeIntoChildInSource = (
+  source: string,
+  fromRange: SourceRange,
+  toRange: SourceRange,
+): string | null => {
+  if (
+    !Number.isInteger(fromRange.start) ||
+    !Number.isInteger(fromRange.end) ||
+    !Number.isInteger(toRange.start) ||
+    !Number.isInteger(toRange.end) ||
+    fromRange.start < 0 ||
+    toRange.start < 0 ||
+    fromRange.end <= fromRange.start ||
+    toRange.end <= toRange.start ||
+    fromRange.end > source.length ||
+    toRange.end > source.length ||
+    (fromRange.start <= toRange.start && fromRange.end >= toRange.end)
+  ) {
+    return null
+  }
+
+  const insertPosition = getChildInsertPosition(source, toRange)
+  if (insertPosition == null || (insertPosition > fromRange.start && insertPosition < fromRange.end)) {
+    return null
+  }
+
+  const fromSnippet = source.slice(fromRange.start, fromRange.end)
+  const fromLength = fromRange.end - fromRange.start
+  const sourceWithoutFrom = source.slice(0, fromRange.start) + source.slice(fromRange.end)
+  const adjustedInsertPosition = insertPosition > fromRange.start
+    ? insertPosition - fromLength
+    : insertPosition
+
+  return (
+    sourceWithoutFrom.slice(0, adjustedInsertPosition) +
+    fromSnippet +
+    sourceWithoutFrom.slice(adjustedInsertPosition)
+  )
+}
+
 const isLocInRange = (loc: any, fileName: string, range: SourceRange) => {
   const start = loc?.jsx?.start
   const end = loc?.jsx?.end
@@ -105,7 +159,7 @@ const getMoveDelta = (
   fileName: string,
   fromRange: SourceRange,
   toRange: SourceRange,
-  type: 'before' | 'after',
+  type: SiblingMovePlacement,
 ) => {
   if (fromRange.start === toRange.start) return 0
   const fromLength = fromRange.end - fromRange.start
@@ -159,7 +213,7 @@ const shiftDOMLocAfterSourceMove = (
   fileName: string,
   fromRange: SourceRange,
   toRange: SourceRange,
-  type: 'before' | 'after',
+  type: SiblingMovePlacement,
   source: string,
 ) => {
   if (!root) return
@@ -187,18 +241,150 @@ const shiftDOMLocAfterSourceMove = (
   })
 }
 
+const isRangeInRange = (range: SourceRange, parentRange: SourceRange) => {
+  return range.start >= parentRange.start && range.end <= parentRange.end
+}
+
+const transformPositionAfterChildMove = (
+  position: number,
+  fromRange: SourceRange,
+  insertPosition: number,
+) => {
+  const fromLength = fromRange.end - fromRange.start
+
+  if (insertPosition > fromRange.end) {
+    if (position >= fromRange.end && position < insertPosition) return position - fromLength
+    return position
+  }
+
+  if (insertPosition < fromRange.start) {
+    if (position >= insertPosition && position < fromRange.start) return position + fromLength
+    return position
+  }
+
+  return position
+}
+
+const transformRangeAfterChildMove = (
+  range: SourceRange,
+  fromRange: SourceRange,
+  insertPosition: number,
+) => {
+  const fromLength = fromRange.end - fromRange.start
+  const finalFromStart = insertPosition > fromRange.start
+    ? insertPosition - fromLength
+    : insertPosition
+
+  if (isRangeInRange(range, fromRange)) {
+    return {
+      start: finalFromStart + range.start - fromRange.start,
+      end: finalFromStart + range.end - fromRange.start,
+    }
+  }
+
+  return {
+    start: transformPositionAfterChildMove(range.start, fromRange, insertPosition),
+    end: transformPositionAfterChildMove(range.end, fromRange, insertPosition),
+  }
+}
+
+const transformLocAfterChildMove = (
+  loc: any,
+  fromRange: SourceRange,
+  insertPosition: number,
+) => {
+  if (!loc) return loc
+
+  const nextLoc = { ...loc }
+  if (nextLoc.jsx && typeof nextLoc.jsx.start === 'number' && typeof nextLoc.jsx.end === 'number') {
+    nextLoc.jsx = transformRangeAfterChildMove(nextLoc.jsx, fromRange, insertPosition)
+  }
+  if (nextLoc.tag && typeof nextLoc.tag.end === 'number') {
+    nextLoc.tag = {
+      ...nextLoc.tag,
+      end: transformPositionAfterChildMove(nextLoc.tag.end, fromRange, insertPosition),
+    }
+  }
+
+  return nextLoc
+}
+
+const transformStyleInfoAfterChildMove = (
+  value: string,
+  fromRange: SourceRange,
+  insertPosition: number,
+) => {
+  const styleInfo = JSON.parse(value)
+  Object.values(styleInfo).forEach((entry: any) => {
+    if (typeof entry?.valueStart !== 'number' || typeof entry?.valueEnd !== 'number') return
+    const shifted = transformRangeAfterChildMove(
+      { start: entry.valueStart, end: entry.valueEnd },
+      fromRange,
+      insertPosition,
+    )
+    entry.valueStart = shifted.start
+    entry.valueEnd = shifted.end
+  })
+  return JSON.stringify(styleInfo)
+}
+
+const shiftDOMLocAfterChildSourceMove = (
+  root: ParentNode | null,
+  fileName: string,
+  fromRange: SourceRange,
+  insertPosition: number,
+  source: string,
+) => {
+  if (!root) return
+
+  const getLineForOffset = createSourceLineResolver(source)
+  const elements = [
+    ...(root instanceof Element ? [root] : []),
+    ...Array.from(root.querySelectorAll('[data-loc]')),
+  ]
+  elements.forEach((ele) => {
+    const locValue = ele.getAttribute('data-loc')
+    if (!locValue) return
+
+    try {
+      const loc = JSON.parse(locValue)
+      if (loc?.files?.jsx !== fileName) return
+
+      ele.setAttribute('data-loc', JSON.stringify(transformLocAfterChildMove(loc, fromRange, insertPosition)))
+
+      const textEditable = ele.getAttribute('data-zone-text-editable')
+      if (textEditable) {
+        ele.setAttribute('data-zone-text-editable', JSON.stringify(transformLocAfterChildMove(JSON.parse(textEditable), fromRange, insertPosition)))
+      }
+
+      const styleInfo = ele.getAttribute('data-style-info')
+      if (styleInfo) {
+        ele.setAttribute('data-style-info', transformStyleInfoAfterChildMove(styleInfo, fromRange, insertPosition))
+      }
+
+      updateElementSourceLocationCodeLine(ele, getLineForOffset)
+    } catch { }
+  })
+}
+
 const restoreDOMNodePosition = (ele: Element, parent: Node | null, nextSibling: Node | null) => {
   if (!parent) return
   parent.insertBefore(ele, nextSibling?.parentNode === parent ? nextSibling : null)
 }
 
-const moveDOMNode = (fromEle: Element, toEle: Element, type: 'before' | 'after') => {
+const moveDOMNode = (fromEle: Element, toEle: Element, type: MovePlacement) => {
+  if (type === 'child') {
+    if (fromEle.contains(toEle)) return
+    toEle.appendChild(fromEle)
+    return
+  }
+
   const parent = toEle.parentNode
   if (!parent) return
   parent.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
 }
 
-const buildMoveDescription = (fromLabel: string, toLabel: string, type: 'before' | 'after') => {
+const buildMoveDescription = (fromLabel: string, toLabel: string, type: MovePlacement) => {
   return `移动 ${fromLabel} 的位置`
   // return `将 ${fromLabel} 移到 ${toLabel}${type === 'before' ? '前' : '后'}`
 }
@@ -206,6 +392,8 @@ const buildMoveDescription = (fromLabel: string, toLabel: string, type: 'before'
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
   // console.log('[changeOrder]', options)
+  if (type !== 'before' && type !== 'after' && type !== 'child') return
+
   if (fromEle === toEle) {
     // 相对自己移动，无需处理
     return
@@ -235,8 +423,12 @@ const changeOrder = (options) => {
     useAI = true
   }
 
-  // 判断 1：fromEle 和 toEle 的 parent 节点不是同一个 DOM，走 AI
-  if (fromEle.parentElement !== toEle.parentElement) {
+  // 判断 1：before/after 只支持同父级快速重排；child 会把 fromEle 放入 toEle 内部。
+  if (type !== 'child' && fromEle.parentElement !== toEle.parentElement) {
+    useAI = true
+  }
+
+  if (type === 'child' && fromEle.contains(toEle)) {
     useAI = true
   }
 
@@ -291,10 +483,15 @@ const changeOrder = (options) => {
         start: toLoc.jsx?.start,
         end: toLoc.jsx?.end,
       }
-      const placement = type === 'before' ? 'before' : 'after'
-      const newSource = moveRangeInSource(source, fromRange, toRange, placement)
+      const placement = type === 'before' ? 'before' : type === 'after' ? 'after' : 'child'
+      const childInsertPosition = placement === 'child'
+        ? getChildInsertPosition(source, toRange)
+        : null
+      const newSource = placement === 'child'
+        ? moveRangeIntoChildInSource(source, fromRange, toRange)
+        : moveRangeInSource(source, fromRange, toRange, placement)
       if (newSource !== null && validateSource(newSource, fromFile)) {
-        const locSnapshotRoot = fromEle.parentElement
+        const locSnapshotRoot = placement === 'child' ? getShadowRoot() : fromEle.parentElement
         // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原移动前快照，
         // 否则源码已回退但 DOM 仍保留移动后的 data-loc，再次操作仍会错位。
         const locSnapshot = createDOMSourceLocationSnapshot(locSnapshotRoot, fromFile)
@@ -313,7 +510,11 @@ const changeOrder = (options) => {
             context.updateFile({ fileName: fromFile, content: newSource, type: undefined, noUpdateFileSystem: true })
             // noUpdateFileSystem 不触发完整重渲染，必须同步节点顺序和源码定位。
             moveDOMNode(fromEle, toEle, placement)
-            shiftDOMLocAfterSourceMove(locSnapshotRoot, fromFile, fromRange, toRange, placement, newSource)
+            if (placement === 'child') {
+              shiftDOMLocAfterChildSourceMove(locSnapshotRoot, fromFile, fromRange, childInsertPosition!, newSource)
+            } else {
+              shiftDOMLocAfterSourceMove(locSnapshotRoot, fromFile, fromRange, toRange, placement, newSource)
+            }
             context.component!.actions.addUserAction({
               id: actionId,
               type: 'move',
@@ -339,7 +540,7 @@ const changeOrder = (options) => {
 
   const fromLabel = getElementLabel(fromEle, '节点1')
   const toLabel = getElementLabel(toEle, '节点2')
-  const placement = type === 'before' ? 'before' : 'after'
+  const placement = type === 'before' ? 'before' : type === 'after' ? 'after' : 'child'
 
   const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
 
