@@ -784,6 +784,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           // height: '100%',
           width: 'fit-content',
           height: 'fit-content',
+          overflow: isDesign() ? 'visible' : 'hidden',
           ...style,
           ...(breakpoint && isDesign() ? {
             width: breakpoint.width,
