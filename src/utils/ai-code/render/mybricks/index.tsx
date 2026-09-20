@@ -339,39 +339,6 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       }
     })
   }
-
-  // 临时测试
-  mixContext.component?.actions.updatePages?.([], {
-    breakpoints: [
-      {
-        "id": "pc",
-        "label": "PC端",
-        "width": 1440
-      },
-      {
-        "id": "mb",
-        "label": "手机端",
-        "width": 780
-      }
-    ]
-  })
-
-  prototype.events.emit('appConfig', {
-    viewports: [
-      {
-        id: 'pc',
-        label: 'PC端',
-        width: 1440,
-      },
-      {
-        id: 'mb',
-        label: '手机端',
-        width: 780,
-      },
-    ],
-    breakpoints: [],
-  })
-  // 临时测试
   
 
   // let mdCompiled = data.files.find((file: any) => file.fileName === 'README.md')?.compiled;
