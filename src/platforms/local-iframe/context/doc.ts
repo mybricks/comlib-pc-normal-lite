@@ -2,7 +2,10 @@ import { executeLocalShellCommand, getCurrentBranch, AUDIT_REVIEW_ROOT } from '.
 import { escapeCssAttributeValue } from '../../../helpers/dom'
 
 export type DocMap = Record<string, {
-  prd: string
+  createTime: number
+  content: string
+  /** @deprecated 废弃，使用 content 替代 */
+  prd?: string
 }>
 
 function parseDocMap(content: string): DocMap {
@@ -11,8 +14,15 @@ function parseDocMap(content: string): DocMap {
   }
 
   try {
-    const parsed = JSON.parse(content)
+    const parsed = JSON.parse(content) as DocMap
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      Object.entries(parsed).forEach(([_, value]) => {
+        if (value.prd) {
+          value.content = value.prd
+          value.createTime = new Date().getTime()
+          Reflect.deleteProperty(value, 'prd')
+        }
+      })
       return parsed as DocMap
     }
   } catch (error) {
@@ -56,23 +66,18 @@ export class Doc {
     return this.doc
   }
 
-  async get(key: string): Promise<string> {
+  async get(key: string): Promise<DocMap[string]> {
     const docMap = await this.getMap()
 
-    if (!docMap[key]) {
-      docMap[key] = {
-        prd: ''
-      }
+    return docMap[key] || {
+      createTime: new Date().getTime(),
+      content: ''
     }
-
-    return docMap[key].prd
   }
 
-  async set(key: string, value: string): Promise<boolean> {
+  async set(key: string, value: DocMap[string]): Promise<boolean> {
     const docMap = await this.getMap()
-    docMap[key] = {
-      prd: value
-    }
+    docMap[key] = value
 
     const docPath = await this.getDocPath()
     if (!docPath) {

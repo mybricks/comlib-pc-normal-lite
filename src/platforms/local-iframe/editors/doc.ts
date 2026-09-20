@@ -8,7 +8,7 @@ export default function () {
     '@getDoc'(params) {
       const loc = getClosestDomLoc(params.focusArea.ele)
       if (!loc) {
-        return ''
+        return myContext.doc.get('')
       }
       const { files, codeLine } = loc
       const key = myContext.doc.buildKey(files, codeLine)
@@ -18,7 +18,7 @@ export default function () {
       const ele = params.focusArea.ele
       const loc = getClosestDomLoc(params.focusArea.ele)
       if (!loc) {
-        return null
+        return
       }
       const { files, codeLine } = loc
       const key = myContext.doc.buildKey(files, codeLine)
@@ -48,10 +48,15 @@ export default function () {
               executeLocalShellCommand(`rm -f "${analyzeFilePath}"`)
             }
 
-            if (result) {
-              myContext.doc.set(key, result)
+            const doc = {
+              createTime: new Date().getTime(),
+              content: result
             }
-            onComplete(result)
+
+            if (result) {
+              myContext.doc.set(key, doc)
+            }
+            onComplete(doc)
           }
         },
         aiRole: "fast",
