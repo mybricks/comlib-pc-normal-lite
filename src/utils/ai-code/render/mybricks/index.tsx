@@ -23,6 +23,7 @@ import {
 import { useElementResizeObserver } from '../../../../hooks/useElementResizeObserver';
 import prototype from './prototype';
 import EnvConfigPanel from './env-config-panel';
+import { getCompiledCssContent } from '../../css';
 
 const useBreakpoints = (path) => {
   const [breakpoint, setBreakpoint] = useState<any>(null)
@@ -33,9 +34,6 @@ const useBreakpoints = (path) => {
     }
 
     const data = mixContext.component?.params.data
-    if (!data.prototype) {
-      data.prototype = {}
-    }
 
     const getViewports = () => {
       const event = prototype.events.getEvent('appConfig')
@@ -50,27 +48,57 @@ const useBreakpoints = (path) => {
       }, null)
     }
 
-    const updateBreakpoint = (breakpointId) => {
+    const getBreakpointByWidth = (viewports, width) => {
+      const currentWidth = Number(width)
+      if (!Number.isFinite(currentWidth)) {
+        return null
+      }
+
+      return [...viewports]
+        .filter((item) => Number.isFinite(Number(item?.width)))
+        .sort((a, b) => Number(a.width) - Number(b.width))
+        .find((item) => Number(item.width) >= currentWidth) || getMaxBreakpoint(viewports)
+    }
+
+    const updateBreakpoint = (params) => {
+      const { id, type, value } = params && typeof params === 'object'
+        ? params
+        : { id: params }
       const viewports = getViewports()
-      const nextBreakpoint = viewports.find((item) => item?.id === breakpointId) || getMaxBreakpoint(viewports)
+      const viewportId = type === 'id' ? value : id
+      let nextBreakpoint = viewports.find((item) => item?.id === viewportId) || getMaxBreakpoint(viewports)
 
       if (nextBreakpoint?.id) {
-        data.prototype[path] = nextBreakpoint.id
-        setBreakpoint(nextBreakpoint)
+        if (type === 'id') {
+          data._canvas[path] = {
+            viewportId: nextBreakpoint.id,
+            style: {
+              height: data._canvas[path]?.style.height
+            }
+          }
+        } else if (type === 'style') {
+          nextBreakpoint = getBreakpointByWidth(viewports, value?.width) || nextBreakpoint
+          data._canvas[path] = {
+            ...data._canvas[path],
+            viewportId: nextBreakpoint.id,
+            style: value
+          }
+        }
+        setBreakpoint({...nextBreakpoint, ...data._canvas[path].style})
       } else {
-        setBreakpoint(null)
+        setBreakpoint({...data._canvas[path]?.style})
       }
     }
 
-    const fn = (breakpointId) => {
-      updateBreakpoint(breakpointId)
+    const fn = (params) => {
+      updateBreakpoint(params)
     }
 
-    updateBreakpoint(data.prototype[path])
+    updateBreakpoint(data._canvas[path]?.viewportId)
     prototype.events.on(path, fn)
 
     const off = prototype.events.on('appConfig', (appConfig) => {
-      updateBreakpoint(data.prototype[path])
+      updateBreakpoint(data._canvas[path]?.viewportId)
     })
 
     return () => {
@@ -84,6 +112,10 @@ const useBreakpoints = (path) => {
       mixContext.component?.actions.loaded?.()
     }
   }, [breakpoint])
+
+  const data = mixContext.component?.params.data
+  console.log(111, breakpoint)
+  console.log(222, data._canvas)
 
   return breakpoint
 }
@@ -605,6 +637,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
       filename: '',
       off: () => {}
     });
+    const cssCleanupRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
       if (defaultMount) {
@@ -708,66 +741,61 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
     const breakpoint = useBreakpoints(path)
 
+    // useLayoutEffect(() => {
+    //   if (frontendMode === 'prototype' && isDesign()) {
+    //     if (cssCleanupRef.current) {
+    //       return
+    //     }
+
+    //     const fileSystem = mixContext.fileSystem
+    //     if (!fileSystem) {
+    //       return
+    //     }
+
+    //     const cssFileNames = new Set<string>()
+    //     const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+    //     const setLessCss = (filename: string) => {
+    //       const entry = fileSystem?.filesMap?.[filename]
+    //       if (!entry || !entry.file.filename.endsWith('.less')) {
+    //         return
+    //       }
+
+    //       const { file, module } = entry
+    //       const cssText = getCompiledCssContent(module)
+
+    //       const myContent = cssText
+    //         .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
+    //         .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
+    //         .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
+    //         .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
+    //         .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
+    //       // 组件id + 文件路径，保证唯一性
+    //       const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
+    //       cssFileNames.add(cssId)
+    //       ;(env as any).canvas.css.set(cssId, myContent)
+    //     }
+
+    //     Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename]) => setLessCss(filename))
+
+    //     const unwatch = fileSystem?.events.on('fileChange', ({ filename, type }) => {
+    //       if (['create', 'update'].includes(type)) {
+    //         setLessCss(filename)
+    //       }
+    //     })
+
+    //     cssCleanupRef.current = () => {
+    //       unwatch?.()
+    //       cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
+    //       cssCleanupRef.current = null
+    //     }
+    //   }
+    // }, [breakpoint])
+
     useLayoutEffect(() => {
-      if (frontendMode === 'prototype' && isDesign()) {
-        const cssFileNames: string[] = []
-        const fileSystem = mixContext.fileSystem
-        const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
-        const setLessCss = (filename: string) => {
-          const entry = fileSystem?.filesMap?.[filename]
-          if (!entry || !entry.file.filename.endsWith('.less')) {
-            return
-          }
-
-          const { file, module } = entry
-          const { cssContent, mediaQueries } = module
-
-          const value = breakpoint?.width ?? canvasWidth
-
-          const cssText = mediaQueries.reduce((pre, cur) => {
-            const match = cur.conditionText.match(/max-width:\s*(\d+)px/)
-            if (!match) {
-              return pre
-            }
-            const width = parseInt(match[1])
-
-            if (value <= width) {
-              return pre.replace(cur.placeholder, cur.cssText)
-            }
-
-            return pre
-          }, cssContent)
-
-          const myContent = cssText
-            .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
-            .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
-            .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
-            .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
-            .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
-          // 组件id + 文件路径，保证唯一性
-          const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
-          if (!cssFileNames.includes(cssId)) {
-            cssFileNames.push(cssId)
-          }
-          ;(env as any).canvas.css.set(cssId, myContent)
-        }
-
-        Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename]) => setLessCss(filename))
-
-        const unwatch = fileSystem?.events.on('fileChange', ({ filename, type }) => {
-          if (['create', 'update'].includes(type)) {
-            setLessCss(filename)
-          }
-        })
-
-        return () => {
-          unwatch?.()
-          if (frontendMode === 'prototype') {
-            cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
-          }
-        }
+      return () => {
+        cssCleanupRef.current?.()
       }
-    }, [breakpoint])
+    }, [])
 
     return (
       <div
@@ -786,8 +814,9 @@ const createMyBricks = (props: CreateMyBricksProps) => {
           height: 'fit-content',
           overflow: isDesign() ? 'visible' : 'hidden',
           ...style,
-          ...(breakpoint && isDesign() ? {
-            width: breakpoint.width,
+          ...(breakpoint ? {
+            ...(breakpoint.width != null ? { width: breakpoint.width } : {}),
+            ...(breakpoint.height != null ? { height: breakpoint.height } : {}),
             // minWidth: breakpoint.width,
             // maxWidth: breakpoint.width,
           } : {}),
@@ -805,6 +834,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             return pre;
           }, {}),
           ...envCssVariables,
+          containerType: 'inline-size',
         }}
       >
         <div data-container style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
@@ -1127,52 +1157,35 @@ const createMyBricks = (props: CreateMyBricksProps) => {
         )
       }
 
-      useLayoutEffect(() => {
-        let cssFileNames: string[] = []
-        if (frontendMode === 'prototype') {
-          const showType = env._debugTarget.showType
-          const fileSystem = mixContext.fileSystem
-          const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
-          const event = prototype.events.getEvent('appConfig')
-          const breakpoint = event.cache.viewports.find((item) => item.id === showType)
-          const value = breakpoint?.width || canvasWidth
-          Object.entries(fileSystem!.filesMap).forEach(([_, { file, module }]) => {
-            if (file.filename.endsWith('.less')) {
-              const { cssContent, mediaQueries } = module
-              const cssText = mediaQueries.reduce((pre, cur) => {
-                const match = cur.conditionText.match(/max-width:\s*(\d+)px/)
-                if (!match) {
-                  return pre
-                }
-                const width = parseInt(match[1])
+      // useLayoutEffect(() => {
+      //   let cssFileNames: string[] = []
+      //   if (frontendMode === 'prototype') {
+      //     const fileSystem = mixContext.fileSystem
+      //     const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
+      //     Object.entries(fileSystem!.filesMap).forEach(([_, { file, module }]) => {
+      //       if (file.filename.endsWith('.less')) {
+      //         const cssText = getCompiledCssContent(module)
 
-                if (value <= width) {
-                  return pre.replace(cur.placeholder, cur.cssText)
-                }
+      //         const myContent = cssText
+      //           .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
+      //           .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
+      //           .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
+      //           .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
+      //           .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
+      //         // 组件id + 文件路径，保证唯一性
+      //         const cssId = `${comId}_${file.filename}`.replace(/\./g, '__').replace(/\//g, '_')
+      //         cssFileNames.push(cssId)
+      //         env.canvas.css.set(cssId, myContent)
+      //       }
+      //     })
+      //   }
 
-                return pre
-              }, cssContent)
-
-              const myContent = cssText
-                .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
-                .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
-                .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
-                .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId})`)
-                .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
-              // 组件id + 文件路径，保证唯一性
-              const cssId = `${comId}_${file.filename}`.replace(/\./g, '__').replace(/\//g, '_')
-              cssFileNames.push(cssId)
-              env.canvas.css.set(cssId, myContent)
-            }
-          })
-        }
-
-        return () => {
-          if (frontendMode === 'prototype') {
-            cssFileNames.forEach(id => env.canvas.css.remove(id))
-          }
-        }
-      }, [])
+      //   return () => {
+      //     if (frontendMode === 'prototype') {
+      //       cssFileNames.forEach(id => env.canvas.css.remove(id))
+      //     }
+      //   }
+      // }, [])
 
       if (props._standalone) {
         /**
@@ -1363,7 +1376,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
                 pre[cur.propertyName] = cur.value;
                 return pre;
               }, {}),
-              ...envCssVariables
+              ...envCssVariables,
+              containerType: 'inline-size',
             }}>
               <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
                 {container && (

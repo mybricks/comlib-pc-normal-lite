@@ -8,4 +8,5 @@ export const DEFAULT_STYLE: CSSProperties = {
   flexDirection: 'column',
   transform: 'scale(1)',
   minHeight: 896,
+  containerType: 'inline-size',
 }

@@ -4,10 +4,12 @@ export const IS_TOOL = Symbol('IS_TOOL')
 export const MOBILE_CARD_STYLE: CSSProperties = {
   width: 382,
   height: 'fit-content',
+  containerType: 'inline-size',
 }
 export const PC_CARD_STYLE: CSSProperties = {
   width: 968,
   height: 'fit-content',
+  containerType: 'inline-size',
 }
 export const CONTAINER_STYLE: CSSProperties = {
   width: 414,
@@ -15,6 +17,7 @@ export const CONTAINER_STYLE: CSSProperties = {
   flexDirection: 'column',
   transform: 'scale(1)',
   height: 896,
+  containerType: 'inline-size',
 }
 export const MOBILE_CONTAINER_STYLE: CSSProperties = {
   width: 414,
@@ -22,6 +25,7 @@ export const MOBILE_CONTAINER_STYLE: CSSProperties = {
   flexDirection: 'column',
   transform: 'scale(1)',
   height: 896,
+  containerType: 'inline-size',
 }
 export const PC_CONTAINER_STYLE: CSSProperties = {
   width: 1000,
@@ -29,4 +33,5 @@ export const PC_CONTAINER_STYLE: CSSProperties = {
   flexDirection: 'column',
   transform: 'scale(1)',
   height: 896,
+  containerType: 'inline-size',
 }

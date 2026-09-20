@@ -7,5 +7,6 @@ export const DEFAULT_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   transform: 'scale(1)',
+  containerType: 'inline-size',
   // height: 896,
 }

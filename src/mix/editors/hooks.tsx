@@ -33,6 +33,7 @@ import { randomUUID } from '../utils/uuid'
 import context, { config } from '../context';
 // import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
 import type {Props} from './types';
+import prototype from '../../utils/ai-code/render/mybricks/prototype'
 
 import {
   getClosestDomLoc,
@@ -347,8 +348,33 @@ export function buildHooks(props: Props) {
     '@openPage'(_, params) {
 
     },
-    '@resizePage'(...args) {
-      // console.log('@resizePage', args)
+    '@resizePage'(hookContext, params) {
+      const { id, width, height } = params
+
+      if (['default', 'prototype'].includes(frontendMode)) {
+        const data = context.component!.params!.data;
+        if (!data._canvas[id]) {
+          data._canvas[id] = {
+            style: {
+              width,
+              height
+            }
+          }
+        } else {
+          data._canvas[id].style = {
+            width,
+            height
+          }
+        }
+        prototype.events.emit(id, {
+          id,
+          type: 'style',
+          value: {
+            width,
+            height
+          }
+        })
+      }
     },
     '@auditPage'(hookContext, params) {
       type AuditPageOptionKey = 'events' | 'services' | 'crScope' | 'store' | 'crComplete';

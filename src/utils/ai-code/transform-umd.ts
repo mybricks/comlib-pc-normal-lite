@@ -12,6 +12,7 @@ import eslintCheckPlugin from './plugins/eslintCheckPlugin'
 import appConfigCheckPlugin from './plugins/appConfigCheckPlugin'
 import config from '../../mix/context/config'
 import { generate as generateCss, parse as parseCss, walk as walkCss } from 'css-tree'
+import { normalizeContainerCondition } from './css'
 
 export function transformTsx(code, ctx: import('../../mix/availableLibraries/types').ValidateContext): { transformCode: string, jsDocMap: any } {
   let transformCode
@@ -95,8 +96,7 @@ export function transformLess(code, filename: string) {
   const cssModule: any = {
     cssContent: "",
     classMap: {},
-    imports: [],
-    mediaQueries: []
+    imports: []
   }
 
   if (!code || code.length === 0) {
@@ -220,9 +220,7 @@ export function transformLess(code, filename: string) {
       // console.error(error)
       throw new Error(`Less 代码编译失败: ${error.message}`)
     } else {
-      const { cssContent, mediaQueries } = extractMediaQueries(convertCssUnits(result?.css || ''))
-      cssModule.cssContent = cssContent
-      cssModule.mediaQueries = mediaQueries
+      cssModule.cssContent = transformMediaQueriesToContainers(convertCssUnits(result?.css || ''))
     }
   })
 
@@ -277,68 +275,33 @@ function transformDimensions(ast: any) {
   })
 }
 
-function extractMediaQueries(css: string): {
-  cssContent: string
-  mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }>
-} {
+function transformMediaQueriesToContainers(css: string): string {
   if (!css) {
-    return { cssContent: '', mediaQueries: [] }
+    return ''
   }
-
-  // CSSOM cssText can corrupt shorthands containing var(), so use css-tree offsets.
-  return extractMediaQueriesByAst(css)
-}
-
-function extractMediaQueriesByAst(css: string): {
-  cssContent: string
-  mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }>
-} {
-  const mediaQueries: Array<{ conditionText: string; cssText: string; placeholder: string }> = []
-  const ranges: Array<[number, number, string]> = []
 
   try {
-    const cssAst = parseCss(css, { context: 'stylesheet', positions: true })
-    cssAst.children.forEach((node: any) => {
-      if (node.type !== 'Atrule' || !isMediaAtRule(node.name) || !node.block?.loc) {
-        return
+    const cssAst = parseCss(css, { context: 'stylesheet' })
+    walkCss(cssAst, {
+      visit: 'Atrule',
+      enter: (node: any) => {
+        if (isMediaAtRule(node.name)) {
+          node.name = 'container'
+          const condition = node.prelude ? generateCss(node.prelude).trim() : ''
+          const normalizedCondition = normalizeContainerCondition(condition)
+          if (normalizedCondition && normalizedCondition !== condition) {
+            node.prelude = {
+              type: 'Raw',
+              value: normalizedCondition
+            }
+          }
+        }
       }
-
-      const start = node.loc.start.offset
-      const blockStart = node.block.loc.start.offset
-      const end = node.loc.end.offset
-      const lastChildEnd = node.block.children.last?.loc?.end.offset
-      const conditionStart = node.prelude?.loc?.start.offset ?? blockStart
-
-      // css-tree can recover an omitted closing brace. Keep malformed source intact.
-      if (css[blockStart] !== '{' || css[end - 1] !== '}' || lastChildEnd === end) {
-        return
-      }
-
-      const placeholder = `/* __MYBRICKS_AI_MEDIA_QUERY_${mediaQueries.length}__ */`
-      mediaQueries.push({
-        conditionText: css.slice(conditionStart, blockStart).trim(),
-        cssText: css.slice(blockStart + 1, end - 1).trim(),
-        placeholder
-      })
-      ranges.push([start, end, placeholder])
     })
+    return generateCss(cssAst)
   } catch {
-    // Keep CSS that cannot be parsed unchanged instead of risking a partial split.
-    return { cssContent: css, mediaQueries }
-  }
-
-  let cssContent = ''
-  let lastIndex = 0
-  ranges.forEach(([start, end, placeholder]) => {
-    cssContent += css.slice(lastIndex, start)
-    cssContent += placeholder
-    lastIndex = end
-  })
-  cssContent += css.slice(lastIndex)
-
-  return {
-    cssContent: cssContent.trim(),
-    mediaQueries
+    // Keep CSS that cannot be parsed unchanged instead of risking a partial rewrite.
+    return css
   }
 }
 

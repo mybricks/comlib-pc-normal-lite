@@ -16,6 +16,7 @@ import type {
   OnRuntimeError
 } from '../../types'
 import { DYNAMIC_MODULE } from '../../../../../../mix/context/config'
+import { getCompiledCssContent } from '../../../../css'
 
 interface LoadModuleParams {
   filename: string
@@ -148,7 +149,8 @@ const loadCssModule = (params: LoadCssParams) => {
   const { file, css, dependencies } = params;
   const compiled = decodeURIComponent(file.compiled)
   const cssModule = JSON.parse(compiled);
-  const { cssContent, classMap, imports, mediaQueries } = cssModule;
+  const { classMap, imports } = cssModule;
+  const cssContent = getCompiledCssContent(cssModule)
   const importModules: any = []
   if (imports) {
     imports.forEach((path) => {
@@ -169,14 +171,13 @@ const loadCssModule = (params: LoadCssParams) => {
   const module = {
     default: proxy,
     classMap,
-    cssContent,
-    mediaQueries
+    cssContent
   }
   Object.defineProperty(module, '__esModule', {
     value: true
   })
 
-  css.set(file.filename, cssContent, mediaQueries)
+  css.set(file.filename, cssContent)
 
   return { module }
 }

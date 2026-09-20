@@ -4,12 +4,36 @@ import context, { config } from './context';
 import { registerSandbox } from './sandbox';
 import { parseFrameSize } from '../utils/ai-code/render/mybricks/utils'
 import RuntimeIframe from '../platforms/local-iframe/runtime'
+// import generator from '@babel/generator'
+// import * as parser from '@babel/parser'
+// import traverse from '@babel/traverse'
+// import * as types from '@babel/types'
+
+// console.log('@babel', {
+//   generator,
+//   parser,
+//   traverse,
+//   types
+// });
 
 (window as any)._hack_pluginai_ = ['12333', 'c3fcce707fb1e218feca2510cff9d2c5']
 
 const dataCompatible = (props) => {
   try {
     const { id, data } = props;
+
+    if (data.prototype) {
+      data._canvas = Object.entries(data.prototype).reduce((pre, cur) => {
+        const [key, value] = cur
+        pre[key] = {
+          viewportId: value,
+        }
+        return pre
+      }, {})
+      Reflect.deleteProperty(data, 'prototype')
+    } else if (!data._canvas) {
+      data._canvas = {}
+    }
 
     const mode = config.getFrontendMode()
 

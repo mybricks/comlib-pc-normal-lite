@@ -21,14 +21,9 @@ export type Files = {
   jsDocMap: string
 }[]
 
-export type CssMediaQuery = {
-  conditionText: string
-  cssText: string
-}
-
 export type Css = {
   /** 注入样式 */
-  set(filename: string, css: string, mediaQueries?: CssMediaQuery[]): void
+  set(filename: string, css: string): void
   /** 清空样式 */
   remove(): void
 }

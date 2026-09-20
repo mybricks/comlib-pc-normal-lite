@@ -7,6 +7,7 @@ import {
   createVisualEditMainCommand,
   getCurrentFileSnapshot,
   setPendingVisualAICommit,
+  getChangedFileNames
 } from '../visualEditCommit'
 import insert from './insert'
 
@@ -23,7 +24,7 @@ export default function () {
         return insert(options)
       }
     },
-    '@commitUserActions'() {
+    async '@commitUserActions'() {
 
       if (context.connectToAIRef.disabledHandler?.isDisabled()) {
         // 取消用户操作
@@ -46,6 +47,8 @@ export default function () {
         const componentId = context.component!.params.id
         const sendToAgent = window._sandbox_?.helpers?.sendToAgent
         if (!sendToAgent) return true
+        const files = getChangedFileNames(beforeFiles, getCurrentFileSnapshot())
+        await context.syncManualFilesToRemoteFs(files)
 
         // afterTurn 会消费这份快照，并把整个可视化分支压入主栈。
         setPendingVisualAICommit(componentId, beforeFiles, styleOverlays)

@@ -5,7 +5,11 @@ export function buildHooks() {
     '@switchPageShowType'(params, value) {
       const path = params.focusArea.dataset.desnPage
 
-      prototype.events.emit(path, value)
+      prototype.events.emit(path, {
+        id: path,
+        type: 'id',
+        value
+      })
     }
   }
 }

@@ -15,7 +15,7 @@ export const getCurrentFileSnapshot = (): FileSnapshot[] => (
     }))
 )
 
-const getChangedFileNames = (beforeFiles: FileSnapshot[], afterFiles: FileSnapshot[]) => {
+export const getChangedFileNames = (beforeFiles: FileSnapshot[], afterFiles: FileSnapshot[]) => {
   const before = new Map(beforeFiles.map((file) => [file.path, file.content]))
   const after = new Map(afterFiles.map((file) => [file.path, file.content]))
   const names = new Set([...before.keys(), ...after.keys()])

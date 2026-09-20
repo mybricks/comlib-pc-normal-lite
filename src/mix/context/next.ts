@@ -596,7 +596,7 @@ class Context {
    * 有可视化分支时，用 cancel 会回到的 branchInitialFiles 做 baseHash；
    * 没有分支快照则直写。冲突时静默放弃本次保存，不修改本地文件。
    */
-  private async syncManualFilesToRemoteFs(updateFiles: string[]): Promise<boolean> {
+  async syncManualFilesToRemoteFs(updateFiles: string[]): Promise<boolean> {
     const remoteFs = this.remoteFs
     const fileNames = [...new Set(updateFiles)]
     if (!remoteFs || !fileNames.length) {

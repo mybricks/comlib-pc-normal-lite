@@ -101,7 +101,7 @@ const useDependencies = (params: Params) => {
       dependencies.mybricks = {}
     }
 
-    if (frontendMode === 'prototype') {
+    if (frontendMode === 'prototype' && false) {
       dependencies._css = {
         set() {},
         remove() {},
