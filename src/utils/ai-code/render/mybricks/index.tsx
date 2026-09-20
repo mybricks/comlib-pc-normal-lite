@@ -114,8 +114,6 @@ const useBreakpoints = (path) => {
   }, [breakpoint])
 
   const data = mixContext.component?.params.data
-  console.log(111, breakpoint)
-  console.log(222, data._canvas)
 
   return breakpoint
 }
