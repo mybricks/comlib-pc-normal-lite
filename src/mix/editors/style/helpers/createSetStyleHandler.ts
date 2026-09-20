@@ -934,6 +934,7 @@ export default function createSetStyleHandler(
 
   function handler(ctx: any, params: any) {
     const { state, multiple } = params
+    console.log('@setStyle:handle', params)
     const isImplicitState = params.__implicitState === true
     const hasState = state !== undefined && state !== null && state !== ''
 
@@ -983,6 +984,8 @@ export default function createSetStyleHandler(
           getEle(ctx, params),
         )
 
+        console.log('@setStyle:style', style)
+
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
           ele = resolveTargetEle(sourceEle, style, multiple)
@@ -1013,18 +1016,19 @@ export default function createSetStyleHandler(
           // 其他模式下：`${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           const frontendMode = config.getFrontendMode()
           let styleID: string
-          if (frontendMode === 'prototype') {
-            // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
-            const pageEle = (sourceEle as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
-            const pagePath = pageEle?.dataset?.desnPage ?? null
-            if (pagePath != null) {
-              styleID = `${componentID}_${pagePath}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
-            } else {
-              styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
-            }
-          } else {
-            styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
-          }
+          // if (frontendMode === 'prototype') {
+          //   // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
+          //   const pageEle = (sourceEle as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
+          //   const pagePath = pageEle?.dataset?.desnPage ?? null
+          //   if (pagePath != null) {
+          //     styleID = `${componentID}_${pagePath}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
+          //   } else {
+          //     styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+          //   }
+          // } else {
+          //   styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
+          // }
+          styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           const shadowRoot = getShadowRoot()
           const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement | null
           const sheet = styleTag?.sheet ?? null
