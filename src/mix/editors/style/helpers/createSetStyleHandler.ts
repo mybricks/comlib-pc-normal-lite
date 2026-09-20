@@ -391,7 +391,7 @@ const isJsxFile = (fileName: string) => ['jsx', 'tsx'].includes(fileName.split('
 
 const isFlexLayout = (targetEle: HTMLElement) => {
   const display = window.getComputedStyle(targetEle).display
-  return display === 'flex' || display === 'inline-flex'
+  return ['flex', 'inline-flex', 'grid'].includes(display)
 }
 
 const parseNumericStyleValue = (value?: string | null): number | null => {
