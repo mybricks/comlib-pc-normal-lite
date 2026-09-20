@@ -934,7 +934,7 @@ export default function createSetStyleHandler(
 
   function handler(ctx: any, params: any) {
     const { state, multiple } = params
-    console.log('@setStyle:handle', params)
+    // console.log('@setStyle:handle', params)
     const isImplicitState = params.__implicitState === true
     const hasState = state !== undefined && state !== null && state !== ''
 
@@ -984,7 +984,7 @@ export default function createSetStyleHandler(
           getEle(ctx, params),
         )
 
-        console.log('@setStyle:style', style)
+        // console.log('@setStyle:style', style)
 
         if (!isStart) {
           const sourceEle = getEle(ctx, params)
@@ -1014,7 +1014,7 @@ export default function createSetStyleHandler(
           // styleID 计算规则需与 index.tsx 中 canvas.css.set 保持一致：
           // prototype 模式下：`${componentID}_${path}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
           // 其他模式下：`${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
-          const frontendMode = config.getFrontendMode()
+          // const frontendMode = config.getFrontendMode()
           let styleID: string
           // if (frontendMode === 'prototype') {
           //   // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
