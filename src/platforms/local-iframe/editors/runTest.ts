@@ -12,7 +12,7 @@ export default function ({ id, focusArea }) {
     window: testDocument.defaultView
   })
 
-  const chipId = randomUUID()
+  const chipId = randomUUID(8)
   const label = ele.tagName.toLowerCase()
 
   const chip = {

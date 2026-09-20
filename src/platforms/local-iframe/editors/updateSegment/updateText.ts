@@ -28,7 +28,7 @@ export default function ({ fromEle: ele, content }) {
   }
 
   const actionId = randomUUID()
-  const chipId = randomUUID()
+  const chipId = randomUUID(8)
   const label = buildLabel(ele)
   const codeLocation = getElementCodeLocation(ele)
 

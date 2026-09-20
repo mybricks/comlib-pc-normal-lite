@@ -180,7 +180,7 @@ export default function () {
         ele,
         targetEle: ele,
         actionId: randomUUID(),
-        chipId: randomUUID(),
+        chipId: randomUUID(8),
         classNames,
         codeLocation: getElementCodeLocation(ele),
         label: `调整 ${labelTarget} 样式`,

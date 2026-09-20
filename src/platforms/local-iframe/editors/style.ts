@@ -467,7 +467,7 @@ export default function() {
           pendingStyleBranch = {
             ele,
             actionId: randomUUID(),
-            chipId: randomUUID(),
+            chipId: randomUUID(8),
             classNames,
             codeLocation,
             label,

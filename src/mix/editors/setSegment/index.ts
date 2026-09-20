@@ -10,6 +10,7 @@ import {
   getChangedFileNames
 } from '../visualEditCommit'
 import insert from './insert'
+import duplicate from './duplicate'
 
 export default function () {
   return {
@@ -22,6 +23,8 @@ export default function () {
         return runDelete(options)
       } else if (type === 'insert') {
         return insert(options)
+      } else if (type === 'duplicate') {
+        return duplicate(options)
       }
     },
     async '@commitUserActions'() {

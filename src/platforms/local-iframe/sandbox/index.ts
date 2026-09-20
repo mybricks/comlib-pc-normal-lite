@@ -750,6 +750,12 @@ export function registerSandbox(comId: string) {
           format: formatParsedElementChipMessage,
         },
       },
+      ['element-insert']: {
+        def: {
+          type: 'element-insert',
+          format: formatParsedElementChipMessage,
+        },
+      }
     }
   }) ?? {};
 

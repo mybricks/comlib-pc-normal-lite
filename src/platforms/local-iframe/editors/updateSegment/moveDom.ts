@@ -32,7 +32,7 @@ export default function ({ fromEle, toEle, type }: Props) {
   const parent = fromEle.parentNode
   const nextSibling = fromEle.nextSibling
   const actionId = randomUUID()
-  const chipId = randomUUID()
+  const chipId = randomUUID(8)
   const label = buildLabel(fromEle)
   const placementText = type === 'before' ? '前面' : type === 'after' ? '后面' : '内部'
   const fromCodeLocation = getElementCodeLocation(fromEle)
