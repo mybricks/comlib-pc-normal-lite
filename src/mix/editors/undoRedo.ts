@@ -180,13 +180,10 @@ class UndoRedoManager {
   /** 撤销 */
   undo() {
     if (this.branchUndoStack.length) {
-      console.log('undo branch')
       this.undoStack(this.branchUndoStack, this.branchRedoStack)
       this.notifyBranchHistoryChange()
       return
     }
-
-    console.log('undo stack')
 
     this.undoStack(this.mainUndoStack, this.mainRedoStack)
   }
@@ -194,13 +191,10 @@ class UndoRedoManager {
   /** 重做 */
   redo() {
     if (this.branchRedoStack.length) {
-      console.log('redo branch')
       this.redoStack(this.branchUndoStack, this.branchRedoStack)
       this.notifyBranchHistoryChange()
       return
     }
-
-    console.log('redo stack')
 
     this.redoStack(this.mainUndoStack, this.mainRedoStack)
   }
@@ -222,13 +216,11 @@ export default function() {
   return {
     /** 撤销 */
     '@undo'() {
-      console.log('@undo', isVibing)
       if (isVibing) return
       undoRedoManager.undo()
     },
     /** 重做 */
     '@redo'() {
-      console.log('@redo', isVibing)
       if (isVibing) return
       undoRedoManager.redo()
     }
