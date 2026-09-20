@@ -84,7 +84,7 @@ const useBreakpoints = (path) => {
             style: value
           }
         }
-        setBreakpoint({...nextBreakpoint, ...data._canvas[path].style})
+        setBreakpoint({...nextBreakpoint, ...data._canvas[path]?.style})
       } else {
         setBreakpoint({...data._canvas[path]?.style})
       }
@@ -112,8 +112,6 @@ const useBreakpoints = (path) => {
       mixContext.component?.actions.loaded?.()
     }
   }, [breakpoint])
-
-  const data = mixContext.component?.params.data
 
   return breakpoint
 }
