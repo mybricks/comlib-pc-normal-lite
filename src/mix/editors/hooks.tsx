@@ -422,7 +422,10 @@ export function buildHooks(props: Props) {
     '@getDoc'(params) {
       const loc = getClosestDomLoc(params.focusArea.ele)
       if (!loc) {
-        return Promise.resolve('')
+        return Promise.resolve({
+          createTime: new Date().getTime(),
+          content: ''
+        })
       }
       const data = context.component!.params!.data;
       if (!data._docs) {
@@ -430,7 +433,26 @@ export function buildHooks(props: Props) {
       }
       const { files, codeLine } = loc;
       const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
-      return Promise.resolve(data._docs[key] ?? '')
+
+      if (!data._docs[key]) {
+        return Promise.resolve({
+          createTime: new Date().getTime(),
+          content: ''
+        })
+      }
+      
+      const doc = data._docs[key]
+      if (typeof doc === 'string') {
+        const createTime = new Date().getTime()
+        data._docs[key] = {
+          createTime,
+          content: doc
+        }
+
+        return Promise.resolve(data._docs[key])
+      }
+
+      return Promise.resolve(doc)
     },
     '@updateDoc'(params, { onComplete }) {
       const ele = params.focusArea.ele
@@ -469,10 +491,15 @@ export function buildHooks(props: Props) {
               context.updateFile({ fileName: analyzeFilePath, type: 'delete' })
             }
 
-            if (result) {
-              data._docs[key] = result
+            const doc = {
+              createTime: new Date().getTime(),
+              content: result
             }
-            await onComplete(result)
+
+            if (result) {
+              data._docs[key] = doc
+            }
+            await onComplete(doc)
           }
         },
         aiRole: "fast",
