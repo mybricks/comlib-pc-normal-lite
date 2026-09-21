@@ -84,108 +84,6 @@ function clearFlatRuleConflicts(
   })
 }
 
-const hasGapStyle = (style: Record<string, number>) => {
-  return 'rowGap' in style || 'columnGap' in style || 'gap' in style
-}
-
-const normalizeGapStyle = (style: Record<string, number>) => {
-  if (!hasGapStyle(style)) return style
-  return Object.entries(style).reduce<Record<string, number>>((nextStyle, [key, value]) => {
-    if (key === 'rowGap' || key === 'columnGap' || key === 'gap') {
-      nextStyle[key] = Math.max(0, value)
-    } else {
-      nextStyle[key] = value
-    }
-    return nextStyle
-  }, {})
-}
-
-const getLayoutParent = (ele: HTMLElement | null): HTMLElement | null => {
-  let parent = ele?.parentElement ?? null
-  while (parent?.hasAttribute('data-wrap-container')) {
-    parent = parent.parentElement
-  }
-  return parent
-}
-
-const shouldUseGapMargins = (ele: HTMLElement | null, multiple?: boolean) => {
-  if (!multiple) return false
-  const parent = getLayoutParent(ele)
-  return !!parent && !isFlexLayout(parent)
-}
-
-const resolveTargetEle = (ele: HTMLElement, style: Record<string, number>, multiple?: boolean) => {
-  const parent = getLayoutParent(ele)
-  if (hasGapStyle(style) && multiple && parent && !shouldUseGapMargins(ele, multiple)) {
-    // if (parent.dataset['customComWrapper']) {
-    //   return parent.parentElement
-    // }
-    return parent
-  }
-  return ele
-}
-
-const resolveStyle = (
-  style: Record<string, number>,
-  multiple?: boolean,
-  sourceEle?: HTMLElement | null,
-) => {
-  if (!hasGapStyle(style)) return style
-  if (multiple && !shouldUseGapMargins(sourceEle ?? null, multiple)) return style
-
-  return Object.entries(style).reduce<Record<string, number>>((nextStyle, [key, value]) => {
-    if (key === 'rowGap') {
-      nextStyle.marginTop = value
-    } else if (key === 'columnGap') {
-      nextStyle.marginLeft = value
-    } else if (key === 'gap') {
-      nextStyle.marginTop = value
-      nextStyle.marginLeft = value
-    } else {
-      nextStyle[key] = value
-    }
-    return nextStyle
-  }, {})
-}
-
-/**
- * 拖拽引擎在单元素模式下返回的 gap 类样式值 = 实际 margin + parent gap，
- * 因此需要从原始样式值中减去 parent 的 gap，得到真正应写入的 margin 值。
- * - 横向（columnGap）减去 parent 的 column-gap
- * - 纵向（rowGap）减去 parent 的 row-gap
- * - 简写 gap 展开为 rowGap/columnGap 分别减去对应分量
- *
- * 仅在 multiple=false 时需要处理（multiple 模式下直接写 parent 的 gap 属性，值本身是正确的）。
- */
-const subtractParentGapFromStyle = (
-  rawStyle: Record<string, number>,
-  sourceEle: HTMLElement | null,
-): Record<string, number> => {
-  if (!sourceEle?.parentElement) return rawStyle
-  if (!hasGapStyle(rawStyle)) return rawStyle
-
-  const parent = getLayoutParent(sourceEle)
-  if (!parent) return rawStyle
-  const computed = window.getComputedStyle(parent)
-  const colGap = parseFloat(computed.columnGap) || 0
-  const rowGap = parseFloat(computed.rowGap) || 0
-
-  if (colGap === 0 && rowGap === 0) return rawStyle
-
-  const result = { ...rawStyle }
-  if ('columnGap' in result) result.columnGap = result.columnGap - colGap
-  if ('rowGap' in result) result.rowGap = result.rowGap - rowGap
-  if ('gap' in result) {
-    // gap 同时覆盖两个方向：展开为 rowGap/columnGap 后分别减去对应 parent gap
-    const gapVal = result.gap
-    delete result.gap
-    result.rowGap = gapVal - rowGap
-    result.columnGap = gapVal - colGap
-  }
-
-  return result
-}
-
 type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number }
 type InitialInlineStyleValue = {
   hadInitialValue: boolean;
@@ -388,11 +286,6 @@ const getSingleInsertionReplacement = (previousCode: string, newCode: string): S
 }
 
 const isJsxFile = (fileName: string) => ['jsx', 'tsx'].includes(fileName.split('.').pop() ?? '')
-
-const isFlexLayout = (targetEle: HTMLElement) => {
-  const display = window.getComputedStyle(targetEle).display
-  return ['flex', 'inline-flex', 'grid', 'inline-grid'].includes(display)
-}
 
 const parseNumericStyleValue = (value?: string | null): number | null => {
   if (!value) return null
@@ -969,26 +862,16 @@ export default function createSetStyleHandler(
       if (state === 'start') {
         clearPreviewStyles()
         isStart = false
-        const sourceEle = getEle(ctx, params)
-        ele = resolveTargetEle(sourceEle, style, multiple)
+        ele = getEle(ctx, params)
         initialInlineCssText = ele.style?.cssText ?? ''
         initialInlineStyleValues = {}
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
-        style = resolveStyle(
-          normalizeGapStyle(
-            multiple
-              ? getStyle(ctx, params)
-              : subtractParentGapFromStyle(getStyle(ctx, params), getEle(ctx, params)),
-          ),
-          multiple,
-          getEle(ctx, params),
-        )
+        style = getStyle(ctx, params)
 
         // console.log('@setStyle:style', style)
 
         if (!isStart) {
-          const sourceEle = getEle(ctx, params)
-          ele = resolveTargetEle(sourceEle, style, multiple)
+          ele = getEle(ctx, params)
           if (isImplicitState) {
             initialInlineCssText = ele.style?.cssText ?? ''
             initialInlineStyleValues = {}
@@ -1003,8 +886,7 @@ export default function createSetStyleHandler(
             }
           })
           const componentID = context.component!.params.id
-          // ele 是 resolveTargetEle 后的目标（gap 场景下为 parent），data-loc 在 ele 上，fallback 到 sourceEle
-          const locRaw = ele.dataset?.loc ?? sourceEle.dataset?.loc
+          const locRaw = ele.dataset?.loc
           const loc = locRaw ? (() => { try { return JSON.parse(locRaw) } catch { return null } })() : null
           lessFile = resolveLessFilePath(
             loc?.files?.less,
@@ -1018,7 +900,7 @@ export default function createSetStyleHandler(
           let styleID: string
           // if (frontendMode === 'prototype') {
           //   // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
-          //   const pageEle = (sourceEle as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
+          //   const pageEle = (ele as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
           //   const pagePath = pageEle?.dataset?.desnPage ?? null
           //   if (pagePath != null) {
           //     styleID = `${componentID}_${pagePath}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
@@ -1235,16 +1117,7 @@ export default function createSetStyleHandler(
         })
       } else if (state === 'finish') {
         isStart = false
-        const rawFinishStyle = getStyle(ctx, params) || style
-        style = resolveStyle(
-          normalizeGapStyle(
-            multiple
-              ? rawFinishStyle
-              : subtractParentGapFromStyle(rawFinishStyle, ele),
-          ),
-          multiple,
-          getEle(ctx, params),
-        )
+        style = getStyle(ctx, params) || style
         // 拖拽预览只改 CSSOM；源码写回前先还原，最终样式由重新编译的 Less 接管。
         clearPreviewStyles()
         const aiKeys = Object.entries(styleKeyRoutes)
