@@ -508,7 +508,7 @@ function LowcodeView(params: Params) {
       },
       undo() {
         previousFiles.forEach(({ fileName, content }) => {
-          context.updateFile({ fileName, content, type: "update" });
+          context.updateFile({ fileName, content, type: "update", updateSource: 'undo' });
         });
         context.saveManualVersion(fileNames);
       },
@@ -560,9 +560,9 @@ function LowcodeView(params: Params) {
       undo() {
         previousFiles.forEach(({ fileName, content, existed }) => {
           if (existed) {
-            context.updateFile({ fileName, content, type: "update" });
+            context.updateFile({ fileName, content, type: "update", updateSource: 'undo' });
           } else {
-            context.updateFile({ fileName, type: "delete" });
+            context.updateFile({ fileName, type: "delete", updateSource: 'undo' });
           }
         });
         context.saveManualVersion(fileNames);
@@ -731,7 +731,7 @@ function LowcodeView(params: Params) {
       },
       undo() {
         previousFiles.forEach(({ fileName, content }) => {
-          context.updateFile({ fileName, content, type: "update" });
+          context.updateFile({ fileName, content, type: "update", updateSource: 'undo' });
         })
         context.saveManualVersion(previousFiles.map((f) => f.fileName));
       },

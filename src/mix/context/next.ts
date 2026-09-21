@@ -201,6 +201,29 @@ class Context {
   /** 文件系统 */
   fileSystem?: FileSystem
 
+  /** 记录当前 runtime 中每个文件最近一次非回退更新是否跳过了 fileSystem。 */
+  private lastNonUndoNoUpdateFileSystem = new Map<string, {
+    fileSystem?: FileSystem
+    noUpdateFileSystem: boolean
+  }>()
+
+  private shouldUpdateRuntimeFileSystem(fileName: string, noUpdateFileSystem?: boolean, updateSource?: string) {
+    const isUndo = updateSource === 'undo'
+    const lastUpdate = this.lastNonUndoNoUpdateFileSystem.get(fileName)
+    const lastNoUpdateFileSystem = lastUpdate?.fileSystem === this.fileSystem
+      ? lastUpdate.noUpdateFileSystem
+      : undefined
+
+    if (!isUndo) {
+      this.lastNonUndoNoUpdateFileSystem.set(fileName, {
+        fileSystem: this.fileSystem,
+        noUpdateFileSystem: noUpdateFileSystem === true,
+      })
+    }
+
+    return !noUpdateFileSystem || (isUndo && lastNoUpdateFileSystem === false)
+  }
+
   /** 临时的，目前只有themes需要用到 */
   projectConfig: { themes?: any[]; } = {}
 
@@ -250,6 +273,13 @@ class Context {
     const suffix = fileName.split('.').pop();
 
     if (type === "delete") {
+      if (updateSource !== 'rollback') {
+        this.lastNonUndoNoUpdateFileSystem.set(fileName, {
+          fileSystem: this.fileSystem,
+          noUpdateFileSystem: false,
+        })
+      }
+
       const deleteIndex = files.findIndex((f) => f.fileName === fileName);
       const deletedFile = deleteIndex === -1 ? undefined : files[deleteIndex]
       const fileSystem = this.fileSystem
@@ -328,7 +358,7 @@ class Context {
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file !== fileName);
             aiComParams.data._errors = aiComParams.data._errors.filter(err => err.file);
             
-            if (!noUpdateFileSystem) {
+            if (this.shouldUpdateRuntimeFileSystem(fileName, noUpdateFileSystem, updateSource)) {
               const fileSystem = this.fileSystem
               if (fileSystem) {
                 const file = files.find((f) => f.fileName === fileName);

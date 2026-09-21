@@ -1875,7 +1875,7 @@ export function syncFromFigmaJson(
       },
       undo() {
         allPrevious.forEach(({ fileName, source }) => {
-          context.updateFile({ fileName, content: source, type: undefined });
+          context.updateFile({ fileName, content: source, type: undefined, updateSource: 'undo' });
         });
         context.saveManualVersion(Array.from(allFiles));
       },

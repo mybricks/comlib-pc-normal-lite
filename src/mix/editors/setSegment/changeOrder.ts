@@ -552,7 +552,7 @@ const changeOrder = (options) => {
             })
           },
           undo() {
-            context.updateFile({ fileName: fromFile, content: source, type: undefined, noUpdateFileSystem: true })
+            context.updateFile({ fileName: fromFile, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
             restoreDOMNodePosition(fromEle, fromParent, fromNextSibling)
             restoreDOMNodePosition(toEle, toParent, toNextSibling)
             restoreDOMSourceLocationSnapshot(locSnapshot)

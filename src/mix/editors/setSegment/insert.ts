@@ -554,7 +554,7 @@ const insert = (options: InsertOptions) => {
         })
       },
       undo() {
-        context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true })
+        context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
         removePreview(preview)
         restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
         context.component!.actions.removeUserAction(actionId)

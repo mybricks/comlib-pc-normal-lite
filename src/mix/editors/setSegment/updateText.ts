@@ -122,7 +122,7 @@ const updateText = (options) => {
         })
       },
       undo() {
-        context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true })
+        context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
         restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
         fromEle.innerHTML = previousInnerHTML
         context.component!.actions.removeUserAction(actionId)

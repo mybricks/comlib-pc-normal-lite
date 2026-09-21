@@ -1319,7 +1319,13 @@ export default function createSetStyleHandler(
               undo() {
                 updateFIles.forEach(({ fileName, previousCode }) => {
                   const suffix = fileName.split('.').pop()!;
-                  context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
+                  context.updateFile({
+                    fileName,
+                    content: previousCode,
+                    type: undefined,
+                    noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix),
+                    updateSource: 'undo',
+                  });
                 })
                 sourceLocationSnapshots.forEach((snapshot) => restoreDOMSourceLocationSnapshot(snapshot))
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'undo')
@@ -1583,7 +1589,13 @@ export default function createSetStyleHandler(
             undo() {
               updateFIles.forEach(({ fileName, previousCode }) => {
                 const suffix = fileName.split('.').pop()!;
-                context.updateFile({ fileName, content: previousCode, type: undefined, noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix) });
+                context.updateFile({
+                  fileName,
+                  content: previousCode,
+                  type: undefined,
+                  noUpdateFileSystem: ['jsx', 'tsx'].includes(suffix),
+                  updateSource: 'undo',
+                });
               })
               sourceLocationSnapshots.forEach((snapshot) => restoreDOMSourceLocationSnapshot(snapshot))
               applyInlineStyleSnapshots(jsxInlineStyleSnapshots, 'undo')

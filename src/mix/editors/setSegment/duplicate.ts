@@ -269,6 +269,7 @@ const duplicate = (options: Options) => {
           content: source,
           type: undefined,
           noUpdateFileSystem: true,
+          updateSource: 'undo',
         })
         clone.remove()
         restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)

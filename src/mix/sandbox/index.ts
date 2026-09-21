@@ -807,7 +807,7 @@ async function persistAiVersionAfterTurn(
     },
     undo() {
       // 撤回：将文件恢复为 AI 修改前的状态
-      const updateFileNames = applyFileDiff(comId, prevFiles);
+      const updateFileNames = applyFileDiff(comId, prevFiles, { updateSource: 'undo' });
       context.saveManualVersion(updateFileNames);
     },
   });

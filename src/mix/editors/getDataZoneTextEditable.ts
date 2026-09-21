@@ -50,7 +50,7 @@ const item = {
             context.saveManualVersion([fileName])
           },
           undo() {
-            context.updateFile({fileName, content: source, type: ''})
+            context.updateFile({fileName, content: source, type: '', updateSource: 'undo'})
             context.saveManualVersion([fileName])
           },
         })

@@ -1420,7 +1420,7 @@ export function genStyleValue(props) {
         undo() {
           if (pendingStyleFileBranch === currentBranch) pendingStyleFileBranch = null;
           currentBranch.files.forEach(({ previous }, fileName) => {
-            context.updateFile({ fileName, content: previous, type: undefined });
+            context.updateFile({ fileName, content: previous, type: undefined, updateSource: 'undo' });
           });
           if (currentBranch.actionApplied) {
             context.component?.actions.removeUserAction(currentBranch.actionId);
@@ -2154,7 +2154,7 @@ export function genImgSrcReplacer() {
               });
             },
             undo() {
-              context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true });
+              context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' });
               applyPreview(previousSrc);
               context.component?.actions.removeUserAction(actionId);
             },
@@ -2529,7 +2529,7 @@ export function applyRawSvg(params: any, rawSvg: string): void {
         })
       },
       undo() {
-        context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true })
+        context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
         if (_lastSvgState === nextSvgState) _lastSvgState = null
         applyPreview(previousSvg)
         context.component?.actions.removeUserAction(actionId)
@@ -2726,7 +2726,7 @@ export function applyIconWithSvg(params: any, rawSvg: string): void {
         })
       },
       undo() {
-        context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true })
+        context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
         applyPreview(previousSvg)
         context.component?.actions.removeUserAction(actionId)
       },
@@ -2897,7 +2897,7 @@ export function patchSvgSizeInTsx(params: any, size: { width?: number; height?: 
       context.saveManualVersion([jsxPath])
     },
     undo() {
-      context.updateFile({ fileName: jsxPath, content: source, type: undefined })
+      context.updateFile({ fileName: jsxPath, content: source, type: undefined, updateSource: 'undo' })
       context.saveManualVersion([jsxPath])
     },
   })
@@ -3067,7 +3067,7 @@ export function patchIconSizeInTsx(params: any, size: { width: number; height: n
       context.saveManualVersion([jsxPath]);
     },
     undo() {
-      context.updateFile({ fileName: jsxPath, content: source, type: undefined });
+      context.updateFile({ fileName: jsxPath, content: source, type: undefined, updateSource: 'undo' });
       context.saveManualVersion([jsxPath]);
     },
   });

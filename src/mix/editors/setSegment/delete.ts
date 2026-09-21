@@ -102,7 +102,7 @@ const runDelete = (options) => {
           })
         },
         undo() {
-          context.updateFile({ fileName: files.jsx, content: source, type: undefined, noUpdateFileSystem: true })
+          context.updateFile({ fileName: files.jsx, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
           if (parent) {
             parent.insertBefore(fromEle, nextSibling?.parentNode === parent ? nextSibling : null)
           }

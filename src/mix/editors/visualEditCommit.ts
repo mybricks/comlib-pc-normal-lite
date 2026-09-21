@@ -23,23 +23,24 @@ export const getChangedFileNames = (beforeFiles: FileSnapshot[], afterFiles: Fil
   return [...names].filter((fileName) => before.get(fileName) !== after.get(fileName))
 }
 
-const applySnapshot = (targetFiles: FileSnapshot[], changedFiles: string[]) => {
+const applySnapshot = (targetFiles: FileSnapshot[], changedFiles: string[], updateSource?: 'undo') => {
   const target = new Map(targetFiles.map((file) => [file.path, file.content]))
   const current = new Set(
     (context.component?.params?.data?.files ?? []).map((file: any) => file.fileName)
   )
+  const updateMeta = updateSource ? { updateSource } : {}
 
   changedFiles.forEach((fileName) => {
     const content = target.get(fileName)
     if (content == null) {
       if (current.has(fileName)) {
-        context.updateFile({ fileName, type: 'delete' })
+        context.updateFile({ fileName, type: 'delete', ...updateMeta })
       }
       return
     }
 
     // 主栈通过正常文件更新将临时源码改动写入文件系统；Less 的即时画布效果由声明式覆盖层维持。
-    context.updateFile({ fileName, content, type: undefined })
+    context.updateFile({ fileName, content, type: undefined, ...updateMeta })
   })
 }
 
@@ -78,7 +79,7 @@ export const createVisualEditMainCommand = (
       isInitialExecution = false
     },
     undo() {
-      applySnapshot(beforeFiles, files)
+      applySnapshot(beforeFiles, files, 'undo')
       ;[...styleOverlays].reverse().forEach(removeVisualStyleOverlay)
       saveVersion('manual')
     },
