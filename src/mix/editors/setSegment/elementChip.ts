@@ -958,6 +958,24 @@ export function buildElementMoveChipData(
   }
 }
 
+export function buildElementDuplicateAiRequest({ ele }: { ele: Element }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+
+  return {
+    type: 'element-duplicate',
+    message: `复制 [[chip:${chip.id}]]，将复制出的完整节点插入到原节点之后，并与原节点保持同级.`,
+    chips: [chip]
+  }
+}
+
 export function buildElementInsertAiRequest({ ele, jsx, placement, importCode = '' }: { ele: Element; jsx: string; placement: 'before' | 'after' | 'child'; importCode?: string }) {
   const chip = {
     id: randomUUID(),

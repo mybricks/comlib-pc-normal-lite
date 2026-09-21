@@ -5,7 +5,7 @@ export default function (props) {
   // 提交用户操作
   const aiRequests = undoRedoManager.getBranchAIRequests()
   console.log('commitUserActions', aiRequests)
-  const message = aiRequests.map((request) => request.message).join('')
+  const message = aiRequests.map((request) => request.message).join('\n')
   const chips = aiRequests.flatMap((request) => request.chips)
   // const beforeFiles = undoRedoManager.getBranchInitialFiles()
   // const styleOverlays = undoRedoManager.getBranchStyleOverlays()

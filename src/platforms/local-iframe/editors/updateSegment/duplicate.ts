@@ -1,7 +1,7 @@
 import context from '../../../../mix/context'
 import { undoRedoManager } from '../../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../../mix/utils/uuid'
-import { buildElementInsertAiRequest } from '../../../../mix/editors/setSegment/elementChip'
+import { buildElementDuplicateAiRequest } from '../../../../mix/editors/setSegment/elementChip'
 import { formatDisplayClassName } from '../style'
 
 interface Props {
@@ -27,11 +27,7 @@ export default function ({ fromEle }: Props) {
   const label = buildLabel(fromEle)
 
   undoRedoManager.executeBranch({
-    aiRequest: buildElementInsertAiRequest({
-      ele: fromEle,
-      jsx: fromEle.outerHTML,
-      placement: 'after',
-    }),
+    aiRequest: buildElementDuplicateAiRequest({ ele: fromEle }),
     execute() {
       if (!fromEle.parentNode) return
       fromEle.parentNode.insertBefore(clone, fromEle.nextSibling)
