@@ -1,8 +1,8 @@
 import context from '../../../../mix/context'
 import { undoRedoManager } from '../../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../../mix/utils/uuid'
-import { getElementCodeLocation } from '../../../../helpers/dom'
-import { formatDisplayClassName, getElementClassNames } from '../style'
+import { buildElementDeleteAiRequest } from '../../../../mix/editors/setSegment/elementChip'
+import { formatDisplayClassName } from '../style'
 
 function buildLabel(ele: HTMLElement) {
   const rawClassNames = Array.from(ele.classList).filter(Boolean)
@@ -21,40 +21,10 @@ export default function ({ fromEle: ele }) {
   const parent = ele.parentNode
   const nextSibling = ele.nextSibling
   const actionId = randomUUID()
-  const chipId = randomUUID(8)
   const label = buildLabel(ele)
-  const codeLocation = getElementCodeLocation(ele)
-
-  const chip = {
-    id: chipId,
-    label,
-    type: 'element-delete',
-    data: {
-      inlineText: `执行「${chipId}」，`,
-      detailText: [
-        `<element-delete id="${chipId}">`,
-        '## 操作意图',
-        '删除目标 DOM 元素及其完整子树。',
-        '',
-        '## 目标元素',
-        `- 名称：${ele.tagName.toLowerCase()}`,
-        `- 类名：${getElementClassNames(ele) || '无'}`,
-        '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
-        '       filepath已将非字母、数字、下划线、短横线的符号转为短横线。',
-        `- 代码位置：${codeLocation}`,
-        '',
-        '## 需要修改的内容',
-        '从页面结构中移除该元素。',
-        '</element-delete>',
-      ].join('\n'),
-    },
-  }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementDeleteAiRequest({ ele }),
     execute() {
       ele.remove()
       context.component?.actions.addUserAction({

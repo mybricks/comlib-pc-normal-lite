@@ -1,7 +1,11 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
-import { buildElementMoveChipData, getElementLabel } from './elementChip'
+import {
+  buildElementMoveChipData,
+  getElementLabel,
+  buildElementMoveAiRequest
+} from './elementChip'
 import { isDOMMoveAllowed } from '../../../helpers/dom'
 import {
   createSourceLineResolver,
@@ -564,21 +568,22 @@ const changeOrder = (options) => {
 
   const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
 
-  const chip = {
-    id: randomUUID(),
-    type: 'element-move',
-    label: moveDescription,
-    data: buildElementMoveChipData(fromEle, toEle, placement, fromLabel, toLabel),
-  }
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-move',
+  //   label: moveDescription,
+  //   data: buildElementMoveChipData(fromEle, toEle, placement, fromLabel, toLabel),
+  // }
   const actionId = randomUUID()
   const fromParent = fromEle.parentNode
   const fromNextSibling = fromEle.nextSibling
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementMoveAiRequest({ fromEle, toEle, placement }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       // AI 修改尚未回写源码，不能更新 data-loc 等源码定位属性。
       moveDOMNode(fromEle, toEle, placement)

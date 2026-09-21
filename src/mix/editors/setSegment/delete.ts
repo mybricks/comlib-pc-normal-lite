@@ -1,7 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
-import { buildElementDeleteChipData, getElementLabel } from './elementChip'
+import { buildElementDeleteChipData, getElementLabel, buildElementDeleteAiRequest } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
 import {
   createDOMSourceLocationSnapshot,
@@ -19,21 +19,22 @@ const createDeletePlaceholder = (length: number) => {
 const runDeleteByAI = (fromEle) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
   const actionId = randomUUID()
-  const chip = {
-    id: randomUUID(),
-    type: 'element-delete',
-    label: `删除 ${fromLabel} `,
-    data: buildElementDeleteChipData(fromEle, fromLabel),
-  }
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-delete',
+  //   label: `删除 ${fromLabel} `,
+  //   data: buildElementDeleteChipData(fromEle, fromLabel),
+  // }
 
   const parent = fromEle.parentNode
   const nextSibling = fromEle.nextSibling
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementDeleteAiRequest({ ele: fromEle }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       fromEle.remove()
       context.component!.actions.addUserAction({

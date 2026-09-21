@@ -1,7 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
-import { buildElementTextUpdateChipData, getElementLabel } from './elementChip'
+import { buildElementTextUpdateChipData, getElementLabel, buildElementTextUpdateAiRequest } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
 import {
   createDOMSourceLocationSnapshot,
@@ -23,21 +23,22 @@ const toSafeJSXText = (content: string) => {
 const runUpdateTextByAI = (fromEle, content: string) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
   const actionId = randomUUID()
-  const chip = {
-    id: randomUUID(),
-    type: 'element-text-update',
-    label: `修改 ${fromLabel} 文案`,
-    data: buildElementTextUpdateChipData(fromEle, content, fromLabel),
-  }
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-text-update',
+  //   label: `修改 ${fromLabel} 文案`,
+  //   data: buildElementTextUpdateChipData(fromEle, content, fromLabel),
+  // }
 
   const previousInnerHTML = fromEle.innerHTML
   const nextValue = toSafeJSXText(content)
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementTextUpdateAiRequest({ ele: fromEle, content }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       // AI 尚未改写源码，先在画布上显示用户输入的预期结果。
       fromEle.innerHTML = nextValue

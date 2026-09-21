@@ -6,7 +6,7 @@ import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
 import { randomUUID } from '../../../utils/uuid'
-import { buildElementStyleUpdateChipData, getElementLabel } from '../../setSegment/elementChip'
+import { buildElementStyleUpdateChipData, getElementLabel, buildElementStyleUpdateAiRequest } from '../../setSegment/elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -1341,15 +1341,15 @@ export default function createSetStyleHandler(
             });
           }
           if (aiKeys.length) {
-            const label = getElementLabel(ele, '节点1')
+            // const label = getElementLabel(ele, '节点1')
             const title = getStyleActionTitle(ele)
             const actionId = randomUUID()
-            const chip = {
-              id: randomUUID(),
-              type: 'element-style-update',
-              label: `调整 ${label} 样式`,
-              data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-            }
+            // const chip = {
+            //   id: randomUUID(),
+            //   type: 'element-style-update',
+            //   label: `调整 ${label} 样式`,
+            //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
+            // }
             const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
               ele,
               key,
@@ -1358,10 +1358,11 @@ export default function createSetStyleHandler(
             ))
 
             undoRedoManager.executeBranch({
-              aiRequest: {
-                message: `[[chip:${chip.id}]]`,
-                chips: [chip],
-              },
+              aiRequest: buildElementStyleUpdateAiRequest({ ele, styles: aiKeys }),
+              // aiRequest: {
+              //   message: `[[chip:${chip.id}]]`,
+              //   chips: [chip],
+              // },
               execute() {
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
                 context.component!.actions.addUserAction({
@@ -1611,15 +1612,15 @@ export default function createSetStyleHandler(
         }
 
         if (aiKeys.length > 0) {
-          const label = getElementLabel(ele, '节点1')
+          // const label = getElementLabel(ele, '节点1')
           const title = getStyleActionTitle(ele)
           const actionId = randomUUID()
-          const chip = {
-            id: randomUUID(),
-            type: 'element-style-update',
-            label: `调整 ${label} 样式`,
-            data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-          }
+          // const chip = {
+          //   id: randomUUID(),
+          //   type: 'element-style-update',
+          //   label: `调整 ${label} 样式`,
+          //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
+          // }
           const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
             ele,
             key,
@@ -1628,10 +1629,11 @@ export default function createSetStyleHandler(
           ))
 
           undoRedoManager.executeBranch({
-            aiRequest: {
-              message: `[[chip:${chip.id}]]`,
-              chips: [chip],
-            },
+            aiRequest: buildElementStyleUpdateAiRequest({ ele, styles: aiKeys }),
+            // aiRequest: {
+            //   message: `[[chip:${chip.id}]]`,
+            //   chips: [chip],
+            // },
             execute() {
               // AI 修改尚未写回源码，仅更新画布预览；不要修改 data-style-info 等源码定位数据。
               applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')

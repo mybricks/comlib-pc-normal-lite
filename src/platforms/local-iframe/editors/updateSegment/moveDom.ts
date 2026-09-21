@@ -1,8 +1,9 @@
 import context from '../../../../mix/context'
 import { undoRedoManager } from '../../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../../mix/utils/uuid'
-import { getElementCodeLocation, isDOMMoveAllowed } from '../../../../helpers/dom'
-import { formatDisplayClassName, getElementClassNames } from '../style'
+import { buildElementMoveAiRequest } from '../../../../mix/editors/setSegment/elementChip'
+import { isDOMMoveAllowed } from '../../../../helpers/dom'
+import { formatDisplayClassName } from '../style'
 
 function buildLabel(ele: HTMLElement) {
   const rawClassNames = Array.from(ele.classList).filter(Boolean)
@@ -31,45 +32,14 @@ export default function ({ fromEle, toEle, type }: Props) {
   const parent = fromEle.parentNode
   const nextSibling = fromEle.nextSibling
   const actionId = randomUUID()
-  const chipId = randomUUID(8)
   const label = buildLabel(fromEle)
-  const placementText = type === 'before' ? '前面' : type === 'after' ? '后面' : '内部'
-  const fromCodeLocation = getElementCodeLocation(fromEle)
-  const toCodeLocation = getElementCodeLocation(toEle)
-
-  const chip = {
-    id: chipId,
-    label: `${label} 到目标节点${placementText}`,
-    type: 'element-move',
-    data: {
-      inlineText: `执行「${chipId}」，`,
-      detailText: [
-        `<element-move id="${chipId}">`,
-        '## 操作意图',
-        `将操作元素移动到目标元素的${placementText}。`,
-        '',
-        '## 操作元素',
-        `- 名称：${fromEle.tagName.toLowerCase()}`,
-        `- 类名：${getElementClassNames(fromEle) || '无'}`,
-        `- 代码位置：${fromCodeLocation}`,
-        '',
-        '## 目标元素',
-        `- 名称：${toEle.tagName.toLowerCase()}`,
-        `- 类名：${getElementClassNames(toEle) || '无'}`,
-        `- 代码位置：${toCodeLocation}`,
-        '',
-        '## 需要修改的内容',
-        `将操作元素移动到目标元素${placementText}。`,
-        '</element-move>',
-      ].join('\n'),
-    },
-  }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementMoveAiRequest({
+      fromEle,
+      toEle,
+      placement: type,
+    }),
     execute() {
       if (!toEle.parentNode) return
       if (type === 'child') {

@@ -2,7 +2,7 @@ import context from '../../context'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
 import { undoRedoManager } from '../undoRedo'
-import { buildElementInsertChipData, getElementLabel } from './elementChip'
+import { buildElementInsertChipData, getElementLabel, buildElementInsertAiRequest } from './elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -139,19 +139,24 @@ const createAIPreviewClone = (fromEle: HTMLElement) => {
 const runDuplicateByAI = (fromEle: HTMLElement, jsx: string, title: string) => {
   const clone = createAIPreviewClone(fromEle)
   const actionId = randomUUID()
-  const targetLabel = getElementLabel(fromEle, '节点')
-  const chip = {
-    id: randomUUID(),
-    type: 'element-insert',
-    label: title,
-    data: buildElementInsertChipData(fromEle, 'after', jsx, '', targetLabel),
-  }
+  // const targetLabel = getElementLabel(fromEle, '节点')
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-insert',
+  //   label: title,
+  //   data: buildElementInsertChipData(fromEle, 'after', jsx, '', targetLabel),
+  // }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementInsertAiRequest({
+      ele: fromEle,
+      jsx,
+      placement: 'after',
+    }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       if (!insertAfter(fromEle, clone)) return
       context.component?.actions.addUserAction({

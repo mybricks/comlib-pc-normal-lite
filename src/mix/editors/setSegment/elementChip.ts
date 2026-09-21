@@ -1,4 +1,5 @@
 import { randomUUID } from "../../utils/uuid"
+import buildDomChipInfo from '../../../helpers/dom/buildDomChipInfo'
 
 const DOM_SUMMARY_SINGLE_TEXT_MAX = 20
 const DOM_SUMMARY_TOTAL_MAX = 300
@@ -513,6 +514,35 @@ export function parseElementInfo(ele: Element | undefined, label: string, option
   }
 }
 
+function getElementLabeForAiRequest(ele: Element) {
+  const zoneSelector = ele.getAttribute('data-zone-selector')
+  const tagName = ele.tagName.toLowerCase()
+  if (zoneSelector) {
+    const selector = JSON.parse(zoneSelector)[0].split(' ').slice(-1)
+    return `${tagName}${selector}`
+  }
+
+  return `${tagName}${Array.from(ele.classList).slice(-1) || ''}`
+}
+
+export function buildElementDeleteAiRequest({ ele }: { ele: Element }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+
+  return {
+    type: 'element-delete',
+    message: `删除 [[chip:${chip.id}]].`,
+    chips: [chip]
+  }
+}
+
 export function buildElementDeleteChipData(ele: Element, label = getElementLabel(ele, '节点1')): ParsedElementDeleteChipData {
   const opLabel = randomUUID(8)
   const target = parseElementInfo(ele, label)
@@ -554,6 +584,24 @@ export function buildElementDeleteChipData(ele: Element, label = getElementLabel
       ...notes,
       '</element-delete-operation>',
     ].join('\n'),
+  }
+}
+
+export function buildElementTextUpdateAiRequest({ ele, content }: { ele: Element; content: string }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+
+  return {
+    type: 'element-text-update',
+    message: `将 [[chip:${chip.id}]] 文本修改为「${content}」.`,
+    chips: [chip]
   }
 }
 
@@ -607,6 +655,24 @@ export function buildElementTextUpdateChipData(ele: Element, content: string, la
   }
 }
 
+export function buildElementImageUpdateAiRequest({ ele, src }: { ele: Element; src: string }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+
+  return {
+    type: 'element-image-update',
+    message: `将 [[chip:${chip.id}]] 图片地址修改为「${src}」.`,
+    chips: [chip]
+  }
+}
+
 export function buildElementImageUpdateChipData(
   ele: Element,
   nextSrc: string,
@@ -649,6 +715,31 @@ export function buildElementImageUpdateChipData(
   }
 }
 
+
+
+export function buildElementSvgUpdateAiRequest({ ele, svg }: { ele: Element; svg: string }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+
+  return {
+    type: 'element-svg-update',
+    message: [
+      `将 [[chip:${chip.id}]] JSX 替换为：`,
+      `\`\`\``,
+      svg,
+      `\`\`\``
+    ].join('\n'),
+    chips: [chip]
+  }
+}
+
 export function buildElementSvgUpdateChipData(
   ele: Element,
   nextSvg: string,
@@ -688,6 +779,30 @@ export function buildElementSvgUpdateChipData(
       '如果无法可靠定位目标图标的源码，请用一句话说明原因，不要修改无关代码。',
       '</element-svg-update-operation>',
     ].join('\n'),
+  }
+}
+
+export function buildElementStyleUpdateAiRequest({ ele, styles }: { ele: Element; styles: Array<{ key: string; value: number | string | null | undefined }>; }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+  const normalizedStyles = styles.map(({ key, value }) => ({
+    property: toKebabCase(key),
+    value: value ?? null,
+  }))
+
+  return {
+    type: 'element-style-update',
+    message: [`调整 [[chip:${chip.id}]] 样式：`].concat(normalizedStyles.map(({ property, value }) => {
+      return value === null || value === undefined || value === '' ? `  - 删除 ${property}` : `  - 更新 ${property} ${typeof value === 'number' ? `${value}px` : value}`
+    })).join('\n'),
+    chips: [chip]
   }
 }
 
@@ -744,6 +859,39 @@ export function buildElementStyleUpdateChipData(
       '- 如果无法可靠定位控制该样式的 prop，请用一句话说明原因，不要修改无关代码。',
       '</element-style-update-operation>',
     ].join('\n'),
+  }
+}
+
+const ELEMENT_MOVE_PLACEMENT_LABEL = {
+  before: '前',
+  after: '后',
+  child: '内'
+}
+
+export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element; toEle: Element; placement: 'before' | 'after' | 'child' }) {
+  const chipFrom = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(fromEle),
+    type: 'dom',
+    data: {
+      ele: fromEle,
+      info: buildDomChipInfo(fromEle)
+    }
+  }
+  const chipTo = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(toEle),
+    type: 'dom',
+    data: {
+      ele: toEle,
+      info: buildDomChipInfo(toEle)
+    }
+  }
+
+  return {
+    type: 'element-move',
+    message: `将 [[chip:${chipFrom.id}]] 移动到 [[chip:${chipTo.id}]] ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]}.`,
+    chips: [chipFrom, chipTo]
   }
 }
 
@@ -807,6 +955,30 @@ export function buildElementMoveChipData(
       ...notes,
       '</element-move-operation>',
     ].join('\n'),
+  }
+}
+
+export function buildElementInsertAiRequest({ ele, jsx, placement, importCode = '' }: { ele: Element; jsx: string; placement: 'before' | 'after' | 'child'; importCode?: string }) {
+  const chip = {
+    id: randomUUID(),
+    label: getElementLabeForAiRequest(ele),
+    type: 'dom',
+    data: {
+      ele,
+      info: buildDomChipInfo(ele)
+    }
+  }
+
+  return {
+    type: 'element-insert',
+    message: [
+      `在 [[chip:${chip.id}]] ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]} 插入 JSX 片段：`,
+      `\`\`\``,
+      importCode,
+      jsx,
+      `\`\`\``
+    ].filter((str) => !!str).join('\n'),
+    chips: [chip]
   }
 }
 

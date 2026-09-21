@@ -8,7 +8,7 @@ import context, { config } from '../../context'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
 import { undoRedoManager } from '../undoRedo'
-import { buildElementInsertChipData, getElementLabel, indentText } from './elementChip'
+import { buildElementInsertChipData, getElementLabel, indentText, buildElementInsertAiRequest } from './elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -411,19 +411,25 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
   if (!preview) return handlePreviewFailure()
 
   const actionId = randomUUID()
-  const targetLabel = getElementLabel(options.toEle, '节点')
-  const chip = {
-    id: randomUUID(),
-    type: 'element-insert',
-    label: title,
-    data: buildElementInsertChipData(options.toEle, options.type, options.code.jsx, options.code.import, targetLabel),
-  }
+  // const targetLabel = getElementLabel(options.toEle, '节点')
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-insert',
+  //   label: title,
+  //   data: buildElementInsertChipData(options.toEle, options.type, options.code.jsx, options.code.import, targetLabel),
+  // }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementInsertAiRequest({
+      ele: options.toEle,
+      jsx: options.code.jsx,
+      placement: options.type,
+      importCode: options.code.import
+    }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       mountPreview(preview, options.toEle, options.type)
       context.component!.actions.addUserAction({

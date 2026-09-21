@@ -1,8 +1,8 @@
 import context from '../../../../mix/context'
 import { undoRedoManager } from '../../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../../mix/utils/uuid'
-import { getElementCodeLocation } from '../../../../helpers/dom'
-import { formatDisplayClassName, getElementClassNames } from '../style'
+import { buildElementInsertAiRequest } from '../../../../mix/editors/setSegment/elementChip'
+import { formatDisplayClassName } from '../style'
 
 interface Props {
   fromEle: HTMLElement
@@ -24,40 +24,14 @@ export default function ({ fromEle }: Props) {
 
   const clone = fromEle.cloneNode(true) as HTMLElement
   const actionId = randomUUID()
-  const chipId = randomUUID(8)
   const label = buildLabel(fromEle)
-  const codeLocation = getElementCodeLocation(fromEle)
-
-  const chip = {
-    id: chipId,
-    label,
-    type: 'element-insert',
-    data: {
-      inlineText: `执行「${chipId}」，`,
-      detailText: [
-        `<element-insert id="${chipId}">`,
-        '## 操作意图',
-        '复制目标 DOM 元素及其完整子树，并插入到目标元素后面。',
-        '',
-        '## 目标元素',
-        `- 名称：${fromEle.tagName.toLowerCase()}`,
-        `- 类名：${getElementClassNames(fromEle) || '无'}`,
-        '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
-        '       filepath已将非字母、数字、下划线、短横线的符号转为短横线。',
-        `- 代码位置：${codeLocation}`,
-        '',
-        '## 需要修改的内容',
-        '在目标元素后面插入一个内容完全相同的兄弟节点。',
-        '</element-insert>',
-      ].join('\n'),
-    },
-  }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementInsertAiRequest({
+      ele: fromEle,
+      jsx: fromEle.outerHTML,
+      placement: 'after',
+    }),
     execute() {
       if (!fromEle.parentNode) return
       fromEle.parentNode.insertBefore(clone, fromEle.nextSibling)

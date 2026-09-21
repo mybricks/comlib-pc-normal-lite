@@ -4,7 +4,15 @@ import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { randomUUID } from '../utils/uuid'
-import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
+import {
+  // buildElementImageUpdateChipData,
+  // buildElementStyleUpdateChipData,
+  // buildElementSvgUpdateChipData,
+  getElementLabel,
+  buildElementStyleUpdateAiRequest,
+  buildElementImageUpdateAiRequest,
+  buildElementSvgUpdateAiRequest
+} from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 
@@ -1464,14 +1472,14 @@ export function genStyleValue(props) {
         priority: ele.style.getPropertyPriority(property),
       };
     });
-    const label = getElementLabel(ele, '节点1');
+    // const label = getElementLabel(ele, '节点1');
     const actionId = randomUUID();
-    const chip = {
-      id: randomUUID(),
-      type: 'element-style-update',
-      label: `调整 ${label} 样式`,
-      data: buildElementStyleUpdateChipData(ele, styleChanges, label),
-    };
+    // const chip = {
+    //   id: randomUUID(),
+    //   type: 'element-style-update',
+    //   label: `调整 ${label} 样式`,
+    //   data: buildElementStyleUpdateChipData(ele, styleChanges, label),
+    // };
 
     const applyPreview = () => {
       styleChanges.forEach(({ key, value }) => {
@@ -1485,10 +1493,14 @@ export function genStyleValue(props) {
     };
 
     undoRedoManager.executeBranch({
-      aiRequest: {
-        message: `[[chip:${chip.id}]]`,
-        chips: [chip],
-      },
+      aiRequest: buildElementStyleUpdateAiRequest({
+        ele,
+        styles: styleChanges
+      }),
+      // aiRequest: {
+      //   message: `[[chip:${chip.id}]]`,
+      //   chips: [chip],
+      // },
       execute() {
         applyPreview();
         context.component?.actions.addUserAction({
@@ -2160,17 +2172,21 @@ export function genImgSrcReplacer() {
             },
           });
         } else {
-          const chip = {
-            id: randomUUID(),
-            type: 'element-image-update',
-            label: title,
-            data: buildElementImageUpdateChipData(ele, newSrc, label),
-          };
+          // const chip = {
+          //   id: randomUUID(),
+          //   type: 'element-image-update',
+          //   label: title,
+          //   data: buildElementImageUpdateChipData(ele, newSrc, label),
+          // };
           undoRedoManager.executeBranch({
-            aiRequest: {
-              message: `[[chip:${chip.id}]]`,
-              chips: [chip],
-            },
+            aiRequest: buildElementImageUpdateAiRequest({
+              ele,
+              src: newSrc
+            }),
+            // aiRequest: {
+            //   message: `[[chip:${chip.id}]]`,
+            //   chips: [chip],
+            // },
             execute() {
               applyPreview(newSrc);
               context.component?.actions.addUserAction({
@@ -2538,18 +2554,22 @@ export function applyRawSvg(params: any, rawSvg: string): void {
     return
   }
 
-  const chip = {
-    id: randomUUID(),
-    type: 'element-svg-update',
-    label: title,
-    data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
-  }
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-svg-update',
+  //   label: title,
+  //   data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
+  // }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementSvgUpdateAiRequest({
+      ele,
+      svg: jsxSvg
+    }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
       _svgAppliedCallback?.(rawSvg)
@@ -2734,18 +2754,22 @@ export function applyIconWithSvg(params: any, rawSvg: string): void {
     return
   }
 
-  const chip = {
-    id: randomUUID(),
-    type: 'element-svg-update',
-    label: title,
-    data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
-  }
+  // const chip = {
+  //   id: randomUUID(),
+  //   type: 'element-svg-update',
+  //   label: title,
+  //   data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
+  // }
 
   undoRedoManager.executeBranch({
-    aiRequest: {
-      message: `[[chip:${chip.id}]]`,
-      chips: [chip],
-    },
+    aiRequest: buildElementSvgUpdateAiRequest({
+      ele,
+      svg: jsxSvg
+    }),
+    // aiRequest: {
+    //   message: `[[chip:${chip.id}]]`,
+    //   chips: [chip],
+    // },
     execute() {
       applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
       context.component?.actions.addUserAction({

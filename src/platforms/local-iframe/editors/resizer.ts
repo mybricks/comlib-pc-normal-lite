@@ -1,13 +1,11 @@
 import context from '../../../mix/context'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../mix/utils/uuid'
-import { getElementCodeLocation } from '../../../helpers/dom'
+import { buildElementStyleUpdateAiRequest } from '../../../mix/editors/setSegment/elementChip'
 import { convertCamelToHyphen } from '../../../utils/string'
 import {
   applyStyleTarget,
   formatDisplayClassName,
-  formatStyleValue,
-  getElementClassNames,
   restoreStyleTarget,
   resolveStyleTarget,
 } from './style'
@@ -22,9 +20,6 @@ type PendingStyleEntry = {
 type PendingStyleBranch = {
   ele: HTMLElement
   actionId: string
-  chipId: string
-  classNames: string
-  codeLocation: string
   label: string
   entries: Map<string, PendingStyleEntry>
 }
@@ -46,45 +41,13 @@ export default function () {
     pendingStyleBranch = null
 
     const resolvedEntries = Array.from(branch.entries.values())
-    const styleChangeLines = resolvedEntries.map(({ key, value }) => {
-      const property = convertCamelToHyphen(key)
-      const nextValue =
-        value === null || value === undefined || value === ''
-          ? '删除'
-          : formatStyleValue(value)
-      return `- ${property}：${nextValue}`
-    })
     const previousTargets = resolvedEntries.map(({ target }) => target)
-    const chip = {
-      id: branch.chipId,
-      label: branch.label,
-      type: 'element-style-update',
-      data: {
-        inlineText: `执行「${branch.chipId}」，`,
-        detailText: [
-          `<element-style-update-operation id="${branch.chipId}">`,
-          '## 操作意图',
-          'dom 样式修改。请优先修改样式文件（Less/CSS）中的对应规则；只有在样式文件不存在、无法可靠定位，或该样式确实只能由运行时 prop 生效时，才修改 JSX 源码中对应的 prop。',
-          '',
-          '## 目标元素',
-          `- 名称：${branch.ele.tagName.toLowerCase()}`,
-          `- 类名：${branch.classNames || '无'}`,
-          '  注意：若类名包含当前样式文件的前缀，说明它来自该样式文件。当前 CSS Modules 命名规则为 [filepath]--[local]--[hash:base64:8]。',
-          '       filepath已将非字母、数字、下划线、短横线的符号转为短横线。',
-          `- 代码位置：${branch.codeLocation}`,
-          '',
-          '## 需要修改的内容',
-          ...styleChangeLines,
-          '</element-style-update-operation>',
-        ].join('\n'),
-      },
-    }
 
     undoRedoManager.executeBranch({
-      aiRequest: {
-        message: `[[chip:${chip.id}]]`,
-        chips: [chip],
-      },
+      aiRequest: buildElementStyleUpdateAiRequest({
+        ele: branch.ele,
+        styles: resolvedEntries.map(({ key, value }) => ({ key, value })),
+      }),
       execute() {
         resolvedEntries.forEach(({ value, target }) => {
           applyStyleTarget(target, value)
@@ -110,9 +73,6 @@ export default function () {
       pendingStyleBranch = {
         ele,
         actionId: randomUUID(),
-        chipId: randomUUID(8),
-        classNames: getElementClassNames(ele),
-        codeLocation: getElementCodeLocation(ele),
         label: buildLabel(ele),
         entries: new Map(),
       }

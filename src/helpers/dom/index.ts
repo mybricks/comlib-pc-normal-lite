@@ -1,4 +1,6 @@
-interface DomLoc {
+import { safeParseJson } from '../normal'
+
+export interface DomLoc {
   codeLine: { start: number; end: number }
   files: { jsx: string; less?: string }
   cn?: string[]
@@ -25,14 +27,7 @@ export function isDOMMoveAllowed(
   return true
 }
 
-function safeParseJson<T>(value: string | null): T | undefined {
-  if (!value) return undefined
-  try {
-    return JSON.parse(value) as T
-  } catch (_) {
-    return undefined
-  }
-}
+
 
 export function getClosestDomLoc<T extends DomLoc>(el: Element): T | undefined {
   let current: Element | null = el
