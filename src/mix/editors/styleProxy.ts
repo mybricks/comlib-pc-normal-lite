@@ -1527,7 +1527,7 @@ export function genStyleValue(props) {
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const hasDragInsert = !!(ele as HTMLElement | null)?.hasAttribute('data-drag-insert');
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
-      const isAIOnlyNode = !!ele && !hasDataZoneSelector && !hasDragInsert;
+      const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
       if (isAIOnlyNode) {
         updateAIStyleInBranch(ele as HTMLElement, value || {}, (deletions || []).slice());

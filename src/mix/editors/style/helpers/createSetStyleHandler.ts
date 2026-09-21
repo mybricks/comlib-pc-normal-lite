@@ -1109,6 +1109,7 @@ export default function createSetStyleHandler(
                 isJsx: true,
                 source: 'jsx-inline',
                 initialValue: getElementNumericStyleValue(ele, key),
+                needsAI: locForSelector ? false : true
               }
               return
             }
@@ -1199,7 +1200,11 @@ export default function createSetStyleHandler(
 
         Object.entries(style as Record<string, number>).forEach(([key, val]) => {
           const route = styleKeyRoutes[key]
-          if (!route || route.needsAI) return
+          if (!route) return
+          if (route.needsAI) {
+            setInlinePreviewStyle(ele, key, val, route)
+            return
+          }
           let cssValue = val
 
           if (route.source === 'jsx-inline' && route.syncInline) {
