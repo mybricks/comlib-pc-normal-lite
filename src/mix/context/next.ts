@@ -210,7 +210,7 @@ class Context {
   private shouldUpdateRuntimeFileSystem(fileName: string, noUpdateFileSystem?: boolean, updateSource?: string) {
     const isUndo = updateSource === 'undo'
     const lastUpdate = this.lastNonUndoNoUpdateFileSystem.get(fileName)
-    const lastNoUpdateFileSystem = lastUpdate?.fileSystem === this.fileSystem
+    const lastNoUpdateFileSystem = (lastUpdate && lastUpdate?.fileSystem === this.fileSystem)
       ? lastUpdate.noUpdateFileSystem
       : undefined
 
@@ -366,7 +366,7 @@ class Context {
               }
             }
           } catch (e: any) {
-            // console.error("[@transformTsx error]", e);
+            console.error("[@transformTsx error]", e);
             updateFileContent({
               fileName,
               files,

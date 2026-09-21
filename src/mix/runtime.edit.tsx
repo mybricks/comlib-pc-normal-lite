@@ -86,7 +86,7 @@ const dataCompatible = (props) => {
     }
 
     const version = config.getVersion()
-    if (!data.version || data.version < 46 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
+    if (!data.version || data.version < 47 || (typeof version === 'number' && (typeof data._componentRuntime.version !== 'number' || data._componentRuntime.version < version))) {
 
       if (!data.version && !data.files.length) {
         // 初始化文件
@@ -96,7 +96,7 @@ const dataCompatible = (props) => {
         }
       }
 
-      data.version = 46
+      data.version = 47
       data._componentRuntime.version = version
       console.log('[com:update]', data)
       console.log('mode', mode)

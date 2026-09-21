@@ -4,6 +4,27 @@ interface DomLoc {
   cn?: string[]
 }
 
+export type DOMMovePlacement = 'before' | 'after' | 'child'
+
+export function isDOMMoveAllowed(
+  fromEle: Element | null | undefined,
+  toEle: Element | null | undefined,
+  type: string,
+): type is DOMMovePlacement {
+  if (!fromEle || !toEle) return false
+  if (type !== 'before' && type !== 'after' && type !== 'child') return false
+  if (fromEle === toEle) return false
+
+  // 祖先节点不能移动到自己的后代内部，否则会形成 DOM 循环。
+  if (type === 'child' && fromEle.contains(toEle)) return false
+
+  // 已经处于目标位置时无需再次移动。
+  if (type === 'before' && toEle.previousElementSibling === fromEle) return false
+  if (type === 'after' && toEle.nextElementSibling === fromEle) return false
+
+  return true
+}
+
 function safeParseJson<T>(value: string | null): T | undefined {
   if (!value) return undefined
   try {

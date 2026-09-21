@@ -43,7 +43,7 @@ type ImportDeclaration = {
 type SourcePatch = SourceReplacement
 
 type InsertPreview = {
-  container: HTMLDivElement
+  container: Element
 }
 
 type PreviewSourceLocation = {
@@ -302,7 +302,7 @@ const createPreview = (code: InsertCode, location?: PreviewSourceLocation): Inse
     } else {
       markAIOnlyPreviewRoots(container)
     }
-    return { container }
+    return { container: container.firstElementChild! }
   } catch (_) {
     console.error('Failed to create insert preview', _)
     return null

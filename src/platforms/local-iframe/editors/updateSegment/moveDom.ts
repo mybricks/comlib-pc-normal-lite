@@ -1,7 +1,7 @@
 import context from '../../../../mix/context'
 import { undoRedoManager } from '../../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../../mix/utils/uuid'
-import { getElementCodeLocation } from '../../../../helpers/dom'
+import { getElementCodeLocation, isDOMMoveAllowed } from '../../../../helpers/dom'
 import { formatDisplayClassName, getElementClassNames } from '../style'
 
 function buildLabel(ele: HTMLElement) {
@@ -24,8 +24,7 @@ export default function ({ fromEle, toEle, type }: Props) {
     }
   }
 
-  // 祖先节点不能移动到自己的后代内部，否则 appendChild 会抛出异常。
-  if (type === 'child' && fromEle.contains(toEle)) {
+  if (!isDOMMoveAllowed(fromEle, toEle, type)) {
     return
   }
 

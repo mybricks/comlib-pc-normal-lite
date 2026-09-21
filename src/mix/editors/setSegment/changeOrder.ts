@@ -2,6 +2,7 @@ import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { buildElementMoveChipData, getElementLabel } from './elementChip'
+import { isDOMMoveAllowed } from '../../../helpers/dom'
 import {
   createSourceLineResolver,
   createDOMSourceLocationSnapshot,
@@ -412,17 +413,7 @@ const getWidgetRoot = (ele: Element) => ele.closest('[data-widget-name]')
 const changeOrder = (options) => {
   const { fromEle, toEle, type } = options
   // console.log('[changeOrder]', options)
-  if (type !== 'before' && type !== 'after' && type !== 'child') return
-
-  if (fromEle === toEle) {
-    // 相对自己移动，无需处理
-    return
-  }
-
-  // 祖先节点不能移动到自己的后代内部，否则会形成 DOM 循环。
-  if (type === 'child' && fromEle.contains(toEle)) {
-    return
-  }
+  if (!isDOMMoveAllowed(fromEle, toEle, type)) return
 
   const fromDataLoc = fromEle.getAttribute('data-loc')
   let fromDOM = fromEle
