@@ -94,7 +94,7 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
 
   const [replacedSvg, setReplacedSvg] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const currentSvgHtml = replacedSvg ?? (svgEl?.tagName.toLowerCase() === 'svg' ? svgEl.outerHTML : '');
+  const currentSvgHtml = replacedSvg ?? (svgEl?.tagName.toLowerCase() === 'svg' ? svgEl.outerHTML : (ele?.querySelector('svg')?.outerHTML ?? ''));
 
   useEffect(() => {
     registerSvgAppliedCallback((rawSvg: string) => {
