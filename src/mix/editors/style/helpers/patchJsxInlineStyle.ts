@@ -1,4 +1,12 @@
-export type StyleInfoEntry = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number };
+export type StyleInfoEntry = {
+  kind: 'static' | 'dynamic';
+  hasSpread?: boolean;
+  duplicate?: boolean;
+  propertyStart?: number;
+  propertyEnd?: number;
+  valueStart?: number;
+  valueEnd?: number;
+};
 
 /**
  * 向 JSX 源码中无 style 属性的开标签注入 `style={{ key: 'val', ... }}`。
@@ -40,6 +48,7 @@ export function injectStyleAttrIntoJSX(
     const keyPart = `${key}: `;
 
     if (i > 0) attrStr += ', ';
+    const propertyStart = insertPos + attrStr.length;
     attrStr += keyPart;
 
     // 此时 attrStr.length 是 '值' 起始位置相对于 insertPos 的偏移
@@ -47,7 +56,13 @@ export function injectStyleAttrIntoJSX(
     attrStr += valStr;
     const valueEnd = insertPos + attrStr.length;
 
-    styleInfo[key] = { kind: 'static', valueStart, valueEnd };
+    styleInfo[key] = {
+      kind: 'static',
+      propertyStart,
+      propertyEnd: valueEnd,
+      valueStart,
+      valueEnd,
+    };
   });
 
   attrStr += ' }}';
@@ -123,13 +138,20 @@ function appendPropsAtStyleObjectEnd(
     } else if (index > 0) {
       insertion += ', ';
     }
+    const propertyStart = insertPos + insertion.length;
     insertion += keyPart;
 
     const valueStart = insertPos + insertion.length;
     insertion += valStr;
     const valueEnd = insertPos + insertion.length;
 
-    styleInfoUpdates[key] = { kind: 'static', valueStart, valueEnd };
+    styleInfoUpdates[key] = {
+      kind: 'static',
+      propertyStart,
+      propertyEnd: valueEnd,
+      valueStart,
+      valueEnd,
+    };
   });
 
   const newSource = source.slice(0, insertPos) + insertion + source.slice(insertPos);
@@ -225,17 +247,156 @@ export function removeFromInlineStyleAttr(
 
   remainingEntries.forEach(([key, entry], i) => {
     if (i > 0) rebuilt += ', ';
+    const propertyStart = styleAttrStart + rebuilt.length;
     rebuilt += `${key}: `;
     const currentVal = source.slice(entry.valueStart, entry.valueEnd); // e.g. "'red'"
     const valueStart = styleAttrStart + rebuilt.length;
     rebuilt += currentVal;
     const valueEnd = styleAttrStart + rebuilt.length;
-    newStyleInfo[key] = { kind: 'static', valueStart, valueEnd };
+    newStyleInfo[key] = {
+      kind: 'static',
+      propertyStart,
+      propertyEnd: valueEnd,
+      valueStart,
+      valueEnd,
+    };
   });
 
   rebuilt += ' }}';
 
   const newSource = source.slice(0, styleAttrStart) + rebuilt + source.slice(styleAttrEnd);
+  return { newSource, newStyleInfo };
+}
+
+/**
+ * 按 Babel 注入的 ObjectProperty range 只删指定 inline style 属性。
+ * 与 removeFromInlineStyleAttr 的重建策略不同，本函数会保留动态兄弟属性、
+ * 注释和原有排版。存在 spread、重复 key 或缺少可验证 range 时整体失败。
+ */
+export function removeInlineStylePropertiesByRange(
+  source: string,
+  existingStyleInfo: Record<string, StyleInfoEntry>,
+  keysToRemove: string[],
+): { newSource: string; newStyleInfo: Record<string, StyleInfoEntry> } | null {
+  const removeSet = new Set(keysToRemove);
+  if (removeSet.size === 0) return null;
+
+  const remainingKeys = Object.keys(existingStyleInfo).filter((key) => !removeSet.has(key));
+  if (remainingKeys.length === 0) {
+    if ([...removeSet].some((key) => {
+      const entry = existingStyleInfo[key];
+      return entry?.kind !== 'static' || entry.hasSpread || entry.duplicate;
+    })) return null;
+    const starts = keysToRemove
+      .map((key) => existingStyleInfo[key]?.propertyStart)
+      .filter((offset): offset is number => typeof offset === 'number');
+    const ends = keysToRemove
+      .map((key) => existingStyleInfo[key]?.propertyEnd)
+      .filter((offset): offset is number => typeof offset === 'number');
+    if (starts.length !== removeSet.size || ends.length !== removeSet.size) return null;
+
+    const styleAttrStart = source.lastIndexOf(' style=', Math.min(...starts));
+    if (styleAttrStart < 0) return null;
+    let styleAttrEnd = Math.max(...ends);
+    while (
+      styleAttrEnd < source.length - 1 &&
+      !(source[styleAttrEnd] === '}' && source[styleAttrEnd + 1] === '}')
+    ) {
+      styleAttrEnd++;
+    }
+    if (styleAttrEnd >= source.length - 1) return null;
+    styleAttrEnd += 2;
+
+    return {
+      newSource: source.slice(0, styleAttrStart) + source.slice(styleAttrEnd),
+      newStyleInfo: {},
+    };
+  }
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const key of removeSet) {
+    const entry = existingStyleInfo[key];
+    const propertyStart = entry?.propertyStart;
+    const propertyEnd = entry?.propertyEnd;
+    if (
+      entry?.kind !== 'static' ||
+      entry.hasSpread ||
+      entry.duplicate ||
+      propertyStart == null ||
+      propertyEnd == null ||
+      propertyStart < 0 ||
+      propertyEnd <= propertyStart ||
+      propertyEnd > source.length
+    ) {
+      return null;
+    }
+
+    const propertySource = source.slice(propertyStart, propertyEnd);
+    if (!propertySource.includes(':')) return null;
+
+    let start = propertyStart;
+    let end = propertyEnd;
+    let right = propertyEnd;
+    while (right < source.length && /\s/.test(source[right])) right++;
+
+    if (source[right] === ',') {
+      end = right + 1;
+      while (end < source.length && /\s/.test(source[end])) end++;
+    } else {
+      // 跳过空白后只允许紧跟对象结束。如果夹着无法归属的
+      // 注释/其他 token，拒绝删除，避免留下非法逗号结构。
+      if (source[right] && source[right] !== '}') {
+        return null;
+      }
+      let left = propertyStart - 1;
+      while (left >= 0 && /\s/.test(source[left])) left--;
+      if (source[left] === ',') start = left;
+    }
+
+    ranges.push({ start, end });
+  }
+
+  // 合并相邻/重叠区间，兼容一次删除多个相邻属性。
+  const mergedRanges: Array<{ start: number; end: number }> = [];
+  ranges
+    .sort((a, b) => a.start - b.start)
+    .forEach((range) => {
+      const previous = mergedRanges[mergedRanges.length - 1];
+      if (previous && range.start <= previous.end) {
+        previous.end = Math.max(previous.end, range.end);
+      } else {
+        mergedRanges.push({ ...range });
+      }
+    });
+
+  let newSource = source;
+  [...mergedRanges].reverse().forEach(({ start, end }) => {
+    newSource = newSource.slice(0, start) + newSource.slice(end);
+  });
+
+  const shiftOffset = (offset: number): number => {
+    let shift = 0;
+    for (const range of mergedRanges) {
+      if (offset >= range.end) {
+        shift += range.end - range.start;
+      } else {
+        break;
+      }
+    }
+    return offset - shift;
+  };
+
+  const newStyleInfo: Record<string, StyleInfoEntry> = {};
+  Object.entries(existingStyleInfo).forEach(([key, entry]) => {
+    if (removeSet.has(key)) return;
+    const nextEntry: StyleInfoEntry = { ...entry };
+    if (nextEntry.propertyStart != null) nextEntry.propertyStart = shiftOffset(nextEntry.propertyStart);
+    if (nextEntry.propertyEnd != null) nextEntry.propertyEnd = shiftOffset(nextEntry.propertyEnd);
+    if (nextEntry.valueStart != null) nextEntry.valueStart = shiftOffset(nextEntry.valueStart);
+    if (nextEntry.valueEnd != null) nextEntry.valueEnd = shiftOffset(nextEntry.valueEnd);
+    newStyleInfo[key] = nextEntry;
+  });
+
   return { newSource, newStyleInfo };
 }
 
@@ -302,7 +463,7 @@ export function patchDataStyleInfo(
 ): void {
   const raw = ele.dataset.styleInfo;
   if (!raw) return;
-  let info: Record<string, { kind: string; valueStart?: number; valueEnd?: number }>;
+  let info: Record<string, StyleInfoEntry>;
   try { info = JSON.parse(raw); } catch { return; }
 
   // 从前到后逐条处理，维护累计偏移量
@@ -315,14 +476,19 @@ export function patchDataStyleInfo(
 
     for (const key of Object.keys(info)) {
       const entry = info[key];
-      if (entry.kind !== 'static' || entry.valueStart == null || entry.valueEnd == null) continue;
-      if (entry.valueStart === adjustedStart) {
+      if (entry.valueStart === adjustedStart && entry.valueEnd != null) {
         // 当前被替换的 key：更新 valueEnd
         entry.valueEnd = adjustedStart + newLen;
-      } else if (entry.valueStart > adjustedStart) {
+        if (entry.propertyEnd != null) entry.propertyEnd += shift;
+      } else if (
+        (entry.propertyStart != null && entry.propertyStart > adjustedStart) ||
+        (entry.propertyStart == null && entry.valueStart != null && entry.valueStart > adjustedStart)
+      ) {
         // 替换点之后的 key：整体偏移
-        entry.valueStart += shift;
-        entry.valueEnd += shift;
+        if (entry.propertyStart != null) entry.propertyStart += shift;
+        if (entry.propertyEnd != null) entry.propertyEnd += shift;
+        if (entry.valueStart != null) entry.valueStart += shift;
+        if (entry.valueEnd != null) entry.valueEnd += shift;
       }
     }
     delta += shift;

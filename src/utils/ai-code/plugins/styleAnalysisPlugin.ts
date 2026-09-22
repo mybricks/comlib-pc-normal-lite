@@ -15,6 +15,9 @@
  * {
  *   [cssKey]: {
  *     kind: 'static' | 'dynamic',
+ *     // property 整体在源码中的偏移，用于安全删除单个 inline 属性
+ *     propertyStart?: number,
+ *     propertyEnd?: number,
  *     // 仅 static 时存在，指向源码中该 value 节点的字符偏移，便于直接替换
  *     valueStart?: number,
  *     valueEnd?: number,
@@ -46,6 +49,14 @@ function isStaticValue(valueNode: any): boolean {
 
 export interface StyleKeyInfo {
   kind: 'static' | 'dynamic';
+  /** style 对象含 spread，来源无法靠单个属性 range 完整建模 */
+  hasSpread?: boolean;
+  /** 同一 style 对象里存在重复 key */
+  duplicate?: boolean;
+  /** ObjectProperty 在源码中的起始偏移（含 key） */
+  propertyStart?: number;
+  /** ObjectProperty 在源码中的结束偏移（不含逗号） */
+  propertyEnd?: number;
   /** 仅 static 时存在：value 节点在源码中的起始字符偏移（含引号） */
   valueStart?: number;
   /** 仅 static 时存在：value 节点在源码中的结束字符偏移（不含） */
@@ -74,6 +85,9 @@ function extractStyleInfo(styleAttr: any): StyleInfo | null {
   if (!objectExpr) return null;
 
   const result: StyleInfo = {};
+  const hasSpread = objectExpr.properties.some(
+    (prop: any) => prop.type === 'SpreadElement' || prop.type === 'RestElement'
+  );
 
   for (const prop of objectExpr.properties) {
     // 跳过展开运算符：...rest
@@ -90,15 +104,26 @@ function extractStyleInfo(styleAttr: any): StyleInfo | null {
     if (!keyName) continue;
 
     const isStatic = isStaticValue(prop.value);
+    const duplicate = Object.prototype.hasOwnProperty.call(result, keyName);
 
     if (isStatic) {
       result[keyName] = {
         kind: 'static',
+        hasSpread,
+        duplicate,
+        propertyStart: prop.start,
+        propertyEnd: prop.end,
         valueStart: prop.value.start,
         valueEnd: prop.value.end,
       };
     } else {
-      result[keyName] = { kind: 'dynamic' };
+      result[keyName] = {
+        kind: 'dynamic',
+        hasSpread,
+        duplicate,
+        propertyStart: prop.start,
+        propertyEnd: prop.end,
+      };
     }
   }
 
@@ -139,9 +164,10 @@ export default function styleAnalysisPlugin({ sourceOffset = 0, reactNative = fa
             // virtual JSX segment.
             if (sourceOffset !== 0) {
               Object.values(styleInfo).forEach((entry) => {
-                if (entry.kind !== 'static' || entry.valueStart == null || entry.valueEnd == null) return
-                entry.valueStart += sourceOffset
-                entry.valueEnd += sourceOffset
+                if (entry.propertyStart != null) entry.propertyStart += sourceOffset
+                if (entry.propertyEnd != null) entry.propertyEnd += sourceOffset
+                if (entry.valueStart != null) entry.valueStart += sourceOffset
+                if (entry.valueEnd != null) entry.valueEnd += sourceOffset
               })
             }
 

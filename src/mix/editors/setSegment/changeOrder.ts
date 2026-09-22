@@ -339,14 +339,20 @@ const transformStyleInfoAfterChildMove = (
 ) => {
   const styleInfo = JSON.parse(value)
   Object.values(styleInfo).forEach((entry: any) => {
-    if (typeof entry?.valueStart !== 'number' || typeof entry?.valueEnd !== 'number') return
-    const shifted = transformRangeAfterChildMove(
-      { start: entry.valueStart, end: entry.valueEnd },
-      fromRange,
-      insertPosition,
-    )
-    entry.valueStart = shifted.start
-    entry.valueEnd = shifted.end
+    const ranges = [
+      ['propertyStart', 'propertyEnd'],
+      ['valueStart', 'valueEnd'],
+    ] as const
+    ranges.forEach(([startKey, endKey]) => {
+      if (typeof entry?.[startKey] !== 'number' || typeof entry?.[endKey] !== 'number') return
+      const shifted = transformRangeAfterChildMove(
+        { start: entry[startKey], end: entry[endKey] },
+        fromRange,
+        insertPosition,
+      )
+      entry[startKey] = shifted.start
+      entry[endKey] = shifted.end
+    })
   })
   return JSON.stringify(styleInfo)
 }

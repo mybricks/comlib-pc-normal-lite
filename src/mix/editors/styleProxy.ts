@@ -4,15 +4,7 @@ import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { randomUUID } from '../utils/uuid'
-import {
-  // buildElementImageUpdateChipData,
-  // buildElementStyleUpdateChipData,
-  // buildElementSvgUpdateChipData,
-  getElementLabel,
-  buildElementStyleUpdateAiRequest,
-  buildElementImageUpdateAiRequest,
-  buildElementSvgUpdateAiRequest
-} from './setSegment/elementChip'
+import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 
@@ -54,6 +46,34 @@ Object.entries(CSS_SHORTHAND_GROUPS).forEach(([shorthand, longhands]) => {
 
 function camelToKebab(str: string) {
   return str.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+function isExplicitUnsetValue(value: unknown): boolean {
+  return typeof value === 'string' && /^unset(?:\s*!important)?$/i.test(value.trim());
+}
+
+function getExplicitClearPatch(
+  selector: unknown,
+  value: unknown,
+): { writes: Record<string, string>; deletions: string[] } | null {
+  if (typeof selector !== 'string' || selector.trim().length === 0) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (
+    entries.length === 0 ||
+    !entries.every(([, nextValue]) => nextValue === null || isExplicitUnsetValue(nextValue))
+  ) {
+    return null;
+  }
+
+  const writes: Record<string, string> = {};
+  const deletions: string[] = [];
+  entries.forEach(([key, nextValue]) => {
+    if (nextValue === null) deletions.push(key);
+    else writes[key] = String(nextValue).trim();
+  });
+  return { writes, deletions };
 }
 
 
@@ -1527,7 +1547,12 @@ export function genStyleValue(props) {
     set(params: any, value: any) {
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
-      const deletions: string[] | null = (window as any).__mybricks_style_deletions;
+      const rawSelector: string = params.selector;
+      const explicitClearPatch = getExplicitClearPatch(rawSelector, value);
+      const legacyDeletions: string[] | null = (window as any).__mybricks_style_deletions;
+      const deletions: string[] | null = explicitClearPatch
+        ? explicitClearPatch.deletions
+        : legacyDeletions;
       const aiComParams = context.component?.params;
       // 子目录 tsx 未 import less 时：先看入口文件的 less import，再按文件名兜底
       const lessPath = resolveLessFilePath(
@@ -1541,7 +1566,134 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
-      if (isAIOnlyNode) {
+      if (explicitClearPatch && rawSelector === 'inline') {
+        const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
+        const styleInfo: Record<string, StyleInfoEntry> | null = styleInfoRaw
+          ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
+          : null;
+        const jsxPath = cn.files?.jsx as string | undefined;
+        const jsxFile = jsxPath
+          ? aiComParams?.data?.files?.find(
+              (file: { fileName: string; source: string }) => file.fileName === jsxPath,
+            )
+          : undefined;
+
+        if (!ele || !styleInfo || !jsxPath || !jsxFile) {
+          console.warn('[style-proxy][style-clear-skip]', {
+            selector: rawSelector,
+            reason: 'inline-source-unavailable',
+          });
+          return;
+        }
+
+        for (const [key, nextValue] of Object.entries(explicitClearPatch.writes)) {
+          const info = styleInfo[key];
+          if (
+            info?.kind !== 'static' ||
+            info.hasSpread ||
+            info.duplicate ||
+            info.valueStart == null ||
+            info.valueEnd == null ||
+            /!important\s*$/i.test(nextValue)
+          ) {
+            console.warn('[style-proxy][style-clear-skip]', {
+              selector: rawSelector,
+              key,
+              reason: 'inline-write-not-safely-representable',
+            });
+            return;
+          }
+        }
+
+        const previousSource = decodeURIComponent(jsxFile.source);
+        let nextSource = previousSource;
+        let nextStyleInfo = styleInfo;
+
+        if (explicitClearPatch.deletions.length > 0) {
+          const removeResult = removeInlineStylePropertiesByRange(
+            nextSource,
+            nextStyleInfo,
+            explicitClearPatch.deletions,
+          );
+          if (!removeResult) {
+            console.warn('[style-proxy][style-clear-skip]', {
+              selector: rawSelector,
+              deletions: explicitClearPatch.deletions,
+              reason: 'inline-delete-range-unavailable',
+            });
+            return;
+          }
+          nextSource = removeResult.newSource;
+          nextStyleInfo = removeResult.newStyleInfo;
+        }
+
+        const writeEntries = Object.entries(explicitClearPatch.writes).map(([key, nextValue]) => {
+          const info = nextStyleInfo[key];
+          return {
+            key,
+            val: nextValue,
+            valueStart: info.valueStart!,
+            valueEnd: info.valueEnd!,
+          };
+        });
+        if (writeEntries.length > 0) {
+          const patchedSource = patchJsxInlineStyle(
+            nextSource,
+            writeEntries.map(({ val, valueStart, valueEnd }) => ({
+              val,
+              valueStart,
+              valueEnd,
+              asString: true,
+            })),
+          );
+          if (!patchedSource) {
+            console.warn('[style-proxy][style-clear-skip]', {
+              selector: rawSelector,
+              writes: explicitClearPatch.writes,
+              reason: 'inline-write-offset-invalid',
+            });
+            return;
+          }
+          nextSource = patchedSource;
+
+          // 复用现有偏移更新器，但只在所有源码 patch 都成功后才更新 DOM。
+          (ele as HTMLElement).dataset.styleInfo = Object.keys(nextStyleInfo).length > 0
+            ? JSON.stringify(nextStyleInfo)
+            : '';
+          patchDataStyleInfo(
+            ele as HTMLElement,
+            writeEntries.map(({ val, valueStart, valueEnd }) => {
+              const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+              return { valueStart, valueEnd, newLen: `'${escaped}'`.length };
+            }),
+          );
+        } else {
+          (ele as HTMLElement).dataset.styleInfo = Object.keys(nextStyleInfo).length > 0
+            ? JSON.stringify(nextStyleInfo)
+            : '';
+        }
+
+        updateStyleFileInBranch({
+          path: jsxPath,
+          current: nextSource,
+          previous: previousSource,
+          ele,
+        });
+        console.log('[style-proxy][style-clear-apply]', {
+          selector: rawSelector,
+          targetKind: 'inline',
+          writes: explicitClearPatch.writes,
+          deletions: explicitClearPatch.deletions,
+        });
+        return;
+      }
+
+      if (explicitClearPatch) {
+        // selector 定向清空只把 unset 作为普通 Less 写入；null 只进入 deletions。
+        value = explicitClearPatch.writes;
+      }
+
+      if (isAIOnlyNode && !explicitClearPatch) {
         updateAIStyleInBranch(ele as HTMLElement, value || {}, (deletions || []).slice());
         return;
       }
@@ -1555,7 +1707,6 @@ export function genStyleValue(props) {
       const cssObj = rawLess ? parseLess(previousLessSource) : {};
 
       // 样式面板可能传来 CSS Modules 运行时类名，先还原成源码类名再定位写入位置
-      const rawSelector: string = params.selector;
       const fullSelector = typeof rawSelector === 'string'
         ? demangleHashedSelector(rawSelector)
         : rawSelector;
@@ -1576,6 +1727,7 @@ export function genStyleValue(props) {
       Object.entries(value as Record<string, any>).forEach(([key, val]) => {
         const info = styleInfo?.[key];
         if (
+          !explicitClearPatch &&
           val !== null && val !== undefined &&
           info?.kind === 'static' &&
           info.valueStart != null && info.valueEnd != null
@@ -1743,7 +1895,7 @@ export function genStyleValue(props) {
       // 嵌套伪类写入前：检测是否存在更高特指度的外部规则（如 antd hover），
       // 若有竞争则给 lessValue 中对应属性追加 !important，确保写入值能生效。
       const _pseudoTailM = fullSelector.match(PSEUDO_TAIL_RE);
-      if (_pseudoTailM && ele) {
+      if (!explicitClearPatch && _pseudoTailM && ele) {
         const _segs = fullSelector.trim().split(/\s+/).filter(Boolean);
         // 使用实际嵌套路径（并保留运行时作用域前缀）与组件自身规则对齐
         const _pseudoTargetKey = nestedCandidate
@@ -1778,6 +1930,14 @@ export function genStyleValue(props) {
           previous: previousLessSource,
           ele,
         });
+        if (explicitClearPatch) {
+          console.log('[style-proxy][style-clear-apply]', {
+            selector: rawSelector,
+            targetKind: 'selector',
+            writes: explicitClearPatch.writes,
+            deletions: explicitClearPatch.deletions,
+          });
+        }
         return;
       }
 
@@ -1806,14 +1966,14 @@ export function genStyleValue(props) {
       let resolvedTargetKey = nestedTarget?.key ?? targetKey;
 
       // 清理旧逻辑已经追加到文件末尾、并覆盖嵌套规则同名声明的重复短规则。
-      if (nestedTarget && isLikelyNestedOrphan) {
+      if (!explicitClearPatch && nestedTarget && isLikelyNestedOrphan) {
         delete cssObj[targetKey];
       }
 
       // 若 targetKey 是独立单类（如 ".cyan"），清除 cssObj 中可能残留的旧版复合选择器键。
       // 例：历史写入产生了 ".topFeatureItem.cyan" 或 ".topFeatureItem.pages_xxx--cyan"，
       // 它们的 CSS 优先级（0,2,0）高于 ".cyan"（0,1,0），会覆盖新写入的规则。
-      if (!nestedTarget && /^\.[\w-]+$/.test(targetKey)) {
+      if (!explicitClearPatch && !nestedTarget && /^\.[\w-]+$/.test(targetKey)) {
         const targetClass = targetKey.slice(1);
         Object.keys(cssObj).forEach(key => {
           if (key === targetKey) return;
@@ -1831,7 +1991,7 @@ export function genStyleValue(props) {
         });
       }
 
-      if (!nestedTarget) {
+      if (!explicitClearPatch && !nestedTarget) {
         absorbOrphans(cssObj, targetKey);
       }
 
@@ -1860,6 +2020,14 @@ export function genStyleValue(props) {
         );
       }
 
+      if (explicitClearPatch && resolvedTargetKey.includes(',')) {
+        console.warn('[style-proxy][style-clear-skip]', {
+          selector: rawSelector,
+          reason: 'ambiguous-comma-selector',
+        });
+        return;
+      }
+
       if (!targetContainer[resolvedTargetKey]) {
         targetContainer[resolvedTargetKey] = {};
       }
@@ -1876,6 +2044,7 @@ export function genStyleValue(props) {
       const cssomOverriddenProps: Set<string> = ele
         ? collectCSSOMOverriddenProps(ele as Element, conflictTargetKey, fullSelector)
         : new Set();
+      let explicitClearDidMutate = false;
 
       Object.entries(lessValue).forEach(([key, val]) => {
         const existing = targetStyle[key];
@@ -1903,12 +2072,17 @@ export function genStyleValue(props) {
           writeVal !== null &&
           writeVal !== undefined &&
           !String(writeVal).includes('!important') &&
+          !explicitClearPatch &&
           (hasInternalConflict || hasExternalConflict)
         ) {
           writeVal = String(writeVal) + ' !important';
         }
 
-        targetStyle[key] = preserveExistingImportant(existing, writeVal);
+        const nextValue = preserveExistingImportant(existing, writeVal);
+        if (explicitClearPatch && existing !== nextValue) {
+          explicitClearDidMutate = true;
+        }
+        targetStyle[key] = nextValue;
       });
 
       // 若写入了 background-image: none（表示用户切换到纯色背景），
@@ -1926,7 +2100,7 @@ export function genStyleValue(props) {
       if (deletions && deletions.length > 0) {
         // 若被删除的属性在 data-style-info 里有静态内联偏移（如手写 style={{}} 的属性），
         // 需同步从 JSX inline style 中移除，否则 Less 侧删了但内联覆盖依然生效
-        if (styleInfo !== null) {
+        if (!explicitClearPatch && styleInfo !== null) {
           const inlineDelsForClass = deletions.filter(
             (key: string) => (styleInfo as any)[key]?.kind === 'static',
           );
@@ -1959,8 +2133,20 @@ export function genStyleValue(props) {
             }
           }
         }
-        const expandedDeletions = filterExpandedDeletions(deletions, value);
+        const expandedDeletions = explicitClearPatch
+          ? deletions.slice()
+          : filterExpandedDeletions(deletions, value);
         expandedDeletions.forEach(key => {
+          if (
+            explicitClearPatch &&
+            (
+              Object.prototype.hasOwnProperty.call(targetStyle, key) ||
+              Object.prototype.hasOwnProperty.call(targetStyle, kebabToCamelProp(key)) ||
+              Object.prototype.hasOwnProperty.call(targetStyle, camelToKebab(key))
+            )
+          ) {
+            explicitClearDidMutate = true;
+          }
           delete targetStyle[key];
           delete targetStyle[kebabToCamelProp(key)];
           delete targetStyle[camelToKebab(key)];
@@ -1969,12 +2155,16 @@ export function genStyleValue(props) {
         // ── 逗号合并规则拆分删除 ──────────────────────────────────────────────
         // 例：.resetBtn, .queryBtn { min-width: 80px } 与更长路径的 .queryBtn 规则并存时，
         // resolveTargetKey 会命中长路径，delete 落不到逗号块。这里拆分后只删当前分支。
-        deleteFromCommaMergedTopLevelRules(cssObj, fullSelector, expandedDeletions);
+        if (!explicitClearPatch) {
+          deleteFromCommaMergedTopLevelRules(cssObj, fullSelector, expandedDeletions);
+        }
 
         // ── 短后缀选择器补充删除 ──────────────────────────────────────────────
         // 例：长路径 .contentArea ... .resetBtn 与短规则 .resetBtn { min-width } 并存时，
         // targetKey 是长路径，需同步删掉短规则上的同名属性。
-        deleteFromShorterMatchingRules(cssObj, fullSelector, targetKey, expandedDeletions);
+        if (!explicitClearPatch) {
+          deleteFromShorterMatchingRules(cssObj, fullSelector, targetKey, expandedDeletions);
+        }
 
         // ── 补充删除：扫描所有适用于当前元素但被遗漏的规则 ──────────────────────
         // parseLess 直接解析 Less AST、保留嵌套结构（不经 less.render() 扁平化），
@@ -1984,7 +2174,7 @@ export function genStyleValue(props) {
         // resolveTargetKey 只扫描顶层 key，嵌套的 &.className 规则会被完全遗漏。
         // 注意：CSS Modules 编译后 eleClassList 中的类名形如 "pages_xxx--originalClass"，
         // 而 Less 里写的是原始短名（如 "radioCard"），需要兼容两种形态做匹配。
-        if (eleClassList.length > 0) {
+        if (!explicitClearPatch && eleClassList.length > 0) {
           const eleClassListFiltered = eleClassList.filter(c => c && c !== 'undefined');
           // 兼容 CSS Modules 哈希：同时支持精确匹配和 "--originalClass" 后缀匹配
           const elementHasClass = (cls: string): boolean =>
@@ -2030,6 +2220,16 @@ export function genStyleValue(props) {
         }
       }
 
+      if (explicitClearPatch && !explicitClearDidMutate) {
+        console.warn('[style-proxy][style-clear-skip]', {
+          selector: rawSelector,
+          writes: explicitClearPatch.writes,
+          deletions: explicitClearPatch.deletions,
+          reason: 'target-property-not-found-or-unchanged',
+        });
+        return;
+      }
+
       if (Object.keys(targetStyle).length === 0) {
         // 这段代码会强制转为baseselector，导致误删selector尾部的:hover等伪类
         // const orphanKeys = findOrphanKeys(cssObj, targetKey);
@@ -2044,6 +2244,14 @@ export function genStyleValue(props) {
         previous: previousLessSource,
         ele,
       });
+      if (explicitClearPatch) {
+        console.log('[style-proxy][style-clear-apply]', {
+          selector: rawSelector,
+          targetKind: 'selector',
+          writes: explicitClearPatch.writes,
+          deletions: explicitClearPatch.deletions,
+        });
+      }
     },
     previewBatch(params: any, value: any) {
       const deletions: string[] = ((window as any).__mybricks_style_deletions || []).slice();

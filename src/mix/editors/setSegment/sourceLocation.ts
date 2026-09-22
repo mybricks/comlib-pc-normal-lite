@@ -188,12 +188,21 @@ const shiftStyleInfoAfterReplacement = (value: string, replacement: SourceReplac
     const styleInfo = JSON.parse(value)
     let changed = false
     Object.values(styleInfo).forEach((entry: any) => {
-      if (typeof entry?.valueStart !== 'number' || typeof entry?.valueEnd !== 'number') return
-      const shifted = shiftRangeAfterReplacement({ start: entry.valueStart, end: entry.valueEnd }, replacement)
-      if (shifted.start === entry.valueStart && shifted.end === entry.valueEnd) return
-      entry.valueStart = shifted.start
-      entry.valueEnd = shifted.end
-      changed = true
+      const ranges = [
+        ['propertyStart', 'propertyEnd'],
+        ['valueStart', 'valueEnd'],
+      ] as const
+      ranges.forEach(([startKey, endKey]) => {
+        if (typeof entry?.[startKey] !== 'number' || typeof entry?.[endKey] !== 'number') return
+        const shifted = shiftRangeAfterReplacement(
+          { start: entry[startKey], end: entry[endKey] },
+          replacement,
+        )
+        if (shifted.start === entry[startKey] && shifted.end === entry[endKey]) return
+        entry[startKey] = shifted.start
+        entry[endKey] = shifted.end
+        changed = true
+      })
     })
     return changed ? JSON.stringify(styleInfo) : value
   } catch {
@@ -282,6 +291,8 @@ export const shiftElementSourceLocationByDelta = (ele: Element, delta: number) =
     if (styleInfo) {
       const shifted = JSON.parse(styleInfo)
       Object.values(shifted).forEach((entry: any) => {
+        if (typeof entry?.propertyStart === 'number') entry.propertyStart += delta
+        if (typeof entry?.propertyEnd === 'number') entry.propertyEnd += delta
         if (typeof entry?.valueStart === 'number') entry.valueStart += delta
         if (typeof entry?.valueEnd === 'number') entry.valueEnd += delta
       })

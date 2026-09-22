@@ -84,7 +84,15 @@ function clearFlatRuleConflicts(
   })
 }
 
-type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number }
+type StyleKeyInfo = {
+  kind: 'static' | 'dynamic';
+  hasSpread?: boolean;
+  duplicate?: boolean;
+  propertyStart?: number;
+  propertyEnd?: number;
+  valueStart?: number;
+  valueEnd?: number;
+}
 type InitialInlineStyleValue = {
   hadInitialValue: boolean;
   initialValue: string;
@@ -435,12 +443,17 @@ const applyStyleInfoOffset = (
     const shift = newLen - (valueEnd - valueStart)
 
     Object.values(nextInfo).forEach((entry) => {
-      if (entry.kind !== 'static' || entry.valueStart == null || entry.valueEnd == null) return
-      if (entry.valueStart === adjustedStart) {
+      if (entry.valueStart === adjustedStart && entry.valueEnd != null) {
         entry.valueEnd = adjustedStart + newLen
-      } else if (entry.valueStart > adjustedStart) {
-        entry.valueStart += shift
-        entry.valueEnd += shift
+        if (entry.propertyEnd != null) entry.propertyEnd += shift
+      } else if (
+        (entry.propertyStart != null && entry.propertyStart > adjustedStart) ||
+        (entry.propertyStart == null && entry.valueStart != null && entry.valueStart > adjustedStart)
+      ) {
+        if (entry.propertyStart != null) entry.propertyStart += shift
+        if (entry.propertyEnd != null) entry.propertyEnd += shift
+        if (entry.valueStart != null) entry.valueStart += shift
+        if (entry.valueEnd != null) entry.valueEnd += shift
       }
     })
     delta += shift
