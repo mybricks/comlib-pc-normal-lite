@@ -221,17 +221,6 @@ function parseReview(content: string): ReviewData {
   }
 }
 
-function SyncIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-      <path d="M13.5 4.5A6 6 0 0 0 2.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M2.5 11.5A6 6 0 0 0 13.5 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M10.5 1.5L13.5 4.5L10.5 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5.5 8.5L2.5 11.5L5.5 14.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function VersionListIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
@@ -259,14 +248,12 @@ function FlowFilterBar({
   activeFilter,
   onFilter,
   updatedAt,
-  onCalibrate,
 }: {
   steps: FlowStep[]
   total: number
   activeFilter: string | null
   onFilter: (s: string | null) => void
   updatedAt: string | null
-  onCalibrate: () => void
 }) {
   return (
     <div className={css['summary-bar']}>
@@ -303,10 +290,6 @@ function FlowFilterBar({
       {updatedAt && (
         <span className={css['summary-updated-at']}>{updatedAt}</span>
       )}
-      <button className={css['calibrate-btn']} onClick={onCalibrate} title="校准文档">
-        <SyncIcon />
-        文档不准？校准一下
-      </button>
     </div>
   )
 }
@@ -439,18 +422,19 @@ function DownChevronIcon() {
   )
 }
 
-function PlusIcon() {
+function AtIcon() {
   return (
-    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
-      <path d="M8 2.5V13.5M2.5 8H13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <path d="M13.106 7.222c0-2.967-2.249-5.032-5.482-5.032-3.35 0-5.646 2.318-5.646 5.702 0 3.493 2.235 5.708 5.762 5.708.862 0 1.689-.123 2.304-.335v-.862c-.43.199-1.354.328-2.29.328-2.926 0-4.813-1.88-4.813-4.798 0-2.844 1.921-4.881 4.594-4.881 2.735 0 4.608 1.688 4.608 4.156 0 1.682-.554 2.769-1.416 2.769-.492 0-.772-.28-.772-.76V5.206H8.923v.834h-.11c-.266-.595-.881-.964-1.6-.964-1.4 0-2.378 1.162-2.378 2.823 0 1.737.957 2.906 2.379 2.906.8 0 1.415-.39 1.709-1.087h.11c.081.67.703 1.148 1.503 1.148 1.572 0 2.57-1.415 2.57-3.643zm-7.177.704c0-1.197.54-1.907 1.456-1.907.93 0 1.524.738 1.524 1.907S8.308 9.84 7.371 9.84c-.895 0-1.442-.725-1.442-1.914z" />
     </svg>
   )
 }
 
 function DeleteIcon() {
   return (
-    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
-      <path d="M3 4.5H13M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M6 7.5V11.5M10 7.5V11.5M4 4.5L4.7 13a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+      <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
+      <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
     </svg>
   )
 }
@@ -608,7 +592,7 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
             data-mybricks-tip="添加到对话"
             onClick={handleAddToChat}
           >
-            <PlusIcon />
+            <AtIcon />
           </span>
           <Popconfirm
             title="删除后任务和相关修改都会被删除，确认删除此任务？"
@@ -771,9 +755,6 @@ function TaskPanel({ content }: { content: string | null }) {
         activeFilter={filter}
         onFilter={setFilter}
         updatedAt={null}
-        onCalibrate={() => (window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-          message: '校准下当前的任务文档',
-        })}
       />
       <AttentionHint
         steps={steps}
@@ -855,7 +836,6 @@ function ReviewPanel({ content }: { content: string | null }) {
         activeFilter={filter}
         onFilter={setFilter}
         updatedAt={updateTime ?? null}
-        onCalibrate={handleReviewClick}
       />
       <div className={css['panel-list']}>
         {filtered.length > 0
