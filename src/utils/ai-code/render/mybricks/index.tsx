@@ -552,10 +552,11 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   interface PageContextValue {
     container: HTMLElement
     onPageInfo: (params: { widgetName?: string | null, filename: string }) => void
+    defaultMount?: Boolean;
   }
   const PageContext = createContext<PageContextValue>({
     container: document.body,
-    onPageInfo: () => {}
+    onPageInfo: () => {},
   });
 
   /**
@@ -646,9 +647,14 @@ const createMyBricks = (props: CreateMyBricksProps) => {
     }, [])
 
     useLayoutEffect(() => {
+      let exeCount = 0
       setContainer({
         container: containerRef.current!.querySelector('[data-container]')!,
         onPageInfo: (params) => {
+          if (exeCount) {
+            return
+          }
+          exeCount = 1
           try {
             if (containerRef.current) {
               containerRef.current.setAttribute('data-zone-filename', params.filename)
@@ -732,7 +738,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
             // console.error(`[@动态解析]`, e)
           }
           onMount?.(params)
-        }
+        },
+        defaultMount
       })
     }, [])
 
@@ -1054,7 +1061,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   const appRef = (Component) => {
-    const ObservedComponent = observer(Component);
+    // const ObservedComponent = observer(Component);
+    const ObservedComponent = Component;
     return (props) => {
       if (isDesign()) {
         const collectingRoutes = useRef<string[]>([]);
@@ -1203,12 +1211,13 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   }
 
   const comRef = (Component: any, params) => {
-    const ObservedComponent = observer(Component);
+    // const ObservedComponent = observer(Component);
+    const ObservedComponent = Component;
 
     return function comRef (props: any) {
       const pageContext = useContext(PageContext);
 
-      if (props['_mybricks_page']) {
+      if (props['_mybricks_page'] || pageContext.defaultMount) {
         useLayoutEffect(() => {
           pageContext.onPageInfo(params)
         }, [])
@@ -1224,7 +1233,8 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   DesignPopup.__type = DESIGNPOPUP_TYPE
 
   const popupRef = (Component: any, params) => {
-    const ObservedComponent = observer(Component);
+    // const ObservedComponent = observer(Component);
+    const ObservedComponent = Component;
     const { ErrorView } = params;
     let realProps = {}
     const DialogRoot = (props) => {
