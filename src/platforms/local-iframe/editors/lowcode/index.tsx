@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { toJsxRuntime, type Components, type Jsx } from 'hast-util-to-jsx-runtime'
+import { fromMarkdown } from 'mdast-util-from-markdown'
+import { toHast } from 'mdast-util-to-hast'
 import context from '../../../../mix/context'
 import { randomUUID } from '../../../../mix/utils/uuid'
 import lowcodeViewCss from './index.lazy.less'
@@ -24,18 +27,6 @@ interface TaskItem {
   metadata: TaskMetadata[]
   summary?: string
   detail?: string
-}
-
-type ReviewStatus = '通过' | '需修复' | '严重问题'
-interface ReviewItem {
-  title: string
-  status: ReviewStatus
-  summary?: string
-  detail?: string
-}
-interface ReviewData {
-  updateTime?: string
-  items: ReviewItem[]
 }
 
 interface FlowStep {
@@ -70,47 +61,10 @@ const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeTex
   },
 }
 
-const REVIEW_STATUS_STYLE: Record<ReviewStatus, { dot: string; badgeBg: string; badgeText: string }> = {
-  '通过': {
-    dot: '#52c41a',
-    badgeBg: '#52c41a',
-    badgeText: '#fff',
-  },
-  '需修复': {
-    dot: '#fa8c16',
-    badgeBg: '#fa8c16',
-    badgeText: '#fff',
-  },
-  '严重问题': {
-    dot: '#ff4d4f',
-    badgeBg: '#ff4d4f',
-    badgeText: '#fff',
-  },
-}
-
 const TAB_LABELS: Record<TabKey, string> = {
   task: '任务',
   version: '版本',
   review: '影响',
-}
-
-const REVIEW_STATUS_KEYWORDS: Array<[ReviewStatus, string[]]> = [
-  ['严重问题', ['严重问题', '严重', 'critical', 'blocker']],
-  ['需修复', ['需修复', '修复', '需要修复', 'fix', 'warning']],
-  ['通过', ['通过', '允许上线', 'pass', 'ok', '✓', '✅']],
-]
-
-function normalizeStatus<T extends string>(
-  raw: string | undefined,
-  keywords: Array<[T, string[]]>,
-  fallback: T,
-): T {
-  if (!raw) return fallback
-  const lower = raw.toLowerCase().trim()
-  for (const [status, keys] of keywords) {
-    if (keys.some(k => lower.includes(k.toLowerCase()))) return status
-  }
-  return fallback
 }
 
 function extractMetaField(section: string, fieldName: string): string | undefined {
@@ -198,27 +152,6 @@ function parseTasks(content: string): TaskItem[] {
     })
   }
   return tasks
-}
-
-function parseReview(content: string): ReviewData {
-  const updateTimeMatch = content.match(/^updateTime\s*[：:]\s*(.+)/m)
-  const withoutFrontmatter = content.replace(/^---[\s\S]*?---\s*[\r\n]+/, '')
-  const items: ReviewItem[] = []
-  const sections = splitSections(withoutFrontmatter).filter(s => /^##\s/.test(s))
-  for (const section of sections) {
-    const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
-    if (!title) continue
-    items.push({
-      title,
-      status: normalizeStatus(extractMetaField(section, '状态'), REVIEW_STATUS_KEYWORDS, '需修复'),
-      summary: extractSummary(section),
-      detail: extractDetail(section),
-    })
-  }
-  return {
-    updateTime: updateTimeMatch?.[1]?.trim(),
-    items,
-  }
 }
 
 function VersionListIcon() {
@@ -670,38 +603,107 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
   )
 }
 
-function ReviewRow({ item }: { item: ReviewItem }) {
-  const [expanded, setExpanded] = useState(false)
-  const style = REVIEW_STATUS_STYLE[item.status] ?? REVIEW_STATUS_STYLE['需修复']
-  const hasDetail = !!item.detail
+function parseReviewDocument(content: string) {
+  const frontmatter = content.match(/^---\s*[\r\n]+([\s\S]*?)[\r\n]+---\s*(?:[\r\n]+|$)/)
+  const updateTime = frontmatter?.[1]?.match(/^updateTime\s*[：:]\s*(.+)$/m)?.[1]?.trim()
+  const rawBody = frontmatter ? content.slice(frontmatter[0].length) : content
+  const statusLine = rawBody.match(/^[ \t]*-[ \t]*\*{1,2}[ \t]*状态[ \t]*\*{0,2}[ \t]*[：:][ \t]*(.+?)[ \t]*\r?$/m)
+  const status = statusLine?.[1]?.replace(/[*_`]/g, '').trim()
+  const body = statusLine ? rawBody.replace(statusLine[0], '') : rawBody
+  return { body: body.trim(), updateTime, status }
+}
+
+const createMarkdownElement = ((type: React.ElementType, props: Record<string, unknown>, key?: string) => (
+  React.createElement(type, key === undefined ? props : { ...props, key })
+)) as Jsx
+
+type ReviewHastNode = {
+  value?: string
+  children?: ReviewHastNode[]
+}
+
+function getReviewNodeText(node?: ReviewHastNode): string {
+  if (!node) return ''
+  if (typeof node.value === 'string') return node.value
+  return node.children?.map(getReviewNodeText).join('') ?? ''
+}
+
+function ReviewStatusValue({ status }: { status: string }) {
+  const tone = status === '通过' ? 'pass' : status === '严重问题' ? 'critical' : 'warning'
+  return (
+    <span className={css['review-status-value']} data-status={tone}>
+      <span className={css['review-status-dot']} />
+      {status}
+    </span>
+  )
+}
+
+function ReviewListItem({
+  node,
+  children,
+  className,
+  ...props
+}: React.LiHTMLAttributes<HTMLLIElement> & { node?: ReviewHastNode }) {
+  const statusMatch = getReviewNodeText(node).trim().match(/^状态\s*[：:]\s*(.+)$/)
+  if (!statusMatch) return <li {...props} className={className}>{children}</li>
+
+  const status = statusMatch[1].trim()
 
   return (
-    <div className={css['task-card']}>
-      <div className={css['task-card-header']}>
-        <span
-          className={css['task-status-badge']}
-          style={{ background: style.badgeBg, color: style.badgeText }}
-        >
-          {item.status}
-        </span>
-        <span className={css['task-title']}>{item.title}</span>
-      </div>
-      {item.summary && (
-        <div className={css['task-summary']}>{item.summary}</div>
-      )}
+    <li
+      {...props}
+      className={[className, css['review-status-item']].filter(Boolean).join(' ')}
+    >
+      <span className={css['review-status-label']}>评估结果</span>
+      <ReviewStatusValue status={status} />
+    </li>
+  )
+}
 
-      {hasDetail && (
-        <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
-          <ChevronIcon expanded={expanded} />
-          <span>{expanded ? '收起详情' : '展开详情'}</span>
-        </div>
-      )}
+function ReviewSectionTitle({
+  node,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement> & { node?: ReviewHastNode }) {
+  if (getReviewNodeText(node).trim() === '影响范围') return null
+  return <h2 {...props}>{children}</h2>
+}
 
-      {hasDetail && expanded && (
-        <div className={css['task-detail-wrapper']}>
-          <DetailContent detail={item.detail!} />
-        </div>
-      )}
+const REVIEW_MARKDOWN_COMPONENTS = {
+  h1: () => null,
+  h2: ReviewSectionTitle,
+  li: ReviewListItem,
+} as Partial<Components>
+
+function MarkdownDocument({ content }: { content: string }) {
+  const { body, updateTime, status } = parseReviewDocument(content)
+
+  if (!body) return null
+
+  const markdown = toJsxRuntime(toHast(fromMarkdown(body)), {
+    Fragment: React.Fragment,
+    jsx: createMarkdownElement,
+    jsxs: createMarkdownElement,
+    components: REVIEW_MARKDOWN_COMPONENTS,
+    passNode: true,
+  }) as React.ReactNode
+
+  return (
+    <div className={css['review-document-scroll']}>
+      <article className={css['review-document']}>
+        {(status || updateTime) && (
+          <div className={css['review-document-meta']}>
+            {status && (
+              <div className={css['review-document-result']}>
+                <span className={css['review-status-label']}>评估结果</span>
+                <ReviewStatusValue status={status} />
+              </div>
+            )}
+            {updateTime && <div className={css['review-document-updated-at']}>更新于 {updateTime}</div>}
+          </div>
+        )}
+        {markdown}
+      </article>
     </div>
   )
 }
@@ -780,10 +782,6 @@ function TaskPanel({ content }: { content: string | null }) {
 }
 
 function ReviewPanel({ content }: { content: string | null }) {
-  const [filter, setFilter] = useState<string | null>(null)
-
-  useEffect(() => { setFilter(null) }, [content])
-
   const handleReviewClick = () => {
     ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
       message: '校准下当前的变更影响文档',
@@ -803,9 +801,9 @@ function ReviewPanel({ content }: { content: string | null }) {
     )
   }
 
-  const { updateTime, items } = parseReview(content)
+  const { body } = parseReviewDocument(content)
 
-  if (!items.length) {
+  if (!body) {
     return (
       <div className={css['panel-empty']}>
         <div className={css['panel-empty-inner']}>
@@ -818,38 +816,7 @@ function ReviewPanel({ content }: { content: string | null }) {
     )
   }
 
-  const reviewOrder: ReviewStatus[] = ['严重问题', '需修复', '通过']
-  const steps: FlowStep[] = reviewOrder.map(s => ({
-    status: s,
-    dot: REVIEW_STATUS_STYLE[s].dot,
-    count: items.filter(item => item.status === s).length,
-    disabled: !items.some(item => item.status === s),
-  }))
-
-  const filtered = filter ? items.filter(item => item.status === filter) : items
-
-  return (
-    <div className={css['panel-container']}>
-      <FlowFilterBar
-        steps={steps}
-        total={items.length}
-        activeFilter={filter}
-        onFilter={setFilter}
-        updatedAt={updateTime ?? null}
-      />
-      <div className={css['panel-list']}>
-        {filtered.length > 0
-          ? filtered
-              .sort((a, b) => {
-                const order: Record<ReviewStatus, number> = { '严重问题': 1, '需修复': 2, '通过': 3 }
-                return order[a.status] - order[b.status]
-              })
-              .map((item, i) => <ReviewRow key={i} item={item} />)
-          : <div className={css['panel-filter-empty']}>无匹配结果</div>
-        }
-      </div>
-    </div>
-  )
+  return <MarkdownDocument content={content} />
 }
 
 function LowcodeViewShell() {

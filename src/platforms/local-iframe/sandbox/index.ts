@@ -211,29 +211,12 @@ export async function getCurrentTasksPath(): Promise<string | undefined> {
 }
 
 async function readAuditReview(): Promise<string> {
-  const entries = await listLocalFiles(AUDIT_REVIEW_ROOT, { recursive: true })
-  const reviewPaths = entries
-    .filter((entry) => entry.type === 'file' && /(?:^|\/)REVIEW\.md$/.test(entry.path))
-    .map((entry) => entry.path)
-
-  if (!reviewPaths.length) {
-    throw new Error('本轮审查未生成 .lingchuang/<分支名>/reviews/REVIEW.md')
-  }
-
-  const expectedPath = await getCurrentAuditReviewPath()
-  const reviewPath = expectedPath && reviewPaths.includes(expectedPath)
-    ? expectedPath
-    : reviewPaths.length === 1
-      ? reviewPaths[0]
-      : undefined
-
-  if (!reviewPath) {
-    throw new Error(`无法确定当前分支的审查报告${expectedPath ? `（期望 ${expectedPath}）` : ''}`)
-  }
+  const reviewPath = await getCurrentAuditReviewPath()
+  if (!reviewPath) throw new Error('无法确定当前 Git 分支')
 
   const review = (await readLocalFiles([reviewPath]))[0]
   if (!review) {
-    throw new Error(`无法读取审查报告：${reviewPath}`)
+    throw new Error(`当前分支未生成影响评估：${reviewPath}`)
   }
   return review.content
 }
@@ -262,20 +245,24 @@ async function syncInitialAuditInfo(): Promise<void> {
   try {
     const review = await readAuditReview()
     context.setReviewContent(review)
-  } catch {}
+  } catch {
+    context.setReviewContent(null)
+  }
 }
 
 async function syncInitialTasksContent(): Promise<void> {
   try {
     const tasksPath = await getCurrentTasksPath()
-    if (!tasksPath) return
+    if (!tasksPath) throw new Error('无法确定当前 Git 分支')
     const files = await readLocalFiles([tasksPath])
     const content = files[0]?.content
-    if (content !== undefined) {
-      context.setTasksContent(content)
-      context.notifyUserTaskInfo(parseTasksForNotify(content))
-    }
-  } catch {}
+    if (content === undefined) throw new Error(`当前分支未生成任务文档：${tasksPath}`)
+    context.setTasksContent(content)
+    context.notifyUserTaskInfo(parseTasksForNotify(content))
+  } catch {
+    context.setTasksContent(null)
+    context.notifyUserTaskInfo([])
+  }
 }
 
 async function syncUpdatedAuditInfo(files: LocalFile[]): Promise<void> {
