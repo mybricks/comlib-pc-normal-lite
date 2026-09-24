@@ -1547,7 +1547,12 @@ export function genStyleValue(props) {
     set(params: any, value: any) {
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
-      const rawSelector: string = params.selector;
+      // 源码更新触发 DOM 重编译后，宿主可能仍基于已断开的旧焦点回退 selector。
+      // 属性级规划器在同步 value.set 调用期间会通过 side-channel 保留实际写入目标。
+      const explicitSelector = (window as any).__mybricks_style_explicit_selector;
+      const rawSelector: string = typeof explicitSelector === 'string' && explicitSelector.trim()
+        ? explicitSelector
+        : params.selector;
       const explicitClearPatch = getExplicitClearPatch(rawSelector, value);
       const legacyDeletions: string[] | null = (window as any).__mybricks_style_deletions;
       const deletions: string[] | null = explicitClearPatch
