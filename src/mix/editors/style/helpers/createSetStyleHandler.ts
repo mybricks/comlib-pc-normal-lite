@@ -486,12 +486,33 @@ const resolveLessFileName = (fileRaw: string, files: Array<{ fileName: string }>
 }
 
 /**
- * 普通 className 需要补充 "." 前缀；
- * 属性选择器、伪类、ID 选择器和 Less 嵌套选择器已经包含自身的语法前缀，需原样保留。
+ * 编译后的模块 token 会丢失选择器最前面的 "."，所以这里仅生成候选项。
+ * 例如 ul.ant-menu 可能来自 ul.ant-menu，也可能来自 .ul.ant-menu。
  */
 const normalizeLessSelectorPart = (value: string) => {
   const selectorPrefixes = ['.', '#', '[', ':', '&', '>', '+', '~', '*']
-  return selectorPrefixes.some(prefix => value.startsWith(prefix)) ? value : `.${value}`
+  if (selectorPrefixes.some(prefix => value.startsWith(prefix))) return [value]
+  return [`.${value}`, value]
+}
+
+const findExistingLessSelectorPath = (cssObj: Record<string, any>, parts: string[]): string[] | null => {
+  const candidates = parts.reduce<string[][]>(
+    (paths, part) => paths.flatMap(path => normalizeLessSelectorPart(part).map(candidate => [...path, candidate])),
+    [[]],
+  )
+
+  for (const path of candidates) {
+    const flatRule = cssObj[path.join(' ')]
+    if (flatRule && typeof flatRule === 'object') return path
+    const nestedRule = path.reduce<any>((rule, part) => rule?.[part], cssObj)
+    if (nestedRule && typeof nestedRule === 'object') return path
+  }
+  return null
+}
+
+const isHtmlTagSelector = (value: string) => {
+  const tag = value.match(/^[a-z][a-z0-9-]*/i)?.[0]
+  return !!tag && !(document.createElement(tag) instanceof HTMLUnknownElement)
 }
 
 const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): FileUpdate[] => {
@@ -529,13 +550,16 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
     if (!parsed.length) return
 
     const fileName = parsed[0].fileName
-    // Less 嵌套路径：['.gridCard', '.topGrid']
-    const classPath = parsed.map(p => normalizeLessSelectorPart(p.className))
-
     const lessFile = context.component!.params.data.files.find((f) => f.fileName === fileName)
     if (!lessFile) return
     const lessPreviousCode = decodeURIComponent(lessFile.source)
     const cssObj = parseLess(lessPreviousCode)
+    // 优先使用源码中的选择器，避免把 ul.ant-menu 写成 .ul.ant-menu。
+    const classPath = findExistingLessSelectorPath(cssObj, parsed.map(p => p.className))
+      ?? parsed.map(({ className }) => {
+        const candidates = normalizeLessSelectorPart(className)
+        return candidates.length === 1 || !isHtmlTagSelector(className) ? candidates[0] : className
+      })
 
     const flatSelector = classPath.join(' ')
     const flatRule = cssObj[flatSelector]
