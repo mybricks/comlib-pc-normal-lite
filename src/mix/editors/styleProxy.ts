@@ -7,6 +7,7 @@ import { randomUUID } from '../utils/uuid'
 import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
+import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
@@ -1715,6 +1716,7 @@ export function genStyleValue(props) {
       const fullSelector = typeof rawSelector === 'string'
         ? demangleHashedSelector(rawSelector)
         : rawSelector;
+      const isStateWrite = isStateStyleSelector(fullSelector);
 
       // ── 内联样式优先路径 ──────────────────────────────────────────
       // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
@@ -1724,7 +1726,8 @@ export function genStyleValue(props) {
         ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
         : null;
 
-      // 将 value 分为"内联写 JSX"和"剩余写 Less"两组
+      // 状态 selector 独立写 Less；同名 inline 仅是基础态来源，不能被覆盖。
+      // 常规态仍将 value 分为"内联写 JSX"和"剩余写 Less"两组。
       type InlineEntry = { key: string; val: string; valueStart: number; valueEnd: number };
       const inlineEntries: InlineEntry[] = [];
       const lessValue: Record<string, any> = {};
@@ -1733,6 +1736,7 @@ export function genStyleValue(props) {
         const info = styleInfo?.[key];
         if (
           !explicitClearPatch &&
+          !isStateWrite &&
           val !== null && val !== undefined &&
           info?.kind === 'static' &&
           info.valueStart != null && info.valueEnd != null
@@ -2104,8 +2108,8 @@ export function genStyleValue(props) {
 
       if (deletions && deletions.length > 0) {
         // 若被删除的属性在 data-style-info 里有静态内联偏移（如手写 style={{}} 的属性），
-        // 需同步从 JSX inline style 中移除，否则 Less 侧删了但内联覆盖依然生效
-        if (!explicitClearPatch && styleInfo !== null) {
+        // 常规态需同步从 JSX 中移除；状态规则的冲突清理不能触及基础态 inline。
+        if (!explicitClearPatch && !isStateWrite && styleInfo !== null) {
           const inlineDelsForClass = deletions.filter(
             (key: string) => (styleInfo as any)[key]?.kind === 'static',
           );
