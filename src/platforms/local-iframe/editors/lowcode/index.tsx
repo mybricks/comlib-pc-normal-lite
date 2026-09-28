@@ -1,7 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { toJsxRuntime, type Components, type Jsx } from 'hast-util-to-jsx-runtime'
-import { fromMarkdown } from 'mdast-util-from-markdown'
-import { toHast } from 'mdast-util-to-hast'
 import context from '../../../../mix/context'
 import { randomUUID } from '../../../../mix/utils/uuid'
 import lowcodeViewCss from './index.lazy.less'
@@ -22,6 +19,8 @@ interface TaskMetadata {
 interface TaskItem {
   title: string
   status: TaskStatus
+  updatedAt?: string
+  updatedAtTimestamp?: number
   handoverTo?: string
   handoverReason?: string
   metadata: TaskMetadata[]
@@ -132,6 +131,13 @@ function normalizeTaskStatus(raw: string | undefined): TaskStatus {
     : '处理中'
 }
 
+function parseTaskUpdatedAt(raw: string | undefined): number | undefined {
+  if (!raw) return undefined
+
+  const timestamp = new Date(raw.trim()).getTime()
+  return Number.isNaN(timestamp) ? undefined : timestamp
+}
+
 function parseTasks(content: string): TaskItem[] {
   const tasks: TaskItem[] = []
   const sections = splitSections(content).filter(s => /^##\s/.test(s))
@@ -139,11 +145,14 @@ function parseTasks(content: string): TaskItem[] {
     const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
     if (!title) continue
     const metadata = extractMetadata(section)
+    const updatedAt = metadata.find(item => item.label === '更新时间')?.value
     const handoverTo = metadata.find(item => item.label === '交接给')?.value
     const handoverReason = metadata.find(item => item.label === '交接原因')?.value
     tasks.push({
       title,
       status: normalizeTaskStatus(extractMetaField(section, '状态')),
+      updatedAt,
+      updatedAtTimestamp: parseTaskUpdatedAt(updatedAt),
       handoverTo,
       handoverReason,
       metadata: metadata.filter(item => item.label !== '交接给' && item.label !== '交接原因'),
@@ -603,111 +612,6 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
   )
 }
 
-function parseReviewDocument(content: string) {
-  const frontmatter = content.match(/^---\s*[\r\n]+([\s\S]*?)[\r\n]+---\s*(?:[\r\n]+|$)/)
-  const updateTime = frontmatter?.[1]?.match(/^updateTime\s*[：:]\s*(.+)$/m)?.[1]?.trim()
-  const rawBody = frontmatter ? content.slice(frontmatter[0].length) : content
-  const statusLine = rawBody.match(/^[ \t]*-[ \t]*\*{1,2}[ \t]*状态[ \t]*\*{0,2}[ \t]*[：:][ \t]*(.+?)[ \t]*\r?$/m)
-  const status = statusLine?.[1]?.replace(/[*_`]/g, '').trim()
-  const body = statusLine ? rawBody.replace(statusLine[0], '') : rawBody
-  return { body: body.trim(), updateTime, status }
-}
-
-const createMarkdownElement = ((type: React.ElementType, props: Record<string, unknown>, key?: string) => (
-  React.createElement(type, key === undefined ? props : { ...props, key })
-)) as Jsx
-
-type ReviewHastNode = {
-  value?: string
-  children?: ReviewHastNode[]
-}
-
-function getReviewNodeText(node?: ReviewHastNode): string {
-  if (!node) return ''
-  if (typeof node.value === 'string') return node.value
-  return node.children?.map(getReviewNodeText).join('') ?? ''
-}
-
-function ReviewStatusValue({ status }: { status: string }) {
-  const tone = status === '通过' ? 'pass' : status === '严重问题' ? 'critical' : 'warning'
-  return (
-    <span className={css['review-status-value']} data-status={tone}>
-      <span className={css['review-status-dot']} />
-      {status}
-    </span>
-  )
-}
-
-function ReviewListItem({
-  node,
-  children,
-  className,
-  ...props
-}: React.LiHTMLAttributes<HTMLLIElement> & { node?: ReviewHastNode }) {
-  const statusMatch = getReviewNodeText(node).trim().match(/^状态\s*[：:]\s*(.+)$/)
-  if (!statusMatch) return <li {...props} className={className}>{children}</li>
-
-  const status = statusMatch[1].trim()
-
-  return (
-    <li
-      {...props}
-      className={[className, css['review-status-item']].filter(Boolean).join(' ')}
-    >
-      <span className={css['review-status-label']}>评估结果</span>
-      <ReviewStatusValue status={status} />
-    </li>
-  )
-}
-
-function ReviewSectionTitle({
-  node,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLHeadingElement> & { node?: ReviewHastNode }) {
-  if (getReviewNodeText(node).trim() === '影响范围') return null
-  return <h2 {...props}>{children}</h2>
-}
-
-const REVIEW_MARKDOWN_COMPONENTS = {
-  h1: () => null,
-  h2: ReviewSectionTitle,
-  li: ReviewListItem,
-} as Partial<Components>
-
-function MarkdownDocument({ content }: { content: string }) {
-  const { body, updateTime, status } = parseReviewDocument(content)
-
-  if (!body) return null
-
-  const markdown = toJsxRuntime(toHast(fromMarkdown(body)), {
-    Fragment: React.Fragment,
-    jsx: createMarkdownElement,
-    jsxs: createMarkdownElement,
-    components: REVIEW_MARKDOWN_COMPONENTS,
-    passNode: true,
-  }) as React.ReactNode
-
-  return (
-    <div className={css['review-document-scroll']}>
-      <article className={css['review-document']}>
-        {(status || updateTime) && (
-          <div className={css['review-document-meta']}>
-            {status && (
-              <div className={css['review-document-result']}>
-                <span className={css['review-status-label']}>评估结果</span>
-                <ReviewStatusValue status={status} />
-              </div>
-            )}
-            {updateTime && <div className={css['review-document-updated-at']}>更新于 {updateTime}</div>}
-          </div>
-        )}
-        {markdown}
-      </article>
-    </div>
-  )
-}
-
 function TaskPanel({ content }: { content: string | null }) {
   const [filter, setFilter] = useState<string | null>(null)
   const [hintHovering, setHintHovering] = useState(false)
@@ -765,11 +669,22 @@ function TaskPanel({ content }: { content: string | null }) {
       <div className={css['panel-list']}>
         {filtered.length > 0
           ? filtered
-              .slice()
-              .sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99))
-              .map((task, i) => (
+              .map((task, index) => ({ task, index }))
+              .sort((a, b) => {
+                const aUpdatedAt = a.task.updatedAtTimestamp
+                const bUpdatedAt = b.task.updatedAtTimestamp
+                if (aUpdatedAt !== undefined && bUpdatedAt !== undefined && aUpdatedAt !== bUpdatedAt) {
+                  return bUpdatedAt - aUpdatedAt
+                }
+                if (aUpdatedAt !== undefined) return -1
+                if (bUpdatedAt !== undefined) return 1
+
+                const statusDiff = (statusOrder[a.task.status] ?? 99) - (statusOrder[b.task.status] ?? 99)
+                return statusDiff || a.index - b.index
+              })
+              .map(({ task, index }) => (
                 <TaskRow
-                  key={i}
+                  key={index}
                   task={task}
                   highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
                 />
@@ -784,7 +699,7 @@ function TaskPanel({ content }: { content: string | null }) {
 function ReviewPanel({ content }: { content: string | null }) {
   const handleReviewClick = () => {
     ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-      message: '校准下当前的变更影响文档',
+      message: '[$mbs-template:evaluate-impact]',
     })
   }
 
@@ -792,31 +707,26 @@ function ReviewPanel({ content }: { content: string | null }) {
     return (
       <div className={css['panel-empty']}>
         <div className={css['panel-empty-inner']}>
-          <span className={css['panel-empty-text']}>暂无影响评估</span>
+          <span className={css['panel-empty-text']}>尚未评估变更影响</span>
           <button className={css['review-btn']} onClick={handleReviewClick}>
-            生成影响评估
+            评估变更影响
           </button>
         </div>
       </div>
     )
   }
 
-  const { body } = parseReviewDocument(content)
+  const renderReview = (window as any)._sandbox_?.helpers?.renders?.renderReviewView
 
-  if (!body) {
-    return (
-      <div className={css['panel-empty']}>
-        <div className={css['panel-empty-inner']}>
-          <span className={css['panel-empty-text']}>暂无影响评估</span>
-          <button className={css['review-btn']} onClick={handleReviewClick}>
-            生成影响评估
-          </button>
-        </div>
-      </div>
-    )
+  if (renderReview) {
+    return renderReview({ content })
   }
 
-  return <MarkdownDocument content={content} />
+  return (
+    <pre className={css['review-fallback']}>
+      {content}
+    </pre>
+  )
 }
 
 function LowcodeViewShell() {
