@@ -283,7 +283,7 @@ export function removeInlineStylePropertiesByRange(
 
   const remainingKeys = Object.keys(existingStyleInfo).filter((key) => !removeSet.has(key));
   if (remainingKeys.length === 0) {
-    if ([...removeSet].some((key) => {
+    if (Array.from(removeSet).some((key) => {
       const entry = existingStyleInfo[key];
       return entry?.kind !== 'static' || entry.hasSpread || entry.duplicate;
     })) return null;
@@ -314,7 +314,7 @@ export function removeInlineStylePropertiesByRange(
   }
 
   const ranges: Array<{ start: number; end: number }> = [];
-  for (const key of removeSet) {
+  for (const key of Array.from(removeSet)) {
     const entry = existingStyleInfo[key];
     const propertyStart = entry?.propertyStart;
     const propertyEnd = entry?.propertyEnd;
@@ -410,6 +410,66 @@ export type JsxStylePatchEntry = {
    */
   asString?: boolean;
 };
+
+export function isFourSideStyleProperty(key: string): boolean {
+  return key === 'borderRadius' || /^border(?:Top|Bottom)(?:Left|Right)Radius$/.test(key) ||
+    /^(?:margin|padding)(?:Top|Right|Bottom|Left)?$/.test(key);
+}
+
+/** 原位拆分或合并静态圆角/间距声明，保留其他 JSX 属性和源码排版。 */
+export function rewriteInlineFourSideStyle(
+  source: string,
+  styleInfo: Record<string, StyleInfoEntry>,
+  values: Record<string, string>,
+  deletions: string[],
+): { newSource: string; newStyleInfo: Record<string, StyleInfoEntry> } | null {
+  const keys = Object.keys(values);
+  if (keys.some(key => !isFourSideStyleProperty(key)) ||
+    Object.values(values).some(value => /!important\s*$/i.test(value))) return null;
+
+  const anchorKey = deletions.find(key => styleInfo[key]);
+  if (!anchorKey) return null;
+  // 用一个已有属性的位置承载新声明，其余被替换的简写/长写一起移除。
+  const otherKeys = Array.from(new Set([...deletions, ...keys]))
+    .filter(key => key !== anchorKey && styleInfo[key]);
+  if (otherKeys.length) {
+    const removed = removeInlineStylePropertiesByRange(source, styleInfo, otherKeys);
+    if (!removed) return null;
+    source = removed.newSource;
+    styleInfo = removed.newStyleInfo;
+  }
+
+  const entry = styleInfo[anchorKey];
+  const start = entry?.propertyStart;
+  const end = entry?.propertyEnd;
+  if (entry?.kind !== 'static' || entry.hasSpread || entry.duplicate ||
+    start == null || end == null || start < 0 || end <= start || end > source.length) return null;
+
+  const newStyleInfo: Record<string, StyleInfoEntry> = {};
+  let replacement = '';
+  keys.forEach((key, index) => {
+    if (index > 0) replacement += ', ';
+    const propertyStart = start + replacement.length;
+    replacement += `${key}: `;
+    const valueStart = start + replacement.length;
+    const escaped = String(values[key]).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    replacement += `'${escaped}'`;
+    const valueEnd = start + replacement.length;
+    newStyleInfo[key] = { kind: 'static', propertyStart, propertyEnd: valueEnd, valueStart, valueEnd };
+  });
+
+  const shift = replacement.length - (end - start);
+  Object.entries(styleInfo).forEach(([key, info]) => {
+    if (key === anchorKey) return;
+    const next = { ...info };
+    for (const field of ['propertyStart', 'propertyEnd', 'valueStart', 'valueEnd'] as const) {
+      const offset = next[field];
+      if (offset != null && offset >= end) next[field] = offset + shift;
+    }
+    newStyleInfo[key] = next;
+  });
+  return { newSource: source.slice(0, start) + replacement + source.slice(end), newStyleInfo };
+}
 
 /** 判断字符串是否是合法的 JS 字面量（字符串 / 数字 / 模板字符串） */
 function isJsLiteral(s: string): boolean {

@@ -5,7 +5,7 @@ import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { randomUUID } from '../utils/uuid'
 import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
-import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange } from './style/helpers/patchJsxInlineStyle'
+import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineFourSideStyle, isFourSideStyleProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 
@@ -1554,8 +1554,12 @@ export function genStyleValue(props) {
       const rawSelector: string = typeof explicitSelector === 'string' && explicitSelector.trim()
         ? explicitSelector
         : params.selector;
-      const explicitClearPatch = getExplicitClearPatch(rawSelector, value);
       const legacyDeletions: string[] | null = (window as any).__mybricks_style_deletions;
+      // 全部写入值为 unset 时，仍先执行四方向重写，保留同批的简写删除。
+      const rewritingInlineFourSide = rawSelector === 'inline' &&
+        legacyDeletions?.some(isFourSideStyleProperty) &&
+        Object.keys(value).length > 0;
+      const explicitClearPatch = rewritingInlineFourSide ? null : getExplicitClearPatch(rawSelector, value);
       const deletions: string[] | null = explicitClearPatch
         ? explicitClearPatch.deletions
         : legacyDeletions;
@@ -1572,7 +1576,7 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
-      if (explicitClearPatch && rawSelector === 'inline') {
+      if (rawSelector === 'inline' && (explicitClearPatch || rewritingInlineFourSide)) {
         const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
         const styleInfo: Record<string, StyleInfoEntry> | null = styleInfoRaw
           ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
@@ -1589,6 +1593,15 @@ export function genStyleValue(props) {
             selector: rawSelector,
             reason: 'inline-source-unavailable',
           });
+          return;
+        }
+
+        if (!explicitClearPatch) {
+          const previousSource = decodeURIComponent(jsxFile.source);
+          const result = rewriteInlineFourSideStyle(previousSource, styleInfo, value, deletions!);
+          if (!result) return;
+          (ele as HTMLElement).dataset.styleInfo = JSON.stringify(result.newStyleInfo);
+          updateStyleFileInBranch({ path: jsxPath, current: result.newSource, previous: previousSource, ele });
           return;
         }
 
@@ -1732,6 +1745,8 @@ export function genStyleValue(props) {
       const inlineEntries: InlineEntry[] = [];
       const lessValue: Record<string, any> = {};
 
+      // 公共层已指定 class/伪类目标时写 Less，不能再被同名 JSX 属性改回内联。
+      const allowInlineWrite = explicitSelector === undefined || explicitSelector === 'inline';
       Object.entries(value as Record<string, any>).forEach(([key, val]) => {
         const info = styleInfo?.[key];
         if (
