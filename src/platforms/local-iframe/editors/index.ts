@@ -32,6 +32,14 @@ export default function () {
       // style: [{ items: [] }],
     },
     '[class]': {
+      style: [
+        {
+          items: [
+            style(),
+            resizer(),
+          ],
+        },
+      ],
       items: [
         noteRender
       ]
