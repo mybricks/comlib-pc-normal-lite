@@ -1,5 +1,5 @@
 import { Events } from '../../../utils/events'
-import { executeLocalShellCommand } from '../sandbox'
+import { captureVersionGitDiff, executeLocalShellCommand } from '../sandbox'
 import { randomUUID } from '../../../mix/utils/uuid'
 
 export interface VersionRecord {
@@ -19,13 +19,13 @@ function buildRollbackCommand(diffs: string[]): string {
     `trap 'rm -f "$patch_file"' EXIT`,
   ]
 
-  diffs.forEach((diff, index) => {
-    const delimiter = `__ROLLBACK_DIFF_${index}__`
-    lines.push(`cat <<'${delimiter}' > "$patch_file"`)
-    lines.push(diff)
-    lines.push(delimiter)
-    lines.push('git apply -R --whitespace=nowarn "$patch_file"')
-  })
+  const delimiter = '__ROLLBACK_DIFF__'
+  lines.push(`cat <<'${delimiter}' > "$patch_file"`)
+  lines.push(diffs.join('\n'))
+  lines.push(delimiter)
+  // Apply all reverse patches in one operation so a failed patch does not
+  // leave earlier versions partially rolled back.
+  lines.push('git apply -R --whitespace=nowarn "$patch_file"')
 
   return lines.join('\n')
 }
@@ -58,21 +58,23 @@ export class Version {
     }
   }
 
-  async rollback(id: string) {
+  async rollback(id: string): Promise<boolean> {
     // 回滚到 id 对应版本
     const itemIndex = this.list.findIndex(item => item.id === id)
-    if (itemIndex < 0) return
+    if (itemIndex < 0) return false
 
     const diffs = this.list
       .slice(0, itemIndex)
       .map((item) => item.diff)
       .filter((diff) => !!diff)
 
-    if (!diffs.length) return
+    if (!diffs.length) return false
 
     const command = buildRollbackCommand(diffs as string[])
-    await executeLocalShellCommand(command, { timeoutMs: 10_000 })
-    const gitDiff = (await executeLocalShellCommand('git diff && git add .', { timeoutMs: 10_000 })).stdout
+    const result = await executeLocalShellCommand(command, { timeoutMs: 10_000 })
+    if (result.exitCode !== 0) return false
+
+    const gitDiff = await captureVersionGitDiff()
     if (gitDiff) {
       this.add({
         id: randomUUID(),
@@ -83,5 +85,7 @@ export class Version {
         summary: `回滚自 ${this.list[itemIndex].label}`
       })
     }
+
+    return true
   }
 }

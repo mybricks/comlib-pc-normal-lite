@@ -389,6 +389,45 @@ export async function executeLocalShellCommand(command: string, options: AgentSa
   return result
 }
 
+// Keep the version baseline in a separate index so version tracking never stages the user's changes.
+let versionIndexPath: string | undefined
+
+export async function captureVersionGitDiff(resetBaseline = false): Promise<string> {
+  const shouldReset = resetBaseline || !versionIndexPath
+  if (!versionIndexPath) {
+    versionIndexPath = `/tmp/mybricks-local-iframe-version-${randomUUID()}.index`
+  }
+
+  // Compare two temporary index trees. `git diff` ignores untracked files, so
+  // staging into a copy of the baseline first is required to include new files.
+  const currentIndexPath = `${versionIndexPath}.current`
+  const command = shouldReset
+    ? [
+        'set -e',
+        `rm -f '${currentIndexPath}'`,
+        `GIT_INDEX_FILE='${currentIndexPath}' git read-tree HEAD`,
+        `baseline_tree=$(git rev-parse HEAD^{tree})`,
+      ]
+    : [
+        'set -e',
+        `rm -f '${currentIndexPath}'`,
+        `cp '${versionIndexPath}' '${currentIndexPath}'`,
+        `baseline_tree=$(GIT_INDEX_FILE='${versionIndexPath}' git write-tree)`,
+      ]
+
+  command.push(
+    `GIT_INDEX_FILE='${currentIndexPath}' git add -A`,
+    `current_tree=$(GIT_INDEX_FILE='${currentIndexPath}' git write-tree)`,
+    `git diff-tree --no-ext-diff --no-color --binary -p "$baseline_tree" "$current_tree"`,
+    `mv '${currentIndexPath}' '${versionIndexPath}'`,
+  )
+  const result = await executeLocalShellCommand(
+    command.join('; '),
+    { timeoutMs: 10_000 },
+  )
+  return result.stdout
+}
+
 async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
   // local iframe 链路只编译 YAML graph；不启用 JSDoc/Babel 编译。
   const files: FileLike[] = localFiles.map(file => ({
@@ -498,8 +537,9 @@ export function registerSandbox(comId: string) {
         // context.component?.events.emit('vibing', true);
       },
       async beforeTurn(params) {
+        myContext.vibe.isVibing = true
         console.log(11, 'hooks:beforeTurn', params)
-        const gitDiff = (await executeLocalShellCommand('git diff && git add .', { timeoutMs: 10_000 })).stdout
+        const gitDiff = await captureVersionGitDiff(true)
         const versionList = myContext.version.getList()
 
         if (!gitDiff) {
@@ -527,13 +567,13 @@ export function registerSandbox(comId: string) {
           }
 
           // 有 diff 认为是手动修改
-          myContext.version.add({
-            id: randomUUID(),
-            label: `V${versionList.length}`,
-            type: 'manual',
-            createdAt: Date.now(),
-            diff: gitDiff,
-          })
+          // myContext.version.add({
+          //   id: randomUUID(),
+          //   label: `V${versionList.length}`,
+          //   type: 'manual',
+          //   createdAt: Date.now(),
+          //   diff: gitDiff,
+          // })
         }
         // const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         // const onProgress = (window as any)?._ai_focus_params_?.onProgress;
@@ -554,8 +594,10 @@ export function registerSandbox(comId: string) {
         // }
         turn.extra?.onComplete?.()
 
-        const gitDiff = (await executeLocalShellCommand('git diff && git add .', { timeoutMs: 10_000 })).stdout
+        const gitDiff = await captureVersionGitDiff()
         const versionList = myContext.version.getList()
+
+        console.log('afterTurn:gitDiff', gitDiff)
 
         if (gitDiff) {
           myContext.version.add({
@@ -567,6 +609,7 @@ export function registerSandbox(comId: string) {
             diff: gitDiff,
           })
         }
+        myContext.vibe.isVibing = false
         // (window as any)._sendToAgent_source_ = null
         // turnLogs.turnID = turn.id
         // turnLogs.setLog({

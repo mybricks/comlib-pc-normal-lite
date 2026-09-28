@@ -1,9 +1,11 @@
 import { Comment } from './comment'
 import { Version } from './version'
 import { Doc } from './doc'
+import { Vibe } from './vibe'
 
 
 class Context {
+  vibe = new Vibe()
   version = new Version()
   comment = new Comment()
   doc = new Doc()

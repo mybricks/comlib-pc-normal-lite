@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { message } from 'antd'
 import context from '../../../../mix/context'
 import { randomUUID } from '../../../../mix/utils/uuid'
 import lowcodeViewCss from './index.lazy.less'
@@ -285,6 +286,11 @@ function AttentionHint({
 
 function VersionPanel() {
   const [versions, setVersions] = useState<VersionRecord[]>([])
+  const [isVibing, setIsVibing] = useState(() => myContext.vibe.isVibing)
+
+  useEffect(() => {
+    return myContext.vibe.events.on('change', setIsVibing)
+  }, [])
 
   useEffect(() => {
     const off = myContext.version.events.on('list', (list) => {
@@ -294,7 +300,15 @@ function VersionPanel() {
   }, [])
 
   const handleRollback = useCallback((version: VersionRecord) => {
-    myContext.version.rollback(version.id)
+    void myContext.version.rollback(version.id).then((success) => {
+      if (success) return
+
+      const messageHack = (window as any)['@m-ui/react']?.message
+      ;(messageHack || message).error('回滚失败，本地代码已发生变更')
+    }).catch(() => {
+      const messageHack = (window as any)['@m-ui/react']?.message
+      ;(messageHack || message).error('回滚失败，本地代码已发生变更')
+    })
   }, [])
 
   return (
@@ -302,6 +316,7 @@ function VersionPanel() {
       <VersionListView
         versions={versions}
         onRollback={handleRollback}
+        rollbackDisabled={isVibing}
         enableInfiniteScroll={false}
       />
     </div>
