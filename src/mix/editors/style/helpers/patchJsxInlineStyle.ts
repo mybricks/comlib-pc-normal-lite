@@ -411,20 +411,21 @@ export type JsxStylePatchEntry = {
   asString?: boolean;
 };
 
-export function isFourSideStyleProperty(key: string): boolean {
+export function isInlineShorthandProperty(key: string): boolean {
   return key === 'borderRadius' || /^border(?:Top|Bottom)(?:Left|Right)Radius$/.test(key) ||
-    /^(?:margin|padding)(?:Top|Right|Bottom|Left)?$/.test(key);
+    /^(?:margin|padding)(?:Top|Right|Bottom|Left)?$/.test(key) || /^overflow(?:X|Y)?$/.test(key) ||
+    /^border(?:(?:Top|Right|Bottom|Left)?(?:Width|Style|Color)?)$/.test(key);
 }
 
-/** 原位拆分或合并静态圆角/间距声明，保留其他 JSX 属性和源码排版。 */
-export function rewriteInlineFourSideStyle(
+/** 原位拆分或合并静态边框/圆角/间距/溢出声明，保留其他 JSX 属性和源码排版。 */
+export function rewriteInlineShorthandStyle(
   source: string,
   styleInfo: Record<string, StyleInfoEntry>,
   values: Record<string, string>,
   deletions: string[],
 ): { newSource: string; newStyleInfo: Record<string, StyleInfoEntry> } | null {
   const keys = Object.keys(values);
-  if (keys.some(key => !isFourSideStyleProperty(key)) ||
+  if (keys.some(key => !isInlineShorthandProperty(key)) ||
     Object.values(values).some(value => /!important\s*$/i.test(value))) return null;
 
   const anchorKey = deletions.find(key => styleInfo[key]);

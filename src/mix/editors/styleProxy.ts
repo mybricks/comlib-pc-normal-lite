@@ -4,8 +4,8 @@ import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { randomUUID } from '../utils/uuid'
-import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
-import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineFourSideStyle, isFourSideStyleProperty } from './style/helpers/patchJsxInlineStyle'
+import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
+import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 
@@ -1551,11 +1551,11 @@ export function genStyleValue(props) {
         ? explicitSelector
         : params.selector;
       const legacyDeletions: string[] | null = (window as any).__mybricks_style_deletions;
-      // 全部写入值为 unset 时，仍先执行四方向重写，保留同批的简写删除。
-      const rewritingInlineFourSide = rawSelector === 'inline' &&
-        legacyDeletions?.some(isFourSideStyleProperty) &&
+      // 全部写入值为 unset 时，仍先执行简写重写，保留同批的简写删除。
+      const rewritingInlineShorthand = rawSelector === 'inline' &&
+        legacyDeletions?.some(isInlineShorthandProperty) &&
         Object.keys(value).length > 0;
-      const explicitClearPatch = rewritingInlineFourSide ? null : getExplicitClearPatch(rawSelector, value);
+      const explicitClearPatch = rewritingInlineShorthand ? null : getExplicitClearPatch(rawSelector, value);
       const deletions: string[] | null = explicitClearPatch
         ? explicitClearPatch.deletions
         : legacyDeletions;
@@ -1572,7 +1572,7 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
-      if (rawSelector === 'inline' && (explicitClearPatch || rewritingInlineFourSide)) {
+      if (rawSelector === 'inline' && (explicitClearPatch || rewritingInlineShorthand)) {
         const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
         const styleInfo: Record<string, StyleInfoEntry> | null = styleInfoRaw
           ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
@@ -1594,7 +1594,7 @@ export function genStyleValue(props) {
 
         if (!explicitClearPatch) {
           const previousSource = decodeURIComponent(jsxFile.source);
-          const result = rewriteInlineFourSideStyle(previousSource, styleInfo, value, deletions!);
+          const result = rewriteInlineShorthandStyle(previousSource, styleInfo, value, deletions!);
           if (!result) return;
           (ele as HTMLElement).dataset.styleInfo = JSON.stringify(result.newStyleInfo);
           updateStyleFileInBranch({ path: jsxPath, current: result.newSource, previous: previousSource, ele });
