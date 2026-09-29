@@ -389,7 +389,7 @@ export async function executeLocalShellCommand(command: string, options: AgentSa
   return result
 }
 
-// Keep the version baseline in a separate index so version tracking never stages the user's changes.
+// 用独立的临时 index 保存版本基线，避免把用户的修改暂存到真实 Git index。
 let versionIndexPath: string | undefined
 
 export async function captureVersionGitDiff(resetBaseline = false): Promise<string> {
@@ -398,8 +398,8 @@ export async function captureVersionGitDiff(resetBaseline = false): Promise<stri
     versionIndexPath = `/tmp/mybricks-local-iframe-version-${randomUUID()}.index`
   }
 
-  // Compare two temporary index trees. `git diff` ignores untracked files, so
-  // staging into a copy of the baseline first is required to include new files.
+  // 重置时以 HEAD 为基线；否则以上次捕获后保存的临时 index 为基线。
+  // 在基线副本上执行 git add -A，把新增文件也纳入本次 tree 比较。
   const currentIndexPath = `${versionIndexPath}.current`
   const command = shouldReset
     ? [
@@ -415,6 +415,7 @@ export async function captureVersionGitDiff(resetBaseline = false): Promise<stri
         `baseline_tree=$(GIT_INDEX_FILE='${versionIndexPath}' git write-tree)`,
       ]
 
+  // 比较两棵 tree 得到可用于版本回滚的 patch，再将当前快照保存为下次的基线。
   command.push(
     `GIT_INDEX_FILE='${currentIndexPath}' git add -A`,
     `current_tree=$(GIT_INDEX_FILE='${currentIndexPath}' git write-tree)`,

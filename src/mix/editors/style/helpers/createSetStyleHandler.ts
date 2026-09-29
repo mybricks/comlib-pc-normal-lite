@@ -6,7 +6,7 @@ import { convertCamelToHyphen } from '../../../../utils/string'
 import { parseLess, stringifyLess } from '../../../utils/transform/less';
 import { undoRedoManager } from '../../undoRedo'
 import { randomUUID } from '../../../utils/uuid'
-import { buildElementStyleUpdateChipData, getElementLabel, buildElementStyleUpdateAiRequest } from '../../setSegment/elementChip'
+import { getElementLabel, buildElementStyleUpdateAiRequest } from '../../setSegment/elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -1269,10 +1269,6 @@ export default function createSetStyleHandler(
 
             undoRedoManager.executeBranch({
               aiRequest: buildElementStyleUpdateAiRequest({ ele, styles: aiKeys }),
-              // aiRequest: {
-              //   message: `[[chip:${chip.id}]]`,
-              //   chips: [chip],
-              // },
               execute() {
                 applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')
                 context.component!.actions.addUserAction({
@@ -1540,10 +1536,6 @@ export default function createSetStyleHandler(
 
           undoRedoManager.executeBranch({
             aiRequest: buildElementStyleUpdateAiRequest({ ele, styles: aiKeys }),
-            // aiRequest: {
-            //   message: `[[chip:${chip.id}]]`,
-            //   chips: [chip],
-            // },
             execute() {
               // AI 修改尚未写回源码，仅更新画布预览；不要修改 data-style-info 等源码定位数据。
               applyInlineStyleSnapshots(inlineStyleSnapshots, 'execute')

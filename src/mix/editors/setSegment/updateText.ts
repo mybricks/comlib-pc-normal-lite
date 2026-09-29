@@ -1,7 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
-import { buildElementTextUpdateChipData, getElementLabel, buildElementTextUpdateAiRequest } from './elementChip'
+import { getElementLabel, buildElementTextUpdateAiRequest } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
 import {
   createDOMSourceLocationSnapshot,
@@ -35,10 +35,6 @@ const runUpdateTextByAI = (fromEle, content: string) => {
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementTextUpdateAiRequest({ ele: fromEle, content }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       // AI 尚未改写源码，先在画布上显示用户输入的预期结果。
       fromEle.innerHTML = nextValue

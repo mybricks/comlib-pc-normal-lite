@@ -4,7 +4,7 @@ import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
 import { randomUUID } from '../utils/uuid'
-import { buildElementImageUpdateChipData, buildElementStyleUpdateChipData, buildElementSvgUpdateChipData, getElementLabel } from './setSegment/elementChip'
+import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineFourSideStyle, isFourSideStyleProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
@@ -1518,10 +1518,6 @@ export function genStyleValue(props) {
         ele,
         styles: styleChanges
       }),
-      // aiRequest: {
-      //   message: `[[chip:${chip.id}]]`,
-      //   chips: [chip],
-      // },
       execute() {
         applyPreview();
         context.component?.actions.addUserAction({
@@ -2415,10 +2411,6 @@ export function genImgSrcReplacer() {
               ele,
               src: newSrc
             }),
-            // aiRequest: {
-            //   message: `[[chip:${chip.id}]]`,
-            //   chips: [chip],
-            // },
             execute() {
               applyPreview(newSrc);
               context.component?.actions.addUserAction({
@@ -2798,10 +2790,6 @@ export function applyRawSvg(params: any, rawSvg: string): void {
       ele,
       svg: jsxSvg
     }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
       _svgAppliedCallback?.(rawSvg)
@@ -2998,10 +2986,6 @@ export function applyIconWithSvg(params: any, rawSvg: string): void {
       ele,
       svg: jsxSvg
     }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       applyPreview(nextSvg instanceof SVGElement ? nextSvg : undefined)
       context.component?.actions.addUserAction({

@@ -1,7 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
-import { buildElementDeleteChipData, getElementLabel, buildElementDeleteAiRequest } from './elementChip'
+import { getElementLabel, buildElementDeleteAiRequest } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
 import {
   createDOMSourceLocationSnapshot,
@@ -31,10 +31,6 @@ const runDeleteByAI = (fromEle) => {
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementDeleteAiRequest({ ele: fromEle }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       fromEle.remove()
       context.component!.actions.addUserAction({

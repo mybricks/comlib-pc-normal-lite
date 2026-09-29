@@ -2,7 +2,7 @@ import context from '../../context'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
 import { undoRedoManager } from '../undoRedo'
-import { buildElementInsertChipData, getElementLabel, buildElementDuplicateAiRequest } from './elementChip'
+import { getElementLabel, buildElementDuplicateAiRequest } from './elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -149,10 +149,6 @@ const runDuplicateByAI = (fromEle: HTMLElement, jsx: string, title: string) => {
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementDuplicateAiRequest({ ele: fromEle }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       if (!insertAfter(fromEle, clone)) return
       context.component?.actions.addUserAction({

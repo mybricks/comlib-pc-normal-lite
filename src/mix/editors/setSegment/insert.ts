@@ -8,7 +8,7 @@ import context, { config } from '../../context'
 import { randomUUID } from '../../utils/uuid'
 import { getShadowRoot } from '../../../helpers/designer'
 import { undoRedoManager } from '../undoRedo'
-import { buildElementInsertChipData, getElementLabel, indentText, buildElementInsertAiRequest } from './elementChip'
+import { getElementLabel, indentText, buildElementInsertAiRequest } from './elementChip'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -426,10 +426,6 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
       placement: options.type,
       importCode: options.code.import
     }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       mountPreview(preview, options.toEle, options.type)
       context.component!.actions.addUserAction({

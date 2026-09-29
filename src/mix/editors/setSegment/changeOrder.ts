@@ -1,11 +1,7 @@
 import context from '../../context'
 import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
-import {
-  buildElementMoveChipData,
-  getElementLabel,
-  buildElementMoveAiRequest
-} from './elementChip'
+import { getElementLabel, buildElementMoveAiRequest } from './elementChip'
 import { isDOMMoveAllowed } from '../../../helpers/dom'
 import {
   createSourceLineResolver,
@@ -586,10 +582,6 @@ const changeOrder = (options) => {
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementMoveAiRequest({ fromEle, toEle, placement }),
-    // aiRequest: {
-    //   message: `[[chip:${chip.id}]]`,
-    //   chips: [chip],
-    // },
     execute() {
       // AI 修改尚未回写源码，不能更新 data-loc 等源码定位属性。
       moveDOMNode(fromEle, toEle, placement)
