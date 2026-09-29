@@ -235,7 +235,9 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
 
       if (pendingMessage) {
         setTimeout(() => {
-          (window as any)._sandbox_?.helpers?.sendToAgent?.(id, pendingMessage);
+          const helpers = (window as any)._sandbox_?.helpers;
+          helpers?.setSenderOptions?.(id, pendingMessage);
+          helpers?.sendToAgent?.(id, pendingMessage);
         }, 500);
       }
     }, []);
