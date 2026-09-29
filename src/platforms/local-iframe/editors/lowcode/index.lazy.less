@@ -241,6 +241,64 @@
   user-select: none;
 }
 
+.batch-toggle-btn {
+  flex-shrink: 0;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--mybricks-text-color-disabled, #999);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+
+  &:hover {
+    color: var(--mybricks-color-primary, #1677ff);
+  }
+}
+
+.batch-toggle-btn-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+
+  &:hover {
+    color: var(--mybricks-text-color-disabled, #999);
+  }
+}
+
+.batch-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.batch-toolbar-count {
+  font-size: 12px;
+  color: var(--mybricks-text-color-disabled, #999);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.batch-toolbar-empty {
+  font-size: 12px;
+  color: var(--mybricks-text-color-disabled, #bbb);
+  white-space: nowrap;
+}
+
+.batch-toolbar-clear {
+  font-size: 12px;
+  color: var(--mybricks-text-color-disabled, #999);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+
+  &:hover {
+    color: var(--mybricks-text-color-main);
+  }
+}
+
 /* ─── Updated-at header ──────────────────────────── */
 
 .panel-section-header {
@@ -595,6 +653,36 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ─── Task selection & batch bar ─────────────────── */
+
+.task-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.task-checkbox-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.task-card-selected {
+  border-color: var(--mybricks-color-primary, #1677ff);
+}
+
+.task-card-batch-mode {
+  cursor: pointer;
+}
+
+.task-card-batch-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .panel-empty-inner {

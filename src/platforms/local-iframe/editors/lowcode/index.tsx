@@ -191,12 +191,26 @@ function FlowFilterBar({
   activeFilter,
   onFilter,
   updatedAt,
+  batchMode,
+  batchDisabled,
+  onToggleBatchMode,
+  selectedCount,
+  batchTransitions,
+  onBatchAction,
+  onClearSelection,
 }: {
   steps: FlowStep[]
   total: number
   activeFilter: string | null
   onFilter: (s: string | null) => void
   updatedAt: string | null
+  batchMode: boolean
+  batchDisabled: boolean
+  onToggleBatchMode: () => void
+  selectedCount: number
+  batchTransitions: TaskTransition[]
+  onBatchAction: (transition: TaskTransition) => void
+  onClearSelection: () => void
 }) {
   return (
     <div className={css['summary-bar']}>
@@ -232,6 +246,45 @@ function FlowFilterBar({
       </div>
       {updatedAt && (
         <span className={css['summary-updated-at']}>{updatedAt}</span>
+      )}
+      {batchMode ? (
+        <div className={css['batch-toolbar']}>
+          <span className={css['batch-toolbar-count']}>已选 {selectedCount} 项</span>
+          {batchTransitions.length > 0 ? (
+            <div className={css['task-status-selector']}>
+              <span className={css['task-status-selector-text']}>调整状态至</span>
+              <DownChevronIcon />
+              <select
+                className={css['task-status-select-overlay']}
+                value=""
+                onChange={(e) => {
+                  const transition = batchTransitions.find(item => item.target === e.target.value)
+                  if (transition) onBatchAction(transition)
+                  e.currentTarget.value = ''
+                }}
+              >
+                <option value="" disabled>调整状态至</option>
+                {batchTransitions.map(transition => (
+                  <option key={transition.target} value={transition.target}>{transition.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <span className={css['batch-toolbar-empty']}>无共同可执行操作</span>
+          )}
+          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>取消选择</span>
+        </div>
+      ) : (
+        <span
+          className={[
+            css['batch-toggle-btn'],
+            batchDisabled ? css['batch-toggle-btn-disabled'] : '',
+          ].filter(Boolean).join(' ')}
+          onClick={() => { if (!batchDisabled) onToggleBatchMode() }}
+          title={batchDisabled ? '任务数量不足，无法批量调整' : '批量调整任务状态'}
+        >
+          批量调整
+        </span>
       )}
     </div>
   )
@@ -455,7 +508,41 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
   return transitions[task.status]
 }
 
-function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgress?: boolean }) {
+function CheckboxIcon({ checked }: { checked: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
+      <rect
+        x="1.5"
+        y="1.5"
+        width="13"
+        height="13"
+        rx="3"
+        fill={checked ? 'var(--mybricks-color-primary, #1677ff)' : 'transparent'}
+        stroke={checked ? 'var(--mybricks-color-primary, #1677ff)' : 'var(--mybricks-text-color-disabled, #c1c7d0)'}
+        strokeWidth="1.5"
+      />
+      {checked && (
+        <path d="M4.5 8.2L6.8 10.5L11.5 5.5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  )
+}
+
+function TaskRow({
+  task,
+  highlightProgress,
+  batchMode,
+  selectable,
+  selected,
+  onToggleSelect,
+}: {
+  task: TaskItem
+  highlightProgress?: boolean
+  batchMode?: boolean
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
@@ -522,9 +609,26 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
   }
 
   return (
-    <div className={css['task-card']}>
+    <div
+      className={[
+        css['task-card'],
+        selected ? css['task-card-selected'] : '',
+        batchMode ? css['task-card-batch-mode'] : '',
+        batchMode && !selectable ? css['task-card-batch-disabled'] : '',
+      ].filter(Boolean).join(' ')}
+      onClick={() => { if (batchMode && selectable) onToggleSelect?.() }}
+    >
       <div className={css['task-card-header']}>
         <div className={css['task-card-header-main']}>
+          {batchMode && (
+            <span
+              className={`${css['task-checkbox']} ${!selectable ? css['task-checkbox-disabled'] : ''}`}
+              onClick={(e) => { e.stopPropagation(); if (selectable) onToggleSelect?.() }}
+              title={selectable ? undefined : '只能同时选择相同状态的任务'}
+            >
+              <CheckboxIcon checked={!!selected} />
+            </span>
+          )}
           <span
             className={css['task-status-badge']}
             style={{ background: style.badgeBg, color: style.badgeText }}
@@ -627,11 +731,26 @@ function TaskRow({ task, highlightProgress }: { task: TaskItem; highlightProgres
   )
 }
 
+function getSharedTransitions(tasks: TaskItem[]): TaskTransition[] {
+  if (!tasks.length) return []
+  const [first, ...rest] = tasks.map(t => getTaskTransitions(t))
+  return rest.reduce(
+    (acc, cur) => acc.filter(t => cur.some(c => c.target === t.target)),
+    first
+  )
+}
+
 function TaskPanel({ content }: { content: string | null }) {
   const [filter, setFilter] = useState<string | null>(null)
   const [hintHovering, setHintHovering] = useState(false)
+  const [batchMode, setBatchMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  useEffect(() => { setFilter(null) }, [content])
+  useEffect(() => {
+    setFilter(null)
+    setBatchMode(false)
+    setSelected(new Set())
+  }, [content])
 
   if (!content) {
     return (
@@ -648,6 +767,45 @@ function TaskPanel({ content }: { content: string | null }) {
         <span className={css['panel-empty-text']}>暂无任务</span>
       </div>
     )
+  }
+
+  const selectedTasks = tasks.filter(t => selected.has(t.title))
+  const selectedStatus = selectedTasks[0]?.status ?? null
+  // 批量操作只支持无需填写原因的目标状态，需要补充原因的场景仍走单任务交互
+  const sharedTransitions = getSharedTransitions(selectedTasks).filter(t => !t.requiresReason)
+
+  const exitBatchMode = () => {
+    setBatchMode(false)
+    setSelected(new Set())
+  }
+
+  const toggleBatchMode = () => {
+    if (batchMode) {
+      exitBatchMode()
+      return
+    }
+    setBatchMode(true)
+  }
+
+  const toggleSelect = (task: TaskItem) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(task.title)) {
+        next.delete(task.title)
+        return next
+      }
+      next.add(task.title)
+      return next
+    })
+  }
+
+  const handleBatchAction = (transition: TaskTransition) => {
+    if (!selectedTasks.length) return
+    const message = selectedTasks
+      .map(task => `任务「${task.title}」：${transition.instruction}`)
+      .join('\n')
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, { message })
+    exitBatchMode()
   }
 
   const countByStatus: Record<string, number> = {}
@@ -676,6 +834,13 @@ function TaskPanel({ content }: { content: string | null }) {
         activeFilter={filter}
         onFilter={setFilter}
         updatedAt={null}
+        batchMode={batchMode}
+        batchDisabled={tasks.length < 2}
+        onToggleBatchMode={toggleBatchMode}
+        selectedCount={selectedTasks.length}
+        batchTransitions={sharedTransitions}
+        onBatchAction={handleBatchAction}
+        onClearSelection={exitBatchMode}
       />
       <AttentionHint
         steps={steps}
@@ -702,6 +867,10 @@ function TaskPanel({ content }: { content: string | null }) {
                   key={index}
                   task={task}
                   highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
+                  batchMode={batchMode}
+                  selectable={selectedStatus === null || task.status === selectedStatus}
+                  selected={selected.has(task.title)}
+                  onToggleSelect={() => toggleSelect(task)}
                 />
               ))
           : <div className={css['panel-filter-empty']}>无匹配结果</div>
