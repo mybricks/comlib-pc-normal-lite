@@ -187,6 +187,7 @@ export default function (props: Props, actions: Actions) {
     '[data-zone-icon]': {
       items: buildIconEditorItems(comId),
     },
+    // 这里同时还兼容了三方库组件
     '[class],[data-zone-noselector]': {
       items: [
         {
@@ -246,6 +247,12 @@ export default function (props: Props, actions: Actions) {
             }
           }
         },
+        {
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
+        },
       ]
     },
     'img': {
@@ -266,16 +273,6 @@ export default function (props: Props, actions: Actions) {
           valueProxy: genStyleValue(props),
         },
         resizer(),
-      ]
-    },
-    '[data-zone-noselector]': {
-      items: [
-        {
-          title: '样式',
-          type: '_style',
-          autoOptions: true,
-          valueProxy: genStyleValue(props),
-        },
       ]
     },
     ...(frontendMode === 'react-native' ? {
