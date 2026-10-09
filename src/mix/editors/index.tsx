@@ -183,30 +183,9 @@ export default function (props: Props, actions: Actions) {
       title: '技能',
       items: [],
     },
-    '[data-zone-selector]': {
-      items: [
-        {
-          title: '样式',
-          type: '_style',
-          autoOptions: true,
-          valueProxy: genStyleValue(props),
-        },
-        resizer(),
-      ]
-    },
     '[data-library-source]': {},
     '[data-zone-icon]': {
       items: buildIconEditorItems(comId),
-    },
-    '[data-zone-noselector]': {
-      items: [
-        {
-          title: '样式',
-          type: '_style',
-          autoOptions: true,
-          valueProxy: genStyleValue(props),
-        },
-      ]
     },
     '[class],[data-zone-noselector]': {
       items: [
@@ -277,6 +256,27 @@ export default function (props: Props, actions: Actions) {
         ...buildSvgEditorItems(comId),
         genSvgResizer(),
       ],
+    },
+    '[data-zone-selector]': {
+      items: [
+        {
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
+        },
+        resizer(),
+      ]
+    },
+    '[data-zone-noselector]': {
+      items: [
+        {
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
+        },
+      ]
     },
     ...(frontendMode === 'react-native' ? {
       '[style]': {}
