@@ -491,6 +491,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 pushDataAttrForMode(node.openingElement.attributes, 'data-zone-svg', 'true');
               }
               const lastSelector = selectors.length > 0 ? selectors.reverse()[0].split(' ').reverse()[0] : tagName;
+              const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
 
               const pageRef = getPageRefForJSXPath(path, pageRefCache, fallbackName);
               if (pageRef) {
@@ -499,7 +500,8 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 // pushDataAttr(node.openingElement.attributes, "title", pageTitle);
                 pushDataAttrForMode(node.openingElement.attributes, "data-widget-name", pageRef.name);
               } else {
-                pushDataAttrForMode(node.openingElement.attributes, "data-zone-title", lastSelector);
+                pushDataAttrForMode(node.openingElement.attributes, "data-zone-title", cnList.length > 0 ? lastSelector : ((source === 'html' || !source) ? tagName : `.${source}/${tagName}`));
+                // pushDataAttrForMode(node.openingElement.attributes, "data-zone-title", lastSelector);
               }
 
               const popupRef = getPopupRefForJSXPath(path, popupRefCache, fallbackName);
@@ -509,7 +511,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
                 pushDataAttrForMode(node.openingElement.attributes, "data-widget-name", popupRef.name);
               }
 
-              const { relyName, source } = findRelyAndSource(tagName, importRelyMap);
+              
 
               // [观察下三方库的样式编辑问题]
               if (cnList.length > 0) {

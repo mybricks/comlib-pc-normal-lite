@@ -21,6 +21,7 @@ import {
   StyleInfoEntry,
 } from './patchJsxInlineStyle'
 import { resolveLessFilePath } from './resolveLessFilePath'
+import { getBoxShorthand, mergeBoxShorthand } from './boxShorthand'
 
 const getStyleActionTitle = (ele: HTMLElement) => {
   const label = getElementLabel(ele, '节点1')
@@ -114,11 +115,12 @@ type CssRuleStyleSnapshot = {
 }
 type InlineSyncTarget = {
   ele: HTMLElement;
-  fileName: string;
+  fileName?: string;
   loc: { start: number; end: number };
   initialValue: number;
   initialInlineValue: string;
   hadInitialInlineValue: boolean;
+  shorthandKey?: string;
 }
 type SelectorMatchStats = {
   /** selectorText 在当前 shadowRoot 下实际命中的 DOM 数量 */
@@ -158,6 +160,7 @@ type StyleKeyRoute = {
   syncInline?: boolean;
   /** multiple 模式下，同选择器命中的其他静态 JSX inline style 也需要按 delta 同步，避免覆盖 Less */
   inlineSyncTargets?: InlineSyncTarget[];
+  shorthandKey?: string;
 }
 
 const getInitialInlineStyleSnapshot = (
@@ -275,6 +278,12 @@ const getJsxStyleValueLength = (value: StyleValue, asString = true) => {
   return escaped.length + 2
 }
 
+const getJsxEntryValue = (entry: { value: StyleValue; important?: boolean; asString?: boolean }): StyleValue => {
+  if (!entry.asString) return entry.value
+  const value = stringifyStyleValue(entry.value)
+  return entry.important && !/\s*!important\s*$/i.test(value) ? `${value} !important` : value
+}
+
 /** Return the exact range for a source transformation that only inserts text. */
 const getSingleInsertionReplacement = (previousCode: string, newCode: string): SourceReplacement | null => {
   if (newCode.length <= previousCode.length) return null
@@ -381,14 +390,16 @@ const collectInlineSyncTargets = (
 
   matchedElements.forEach((matchedEle) => {
     const styleInfo = parseJSON<Record<string, StyleKeyInfo>>(matchedEle.dataset.styleInfo)
-    const info = styleInfo?.[key]
+    const shorthand = getBoxShorthand(key)
+    const shorthandKey = !styleInfo?.[key] && shorthand && styleInfo?.[shorthand]?.kind === 'static' ? shorthand : undefined
+    const info = styleInfo?.[key] ?? (shorthandKey ? styleInfo?.[shorthandKey] : undefined)
     if (info?.kind !== 'static' || info.valueStart == null || info.valueEnd == null) return
 
     const loc = parseJSON<any>(matchedEle.dataset.loc)
     const fileName: string | undefined = loc?.files?.jsx
     if (!fileName) return
 
-    const initialInlineValue = matchedEle.style.getPropertyValue(convertCamelToHyphen(key))
+    const initialInlineValue = matchedEle.style.getPropertyValue(convertCamelToHyphen(shorthandKey ?? key))
     targets.push({
       ele: matchedEle,
       fileName,
@@ -396,17 +407,20 @@ const collectInlineSyncTargets = (
       initialValue: getElementNumericStyleValue(matchedEle, key),
       initialInlineValue,
       hadInitialInlineValue: initialInlineValue !== '',
+      shorthandKey,
     })
   })
 
   if (!targets.some(target => target.ele === editedEle)) {
     const editedStyleInfo = parseJSON<Record<string, StyleKeyInfo>>(editedEle.dataset.styleInfo)
-    const editedInfo = editedStyleInfo?.[key]
+    const shorthand = getBoxShorthand(key)
+    const shorthandKey = !editedStyleInfo?.[key] && shorthand && editedStyleInfo?.[shorthand]?.kind === 'static' ? shorthand : undefined
+    const editedInfo = editedStyleInfo?.[key] ?? (shorthandKey ? editedStyleInfo?.[shorthandKey] : undefined)
     const editedLoc = parseJSON<any>(editedEle.dataset.loc)
     const editedFileName: string | undefined = editedLoc?.files?.jsx
 
     if (editedInfo?.kind === 'static' && editedInfo.valueStart != null && editedInfo.valueEnd != null && editedFileName) {
-      const initialInlineValue = editedEle.style.getPropertyValue(convertCamelToHyphen(key))
+      const initialInlineValue = editedEle.style.getPropertyValue(convertCamelToHyphen(shorthandKey ?? key))
       targets.push({
         ele: editedEle,
         fileName: editedFileName,
@@ -414,6 +428,7 @@ const collectInlineSyncTargets = (
         initialValue: getElementNumericStyleValue(editedEle, key),
         initialInlineValue,
         hadInitialInlineValue: initialInlineValue !== '',
+        shorthandKey,
       })
     }
   }
@@ -585,6 +600,14 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
     }
 
     value.forEach(({ key: propKey, value: propVal }) => {
+      const shorthand = getBoxShorthand(propKey)
+      if (shorthand && target[propKey] == null && typeof target[shorthand] === 'string') {
+        const merged = mergeBoxShorthand(target[shorthand], propKey, stringifyStyleValue(propVal))
+        if (merged != null) {
+          target[shorthand] = merged
+          return
+        }
+      }
       target[propKey] = stringifyStyleValue(propVal)
     })
 
@@ -617,6 +640,7 @@ const patchSingleElementInlineStyle = (
   newCode: string;
   nextStyleInfo: Record<string, StyleKeyInfo> | null;
   sourceReplacements: SourceReplacement[];
+  writtenStyle: Record<string, string>;
 } | null => {
   const jsxInfo = getJsxFileInfo(targetEle)
   if (!jsxInfo) return null
@@ -624,15 +648,31 @@ const patchSingleElementInlineStyle = (
   const styleInfo = parseJSON<Record<string, StyleKeyInfo>>(targetEle.dataset.styleInfo)
   const existingEntries: Array<{ key: string; val: string; valueStart: number; valueEnd: number }> = []
   const propsToAdd: Record<string, string> = {}
+  const writtenStyle: Record<string, string> = {}
 
   Object.entries(nextStyle).forEach(([key, value]) => {
-    const info = styleInfo?.[key]
     const val = stringifyStyleValue(value)
+    const shorthand = getBoxShorthand(key)
+    const shorthandInfo = shorthand && styleInfo?.[shorthand]
+    if (!styleInfo?.[key] && shorthand && shorthandInfo?.kind === 'static' &&
+      shorthandInfo.valueStart != null && shorthandInfo.valueEnd != null) {
+      const initial = targetEle.style.getPropertyValue(shorthand)
+      const previous = existingEntries.find(entry => entry.key === shorthand)
+      const merged = mergeBoxShorthand(previous?.val ?? initial, key, val)
+      if (merged != null) {
+        if (previous) previous.val = merged
+        else existingEntries.push({ key: shorthand, val: merged, valueStart: shorthandInfo.valueStart, valueEnd: shorthandInfo.valueEnd })
+        writtenStyle[shorthand] = merged
+        return
+      }
+    }
+    const info = styleInfo?.[key]
     if (info?.kind === 'static' && info.valueStart != null && info.valueEnd != null) {
       existingEntries.push({ key, val, valueStart: info.valueStart, valueEnd: info.valueEnd })
     } else {
       propsToAdd[key] = val
     }
+    writtenStyle[key] = val
   })
 
   let newCode = jsxInfo.previousCode
@@ -702,6 +742,7 @@ const patchSingleElementInlineStyle = (
     // keeping subsequent edits (noUpdateFileSystem) aligned with the new source positions.
     nextStyleInfo: latestStyleInfo,
     sourceReplacements,
+    writtenStyle,
   }
 }
 
@@ -1033,7 +1074,9 @@ export default function createSetStyleHandler(
               return
             }
 
-            const info = styleInfo?.[key]
+            const shorthand = getBoxShorthand(key)
+            const shorthandKey = !styleInfo?.[key] && shorthand && styleInfo?.[shorthand]?.kind === 'static' ? shorthand : undefined
+            const info = styleInfo?.[key] ?? (shorthandKey ? styleInfo?.[shorthandKey] : undefined)
             const inlineSyncTargets = multiple && lessSelectorFromLoc
               ? collectInlineSyncTargets(lessSelectorFromLoc, key, ele, shadowRoot)
               : []
@@ -1062,6 +1105,7 @@ export default function createSetStyleHandler(
                   matchedSourceLocationCount: matchStats.sourceLocationCount,
                   syncInline: multiple && !!lessSelectorFromLoc,
                   inlineSyncTargets,
+                  shorthandKey,
                 }
               } else {
                 // [TODO] 动态的，走 AI ?
@@ -1070,7 +1114,8 @@ export default function createSetStyleHandler(
               // CSS rule：从 matchedRules 中找第一个已声明该属性的 rule
               const cssProp = convertCamelToHyphen(key)
               const ownerCssRule = matchedRules.find(
-                (rule) => rule.style.getPropertyValue(cssProp) !== ''
+                (rule) => rule.style.getPropertyValue(cssProp) !== '' ||
+                  (!!shorthand && rule.style.getPropertyValue(shorthand) !== '')
               )
               // 若三方库组件 + 用户 Less 中无该属性的规则 + 属于 gap 属性，说明间距由组件 prop 控制，交给 AI
               if (isLibraryElement && !ownerCssRule && GAP_KEYS.has(key)) {
@@ -1190,7 +1235,7 @@ export default function createSetStyleHandler(
             : null
           const updateFIles: FileUpdate[] = (inlineUpdateAsFileUpdate ? [inlineUpdateAsFileUpdate] : [] as FileUpdate[]).concat(lessUpdates)
           const inlineStyleSnapshots = inlineUpdate
-            ? Object.entries(inlineStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key]))
+            ? Object.entries(inlineUpdate.writtenStyle).map(([key, value]) => getInitialInlineStyleSnapshot(ele, key, value, initialInlineStyleValues[key]))
             : []
           // Pre-serialise the updated offset map so execute/undo closures don't hold a reference
           // to a mutable object.
@@ -1289,7 +1334,7 @@ export default function createSetStyleHandler(
 
         let jsxStyle: Array<{
           key: string;
-          value: number;
+          value: StyleValue;
           important?: boolean;
           loc: { start: number; end: number };
           asString?: boolean;
@@ -1300,6 +1345,30 @@ export default function createSetStyleHandler(
         }> = []
         let lessStyle: LessStyleMap = new Map()
         const fallbackInlineStyle: Record<string, StyleValue> = {}
+
+        const addInlineSyncStyle = (target: InlineSyncTarget, key: string, value: number, important?: boolean) => {
+          const previous = target.shorthandKey && jsxStyle.find(entry =>
+            entry.fileName === target.fileName && entry.loc.start === target.loc.start && entry.key === target.shorthandKey)
+          const merged = target.shorthandKey
+            ? mergeBoxShorthand(String(previous?.value ?? target.initialInlineValue), key, stringifyStyleValue(value))
+            : null
+          if (previous && merged != null) {
+            previous.value = merged
+            previous.important ||= important
+            return
+          }
+          jsxStyle.push({
+            key: merged != null ? target.shorthandKey! : key,
+            value: merged ?? value,
+            important,
+            loc: target.loc,
+            asString: true,
+            fileName: target.fileName,
+            ele: target.ele,
+            initialInlineValue: target.initialInlineValue,
+            hadInitialInlineValue: target.hadInitialInlineValue,
+          })
+        }
 
         Object.entries(styleKeyRoutes).forEach(([key, route]) => {
           const { isJsx, selector, loc, needsAI } = route
@@ -1317,23 +1386,14 @@ export default function createSetStyleHandler(
                   fileName: undefined,
                   loc,
                   initialValue: route.initialValue ?? value,
-                  initialInlineValue: initialInlineStyleValues[key]?.initialValue ?? ele.style.getPropertyValue(convertCamelToHyphen(key)),
-                  hadInitialInlineValue: initialInlineStyleValues[key]?.hadInitialValue ?? ele.style.getPropertyValue(convertCamelToHyphen(key)) !== '',
+                  initialInlineValue: ele.style.getPropertyValue(convertCamelToHyphen(route.shorthandKey ?? key)),
+                  hadInitialInlineValue: ele.style.getPropertyValue(convertCamelToHyphen(route.shorthandKey ?? key)) !== '',
+                  shorthandKey: route.shorthandKey,
                 }]
                 : []
 
             inlineTargets.forEach((target) => {
-              jsxStyle.push({
-                key,
-                value: target.initialValue + delta,
-                important: route.needsImportant,
-                loc: target.loc,
-                asString: true,
-                fileName: target.fileName,
-                ele: target.ele,
-                initialInlineValue: target.initialInlineValue,
-                hadInitialInlineValue: target.hadInitialInlineValue,
-              })
+              addInlineSyncStyle(target, key, target.initialValue + delta, route.needsImportant)
             })
             pushLessStyle(
               lessStyle,
@@ -1344,26 +1404,32 @@ export default function createSetStyleHandler(
           } else if (route.source === 'less' && route.inlineSyncTargets?.length) {
             const delta = value - (route.initialValue ?? 0)
             route.inlineSyncTargets.forEach((target) => {
-              jsxStyle.push({
-                key,
-                value: target.initialValue + delta,
-                important: route.needsImportant,
-                loc: target.loc,
-                asString: true,
-                fileName: target.fileName,
-                ele: target.ele,
-                initialInlineValue: target.initialInlineValue,
-                hadInitialInlineValue: target.hadInitialInlineValue,
-              })
+              addInlineSyncStyle(target, key, target.initialValue + delta, route.needsImportant)
             })
             pushLessStyle(lessStyle, selector, key, getStyleValueForRoute(route, value))
           } else if (isJsx && loc) {
+            const initialShorthand = route.shorthandKey
+              ? ele.style.getPropertyValue(route.shorthandKey)
+              : ''
+            const merged = route.shorthandKey
+              ? mergeBoxShorthand(initialShorthand, key, stringifyStyleValue(value))
+              : null
+            const previous = merged != null && jsxStyle.find(entry =>
+              entry.loc.start === loc.start && entry.key === route.shorthandKey)
+            if (previous) {
+              previous.value = mergeBoxShorthand(String(previous.value), key, stringifyStyleValue(value)) ?? merged!
+              previous.important ||= route.needsImportant
+              return
+            }
             jsxStyle.push({
-              key,
-              value,
+              key: merged != null ? route.shorthandKey! : key,
+              value: merged ?? value,
               important: route.needsImportant,
               loc,
-              ele
+              ele,
+              asString: merged != null,
+              initialInlineValue: merged != null ? initialShorthand : undefined,
+              hadInitialInlineValue: merged != null ? initialShorthand !== '' : undefined,
             })
           } else {
             pushLessStyle(lessStyle, selector, key, getStyleValueForRoute(route, value))
@@ -1401,9 +1467,7 @@ export default function createSetStyleHandler(
               entries.map((entry) => {
                 return {
                   key: entry.key,
-                  val: entry.asString
-                    ? `${stringifyStyleValue(entry.value)}${entry.important ? ' !important' : ''}`
-                    : entry.value,
+                  val: getJsxEntryValue(entry),
                   valueStart: entry.loc.start,
                   valueEnd: entry.loc.end,
                   asString: entry.asString,
@@ -1425,9 +1489,7 @@ export default function createSetStyleHandler(
                   start: entry.loc.start,
                   end: entry.loc.end,
                   newLength: getJsxStyleValueLength(
-                    entry.asString
-                      ? `${stringifyStyleValue(entry.value)}${entry.important ? ' !important' : ''}`
-                      : entry.value,
+                    getJsxEntryValue(entry),
                     entry.asString,
                   ),
                 })),
@@ -1451,7 +1513,7 @@ export default function createSetStyleHandler(
           .map((entry) => getInitialInlineStyleSnapshot(
             entry.ele,
             entry.key,
-            stringifyStyleValue(entry.value),
+            stringifyStyleValue(getJsxEntryValue(entry)),
             entry.initialInlineValue !== undefined && entry.hadInitialInlineValue !== undefined
               ? {
                 initialValue: entry.initialInlineValue,
@@ -1459,8 +1521,8 @@ export default function createSetStyleHandler(
               }
               : undefined,
           ))
-          .concat(Object.entries(fallbackInlineStyle).map(([key, value]) => (
-            getInitialInlineStyleSnapshot(ele, key, stringifyStyleValue(value), initialInlineStyleValues[key])
+          .concat(Object.entries(fallbackInlineUpdate?.writtenStyle ?? {}).map(([key, value]) => (
+            getInitialInlineStyleSnapshot(ele, key, value, initialInlineStyleValues[key])
           )))
         const updateFIles = jsxs.concat(lesss)
         const nextFallbackStyleInfoStr = fallbackInlineUpdate?.nextStyleInfo

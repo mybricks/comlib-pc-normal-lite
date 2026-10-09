@@ -14,20 +14,21 @@ import { DataSource } from './mybricks/data-source'
 import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
 import { createRuntimeMode } from '../runtimeMode'
+import commonLang from '../../../helpers/i18n/common'
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
-export const RuntimeErrorView = ({ title = '组件运行时错误', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+export const RuntimeErrorView = ({ title = commonLang.runtimeError, desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
   return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
 };
 
 /** 编译失败错误面板（外层 genAIRuntime 使用） */
-export const CompileErrorView = ({ title = '编译失败', desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
+export const CompileErrorView = ({ title = commonLang.compileFailed, desc = '', errors = [], comId }: { title?: string; desc?: string; errors?: any[]; comId?: string }) => {
   return <RuntimeCardErrorView title={title} desc={desc} errors={errors} comId={comId} />;
 };
 
 /** 运行时错误面板，由 @error 捕获 */
 export const ErrorView = ({ error, comId }) => {
-  return <RuntimeCardErrorView title={"组件运行时错误"} desc={error.message} error={error} comId={comId} source="@error" />;
+  return <RuntimeCardErrorView title={commonLang.runtimeError} desc={error.message} error={error} comId={comId} source="@error" />;
 }
 
 /** 统一错误面板基础交互组件：编译失败、generate.error、eval 失败等共用同一套样式 */
@@ -61,7 +62,7 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
         <pre className={css.runtimeCardErrorDesc}>{desc || '未知错误'}</pre>
         {errors && errors.length > 1 && (
           <details className={css.errorDetails}>
-            <summary>查看所有错误 ({errors.length})</summary>
+            <summary>{commonLang.viewAllErrors} ({errors.length})</summary>
             {errors.map((err, idx) => (
               <div key={idx} className={css.errorItem}>
                 <strong>{err.file || '运行时'}</strong>: {err.message}
@@ -71,12 +72,13 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
         )}
         {source === "@error" && error && (
           <details className={css.errorDetails}>
+            <summary>{commonLang.details}</summary>
             <div className={css.errorItem}>
               {error.stack}
             </div>
           </details>
         )}
-        <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+        <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>{commonLang.aiFix}</button>
       </div>
     </div>
   );
@@ -103,7 +105,7 @@ const GenerateLoadingView = ({
             <span className={css.generateErrorIcon}>!</span>
             <div className={css.generateErrorTitle}>生成失败</div>
             <pre className={css.generateErrorDesc}>{errorMessage || '未知错误'}</pre>
-            <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>交给 AI 修复</button>
+            <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>{commonLang.aiFix}</button>
           </div>
         ) : (
           <>
@@ -256,7 +258,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         const firstError = compileErrors[0];
         const fileLabel = firstError.file ? ` (${firstError.file})` : '';
         return {
-          title: '编译失败' + fileLabel,
+          title: commonLang.compileFailed + fileLabel,
           desc: firstError.message,
           errors: compileErrors,
         };

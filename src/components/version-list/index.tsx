@@ -5,14 +5,15 @@ import type { VersionRecord } from "../../mix/context";
 import InfiniteScroll from "../../mix/lowcodeView/infinite-scroll";
 import { getLazyCss } from "../../mix/lowcodeView/utils/css";
 import * as lazyCss from "./index.lazy.less";
+import commonLang from "../../helpers/i18n/common";
 
 const css = getLazyCss(lazyCss);
 
 const TYPE_LABEL: Record<VersionRecord["type"], string> = {
-  init: "初始版本",
-  manual: "手动编辑版本",
-  ai: "AI修改版本",
-  rollback: "回滚版本",
+  init: commonLang["version.type.init"],
+  manual: commonLang["version.type.manual"],
+  ai: commonLang["version.type.ai"],
+  rollback: commonLang["version.type.rollback"],
 };
 
 export interface PopconfirmProps {
@@ -90,10 +91,10 @@ export function Popconfirm({ title, visible, onVisible, onConfirm, children, par
           <div className={css["popconfirm-title"]}>{title}</div>
           <div className={css["popconfirm-actions"]}>
             <button type="button" className={css["popconfirm-cancel"]} onClick={handleCancel}>
-              取消
+              {commonLang.cancel}
             </button>
             <button type="button" className={css["popconfirm-confirm"]} onClick={handleConfirm}>
-              确认
+              {commonLang.confirm}
             </button>
           </div>
         </div>,
@@ -177,14 +178,14 @@ function VersionItem({
       {!isCurrent && !rollbackDisabled && (
         <div>
           <Popconfirm
-            title="确认回滚到该版本？该版本之后的内容将被删除且不可撤销。"
+            title={commonLang["version.type.rollback.tips"]}
             visible={popconfirmVisible}
             onVisible={setPopconfirmVisible}
             onConfirm={() => onRollback(version)}
             parentElement={parentElement}
           >
             <button type="button" className={css["version-rollback-btn"]}>
-              回滚
+              {commonLang["version.type.rollback"]}
             </button>
           </Popconfirm>
         </div>
@@ -225,7 +226,7 @@ export default function VersionListView({
 
   const renderItems = () => {
     if (!versions.length) {
-      return <div className={css["version-empty"]}>暂无版本</div>;
+      return <div className={css["version-empty"]}>{commonLang["version.empty"]}</div>;
     }
 
     return versions.map((version, index) => {
@@ -271,7 +272,7 @@ export default function VersionListView({
               <Spin />
             </p>
           }
-          endMessage={<p className={css.noMore}>- 没有更多了 -</p>}
+          endMessage={<p className={css.noMore}>- {commonLang.noMore} -</p>}
           next={loadMore!}
         >
           {renderItems()}

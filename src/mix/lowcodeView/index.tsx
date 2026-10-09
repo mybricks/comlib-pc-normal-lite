@@ -15,6 +15,7 @@ import { undoRedoManager } from "../editors/undoRedo";
 import { isVSCodeEnv } from "../vscode/isVSCodeEnv";
 import { VSCODE_CODEEDITOR_ESLINT, VSCODE_CODEEDITOR_LOADER_CONFIG } from "../vscode/constants";
 import JSZip from "jszip";
+import commonLang from "../../helpers/i18n/common";
 
 const css = getLazyCss(lazyCss)
 
@@ -960,20 +961,20 @@ function LowcodeView(params: Params) {
                 className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'console' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
                 onClick={() => setBottomTab('console')}
               >
-                控制台{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
+                {commonLang.console}{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
               </div>
             )}
             <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('version')}
             >
-              版本
+              {commonLang.version}
             </div>
             <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'source' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('source')}
             >
-              源代码
+              {commonLang.sourceCode}
             </div>
           </div>
         </div>
@@ -984,7 +985,7 @@ function LowcodeView(params: Params) {
             onClick={handleSaveAll}
             disabled={!hasUnsavedChanges || hasBranchHistory}
           >
-            保存
+            {commonLang.save}
           </button>
         ): null}
         {bottomTab === 'console' ? (
@@ -995,7 +996,7 @@ function LowcodeView(params: Params) {
               context.clearComLogs();
             }}
           >
-            清空
+            {commonLang.clear}
           </button>
         ): null}
       </div>
@@ -1093,7 +1094,7 @@ function LowcodeView(params: Params) {
             }}
             style={{ display: contextMenu.node.fileName ? undefined : "none" }}
           >
-            删除
+            {commonLang.delete}
           </button>
           <button
             type="button"
@@ -1103,7 +1104,7 @@ function LowcodeView(params: Params) {
               closeContextMenu();
             }}
           >
-            导出
+            {commonLang.export}
           </button>
           <button
             type="button"
@@ -1114,7 +1115,7 @@ function LowcodeView(params: Params) {
               closeContextMenu();
             }}
           >
-            导入
+            {commonLang.import}
           </button>
         </div>
       ) : null}

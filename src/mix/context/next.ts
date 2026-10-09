@@ -18,6 +18,7 @@ import { getTimestamp } from "../../utils/time"
 import config from './config'
 import { validateSkillMd } from "../../utils/ai-code/render/mybricks/gui-card-next/validate-skill-md"
 import { undoRedoManager } from '../editors/undoRedo'
+import commonLang from '../../helpers/i18n/common'
 
 const updateFileContent = ({ fileName, files, content }) => {
   const replaceFileName = fileName.replace(/^\//, '')
@@ -706,7 +707,7 @@ class Context {
       createdAt: Date.now(),
     };
 
-    const summary = '更新文件:' + 
+    const summary = `${commonLang.updateFiles}:` +
       updateFiles.reduce((pre, filename) => {
         return pre + `\n- ${filename}`
       }, '')
@@ -778,7 +779,7 @@ class Context {
       state.logs = [{
         id: 'start',
         timestamp: getTimestamp(),
-        data: ['开始调试'],
+        data: [commonLang['console.start.data']],
         method: 'log',
         _: {}
       }];

@@ -23,6 +23,7 @@ import {
   takePendingVisualAICommit,
 } from '../editors/visualEditCommit';
 import { parseLess, stringifyLess } from '../utils/transform/less';
+import commonLang from '../../helpers/i18n/common';
 
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
@@ -1292,7 +1293,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
       label: `V${total}`,
       type: 'rollback',
       createdAt: Date.now(),
-      summary: `回滚自 ${targetMeta.label}`,
+      summary: `${commonLang.rollbackFrom} ${targetMeta.label}`,
     };
 
     version.addPromiseTask(async () => {

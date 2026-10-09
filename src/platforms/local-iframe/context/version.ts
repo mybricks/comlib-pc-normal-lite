@@ -1,6 +1,7 @@
 import { Events } from '../../../utils/events'
 import { captureVersionGitDiff, executeLocalShellCommand } from '../sandbox'
 import { randomUUID } from '../../../mix/utils/uuid'
+import commonLang from '../../../helpers/i18n/common'
 
 export interface VersionRecord {
   id: string;
@@ -82,7 +83,7 @@ export class Version {
         type: 'rollback',
         createdAt: Date.now(),
         diff: gitDiff,
-        summary: `回滚自 ${this.list[itemIndex].label}`
+        summary: `${commonLang.rollbackFrom} ${this.list[itemIndex].label}`
       })
     }
 
