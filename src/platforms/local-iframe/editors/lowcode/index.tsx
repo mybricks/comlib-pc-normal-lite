@@ -880,6 +880,32 @@ function TaskPanel({ content }: { content: string | null }) {
   )
 }
 
+function extractReviewGeneratedAt(content: string): string | undefined {
+  const head = content.split(/\n##\s/)[0]
+  const match = head.match(/\*{1,2}\s*(?:生成时间|更新时间|评估时间)\s*\*{0,2}\s*[：:]\s*(.+)/)
+  return match?.[1]?.replace(/[*_`]/g, '').trim() || undefined
+}
+
+function ReviewMetaBar({
+  generatedAt,
+  onReEvaluate,
+}: {
+  generatedAt?: string
+  onReEvaluate: () => void
+}) {
+  return (
+    <div className={css['review-meta-bar']}>
+      <span className={css['review-meta-desc']}>评估当前代码潜在的风险和影响</span>
+      <div className={css['review-meta-right']}>
+        {generatedAt && (
+          <span className={css['review-meta-time']}>{generatedAt}</span>
+        )}
+        <span className={css['review-meta-reevaluate']} onClick={onReEvaluate}>重新评估</span>
+      </div>
+    </div>
+  )
+}
+
 function ReviewPanel({ content }: { content: string | null }) {
   const handleReviewClick = () => {
     ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
@@ -900,16 +926,19 @@ function ReviewPanel({ content }: { content: string | null }) {
     )
   }
 
+  const generatedAt = extractReviewGeneratedAt(content)
   const renderReview = (window as any)._sandbox_?.helpers?.renders?.renderReviewView
 
-  if (renderReview) {
-    return renderReview({ content })
-  }
-
   return (
-    <pre className={css['review-fallback']}>
-      {content}
-    </pre>
+    <div className={css['review-container']}>
+      <ReviewMetaBar generatedAt={generatedAt} onReEvaluate={handleReviewClick} />
+      <div className={css['review-body']}>
+        {renderReview
+          ? renderReview({ content })
+          : <pre className={css['review-fallback']}>{content}</pre>
+        }
+      </div>
+    </div>
   )
 }
 

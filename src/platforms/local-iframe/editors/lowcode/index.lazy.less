@@ -634,12 +634,77 @@
 
 /* ─── Empty states ───────────────────────────────── */
 
+/* ─── Review panel ───────────────────────────────── */
+
+.review-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 15px;
+  box-sizing: border-box;
+}
+
+.review-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 38px;
+  min-height: 38px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+}
+
+.review-meta-desc {
+  font-size: 12px;
+  color: var(--mybricks-text-color-disabled, #999);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.review-meta-time {
+  font-size: 12px;
+  color: var(--mybricks-text-color-disabled, #bbb);
+  white-space: nowrap;
+}
+
+.review-meta-reevaluate {
+  font-size: 12px;
+  color: var(--mybricks-color-primary, #1677ff);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.review-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .review-fallback {
   flex: 1;
   min-height: 0;
   margin: 0;
   overflow: auto;
-  padding: 12px 15px;
+  padding: 12px 0;
   box-sizing: border-box;
   color: var(--mybricks-text-color-main);
   font-size: 12px;
