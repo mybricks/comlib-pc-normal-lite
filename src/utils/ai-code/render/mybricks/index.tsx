@@ -1019,46 +1019,46 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   const popupRefRegistry: Record<string, React.FC[]> = {};
   let popupRefRegistryForceUpdate: (() => void) | null = null;
 
-  const EnvConfigPanelContainer = () => {
-    const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
+  // const EnvConfigPanelContainer = () => {
+  //   const [, forceUpdate] = useReducer((n: number) => n + 1, 0)
 
-    useEffect(() => {
-      const fileSystem = mixContext.fileSystem
-      return fileSystem?.events.on('fileChange', ({ filename, type }) => {
-        if (filename === ENV_CONFIG_FILENAME && ['create', 'update', 'delete'].includes(type)) {
-          forceUpdate()
-        }
-      })
-    }, [])
+  //   useEffect(() => {
+  //     const fileSystem = mixContext.fileSystem
+  //     return fileSystem?.events.on('fileChange', ({ filename, type }) => {
+  //       if (filename === ENV_CONFIG_FILENAME && ['create', 'update', 'delete'].includes(type)) {
+  //         forceUpdate()
+  //       }
+  //     })
+  //   }, [])
 
-    const envFile = mixContext.fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file
-    return envFile ? (
-      <EnvConfigPanel
-        env={envFile.source}
-        onSave={(source, refElement, action) => {
-          const previousSource = decodeURIComponent(envFile.source)
-          if (source === previousSource) return
-          const actionId = randomUUID()
+  //   const envFile = mixContext.fileSystem?.filesMap?.[ENV_CONFIG_FILENAME]?.file
+  //   return envFile ? (
+  //     <EnvConfigPanel
+  //       env={envFile.source}
+  //       onSave={(source, refElement, action) => {
+  //         const previousSource = decodeURIComponent(envFile.source)
+  //         if (source === previousSource) return
+  //         const actionId = randomUUID()
 
-          undoRedoManager.executeBranch({
-            execute() {
-              mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })
-              mixContext.component!.actions.addUserAction({
-                id: actionId,
-                type: action.type,
-                title: action.title,
-                refElement,
-              })
-            },
-            undo() {
-              mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: previousSource })
-              mixContext.component!.actions.removeUserAction(actionId)
-            },
-          })
-        }}
-      />
-    ) : null
-  }
+  //         undoRedoManager.executeBranch({
+  //           execute() {
+  //             mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: source })
+  //             mixContext.component!.actions.addUserAction({
+  //               id: actionId,
+  //               type: action.type,
+  //               title: action.title,
+  //               refElement,
+  //             })
+  //           },
+  //           undo() {
+  //             mixContext.updateFile({ fileName: ENV_CONFIG_FILENAME, content: previousSource })
+  //             mixContext.component!.actions.removeUserAction(actionId)
+  //           },
+  //         })
+  //       }}
+  //     />
+  //   ) : null
+  // }
 
   const appRef = (Component) => {
     // const ObservedComponent = observer(Component);
@@ -1114,7 +1114,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 
         return (
           <AppContext.Provider value={app}>
-            <EnvConfigPanelContainer />
+            {/* <EnvConfigPanelContainer /> */}
             {app.state === "collect_routes" && (
               <ObservedComponent {...props} _env={_env}/>
             )}
