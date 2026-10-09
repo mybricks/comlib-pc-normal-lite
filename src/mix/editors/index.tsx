@@ -184,46 +184,31 @@ export default function (props: Props, actions: Actions) {
       items: [],
     },
     '[data-zone-selector]': {
-      style: [
+      items: [
         {
-          items: [
-            {
-              title: '样式',
-              autoOptions: true,
-              valueProxy: genStyleValue(props),
-            },
-            resizer(),
-          ],
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
         },
-      ],
+        resizer(),
+      ]
     },
-    // '[data-zone-noselector]': {
-    //   style: [{ items: [] }],
-    // },
     '[data-library-source]': {},
     '[data-zone-icon]': {
-      // '@ai': {
-      //   title: aiSvgIcon5,
-      //   desc: '通过AI创作图标',
-      //   render(_data, { close }) {
-      //     return <AiEditPanel close={close} mode="SVG" />;
-      //   }
-      // },
       items: buildIconEditorItems(comId),
     },
-    '[class],[data-zone-noselector]': {
-      style: [
+    '[data-zone-noselector]': {
+      items: [
         {
-          items: [
-            {
-              title: '样式',
-              autoOptions: true,
-              valueProxy: genStyleValue(props),
-            },
-            // resizer(),
-          ],
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
         },
-      ],
+      ]
+    },
+    '[class],[data-zone-noselector]': {
       items: [
         {
           title: '',
@@ -281,41 +266,17 @@ export default function (props: Props, actions: Actions) {
               })
             }
           }
-        }
+        },
       ]
-      // items: buildElementReplacerItems(comId),
     },
     'img': {
-      // '@ai': {
-      //   title: aiImgIcon,
-      //   desc: '通过AI创作图片',
-      //   render(_data, { close }) {
-      //     return <AiEditPanel close={close} mode="IMG" />;
-      //   }
-      // },
       items: buildImgEditorItems(comId),
     },
     '[data-zone-type="page"] svg': {
-      // '@ai': {
-      //   title: aiSvgIcon5,
-      //   desc: '通过AI创作图标',
-      //   render(_data, { close }) {
-      //     return <AiEditPanel close={close} mode="SVG" />;
-      //   }
-      // },
-      style: [
-        {
-          items: [
-            {
-              title: '样式',
-              autoOptions: true,
-              valueProxy: genStyleValue(props),
-            },
-            genSvgResizer(),
-          ],
-        },
+      items: [
+        ...buildSvgEditorItems(comId),
+        genSvgResizer(),
       ],
-      items: buildSvgEditorItems(comId),
     },
     ...(frontendMode === 'react-native' ? {
       '[style]': {}
