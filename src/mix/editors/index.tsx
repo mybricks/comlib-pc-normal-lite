@@ -184,9 +184,6 @@ export default function (props: Props, actions: Actions) {
       items: [],
     },
     '[data-library-source]': {},
-    '[data-zone-icon]': {
-      items: buildIconEditorItems(comId),
-    },
     // 这里同时还兼容了三方库组件
     '[class],[data-zone-noselector]': {
       items: [
@@ -247,13 +244,10 @@ export default function (props: Props, actions: Actions) {
             }
           }
         },
-        {
-          title: '样式',
-          type: '_style',
-          autoOptions: true,
-          valueProxy: genStyleValue(props),
-        },
       ]
+    },
+    '[data-zone-icon]': {
+      items: buildIconEditorItems(comId),
     },
     'img': {
       items: buildImgEditorItems(comId),
@@ -263,6 +257,26 @@ export default function (props: Props, actions: Actions) {
         ...buildSvgEditorItems(comId),
         genSvgResizer(),
       ],
+    },
+    '[class]': {
+      items: [
+        {
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
+        },
+      ]
+    },
+    '[data-zone-noselector]': {
+      items: [
+        {
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
+        },
+      ]
     },
     '[data-zone-selector]': {
       items: [
