@@ -27,6 +27,8 @@ import commonLang from '../../helpers/i18n/common';
 import { agentTurnLifecycle } from './agent-turn-lifecycle';
 import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
 
+const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
+
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
 /**
@@ -1268,6 +1270,16 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         // 通知 UI
         context.notifyVersionsChange(target);
       },
+      async beforeToolCall({ tool }) {
+        if (tool.name !== ASK_QUESTIONS_TOOL_NAME) return;
+        // 问答工具调用，关闭loading
+        loadingRef.current?.setLock('unlock')
+      },
+      async afterToolCall({ tool }) {
+        if (tool.name !== ASK_QUESTIONS_TOOL_NAME) return;
+        // 问答工具调用结束，开启loading
+        loadingRef.current?.setLock('lock')
+      }
     },
     chips: CHIPS
   }) ?? {};
