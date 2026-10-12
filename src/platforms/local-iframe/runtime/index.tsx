@@ -208,7 +208,8 @@ const RuntimeIframe = (props) => {
 								loadedSrcsRef.current.add(item.src)
 								props.onIframeLoad({
 									id: item.src,
-									doc: event.currentTarget.contentDocument
+									doc: event.currentTarget.contentDocument,
+									routerPath: item.src
 								})
 								emitLoadedIfReady(currentIframesRef.current)
 							}}
