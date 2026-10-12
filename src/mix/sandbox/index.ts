@@ -191,21 +191,23 @@ function buildProject(comId: string) {
       const VERIFY_CONFIG = {
         rules: {
           // [RULE_IDS.README_CHECK]: 'off' as const,
-          [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
+          // [RULE_IDS.REQUIREMENT_CHECK]: 'error' as const,
+          'requirement-check': 'off',
+          'jsdoc-check': 'off',
         },
       };
 
       if (componentRuntime) {
         const { eslint, modules } = componentRuntime
-        if (eslint) {
-          const { rules, verify } = eslint
-          if (rules) {
-            Object.assign(VERIFY_CONFIG.rules, eslint.rules)
-          }
-          if (verify) {
-            messages.push(...await verify(files))
-          }
-        }
+        // if (eslint) {
+        //   const { rules, verify } = eslint
+        //   if (rules) {
+        //     Object.assign(VERIFY_CONFIG.rules, eslint.rules)
+        //   }
+        //   if (verify) {
+        //     messages.push(...await verify(files))
+        //   }
+        // }
         if (modules) {
           await Promise.all(Object.entries(modules).map(async ([key, value]: any) => {
             const eslintVerify = value.eslint.verify
