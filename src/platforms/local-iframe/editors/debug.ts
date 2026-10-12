@@ -1,7 +1,7 @@
-import context from '../../../mix/context'
+import myContext from '../context'
 
 export default (params: any, stop: any) => {
-  const events = context.component!.events;
+  const events = myContext.debug.events
   if (stop) {
     events.emit('debugTarget', {
       src: undefined
