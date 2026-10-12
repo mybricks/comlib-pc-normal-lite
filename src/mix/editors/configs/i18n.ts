@@ -57,7 +57,13 @@ const lang = {
   qualityHD: i18n({ zh: '高清', en: 'HD' }),
   qualityUHD: i18n({ zh: '超清', en: 'UHD' }),
   // PagePanel
-  uiDesignTitle: i18n({ zh: 'UI 设计', en: 'UI Design' })
+  uiDesignTitle: i18n({ zh: 'UI 设计', en: 'UI Design' }),
+  // SvgEditor / IconEditor
+  iconEditorTitle: i18n({ zh: '图标', en: 'Icon' }),
+  selectFromIconLibraryTip: i18n({ zh: '从AI生成的图标库中进行选择', en: 'Select from AI-generated icon library' }),
+  uploadSvg: i18n({ zh: '上传SVG', en: 'Upload SVG' }),
+  noPreviewAvailable: i18n({ zh: '无法预览', en: 'No preview available' }),
+  downloadSvg: i18n({ zh: '下载SVG', en: 'Download SVG' })
 };
 
 export default lang;
