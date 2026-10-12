@@ -3,7 +3,7 @@ function i18n(langs: Record<string, string>): string {
   if (type && langs[type]) {
     return langs[type];
   }
-  return langs['en'] || 'en not found';
+  return langs['zh'] || 'en not found';
 }
 
 const lang = {
@@ -63,7 +63,9 @@ const lang = {
   selectFromIconLibraryTip: i18n({ zh: '从AI生成的图标库中进行选择', en: 'Select from AI-generated icon library' }),
   uploadSvg: i18n({ zh: '上传SVG', en: 'Upload SVG' }),
   noPreviewAvailable: i18n({ zh: '无法预览', en: 'No preview available' }),
-  downloadSvg: i18n({ zh: '下载SVG', en: 'Download SVG' })
+  downloadSvg: i18n({ zh: '下载SVG', en: 'Download SVG' }),
+  svgGenMessagePrefix: i18n({ zh: '调用图标生成工具，生成图标，用户需求：', en: 'Call the icon generation tool to generate an icon, user requirement: ' }),
+  imgGenMessagePrefix: i18n({ zh: '调用图片生成工具，生成图片，用户需求：', en: 'Call the image generation tool to generate an image, user requirement: ' })
 };
 
 export default lang;
