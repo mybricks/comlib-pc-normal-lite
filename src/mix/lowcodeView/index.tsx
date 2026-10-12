@@ -3,7 +3,7 @@ import Editor, { HandlerType, Monaco, StandaloneCodeEditor } from "@mybricks/cod
 import context, { config } from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
-import TaskPanel from "../../components/task-panel";
+import TaskPanel, { hasTasks } from "../../components/task-panel";
 import * as lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
 import { useDarkMode } from "../../utils/hooks";
@@ -272,6 +272,7 @@ function LowcodeView(params: Params) {
   // 用稳定的 key 字符串表示 files 快照，用于监听变化
   const filesKey = files.map((f) => `${f.fileName}:${f.source}`).join('|');
   const taskContent = useMemo(() => findTaskDocumentContent(files), [filesKey]);
+  const hasTaskPanel = useMemo(() => hasTasks(taskContent), [taskContent]);
   useEffect(() => context.setTasksContent(taskContent), [taskContent]);
   const treeNodes = useMemo(() => filesJsonToTree(files), [filesKey]);
   const rootNode = useMemo<FileTreeNode>(() => ({
@@ -316,6 +317,10 @@ function LowcodeView(params: Params) {
   const setBottomTab = useCallback((tab: 'task' | 'source' | 'console' | 'version') => {
     if (componentId) context.setComBottomTab(tab);
   }, [componentId]);
+
+  useEffect(() => {
+    if (!hasTaskPanel && bottomTab === 'task') setBottomTab('version');
+  }, [bottomTab, hasTaskPanel, setBottomTab]);
 
   const coderOptions = useMemo(() => {
     if (!selectFile) {
@@ -978,12 +983,14 @@ function LowcodeView(params: Params) {
                 {commonLang.console}{consoleLogs.length > 0 ? ` (${consoleLogs.length})` : ''}
               </div>
             )}
-            <div
-              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'task' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-              onClick={() => setBottomTab('task')}
-            >
-              任务
-            </div>
+            {hasTaskPanel && (
+              <div
+                className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'task' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+                onClick={() => setBottomTab('task')}
+              >
+                任务
+              </div>
+            )}
             <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('version')}
@@ -1089,9 +1096,11 @@ function LowcodeView(params: Params) {
           />
         </div>
       )}
-      <div className={css['lowcode-view']} style={{ display: bottomTab === 'task' ? 'flex' : 'none' }}>
-        <TaskPanel content={taskContent} />
-      </div>
+      {hasTaskPanel && (
+        <div className={css['lowcode-view']} style={{ display: bottomTab === 'task' ? 'flex' : 'none' }}>
+          <TaskPanel content={taskContent} />
+        </div>
+      )}
       {/* 版本面板 */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
         <VersionPanel render={bottomTab === 'version'} />

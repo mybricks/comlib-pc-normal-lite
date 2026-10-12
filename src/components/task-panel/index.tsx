@@ -152,6 +152,10 @@ function parseTasks(content: string): TaskItem[] {
   return tasks
 }
 
+export function hasTasks(content: string | null): boolean {
+  return Boolean(content && parseTasks(content).length)
+}
+
 
 function FlowArrow() {
   return (
@@ -697,22 +701,8 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
     setSelected(new Set())
   }, [content])
 
-  if (!content) {
-    return (
-      <div className={css['panel-empty']}>
-        <span className={css['panel-empty-text']}>暂无任务</span>
-      </div>
-    )
-  }
-
-  const tasks = parseTasks(content)
-  if (!tasks.length) {
-    return (
-      <div className={css['panel-empty']}>
-        <span className={css['panel-empty-text']}>暂无任务</span>
-      </div>
-    )
-  }
+  const tasks = content ? parseTasks(content) : []
+  if (!tasks.length) return null
 
   const selectedTasks = tasks.filter(t => selected.has(t.title))
   const selectedStatus = selectedTasks[0]?.status ?? null

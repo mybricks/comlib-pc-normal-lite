@@ -5,7 +5,7 @@ import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
 import myContext, { type VersionRecord } from '../../context'
 import VersionListView from '../../../../components/version-list'
-import TaskPanel from '../../../../components/task-panel'
+import TaskPanel, { hasTasks } from '../../../../components/task-panel'
 import taskPanelCss from '../../../../components/task-panel/index.lazy.less'
 import * as taskPanelCssNS from '../../../../components/task-panel/index.lazy.less'
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
@@ -135,10 +135,14 @@ function ReviewPanel({ content }: { content: string | null }) {
 function LowcodeViewShell() {
   const [activeTab, setActiveTab] = useState<TabKey>('task')
   const [tasksContent, setTasksContent] = useState<string | null>(null)
+  const [tasksLoaded, setTasksLoaded] = useState(false)
   const [reviewContent, setReviewContent] = useState<string | null>(null)
 
   useEffect(() => {
-    const unsubTasks = context.tasksEvents.on('change', setTasksContent, true)
+    const unsubTasks = context.tasksEvents.on('change', (content) => {
+      setTasksContent(content)
+      setTasksLoaded(true)
+    }, true)
     const unsubReview = context.reviewEvents.on('change', setReviewContent, true)
     return () => {
       unsubTasks()
@@ -146,25 +150,33 @@ function LowcodeViewShell() {
     }
   }, [])
 
+  const hasTaskPanel = hasTasks(tasksContent)
+
+  useEffect(() => {
+    if (tasksLoaded && !hasTaskPanel && activeTab === 'task') setActiveTab('version')
+  }, [activeTab, hasTaskPanel, tasksLoaded])
+
   return (
     <div className={css['lowcode-view-container']}>
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div className={css['lowcode-view-toolbar-left']}>
-            {(['task', 'version', 'review'] as TabKey[]).map((tab) => (
-              <div
-                key={tab}
-                className={`${css['lowcode-view-toolbar-tab']} ${activeTab === tab ? css['lowcode-view-toolbar-tab-active'] : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {TAB_LABELS[tab]}
-              </div>
-            ))}
+            {(['task', 'version', 'review'] as TabKey[])
+              .filter(tab => tab !== 'task' || hasTaskPanel)
+              .map((tab) => (
+                <div
+                  key={tab}
+                  className={`${css['lowcode-view-toolbar-tab']} ${activeTab === tab ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {TAB_LABELS[tab]}
+                </div>
+              ))}
           </div>
         </div>
       </div>
       <div className={css['lowcode-view']}>
-        {activeTab === 'task' && <TaskPanel content={tasksContent} allowDelete />}
+        {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} allowDelete />}
         {activeTab === 'version' && <VersionPanel />}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
       </div>
