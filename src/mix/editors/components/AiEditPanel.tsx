@@ -5,6 +5,7 @@ import { getLazyCss } from '../../lowcodeView/utils/css';
 
 const css = getLazyCss(styles);
 import { AiSendIcon } from './AiSendIcon';
+import lang from '../configs/i18n';
 
 type EditMode = 'IMG' | 'SVG';
 
@@ -13,31 +14,53 @@ const MODE_CONFIG: Record<
   { presets: string[]; placeholder: string; messagePrefix: string }
 > = {
   SVG: {
-    presets: ['线条风格', '填充风格', '扁平设计', '单色图标'],
-    placeholder: '描述你想要的图标，如 蓝色搜索图标',
+    presets: [lang.svgPresetLine, lang.svgPresetFill, lang.svgPresetFlat, lang.svgPresetMono],
+    placeholder: lang.svgPanelPlaceholder,
     messagePrefix: '调用图标生成工具，生成图标，用户需求：',
   },
   IMG: {
     presets: [],
-    placeholder: '描述你想要的图片，如 夏日冲浪海报 ',
+    placeholder: lang.imgPanelPlaceholder,
     messagePrefix: '调用图片生成工具，生成图片，用户需求：',
   },
 };
 
 type ToolbarKey = 'model' | 'style' | 'ratio' | 'quality';
 
-const TOOLBAR_CONFIG: Array<{ key: ToolbarKey; label: string; options: string[] }> = [
-  { key: 'model', label: '模型', options: ['banana', 'gpt-image-2'] },
-  { key: 'style', label: '风格', options: ['通用', '写实摄影', '插画', '产品海报', '扁平设计', '高饱和配色'] },
-  { key: 'ratio', label: '比例', options: ['1:1', '4:3', '16:9', '9:16', '3:4'] },
-  { key: 'quality', label: '画质', options: ['标清', '高清', '超清'] },
+const STYLE_OPTIONS: Array<{ key: string; label: string }> = [
+  { key: 'general', label: lang.styleGeneral },
+  { key: 'photo', label: lang.stylePhoto },
+  { key: 'illustration', label: lang.styleIllustration },
+  { key: 'poster', label: lang.stylePoster },
+  { key: 'flat', label: lang.styleFlatDesign },
+  { key: 'vibrant', label: lang.styleVibrant },
+];
+const QUALITY_OPTIONS: Array<{ key: string; label: string }> = [
+  { key: 'sd', label: lang.qualitySD },
+  { key: 'hd', label: lang.qualityHD },
+  { key: 'uhd', label: lang.qualityUHD },
+];
+function styleKeyToZh(key: string): string {
+  const map: Record<string, string> = { general: '通用', photo: '写实摄影', illustration: '插画', poster: '产品海报', flat: '扁平设计', vibrant: '高饱和配色' };
+  return map[key] ?? key;
+}
+function qualityKeyToZh(key: string): string {
+  const map: Record<string, string> = { sd: '标清', hd: '高清', uhd: '超清' };
+  return map[key] ?? key;
+}
+
+const TOOLBAR_CONFIG: Array<{ key: ToolbarKey; label: string; options: Array<{ key: string; label: string }> }> = [
+  { key: 'model', label: lang.toolbarModel, options: [{ key: 'banana', label: 'banana' }, { key: 'gpt-image-2', label: 'gpt-image-2' }] },
+  { key: 'style', label: lang.toolbarStyle, options: STYLE_OPTIONS },
+  { key: 'ratio', label: lang.toolbarRatio, options: ['1:1', '4:3', '16:9', '9:16', '3:4'].map(r => ({ key: r, label: r })) },
+  { key: 'quality', label: lang.toolbarQuality, options: QUALITY_OPTIONS },
 ];
 
-const DEFAULT_SELECTIONS: Record<ToolbarKey, string> = {
+const DEFAULT_KEYS: Record<ToolbarKey, string> = {
   model: 'banana',
-  style: '通用',
+  style: 'general',
   ratio: '1:1',
-  quality: '高清',
+  quality: 'hd',
 };
 
 function ChevronIcon() {
@@ -150,7 +173,7 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
             type="button"
             onClick={handleSubmit}
             className={css.sendButton}
-            aria-label="发送"
+            aria-label={lang.sendBtn}
             disabled={!canSubmit}
           >
             <AiSendIcon disabled={!canSubmit} />
