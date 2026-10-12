@@ -79,7 +79,7 @@ function ChevronIcon() {
 
 export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode }) {
   const [value, setValue] = useState('');
-  const [selections, setSelections] = useState<Record<ToolbarKey, string>>(DEFAULT_SELECTIONS);
+  const [selections, setSelections] = useState<Record<ToolbarKey, string>>(DEFAULT_KEYS);
   const [openDropdown, setOpenDropdown] = useState<ToolbarKey | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -123,9 +123,9 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
     if (mode === 'IMG') {
       const { model, style, ratio, quality } = selections;
       extras += `，模型：${model}`;
-      if (style !== DEFAULT_SELECTIONS.style) extras += `，风格：${style}`;
-      if (ratio !== DEFAULT_SELECTIONS.ratio) extras += `，比例：${ratio}`;
-      if (quality !== DEFAULT_SELECTIONS.quality) extras += `，画质：${quality}`;
+      if (style !== DEFAULT_KEYS.style) extras += `，风格：${styleKeyToZh(style)}`;
+      if (ratio !== DEFAULT_KEYS.ratio) extras += `，比例：${ratio}`;
+      if (quality !== DEFAULT_KEYS.quality) extras += `，画质：${qualityKeyToZh(quality)}`;
     }
 
     plugins?.showAIDialog?.();
@@ -184,8 +184,9 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
           <div className={css.toolbar}>
             {TOOLBAR_CONFIG.map(({ key, label, options }, idx) => {
               const isOpen = openDropdown === key;
-              const selected = selections[key];
-              const isActive = selected !== DEFAULT_SELECTIONS[key];
+              const selectedKey = selections[key];
+              const selectedOption = options.find(o => o.key === selectedKey);
+              const isActive = selectedKey !== DEFAULT_KEYS[key];
               return (
                 <React.Fragment key={key}>
                   {idx > 0 && <span className={css.toolbarSep} />}
@@ -199,7 +200,7 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
                     className={`${css.dropdownTrigger}${isActive ? ` ${css.dropdownTriggerActive}` : ''}`}
                     onClick={() => setOpenDropdown(isOpen ? null : key)}
                   >
-                    <span className={css.dropdownValue}>{selected}</span>
+                    <span className={css.dropdownValue}>{selectedOption?.label ?? selectedKey}</span>
                     <span
                       className={`${css.dropdownChevron}${isOpen ? ` ${css.dropdownChevronOpen}` : ''}`}
                     >
@@ -211,15 +212,15 @@ export function AiEditPanel({ close, mode }: { close: () => void; mode: EditMode
                       <div className={css.dropdownMenuTitle}>{label}</div>
                       {options.map(opt => (
                         <button
-                          key={opt}
+                          key={opt.key}
                           type="button"
-                          className={`${css.dropdownItem}${opt === selected ? ` ${css.dropdownItemActive}` : ''}`}
+                          className={`${css.dropdownItem}${opt.key === selectedKey ? ` ${css.dropdownItemActive}` : ''}`}
                           onClick={() => {
-                            setSelections(prev => ({ ...prev, [key]: opt }));
+                            setSelections(prev => ({ ...prev, [key]: opt.key }));
                             setOpenDropdown(null);
                           }}
                         >
-                          {opt}
+                          {opt.label}
                         </button>
                       ))}
                     </div>
