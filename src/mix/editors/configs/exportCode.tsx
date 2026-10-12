@@ -5,6 +5,7 @@ import type { Props, FigmaImportItem } from '../types';
 import IconLibraryModal from './IconLibraryModal';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from "../../lowcodeView/utils/css";
+import lang from './i18n';
 
 const css = getLazyCss(styles)
 
@@ -38,7 +39,7 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
         </button>
       )}
       <button type="button" className={css.actionBtn} onClick={() => setIconLibVisible(true)}>
-        图标库设置
+        {lang.iconLibrarySettings}
       </button>
       {prdVisible && compiled && (
         <RequirementViewModal compiled={compiled} onClose={() => setPrdVisible(false)} />

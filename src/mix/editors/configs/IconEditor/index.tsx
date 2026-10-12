@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import context from '../../../context';
 import {
   genIconReplacer,
   registerSvgAppliedCallback,
   applyIconWithSvg,
-  patchIconSizeInTsx,
-  patchSvgSizeInTsx,
-  readIconSizeFromJsx,
 } from '../../styleProxy';
 import IconLibraryModal from '../IconLibraryModal';
-import { SizeEditor } from '../SizeEditor';
+import { DownloadIcon } from '../../icons/ai-img';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
+import lang from '../i18n';
 
 const css = getLazyCss(styles);
 
@@ -32,46 +30,15 @@ function getSvgComputedColor(el: Element | null): string | undefined {
   return style.getPropertyValue('color') || undefined;
 }
 
-/** 从三方图标的 DOM 元素读取实际渲染尺寸（多种 fallback） */
-function readIconDomSize(ele: Element | null): { w: number; h: number } {
-  if (!ele) return { w: 0, h: 0 };
-
-  // 直接读 ele 本身
-  const elW = (ele as HTMLElement).offsetWidth;
-  const elH = (ele as HTMLElement).offsetHeight;
-  if (elW > 0 && elH > 0) return { w: elW, h: elH };
-
-  // 内部 SVG
-  const svgEl = ele.querySelector('svg') as HTMLElement | null;
-  if (svgEl) {
-    const w = svgEl.offsetWidth;
-    const h = svgEl.offsetHeight;
-    if (w > 0 && h > 0) return { w, h };
-
-    const rect = svgEl.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-      return { w: rect.width, h: rect.height };
-    }
-  }
-
-  // ele 的 getBoundingClientRect
-  const rect = ele.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    return { w: rect.width, h: rect.height };
-  }
-
-  return { w: 0, h: 0 };
-}
-
-/** 从替换后的 SVG HTML 字符串读取 width/height 属性 */
-function readSvgHtmlSize(svgHtml: string): { w: number; h: number } {
-  const wMatch = svgHtml.match(/\bwidth="([^"]+)"/);
-  const hMatch = svgHtml.match(/\bheight="([^"]+)"/);
-  const w = parseFloat(wMatch?.[1] ?? '');
-  const h = parseFloat(hMatch?.[1] ?? '');
-  return !isNaN(w) && w > 0 && !isNaN(h) && h > 0
-    ? { w, h }
-    : { w: 0, h: 0 };
+function downloadSvg(svg: string): void {
+  const objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = 'icon.svg';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
 // ─── IconEditorPanel ──────────────────────────────────────────────────────────
@@ -103,26 +70,6 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
     return () => registerSvgAppliedCallback(null);
   }, []);
 
-  // 替换为内联 SVG 后从 HTML 字符串读取；否则优先从 JSX 源码读显式尺寸，fallback 到 DOM 测量
-  const iconSize = replacedSvg
-    ? readSvgHtmlSize(replacedSvg)
-    : (() => {
-        const jsxSize = readIconSizeFromJsx(syntheticParams);
-        return jsxSize.w > 0 ? jsxSize : readIconDomSize(ele);
-      })();
-
-  const handleSizeCommit = useCallback(
-    (size: { width: number; height: number }) => {
-      if (replacedSvg) {
-        patchSvgSizeInTsx(syntheticParams, size);
-      } else {
-        patchIconSizeInTsx(syntheticParams, size);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [replacedSvg],
-  );
-
   return (
     <div className={css.panel}>
       {/* 图标预览 */}
@@ -135,12 +82,9 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
         ) : IconComp ? (
           React.createElement(IconComp, { style: { fontSize: 48, color } })
         ) : (
-          <span className={css.previewEmpty}>{iconName || '无法预览'}</span>
+          <span className={css.previewEmpty}>{iconName || lang.noPreviewAvailable}</span>
         )}
       </div>
-
-      {/* 尺寸编辑器：三方组件图标不支持非等比变形，禁止解锁宽高比 */}
-      <SizeEditor size={iconSize} onCommit={handleSizeCommit} svg={currentSvgHtml} disableLock={!replacedSvg} />
 
       {/* 操作按钮 */}
       <div className={css.btnRow}>
@@ -149,9 +93,9 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
           className={css.btn}
           onClick={() => setPickerOpen(true)}
         >
-          从图标库选择
+          {lang.selectFromIconLibrary}
           <svg
-            data-mybricks-tip="从AI生成的图标库中进行选择"
+            data-mybricks-tip={lang.selectFromIconLibraryTip}
             viewBox="0 0 1024 1024"
             xmlns="http://www.w3.org/2000/svg"
             style={{ width: 13, height: 13, flexShrink: 0, opacity: 0.30, display: 'block' }}
@@ -165,8 +109,29 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
           className={css.btn}
           onClick={() => iconReplacer.set(syntheticParams)}
         >
-          上传SVG
+          {lang.uploadSvg}
         </button>
+        {currentSvgHtml && (
+          <button
+            type="button"
+            aria-label={lang.downloadSvg}
+            data-mybricks-tip={JSON.stringify({ content: lang.downloadSvg, position: 'left' })}
+            onClick={() => downloadSvg(currentSvgHtml)}
+            style={{
+              flexShrink: 0,
+              width: 26,
+              height: 26,
+              padding: 4,
+              boxSizing: 'border-box',
+              border: '1px solid var(--mybricks-border-color-main, #ddd)',
+              borderRadius: 6,
+              backgroundColor: 'var(--mybricks-bg-color-main, #fff)',
+              cursor: 'pointer',
+            }}
+          >
+            <DownloadIcon style={{ display: 'block', width: '100%', height: '100%' }} />
+          </button>
+        )}
       </div>
 
       <IconLibraryModal
@@ -185,7 +150,7 @@ function IconEditorPanel({ editConfig, comId }: { editConfig: any; comId: string
 export function buildIconEditorItems(comId: string) {
   return [
     {
-      title: '图标',
+      title: lang.iconEditorTitle,
       type: 'editorRender',
       options: {
         render(editConfig: any) {

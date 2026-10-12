@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { genSvgReplacer, registerSvgAppliedCallback, applyRawSvg, patchSvgSizeInTsx } from '../../styleProxy';
+import { genSvgReplacer, registerSvgAppliedCallback, applyRawSvg } from '../../styleProxy';
 import IconLibraryModal from '../IconLibraryModal';
-import { SizeEditor } from '../SizeEditor';
+import { DownloadIcon } from '../../icons/ai-img';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
+import lang from '../i18n';
 
 const css = getLazyCss(styles);
 
@@ -24,30 +25,15 @@ function getSvgComputedColor(el: Element | null): string | undefined {
   return style.getPropertyValue('color') || undefined;
 }
 
-/** 从 SVG HTML 字符串或 DOM 元素读取 width/height */
-function readSvgSize(svgHtml: string, el: SVGElement | null): { w: number; h: number } {
-  // 优先从 HTML 属性字符串解析
-  const wMatch = svgHtml.match(/\bwidth="([^"]+)"/);
-  const hMatch = svgHtml.match(/\bheight="([^"]+)"/);
-  const wAttr = parseFloat(wMatch?.[1] ?? '');
-  const hAttr = parseFloat(hMatch?.[1] ?? '');
-  if (!isNaN(wAttr) && wAttr > 0 && !isNaN(hAttr) && hAttr > 0) {
-    return { w: wAttr, h: hAttr };
-  }
-  // fallback 1：offsetWidth/offsetHeight（Shadow DOM 内可读）
-  if (el) {
-    const ow = (el as unknown as HTMLElement).offsetWidth;
-    const oh = (el as unknown as HTMLElement).offsetHeight;
-    if (ow > 0 && oh > 0) return { w: ow, h: oh };
-  }
-  // fallback 2：getBoundingClientRect
-  if (el) {
-    const rect = el.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-      return { w: rect.width, h: rect.height };
-    }
-  }
-  return { w: 0, h: 0 };
+function downloadSvg(svg: string): void {
+  const objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = 'icon.svg';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
 // ─── SvgPreview ───────────────────────────────────────────────────────────────
@@ -88,27 +74,19 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
     focusArea: isSvgElement ? svgEle : svgEle?.closest('[data-loc]'),
     id: comId,
   };
-  const svgSize = readSvgSize(currentSvgHtml, svgEle);
 
   return (
     <div className={css.panel}>
       <SvgPreview svgHtml={currentSvgHtml} color={svgColor} />
-      {currentSvgHtml && isSvgElement && (
-        <SizeEditor
-          size={svgSize}
-          onCommit={(size) => patchSvgSizeInTsx(syntheticParams, size)}
-          svg={currentSvgHtml}
-        />
-      )}
       <div className={css.btnRow}>
         <button
           type="button"
           className={css.btn}
           onClick={() => setPickerOpen(true)}
         >
-          从图标库选择
+          {lang.selectFromIconLibrary}
           <svg
-            data-mybricks-tip="从AI生成的图标库中进行选择"
+            data-mybricks-tip={lang.selectFromIconLibraryTip}
             viewBox="0 0 1024 1024"
             xmlns="http://www.w3.org/2000/svg"
             style={{ width: 13, height: 13, flexShrink: 0, opacity: 0.30, display: 'block' }}
@@ -122,8 +100,29 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
           className={css.btn}
           onClick={() => svgReplacer.set(syntheticParams)}
         >
-          上传SVG
+          {lang.uploadSvg}
         </button>
+        {currentSvgHtml && (
+          <button
+            type="button"
+            aria-label={lang.downloadSvg}
+            data-mybricks-tip={JSON.stringify({ content: lang.downloadSvg, position: 'left' })}
+            onClick={() => downloadSvg(currentSvgHtml)}
+            style={{
+              flexShrink: 0,
+              width: 26,
+              height: 26,
+              padding: 4,
+              boxSizing: 'border-box',
+              border: '1px solid var(--mybricks-border-color-main, #ddd)',
+              borderRadius: 6,
+              backgroundColor: 'var(--mybricks-bg-color-main, #fff)',
+              cursor: 'pointer',
+            }}
+          >
+            <DownloadIcon style={{ display: 'block', width: '100%', height: '100%' }} />
+          </button>
+        )}
       </div>
       <IconLibraryModal
         visible={pickerOpen}
@@ -141,7 +140,7 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
 export function buildSvgEditorItems(comId: string) {
   return [
     {
-      title: '图标',
+      title: lang.iconEditorTitle,
       type: 'editorRender',
       options: {
         render(editConfig: any) {
