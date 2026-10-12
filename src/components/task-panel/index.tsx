@@ -236,7 +236,7 @@ function FlowFilterBar({
           <span className={css['batch-toolbar-count']}>已选 {selectedCount} 项</span>
           {batchTransitions.length > 0 ? (
             <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>调整状态至</span>
+              <span className={css['task-status-selector-text']}>调整</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
@@ -247,7 +247,7 @@ function FlowFilterBar({
                   e.currentTarget.value = ''
                 }}
               >
-                <option value="" disabled>调整状态至</option>
+                <option value="" disabled>调整</option>
                 {batchTransitions.map(transition => (
                   <option key={transition.target} value={transition.target}>{transition.label}</option>
                 ))}
@@ -402,6 +402,23 @@ interface TaskTransition {
   requiresReason?: boolean
 }
 
+function sendTaskMessage(message: string) {
+  const componentId = context.comId ?? context.component?.params?.id
+  const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent
+
+  if (typeof sendToAgent === 'function' && componentId) {
+    sendToAgent(componentId, { message })
+    return
+  }
+
+  const plugins = context.plugins as any
+  plugins?.showAIDialog?.()
+  plugins?.aiService?.request({
+    message,
+    attachments: [],
+  })
+}
+
 function getTaskTransitions(task: TaskItem): TaskTransition[] {
   const transitions: Record<TaskStatus, TaskTransition[]> = {
     '处理中': [{
@@ -520,9 +537,7 @@ function TaskRow({
   }
 
   const handleRevert = () => {
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-      message: `[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`,
-    })
+    sendTaskMessage(`[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`)
   }
 
   const handleTransition = (transition: TaskTransition) => {
@@ -545,15 +560,11 @@ function TaskRow({
 
       const reason = window.prompt('请填写原因')?.trim()
       if (!reason) return
-      ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-        message: `${message}\n\n原因：${reason}`,
-      })
+      sendTaskMessage(`${message}\n\n原因：${reason}`)
       return
     }
 
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
-      message,
-    })
+    sendTaskMessage(message)
   }
 
   return (
@@ -621,7 +632,7 @@ function TaskRow({
           )}
           {transitions.length > 0 && (
             <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>调整状态至</span>
+              <span className={css['task-status-selector-text']}>调整</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
@@ -633,7 +644,7 @@ function TaskRow({
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <option value="" disabled>调整状态至</option>
+                <option value="" disabled>调整</option>
                 {transitions.map(transition => (
                   <option key={transition.target} value={transition.target}>{transition.label}</option>
                 ))}
@@ -740,7 +751,7 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
     const message = selectedTasks
       .map(task => `任务「${task.title}」：${transition.instruction}`)
       .join('\n')
-    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, { message })
+    sendTaskMessage(message)
     exitBatchMode()
   }
 
