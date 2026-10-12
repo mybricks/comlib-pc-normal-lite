@@ -9,6 +9,9 @@ export function buildPagePanel(props: Props) {
 
   return {
     items: (pageProps: any, cate1: any, _cate2: any) => {
+      if (!cate1) {
+        return
+      }
       if (pageProps.focusArea.dataset.desnPage === 'GUI_AGENT') {
         cate1.title = '智能体';
         cate1.items = [

@@ -99,13 +99,13 @@ const RuntimeIframe = (props) => {
 		const expectedSrc = buildIframeSrc(itemSrc)
 
 		try {
-			const currentSrc = iframe.contentWindow?.location?.href || iframe.src
-			if (currentSrc && currentSrc !== expectedSrc) {
+			// 替换 iframe 的历史记录，使刷新后回到初始路由且无法回退到 iframe 内的旧页面。
+			const contentWindow = iframe.contentWindow
+			if (contentWindow) {
+				contentWindow.location.replace(expectedSrc)
+			} else {
 				iframe.src = expectedSrc
-				return true
 			}
-
-			iframe.contentWindow?.location.reload()
 			return true
 		} catch {
 			iframe.src = expectedSrc
@@ -128,13 +128,19 @@ const RuntimeIframe = (props) => {
 			setIframes(nextRoutes)
 		})
 
-		const events = context.component!.events;
-		const onEventsDebugTargetCancel = events.on('debugTarget', (props) => {
+		const onEventsDebugTargetCancel = myContext.debug.events.on('debugTarget', (props) => {
 			const nextSrc = props.src || ''
 			const previousSrc = debugSrcRef.current
 			pendingRefreshSrcRef.current = nextSrc || previousSrc
 			debugSrcRef.current = nextSrc
 			setDebugSrc(nextSrc)
+		})
+
+		const onEventsRefreshTargetCancel = myContext.refresh.events.on('refreshTarget', (props) => {
+			const refreshSrc = props.src || ''
+			if (!refreshSrc) return
+
+			refreshIframe(refreshSrc)
 		})
 
 		return () => {
@@ -143,6 +149,7 @@ const RuntimeIframe = (props) => {
 			})
 			cancelRoutesEventsRoutes()
 			onEventsDebugTargetCancel()
+			onEventsRefreshTargetCancel()
 		}
 	}, [])
 
@@ -169,7 +176,7 @@ const RuntimeIframe = (props) => {
 	}, [iframes])
 
 	return (
-		<>
+		<div style={{ display: 'contents' }}>
 			{iframes.map((item) => {
 				const src = buildIframeSrc(item.src)
 
@@ -208,7 +215,7 @@ const RuntimeIframe = (props) => {
 					</div>
 				)
 			})}
-		</>
+		</div>
 	)
 }
 

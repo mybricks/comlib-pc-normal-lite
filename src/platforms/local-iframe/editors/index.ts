@@ -13,11 +13,13 @@ import auditPage from './auditPage'
 import viewCode from './viewCode'
 import resizePage from './resizePage'
 import doc from './doc'
+import refresh from './refresh'
 
 export default function () {
   return {
     '@lowcode': lowcode,
     '@debug': debug,
+    '@refresh': refresh,
     '[data-zone-noselector]': {
       // style: [{ items: [] }],
     },

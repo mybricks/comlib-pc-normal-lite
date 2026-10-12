@@ -2,13 +2,16 @@ import { Comment } from './comment'
 import { Version } from './version'
 import { Doc } from './doc'
 import { Vibe } from './vibe'
-
+import { Debug } from './debug'
+import { Refresh } from './refresh'
 
 class Context {
   vibe = new Vibe()
   version = new Version()
   comment = new Comment()
   doc = new Doc()
+  debug = new Debug()
+  refresh = new Refresh()
 }
 
 let context: Context | null = null
