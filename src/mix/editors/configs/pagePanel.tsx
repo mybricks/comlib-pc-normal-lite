@@ -2,6 +2,7 @@ import context, { config } from '../../context';
 import { syncFromFigmaJson } from '../figma-to-dom/sync';
 import type { Props, FigmaComponentPatch, FigmaImportItem } from '../types';
 import { ensureGuiCard, getGuiCardField, setGuiCardField } from './guiCard';
+import lang from './i18n';
 
 export function buildPagePanel(props: Props) {
   const comId = props.model?.runtime?.id || props.id;
@@ -119,7 +120,7 @@ export function buildPagePanel(props: Props) {
       let title = '页面'
       const items: any[] = [
         {
-          title: 'UI设计',
+          title: lang.uiDesignTitle,
           items: [
             {
               title: 'Figma',

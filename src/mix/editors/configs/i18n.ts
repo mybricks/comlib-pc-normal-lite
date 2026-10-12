@@ -56,6 +56,8 @@ const lang = {
   qualitySD: i18n({ zh: '标清', en: 'SD' }),
   qualityHD: i18n({ zh: '高清', en: 'HD' }),
   qualityUHD: i18n({ zh: '超清', en: 'UHD' }),
+  // PagePanel
+  uiDesignTitle: i18n({ zh: 'UI 设计', en: 'UI Design' })
 };
 
 export default lang;
