@@ -3,7 +3,7 @@ function i18n(langs: Record<string, string>): string {
   if (type && langs[type]) {
     return langs[type];
   }
-  return langs['zh'] || 'zh not found';
+  return langs['en'] || 'en not found';
 }
 
 const lang = {
