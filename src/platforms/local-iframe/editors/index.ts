@@ -18,31 +18,21 @@ export default function () {
   return {
     '@lowcode': lowcode,
     '@debug': debug,
-    '[data-zone-selector]': {
-      style: [
-        {
-          items: [
-            style(),
-            resizer(),
-          ],
-        },
-      ],
-    },
     '[data-zone-noselector]': {
       // style: [{ items: [] }],
     },
     '[class]': {
-      style: [
-        {
-          items: [
-            style(),
-            resizer(),
-          ],
-        },
-      ],
       items: [
-        noteRender
+        noteRender,
+        style(),
+        resizer(),
       ]
+    },
+    '[data-zone-selector]': {
+      items: [
+        style(),
+        resizer(),
+      ],
     },
     '@commitUserActions': commitUserActions,
     '@cancelUserActions': cancelUserActions,

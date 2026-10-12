@@ -387,6 +387,7 @@ export default function() {
 
   return {
     title: '样式',
+    type: '_style',
     autoOptions: true,
     valueProxy: {
       set({ focusArea }, style: CSSProperties) {
