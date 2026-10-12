@@ -2,15 +2,14 @@ import React, { useState, useRef, useLayoutEffect } from 'react';
 import { AiSendIcon } from '../../components/AiSendIcon';
 import * as styleNS from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
-import lang from '../i18n';
 
 const css = getLazyCss(styleNS);
 
-const SVG_PRESETS = [lang.svgPresetLine, lang.svgPresetFill, lang.svgPresetFlat, lang.svgPresetMono];
+const SVG_PRESETS = ['线条风格', '填充风格', '扁平设计', '单色图标'];
 
 export default function AIInputBar({
   onGenerate,
-  placeholder = lang.aiInputBarDefaultPlaceholder,
+  placeholder = '描述你想要的图标库，如「简约风格的电商图标库」',
   showPresets = true,
 }: {
   onGenerate: (content: string) => void;
@@ -66,7 +65,7 @@ export default function AIInputBar({
           className={css.sendButton}
           onClick={handleSubmit}
           disabled={!canSubmit}
-          aria-label={lang.generateIconLibrary}
+          aria-label="生成图标库"
         >
           <AiSendIcon disabled={!canSubmit} size={19} />
         </button>

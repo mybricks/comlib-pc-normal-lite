@@ -6,7 +6,6 @@ import { AiBlingblingIcon } from '../../icons/ai-svg-blingbling';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 import { DownloadIcon } from '../../icons/ai-img';
-import lang from '../i18n';
 
 const css = getLazyCss(styles);
 
@@ -86,7 +85,7 @@ function ImgPreview({ src }: { src: string }) {
         className={css.preview}
         role="button"
         tabIndex={0}
-        data-mybricks-tip={lang.clickToPreview}
+        data-mybricks-tip="点击查看大图"
         onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -145,16 +144,16 @@ function ImgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
         <button
           type="button"
           className={css.btn}
-          data-mybricks-tip={isDynamic ? lang.uploadWithAI : lang.uploadAndReplace}
+          data-mybricks-tip={isDynamic ? '上传图片，AI 帮你替换' : '上传图片进行替换'}
           onClick={() => imgReplacer.set(syntheticParams)}
         >
           {isDynamic && <AiBlingblingIcon style={{ flexShrink: 0, marginRight: 4, transform: 'rotate(180deg)' }} />}
-          {lang.changeImage}
+          更改图片
         </button>
         <button
           type="button"
-          aria-label={lang.downloadImage}
-          data-mybricks-tip={JSON.stringify({ content: lang.downloadImage, position: 'left' })}
+          aria-label="下载图片"
+          data-mybricks-tip={JSON.stringify({ content: '下载图片', position: 'left' })}
           onClick={() => downloadImage(currentSrc)}
           style={{
             flexShrink: 0,
@@ -178,7 +177,7 @@ function ImgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
 export function buildImgEditorItems(comId: string) {
   return [
     {
-      title: lang.imagePanelTitle,
+      title: '图片',
       type: 'editorRender',
       options: {
         render(editConfig: any) {

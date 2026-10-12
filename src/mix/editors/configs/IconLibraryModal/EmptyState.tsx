@@ -3,7 +3,6 @@ import context from '../../../context';
 import AIInputBar from './AIInputBar';
 import * as styleNS from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
-import lang from '../i18n';
 
 const css = getLazyCss(styleNS);
 
@@ -43,8 +42,8 @@ export default function EmptyState({ onClose }: { onClose: () => void }) {
           />
         </svg>
       </div>
-      <div className={css.title}>{lang.noIconLibraryTitle}</div>
-      <div className={css.subtitle}>{lang.noIconLibrarySubtitle}</div>
+      <div className={css.title}>还没有图标库</div>
+      <div className={css.subtitle}>描述你想要的风格，让 AI 帮你生成</div>
       <AIInputBar onGenerate={handleGenerate} />
     </div>
   );

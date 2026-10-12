@@ -7,7 +7,6 @@ import AIInputBar from './AIInputBar';
 import EmptyState from './EmptyState';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
-import lang from '../i18n';
 
 const css = getLazyCss(styles);
 
@@ -150,7 +149,7 @@ export default function IconLibraryModal({
     <Modal
       open={visible}
       onCancel={onClose}
-      title={lang.selectFromIconLibrary}
+      title="从图标库选择"
       bodyStyle={isEmptyOverview ? { height: 'auto' } : { height: '520px' }}
       footer={null}
       width={560}
@@ -174,7 +173,7 @@ export default function IconLibraryModal({
                         className={`${css.deleteBtn}${deletingId === library.id ? ` ${css.deleteBtnLoading}` : ''}`}
                         onClick={e => handleDeleteLibrary(e, library.id)}
                         disabled={deletingId !== null}
-                        aria-label={lang.deleteIconLibrary}
+                        aria-label="删除图标库"
                       >
                         {deletingId === library.id ? (
                           <svg viewBox="0 0 16 16" width={12} height={12} fill="currentColor" className={css.spinIcon}>
@@ -186,8 +185,8 @@ export default function IconLibraryModal({
                           </svg>
                         )}
                       </button>
-                      <div className={css.libraryName} title={library.name || lang.unnamedIconLibrary}>
-                        {library.name || lang.unnamedIconLibrary}
+                      <div className={css.libraryName} title={library.name || '未命名图标库'}>
+                        {library.name || '未命名图标库'}
                       </div>
                       <div className={css.previewWrap}>
                         <div className={css.previewGrid}>
@@ -205,7 +204,7 @@ export default function IconLibraryModal({
                         )}
                       </div>
                       <div className={css.libraryCount}>
-                        {lang.iconCountPrefix}{lang.iconCountPrefix ? ' ' : ''}{library.icons.length} {lang.iconCountSuffix}
+                        共 {library.icons.length} 个图标
                       </div>
                     </div>
                   ))}
@@ -213,7 +212,7 @@ export default function IconLibraryModal({
                 <div className={css.aiInputSection}>
                   <AIInputBar
                     onGenerate={handleGenerateIcon}
-                    placeholder={lang.aiInputPlaceholderOverview}
+                    placeholder="告诉 AI 你还需要什么图标库…"
                   />
                 </div>
               </>
@@ -226,9 +225,9 @@ export default function IconLibraryModal({
           <div className={css.detailWrap}>
             <div className={css.detailHeader}>
               <span className={css.backBtn} onClick={handleBackToOverview}>
-                {lang.backBtn}
+                ← 返回
               </span>
-              <span className={css.detailTitle}>{activeLibrary?.name || lang.iconLibraryFallback}</span>
+              <span className={css.detailTitle}>{activeLibrary?.name || '图标库'}</span>
             </div>
             <div className={css.detailGrid}>
               {(activeLibrary?.icons ?? []).map((icon, index) => {
@@ -251,7 +250,7 @@ export default function IconLibraryModal({
                           onClose();
                         }}
                       >
-                        {lang.useIcon}
+                        使用
                       </button>
                     )}
                     <div className={css.iconItemSvg} dangerouslySetInnerHTML={{ __html: icon.svg }} />
@@ -260,14 +259,14 @@ export default function IconLibraryModal({
                 );
               })}
               {(activeLibrary?.icons?.length ?? 0) === 0 && (
-                <div className={css.emptyTip}>{lang.emptyIconLibrary}</div>
+                <div className={css.emptyTip}>当前图标库暂无图标</div>
               )}
             </div>
             {selectedIconKey && (
               <div className={css.detailAISection}>
                 <AIInputBar
                   onGenerate={handleEditIcon}
-                  placeholder={lang.aiInputPlaceholderDetail}
+                  placeholder="告诉 AI 你想怎么改这个图标"
                   showPresets={false}
                 />
               </div>
