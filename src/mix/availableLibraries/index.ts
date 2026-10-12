@@ -124,7 +124,17 @@ export function getEffectiveLibraries(): EffectiveLibrary[] {
     ? effectiveLibraries.map((lib) => toLibraryMeta(lib))
     : PRESET_ADDON_LIBS
 
-  return [...BASE_LIBS, ...addonLibs].map((lib) => ({
+  // 基础库由组件库自身提供，优先于宿主同名配置。其余配置库按名称保留最后
+  // 一项，与运行时 getCompatibleDependencies 的覆盖顺序保持一致。
+  const baseLibraryNames = new Set(BASE_LIBS.map((library) => library.name))
+  const addonLibrariesByName = new Map<string, import('./types').LibraryMeta>()
+  addonLibs.forEach((library) => {
+    if (!baseLibraryNames.has(library.name)) {
+      addonLibrariesByName.set(library.name, library)
+    }
+  })
+
+  return [...BASE_LIBS, ...addonLibrariesByName.values()].map((lib) => ({
     name: lib.name,
     version: lib.version ?? '',
     usage: getLibraryUsage(lib),

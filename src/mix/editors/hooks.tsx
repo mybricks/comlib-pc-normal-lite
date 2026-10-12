@@ -27,6 +27,8 @@ import * as aiSvgIconCssNS from './icons/aiSvgIcon.lazy.less';
 import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 import versionListViewCss from '../../components/version-list/index.lazy.less';
 import * as versionListViewCssNS from '../../components/version-list/index.lazy.less';
+import taskPanelCss from '../../components/task-panel/index.lazy.less';
+import * as taskPanelCssNS from '../../components/task-panel/index.lazy.less';
 import { randomUUID } from '../utils/uuid'
 
 
@@ -124,6 +126,10 @@ export function buildHooks(props: Props) {
           {
             css: transform(versionListViewCssNS),
             use: genUse(versionListViewCss)
+          },
+          {
+            css: transform(taskPanelCssNS),
+            use: genUse(taskPanelCss)
           },
           {
             css: transform(exportCodeCssNS),

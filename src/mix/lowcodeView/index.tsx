@@ -3,6 +3,7 @@ import Editor, { HandlerType, Monaco, StandaloneCodeEditor } from "@mybricks/cod
 import context, { config } from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
+import TaskPanel from "../../components/task-panel";
 import * as lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
 import { useDarkMode } from "../../utils/hooks";
@@ -210,6 +211,17 @@ const getRelativeImportAtPosition = ({
   return { importPath, startColumn, endColumn };
 };
 
+function findTaskDocumentContent(files: LowcodeFile[]): string | null {
+  const configured = ((window as any).__LINGCHUANG_CONFIG__?.configDirName ?? (window as any)._sandbox_?.config?.configDirName);
+  const root = typeof configured === 'string' && configured.trim()
+    ? normalizeFilePath(configured.trim()).replace(/\/$/, '')
+    : '.lingchuang';
+  const taskFiles = files.filter(file => normalizeFilePath(file.fileName).endsWith('/tasks/TASKS.md'));
+  const unbranched = taskFiles.find(file => normalizeFilePath(file.fileName) === `${root}/tasks/TASKS.md`);
+  const selected = unbranched ?? (taskFiles.length === 1 ? taskFiles[0] : null);
+  return selected ? safeDecodeSource(selected.source) : null;
+}
+
 function LowcodeView(params: Params) {
   const [modifiedContent, setModifiedContent] = useState<Record<string, string>>({});
   const [hasBranchHistory, setHasBranchHistory] = useState(() => undoRedoManager.hasBranchHistory());
@@ -259,6 +271,8 @@ function LowcodeView(params: Params) {
 
   // 用稳定的 key 字符串表示 files 快照，用于监听变化
   const filesKey = files.map((f) => `${f.fileName}:${f.source}`).join('|');
+  const taskContent = useMemo(() => findTaskDocumentContent(files), [filesKey]);
+  useEffect(() => context.setTasksContent(taskContent), [taskContent]);
   const treeNodes = useMemo(() => filesJsonToTree(files), [filesKey]);
   const rootNode = useMemo<FileTreeNode>(() => ({
     type: "directory",
@@ -299,7 +313,7 @@ function LowcodeView(params: Params) {
   const bottomTab = debugState?.bottomTab ?? 'version';
   const consoleLogs = debugState?.logs ?? [];
 
-  const setBottomTab = useCallback((tab: 'source' | 'console' | 'version') => {
+  const setBottomTab = useCallback((tab: 'task' | 'source' | 'console' | 'version') => {
     if (componentId) context.setComBottomTab(tab);
   }, [componentId]);
 
@@ -965,6 +979,12 @@ function LowcodeView(params: Params) {
               </div>
             )}
             <div
+              className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'task' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
+              onClick={() => setBottomTab('task')}
+            >
+              任务
+            </div>
+            <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('version')}
             >
@@ -1069,6 +1089,9 @@ function LowcodeView(params: Params) {
           />
         </div>
       )}
+      <div className={css['lowcode-view']} style={{ display: bottomTab === 'task' ? 'flex' : 'none' }}>
+        <TaskPanel content={taskContent} />
+      </div>
       {/* 版本面板 */}
       <div className={css['lowcode-view']} style={{ display: bottomTab === 'version' ? 'flex' : 'none' }}>
         <VersionPanel render={bottomTab === 'version'} />

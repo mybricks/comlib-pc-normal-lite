@@ -1,0 +1,831 @@
+import React, { useState, useEffect } from 'react'
+import context from '../../mix/context'
+import { randomUUID } from '../../mix/utils/uuid'
+import { Popconfirm } from '../version-list'
+import taskPanelCss from './index.lazy.less'
+
+const css = (taskPanelCss as any).locals || taskPanelCss
+
+type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
+interface TaskMetadata {
+  label: string
+  value: string
+}
+interface TaskItem {
+  title: string
+  status: TaskStatus
+  updatedAt?: string
+  updatedAtTimestamp?: number
+  handoverTo?: string
+  handoverReason?: string
+  metadata: TaskMetadata[]
+  summary?: string
+  detail?: string
+}
+
+interface FlowStep {
+  status: string
+  dot: string
+  count: number
+  disabled: boolean
+}
+
+const TASK_FLOW_ORDER: TaskStatus[] = ['处理中', '待验证', '待交接', '已完成']
+
+const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
+  '处理中': {
+    dot: 'var(--mybricks-text-color-disabled, #ccc)',
+    badgeBg: 'var(--mybricks-bg-color-active, #DFE1E6)',
+    badgeText: 'var(--mybricks-text-color-disabled, #42526E)',
+  },
+  '待验证': {
+    dot: '#ff4d4f',
+    badgeBg: '#ff4d4f',
+    badgeText: '#fff',
+  },
+  '待交接': {
+    dot: '#faad14',
+    badgeBg: '#faad14',
+    badgeText: '#fff',
+  },
+  '已完成': {
+    dot: '#52c41a',
+    badgeBg: '#52c41a',
+    badgeText: '#fff',
+  },
+}
+
+function extractMetaField(section: string, fieldName: string): string | undefined {
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = section.match(
+    new RegExp(`\\*{1,2}\\s*${escaped}\\s*\\*{0,2}\\s*[：:：]\\s*(.+)`, 'i')
+  )
+  return match?.[1]?.replace(/[*_`]/g, '').trim() || undefined
+}
+
+function extractSummary(section: string): string | undefined {
+  const lines = section.split('\n')
+  const summaryLines: string[] = []
+  for (const line of lines) {
+    const m = line.match(/^>\s*(.*)/)
+    if (m) {
+      const text = m[1].trim()
+      if (text) summaryLines.push(text)
+    }
+  }
+  return summaryLines.length ? summaryLines.join(' ') : undefined
+}
+
+function extractDetail(section: string): string | undefined {
+  const lines = section.split('\n')
+  let passedTitle = false
+  const detailLines: string[] = []
+
+  for (const line of lines) {
+    if (!passedTitle) {
+      if (/^#+\s/.test(line)) passedTitle = true
+      continue
+    }
+    if (/^\s*-\s*\*{1,2}[^*\n]+\*{0,2}\s*[：:]\s*.+/.test(line)) continue
+    if (/^>\s*/.test(line)) continue
+    detailLines.push(line)
+  }
+
+  const detail = detailLines.join('\n').trim()
+  return detail || undefined
+}
+
+function splitSections(content: string): string[] {
+  return content.split(/(?=^#{1,3}\s)/m).filter(s => /^#{1,3}\s/.test(s))
+}
+
+function extractMetadata(section: string): TaskMetadata[] {
+  const metadata: TaskMetadata[] = []
+  const regex = /^\s*-\s*\*{1,2}\s*([^*\n]+?)\s*\*{0,2}\s*[：:]\s*(.+)$/gm
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(section))) {
+    const label = match[1].trim()
+    const value = match[2].replace(/[*_`]/g, '').trim()
+    if (label && label !== '状态' && value) metadata.push({ label, value })
+  }
+  return metadata
+}
+
+function normalizeTaskStatus(raw: string | undefined): TaskStatus {
+  const status = raw?.replace(/[*_`]/g, '').trim() || '处理中'
+  if (status === '待处理') return '处理中'
+  if (status === '待验收') return '待验证'
+  return ['处理中', '待验证', '待交接', '已完成'].includes(status)
+    ? status as TaskStatus
+    : '处理中'
+}
+
+function parseTaskUpdatedAt(raw: string | undefined): number | undefined {
+  if (!raw) return undefined
+
+  const timestamp = new Date(raw.trim()).getTime()
+  return Number.isNaN(timestamp) ? undefined : timestamp
+}
+
+function parseTasks(content: string): TaskItem[] {
+  const tasks: TaskItem[] = []
+  const sections = splitSections(content).filter(s => /^##\s/.test(s))
+  for (const section of sections) {
+    const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
+    if (!title) continue
+    const metadata = extractMetadata(section)
+    const updatedAt = metadata.find(item => item.label === '更新时间')?.value
+    const handoverTo = metadata.find(item => item.label === '交接给')?.value
+    const handoverReason = metadata.find(item => item.label === '交接原因')?.value
+    tasks.push({
+      title,
+      status: normalizeTaskStatus(extractMetaField(section, '状态')),
+      updatedAt,
+      updatedAtTimestamp: parseTaskUpdatedAt(updatedAt),
+      handoverTo,
+      handoverReason,
+      metadata: metadata.filter(item => item.label !== '交接给' && item.label !== '交接原因'),
+      summary: extractSummary(section),
+      detail: extractDetail(section),
+    })
+  }
+  return tasks
+}
+
+
+function FlowArrow() {
+  return (
+    <svg className={css['flow-arrow']} width="14" height="10" viewBox="0 0 14 10" fill="none">
+      <path d="M1 5H11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeDasharray="2 2" />
+      <path d="M8.5 2L11.5 5L8.5 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+const ATTENTION_STATUS = '待验证'
+
+function FlowFilterBar({
+  steps,
+  total,
+  activeFilter,
+  onFilter,
+  updatedAt,
+  batchMode,
+  batchDisabled,
+  onToggleBatchMode,
+  selectedCount,
+  batchTransitions,
+  onBatchAction,
+  onClearSelection,
+}: {
+  steps: FlowStep[]
+  total: number
+  activeFilter: string | null
+  onFilter: (s: string | null) => void
+  updatedAt: string | null
+  batchMode: boolean
+  batchDisabled: boolean
+  onToggleBatchMode: () => void
+  selectedCount: number
+  batchTransitions: TaskTransition[]
+  onBatchAction: (transition: TaskTransition) => void
+  onClearSelection: () => void
+}) {
+  return (
+    <div className={css['summary-bar']}>
+      <div className={css['flow-track']}>
+        <div
+          className={`${css['flow-node']} ${css['flow-node-all']} ${!activeFilter ? css['flow-node-active'] : ''}`}
+          onClick={() => onFilter(null)}
+          title="全部"
+        >
+          <span className={css['flow-node-label']}>全部</span>
+          <span className={css['flow-node-count']}>{total}</span>
+        </div>
+        {steps.map(step => {
+          return (
+            <React.Fragment key={step.status}>
+              <FlowArrow />
+              <div
+                className={[
+                  css['flow-node'],
+                  activeFilter === step.status ? css['flow-node-active'] : '',
+                  step.disabled ? css['flow-node-disabled'] : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => onFilter(activeFilter === step.status ? null : step.status)}
+                title={step.disabled ? `${step.status}（暂无）` : step.status}
+              >
+                <span className={css['flow-node-dot']} style={{ background: step.dot }} />
+                <span className={css['flow-node-label']}>{step.status}</span>
+                <span className={css['flow-node-count']}>{step.count}</span>
+              </div>
+            </React.Fragment>
+          )
+        })}
+      </div>
+      {updatedAt && (
+        <span className={css['summary-updated-at']}>{updatedAt}</span>
+      )}
+      {batchMode ? (
+        <div className={css['batch-toolbar']}>
+          <span className={css['batch-toolbar-count']}>已选 {selectedCount} 项</span>
+          {batchTransitions.length > 0 ? (
+            <div className={css['task-status-selector']}>
+              <span className={css['task-status-selector-text']}>调整状态至</span>
+              <DownChevronIcon />
+              <select
+                className={css['task-status-select-overlay']}
+                value=""
+                onChange={(e) => {
+                  const transition = batchTransitions.find(item => item.target === e.target.value)
+                  if (transition) onBatchAction(transition)
+                  e.currentTarget.value = ''
+                }}
+              >
+                <option value="" disabled>调整状态至</option>
+                {batchTransitions.map(transition => (
+                  <option key={transition.target} value={transition.target}>{transition.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <span className={css['batch-toolbar-empty']}>无共同可执行操作</span>
+          )}
+          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>取消选择</span>
+        </div>
+      ) : (
+        <span
+          className={[
+            css['batch-toggle-btn'],
+            batchDisabled ? css['batch-toggle-btn-disabled'] : '',
+          ].filter(Boolean).join(' ')}
+          onClick={() => { if (!batchDisabled) onToggleBatchMode() }}
+          title={batchDisabled ? '任务数量不足，无法批量调整' : '批量调整任务状态'}
+        >
+          批量调整
+        </span>
+      )}
+    </div>
+  )
+}
+
+function AttentionHint({
+  steps,
+  onClick,
+  onHoverChange,
+}: {
+  steps: FlowStep[]
+  onClick: () => void
+  onHoverChange: (hovering: boolean) => void
+}) {
+  const count = steps.find(step => step.status === ATTENTION_STATUS)?.count ?? 0
+  if (!count) return null
+
+  const handleTellMe = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
+    const componentId = context.comId ?? context.component?.params?.id
+    if (typeof appendToSender === 'function' && componentId) {
+      ;(context.plugins as any)?.showAIDialog?.()
+      appendToSender(componentId, {
+        message: '',
+        mentionFocus: true,
+        attachments: [],
+      })
+      return
+    }
+    ;(context.plugins as any)?.showAIDialog?.()
+  }
+
+  return (
+    <div
+      className={css['attention-hint']}
+      onClick={onClick}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
+      title="点击查看待验证任务"
+    >
+      <span className={css['attention-hint-text']}>
+        有 <span className={css['attention-hint-count']}>{count}</span> 个任务已经改完了，需要您帮忙验证下结果，如果没问题可以
+      </span>
+      <span className={css['attention-hint-link']} onClick={handleTellMe} title="打开对话，告知我结果">
+        告知我
+      </span>
+      <span className={css['attention-hint-text']}>结果</span>
+    </div>
+  )
+}
+
+
+function DetailContent({ detail }: { detail: string }) {
+  return (
+    <div className={css['detail-content']}>
+      {detail.split('\n').map((line, i) => {
+        const headingMatch = line.match(/^#{2,4}\s+(.+)/)
+        if (headingMatch) {
+          return <div key={i} className={css['detail-heading']}>{headingMatch[1]}</div>
+        }
+        const bulletMatch = line.match(/^\s*[-*]\s+(.+)/)
+        if (bulletMatch) {
+          return (
+            <div key={i} className={css['detail-bullet']}>
+              <span className={css['detail-bullet-dot']} />
+              {bulletMatch[1]}
+            </div>
+          )
+        }
+        if (!line.trim()) {
+          return <div key={i} className={css['detail-gap']} />
+        }
+        return <div key={i} className={css['detail-text']}>{line}</div>
+      })}
+    </div>
+  )
+}
+
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={`${css['chevron']} ${expanded ? css['chevron-expanded'] : ''}`}
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+    >
+      <path d="M3 2L7 5L3 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none">
+      <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 14c0-2.5 2.5-4 5.5-4s5.5 1.5 5.5 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function DownChevronIcon() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ pointerEvents: 'none', flexShrink: 0 }}>
+      <path d="M1.5 3L4 5.5L6.5 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function AtIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <path d="M13.106 7.222c0-2.967-2.249-5.032-5.482-5.032-3.35 0-5.646 2.318-5.646 5.702 0 3.493 2.235 5.708 5.762 5.708.862 0 1.689-.123 2.304-.335v-.862c-.43.199-1.354.328-2.29.328-2.926 0-4.813-1.88-4.813-4.798 0-2.844 1.921-4.881 4.594-4.881 2.735 0 4.608 1.688 4.608 4.156 0 1.682-.554 2.769-1.416 2.769-.492 0-.772-.28-.772-.76V5.206H8.923v.834h-.11c-.266-.595-.881-.964-1.6-.964-1.4 0-2.378 1.162-2.378 2.823 0 1.737.957 2.906 2.379 2.906.8 0 1.415-.39 1.709-1.087h.11c.081.67.703 1.148 1.503 1.148 1.572 0 2.57-1.415 2.57-3.643zm-7.177.704c0-1.197.54-1.907 1.456-1.907.93 0 1.524.738 1.524 1.907S8.308 9.84 7.371 9.84c-.895 0-1.442-.725-1.442-1.914z" />
+    </svg>
+  )
+}
+
+function DeleteIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+      <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
+      <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+    </svg>
+  )
+}
+
+interface TaskTransition {
+  target: TaskStatus
+  label: string
+  instruction: string
+  requiresReason?: boolean
+}
+
+function getTaskTransitions(task: TaskItem): TaskTransition[] {
+  const transitions: Record<TaskStatus, TaskTransition[]> = {
+    '处理中': [{
+      target: '待验证',
+      label: '代码已完成，等待我验证',
+      instruction: '代码已完成，等待我验证',
+      requiresReason: true,
+    }],
+    '待验证': [
+      {
+        target: '已完成',
+        label: '已验证完成',
+        instruction: '已验证完成',
+      },
+      {
+        target: '处理中',
+        label: '任务有问题，请重新修改',
+        instruction: '任务有问题，请重新修改',
+        requiresReason: true,
+      },
+    ],
+    '待交接': [
+      {
+        target: '处理中',
+        label: '任务有问题，请重新修改',
+        instruction: '任务有问题，请重新修改',
+        requiresReason: true,
+      },
+    ],
+    '已完成': [
+      {
+        target: '处理中',
+        label: '任务有问题，请重新修改',
+        instruction: '任务有问题，请重新修改',
+        requiresReason: true,
+      },
+    ],
+  }
+
+  if (task.status === '待验证' && task.handoverTo) {
+    return [
+      {
+        target: '待交接',
+        label: '已验证完成',
+        instruction: '已验证完成',
+      },
+      ...transitions['待验证'].filter(item => item.target !== '已完成'),
+    ]
+  }
+  return transitions[task.status]
+}
+
+function CheckboxIcon({ checked }: { checked: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
+      <rect
+        x="1.5"
+        y="1.5"
+        width="13"
+        height="13"
+        rx="3"
+        fill={checked ? 'var(--mybricks-color-primary, #1677ff)' : 'transparent'}
+        stroke={checked ? 'var(--mybricks-color-primary, #1677ff)' : 'var(--mybricks-text-color-disabled, #c1c7d0)'}
+        strokeWidth="1.5"
+      />
+      {checked && (
+        <path d="M4.5 8.2L6.8 10.5L11.5 5.5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  )
+}
+
+function TaskRow({
+  task,
+  highlightProgress,
+  batchMode,
+  selectable,
+  selected,
+  allowDelete,
+  onToggleSelect,
+}: {
+  task: TaskItem
+  highlightProgress?: boolean
+  batchMode?: boolean
+  selectable?: boolean
+  selected?: boolean
+  allowDelete?: boolean
+  onToggleSelect?: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
+  const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
+  const hasDetail = !!task.detail
+  const transitions = getTaskTransitions(task)
+
+  const handleAddToChat = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
+    const componentId = context.comId ?? context.component?.params?.id
+    if (typeof appendToSender === 'function' && componentId) {
+      ;(context.plugins as any)?.showAIDialog?.()
+      const chip = {
+        id: randomUUID(),
+        type: 'task',
+        label: task.title,
+        data: { title: task.title },
+      }
+      appendToSender(componentId, {
+        message: `[[chip:${chip.id}]]`,
+        meta: { chips: [chip] },
+        animation: true,
+      })
+      return
+    }
+    ;(context.plugins as any)?.showAIDialog?.()
+  }
+
+  const handleRevert = () => {
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+      message: `[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`,
+    })
+  }
+
+  const handleTransition = (transition: TaskTransition) => {
+    const message = `任务「${task.title}」：${transition.instruction}`
+
+    if (transition.requiresReason) {
+      const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
+      const componentId = context.comId ?? context.component?.params?.id
+      const requestPayload = {
+        message: `${message}\n\n原因：`,
+        mentionFocus: true,
+        attachments: [],
+      }
+
+      if (typeof appendToSender === 'function' && componentId) {
+        ;(context.plugins as any)?.showAIDialog?.()
+        appendToSender(componentId, requestPayload)
+        return
+      }
+
+      const reason = window.prompt('请填写原因')?.trim()
+      if (!reason) return
+      ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+        message: `${message}\n\n原因：${reason}`,
+      })
+      return
+    }
+
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, {
+      message,
+    })
+  }
+
+  return (
+    <div
+      className={[
+        css['task-card'],
+        selected ? css['task-card-selected'] : '',
+        batchMode ? css['task-card-batch-mode'] : '',
+        batchMode && !selectable ? css['task-card-batch-disabled'] : '',
+      ].filter(Boolean).join(' ')}
+      onClick={() => { if (batchMode && selectable) onToggleSelect?.() }}
+    >
+      <div className={css['task-card-header']}>
+        <div className={css['task-card-header-main']}>
+          {batchMode && (
+            <span
+              className={`${css['task-checkbox']} ${!selectable ? css['task-checkbox-disabled'] : ''}`}
+              onClick={(e) => { e.stopPropagation(); if (selectable) onToggleSelect?.() }}
+              title={selectable ? undefined : '只能同时选择相同状态的任务'}
+            >
+              <CheckboxIcon checked={!!selected} />
+            </span>
+          )}
+          <span
+            className={css['task-status-badge']}
+            style={{ background: style.badgeBg, color: style.badgeText }}
+          >
+            {task.status}
+          </span>
+          <span className={css['task-title']} title={task.title}>{task.title}</span>
+          {task.handoverTo && (
+            <span className={css['task-handover-inline']}>
+              <span className={css['task-handover-label']}>交接给</span>
+              <UserIcon />
+              <span className={css['task-handover-name']}>{task.handoverTo}</span>
+              {task.handoverReason && (
+                <span className={css['task-handover-tooltip']}>{task.handoverReason}</span>
+              )}
+            </span>
+          )}
+        </div>
+        <div className={css['task-card-actions']}>
+          <span
+            className={css['task-action-icon']}
+            data-mybricks-tip="添加到对话"
+            onClick={handleAddToChat}
+          >
+            <AtIcon />
+          </span>
+          {allowDelete && (
+            <Popconfirm
+              title="删除后任务和相关修改都会被删除，确认删除此任务？"
+              visible={revertConfirmVisible}
+              onVisible={setRevertConfirmVisible}
+              onConfirm={handleRevert}
+            >
+              <span
+                className={css['task-action-icon']}
+                data-mybricks-tip="删除此任务"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              >
+                <DeleteIcon />
+              </span>
+            </Popconfirm>
+          )}
+          {transitions.length > 0 && (
+            <div className={css['task-status-selector']}>
+              <span className={css['task-status-selector-text']}>调整状态至</span>
+              <DownChevronIcon />
+              <select
+                className={css['task-status-select-overlay']}
+                value=""
+                onChange={(e) => {
+                  const transition = transitions.find(item => item.target === e.target.value)
+                  if (transition) handleTransition(transition)
+                  e.currentTarget.value = ''
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value="" disabled>调整状态至</option>
+                {transitions.map(transition => (
+                  <option key={transition.target} value={transition.target}>{transition.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {task.summary && (
+        <div className={css['task-summary']}>{task.summary}</div>
+      )}
+
+      {task.metadata.length > 0 && (
+        <div className={css['task-meta-list']}>
+          {task.metadata.map((item) => {
+            const isProgress = item.label === '验证进展'
+            const hl = isProgress && highlightProgress
+            return (
+              <div
+                key={item.label}
+                className={`${css['task-meta-item']} ${hl ? css['task-meta-item-highlight'] : ''}`}
+              >
+                <span className={css['task-meta-label']}>{item.label}</span>
+                <span className={css['task-meta-value']}>{item.value}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {hasDetail && (
+        <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+          <ChevronIcon expanded={expanded} />
+          <span>{expanded ? '收起详情' : '展开详情'}</span>
+        </div>
+      )}
+
+      {hasDetail && expanded && (
+        <div className={css['task-detail-wrapper']}>
+          <DetailContent detail={task.detail!} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function getSharedTransitions(tasks: TaskItem[]): TaskTransition[] {
+  if (!tasks.length) return []
+  const [first, ...rest] = tasks.map(t => getTaskTransitions(t))
+  return rest.reduce(
+    (acc, cur) => acc.filter(t => cur.some(c => c.target === t.target)),
+    first
+  )
+}
+
+function TaskPanel({ content, allowDelete = false }: { content: string | null, allowDelete?: boolean }) {
+  const [filter, setFilter] = useState<string | null>(null)
+  const [hintHovering, setHintHovering] = useState(false)
+  const [batchMode, setBatchMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setFilter(null)
+    setBatchMode(false)
+    setSelected(new Set())
+  }, [content])
+
+  if (!content) {
+    return (
+      <div className={css['panel-empty']}>
+        <span className={css['panel-empty-text']}>暂无任务</span>
+      </div>
+    )
+  }
+
+  const tasks = parseTasks(content)
+  if (!tasks.length) {
+    return (
+      <div className={css['panel-empty']}>
+        <span className={css['panel-empty-text']}>暂无任务</span>
+      </div>
+    )
+  }
+
+  const selectedTasks = tasks.filter(t => selected.has(t.title))
+  const selectedStatus = selectedTasks[0]?.status ?? null
+  // 批量操作只支持无需填写原因的目标状态，需要补充原因的场景仍走单任务交互
+  const sharedTransitions = getSharedTransitions(selectedTasks).filter(t => !t.requiresReason)
+
+  const exitBatchMode = () => {
+    setBatchMode(false)
+    setSelected(new Set())
+  }
+
+  const toggleBatchMode = () => {
+    if (batchMode) {
+      exitBatchMode()
+      return
+    }
+    setBatchMode(true)
+  }
+
+  const toggleSelect = (task: TaskItem) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(task.title)) {
+        next.delete(task.title)
+        return next
+      }
+      next.add(task.title)
+      return next
+    })
+  }
+
+  const handleBatchAction = (transition: TaskTransition) => {
+    if (!selectedTasks.length) return
+    const message = selectedTasks
+      .map(task => `任务「${task.title}」：${transition.instruction}`)
+      .join('\n')
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(context.comId, { message })
+    exitBatchMode()
+  }
+
+  const countByStatus: Record<string, number> = {}
+  tasks.forEach(t => { countByStatus[t.status] = (countByStatus[t.status] ?? 0) + 1 })
+
+  const steps: FlowStep[] = TASK_FLOW_ORDER.map(status => ({
+    status,
+    dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['处理中']).dot,
+    count: countByStatus[status] ?? 0,
+    disabled: !countByStatus[status],
+  }))
+
+  const filtered = filter ? tasks.filter(t => t.status === filter) : tasks
+  const statusOrder: Record<string, number> = {
+    '处理中': 1,
+    '待验证': 2,
+    '待交接': 3,
+    '已完成': 4,
+  }
+
+  return (
+    <div className={css['panel-container']}>
+      <FlowFilterBar
+        steps={steps}
+        total={tasks.length}
+        activeFilter={filter}
+        onFilter={setFilter}
+        updatedAt={null}
+        batchMode={batchMode}
+        batchDisabled={tasks.length < 2}
+        onToggleBatchMode={toggleBatchMode}
+        selectedCount={selectedTasks.length}
+        batchTransitions={sharedTransitions}
+        onBatchAction={handleBatchAction}
+        onClearSelection={exitBatchMode}
+      />
+      <AttentionHint
+        steps={steps}
+        onClick={() => setFilter(ATTENTION_STATUS)}
+        onHoverChange={setHintHovering}
+      />
+      <div className={css['panel-list']}>
+        {filtered.length > 0
+          ? filtered
+              .map((task, index) => ({ task, index }))
+              .sort((a, b) => {
+                const aUpdatedAt = a.task.updatedAtTimestamp
+                const bUpdatedAt = b.task.updatedAtTimestamp
+                if (aUpdatedAt !== undefined && bUpdatedAt !== undefined && aUpdatedAt !== bUpdatedAt) {
+                  return bUpdatedAt - aUpdatedAt
+                }
+                if (aUpdatedAt !== undefined) return -1
+                if (bUpdatedAt !== undefined) return 1
+
+                const statusDiff = (statusOrder[a.task.status] ?? 99) - (statusOrder[b.task.status] ?? 99)
+                return statusDiff || a.index - b.index
+              })
+              .map(({ task, index }) => (
+                <TaskRow
+                  key={index}
+                  task={task}
+                  highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
+                  batchMode={batchMode}
+                  selectable={selectedStatus === null || task.status === selectedStatus}
+                  selected={selected.has(task.title)}
+                  allowDelete={allowDelete}
+                  onToggleSelect={() => toggleSelect(task)}
+                />
+              ))
+          : <div className={css['panel-filter-empty']}>无匹配结果</div>
+        }
+      </div>
+    </div>
+  )
+}
+
+
+export default TaskPanel

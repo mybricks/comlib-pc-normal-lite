@@ -1,4 +1,4 @@
-import { executeLocalShellCommand, getCurrentBranch, AUDIT_REVIEW_ROOT } from '../sandbox'
+import { executeLocalShellCommand, getCurrentBranch, getDocumentRoot } from '../sandbox'
 import { escapeCssAttributeValue } from '../../../helpers/dom'
 
 export type DocMap = Record<string, {
@@ -42,7 +42,7 @@ export class Doc {
 
   async getDocPath(): Promise<string | undefined> {
     const branch = await getCurrentBranch().catch(() => undefined)
-    return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/doc/doc.json` : undefined
+    return branch ? `${getDocumentRoot()}/${branch}/doc/doc.json` : undefined
   }
 
   async getMap(): Promise<DocMap> {

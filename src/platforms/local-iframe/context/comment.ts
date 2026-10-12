@@ -1,4 +1,4 @@
-import { executeLocalShellCommand, getCurrentBranch, AUDIT_REVIEW_ROOT } from '../sandbox'
+import { executeLocalShellCommand, getCurrentBranch, getDocumentRoot } from '../sandbox'
 import context from '../../../mix/context'
 
 export type CommentMap = Record<string, any[]>
@@ -51,7 +51,7 @@ export class Comment {
 
   async getCommentPath(): Promise<string | undefined> {
     const branch = await getCurrentBranch().catch(() => undefined)
-    return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/comment/comment.json` : undefined
+    return branch ? `${getDocumentRoot()}/${branch}/comment/comment.json` : undefined
   }
 
   async getMap(): Promise<CommentMap> {

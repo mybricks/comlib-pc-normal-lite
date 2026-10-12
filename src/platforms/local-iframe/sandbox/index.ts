@@ -106,6 +106,11 @@ type AgentSandboxCommandOptions = {
 }
 
 export const AUDIT_REVIEW_ROOT = '.lingchuang'
+export function getDocumentRoot(): string {
+  const configured = ((window as any).__LINGCHUANG_CONFIG__?.configDirName ?? (window as any)._sandbox_?.config?.configDirName)
+  const root = typeof configured === 'string' ? configured.trim().replace(/^\/+|\/+$/g, '') : ''
+  return root || AUDIT_REVIEW_ROOT
+}
 const AUDIT_STATE_LABELS: Record<AuditState, string> = {
   [-1]: '禁止上线',
   0: '需要修复',
@@ -200,19 +205,18 @@ function parseTasksForNotify(content: string): UserTaskInfo[] {
   return tasks
 }
 
-async function getCurrentAuditReviewPath(): Promise<string | undefined> {
+async function getCurrentAuditReviewPath(): Promise<string> {
   const branch = await getCurrentBranch().catch(() => undefined)
-  return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md` : undefined
+  return branch ? `${getDocumentRoot()}/${branch}/reviews/REVIEW.md` : `${getDocumentRoot()}/reviews/REVIEW.md`
 }
 
-export async function getCurrentTasksPath(): Promise<string | undefined> {
+export async function getCurrentTasksPath(): Promise<string> {
   const branch = await getCurrentBranch().catch(() => undefined)
-  return branch ? `${AUDIT_REVIEW_ROOT}/${branch}/tasks/TASKS.md` : undefined
+  return branch ? `${getDocumentRoot()}/${branch}/tasks/TASKS.md` : `${getDocumentRoot()}/tasks/TASKS.md`
 }
 
 async function readAuditReview(): Promise<string> {
   const reviewPath = await getCurrentAuditReviewPath()
-  if (!reviewPath) throw new Error('无法确定当前 Git 分支')
 
   const review = (await readLocalFiles([reviewPath]))[0]
   if (!review) {
@@ -253,7 +257,6 @@ async function syncInitialAuditInfo(): Promise<void> {
 async function syncInitialTasksContent(): Promise<void> {
   try {
     const tasksPath = await getCurrentTasksPath()
-    if (!tasksPath) throw new Error('无法确定当前 Git 分支')
     const files = await readLocalFiles([tasksPath])
     const content = files[0]?.content
     if (content === undefined) throw new Error(`当前分支未生成任务文档：${tasksPath}`)
@@ -266,10 +269,7 @@ async function syncInitialTasksContent(): Promise<void> {
 }
 
 async function syncUpdatedAuditInfo(files: LocalFile[]): Promise<void> {
-  const branch = await getCurrentBranch().catch(() => undefined)
-  if (!branch) return
-
-  const tasksPath = `${AUDIT_REVIEW_ROOT}/${branch}/tasks/TASKS.md`
+  const tasksPath = await getCurrentTasksPath()
   const tasksFile = files.find((file) => file.path === tasksPath)
   if (tasksFile) {
     context.setTasksContent(tasksFile.content)
@@ -277,8 +277,7 @@ async function syncUpdatedAuditInfo(files: LocalFile[]): Promise<void> {
   }
 
   if (hasActiveAuditTransaction()) return
-
-  const reviewPath = `${AUDIT_REVIEW_ROOT}/${branch}/reviews/REVIEW.md`
+  const reviewPath = await getCurrentAuditReviewPath()
   const reviewFile = files.find((file) => file.path === reviewPath)
   if (!reviewFile) return
   context.setReviewContent(reviewFile.content)

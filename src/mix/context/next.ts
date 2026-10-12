@@ -75,8 +75,8 @@ export interface LogMessage {
 
 export interface ComDebugState {
   isDebugging: boolean;
-  bottomTab: 'source' | 'console' | 'version';
-  bottomTabBeforeDebug: 'source' | 'console' | 'version';
+  bottomTab: 'task' | 'source' | 'console' | 'version';
+  bottomTabBeforeDebug: 'task' | 'source' | 'console' | 'version';
   logs: LogMessage[];
   logIdCounter: number;
 }
@@ -179,6 +179,7 @@ class Context {
   /** 通知引擎文档相关更新 */
   notifyChanged(filename?: string, changeType?: 'delete' | 'update', value?: any) {
     try {
+      console.log('[mybricks] notifyChanged', { filename, changeType, value })
       if (!filename) {
         this.component?.actions?.notifyChanged?.()
       } else {
@@ -801,7 +802,7 @@ class Context {
   }
 
   /** 设置底部lowcodeview展示面板 */
-  setComBottomTab(tab: 'source' | 'console' | 'version') {
+  setComBottomTab(tab: 'task' | 'source' | 'console' | 'version') {
     const state = this.comDebugStateMap;
     state.bottomTab = tab;
     if (!(state.isDebugging && tab === 'console')) {
