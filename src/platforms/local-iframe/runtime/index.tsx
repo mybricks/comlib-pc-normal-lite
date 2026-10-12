@@ -86,7 +86,8 @@ const RuntimeIframe = (props) => {
 			pageList: nextIframes.map((route) => {
 				return {
 					...route,
-					id: route.src
+					id: route.src,
+					routerPath: route.src
 				}
 			})
 		})
