@@ -1,5 +1,6 @@
 import context, { type UserTaskInfo } from '../../../mix/context'
 import { parse as parseYaml } from 'yaml'
+import { parseTasksForNotify } from '../../../mix/tasks/notify'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
 import { transformLocalIframeFormatForNotifyChanged } from '../../../utils/ai-code/md/transformForNotifyChanged'
 import {
@@ -13,6 +14,7 @@ import {
 } from '../../../utils/ai-code/graph'
 import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
+import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -117,15 +119,6 @@ const AUDIT_STATE_LABELS: Record<AuditState, string> = {
   1: '允许上线',
 }
 
-const TASK_NOTIFY_STATE: Record<string, UserTaskInfo['state']> = {
-  '处理中': 0,
-  '待处理': 0,
-  '待验证': 1,
-  '待验收': 1,
-  '待交接': 2,
-  '已完成': 3,
-}
-
 function toError(error: unknown, fallbackMessage: string): Error {
   return error instanceof Error ? error : new Error(typeof error === 'string' ? error : fallbackMessage)
 }
@@ -185,24 +178,6 @@ export async function getCurrentBranch(): Promise<string | undefined> {
   if (result.exitCode !== 0) return undefined
   const branch = result.stdout.trim()
   return branch ? branch.replace(/[^a-zA-Z0-9]/g, '_') : undefined
-}
-
-function parseTasksForNotify(content: string): UserTaskInfo[] {
-  const tasks: UserTaskInfo[] = []
-  const sections = content.split(/(?=^## )/m).filter(s => s.startsWith('## '))
-  for (const section of sections) {
-    const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
-    if (!title) continue
-    const statusMatch = section.match(/\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*(.+)/i)
-    const summaryMatch = section.match(/^>\s*(.+)/m)
-    const rawState = statusMatch?.[1]?.replace(/[*_`]/g, '').trim() ?? ''
-    const id = title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || String(tasks.length)
-
-    const state = TASK_NOTIFY_STATE[rawState] ?? 0
-
-    tasks.push({ id, title, desc: summaryMatch?.[1]?.trim() ?? '', state })
-  }
-  return tasks
 }
 
 async function getCurrentAuditReviewPath(): Promise<string> {
@@ -537,6 +512,7 @@ export function registerSandbox(comId: string) {
         // context.component?.events.emit('vibing', true);
       },
       async beforeTurn(params) {
+        agentTurnLifecycle.onStart(comId)
         myContext.vibe.isVibing = true
         console.log(11, 'hooks:beforeTurn', params)
         const gitDiff = await captureVersionGitDiff(true)
@@ -581,19 +557,6 @@ export function registerSandbox(comId: string) {
         // refreshProjectBaseline(comId, projectRef);
       },
       async afterTurn(turn: any) {
-        console.log(12, 'hooks:afterTurn', turn)
-        // if (hasActiveAuditTransaction()) {
-        //   try {
-        //     const auditInfo = await resolveAuditResult()
-        //     completeActiveAuditTransaction(auditInfo)
-        //   } catch (error) {
-        //     failActiveAuditTransaction(toError(error, '审查报告解析失败'))
-        //   }
-        // } else {
-        //   turn.extra?.onComplete?.()
-        // }
-        turn.extra?.onComplete?.()
-
         const gitDiff = await captureVersionGitDiff()
         const versionList = myContext.version.getList()
 
@@ -609,6 +572,7 @@ export function registerSandbox(comId: string) {
             diff: gitDiff,
           })
         }
+        await agentTurnLifecycle.onComplete(comId, turn)
         myContext.vibe.isVibing = false
         // (window as any)._sendToAgent_source_ = null
         // turnLogs.turnID = turn.id

@@ -1,3 +1,5 @@
+import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
+
 export default function (hookContext, params) {
   type AuditPageOptionKey = 'events' | 'services' | 'crScope' | 'store' | 'crComplete';
   type AuditPageOptions = Partial<Record<AuditPageOptionKey, boolean>>;
@@ -31,12 +33,15 @@ export default function (hookContext, params) {
   const message = getAuditPageMessage(options);
   const detail = message ? `的${message}文档` : '文档';
   const ele = hookContext.focusArea.ele;
+  const agentMessage = `更新页面「${id}」${detail}`;
 
-  (window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
-    message: `更新页面「${id}」${detail}`,
-    extra: {
-      onComplete,
-      onError,
-    },
-  });
+  agentTurnLifecycle.register(hookContext.id, (turn) => {
+    if (turn?.status === 'success') {
+      return onComplete()
+    }
+    return onError()
+  })
+  ;(window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
+    message: agentMessage,
+  })
 }

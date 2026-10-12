@@ -17,6 +17,7 @@ import { isVSCodeEnv } from "../vscode/isVSCodeEnv";
 import { VSCODE_CODEEDITOR_ESLINT, VSCODE_CODEEDITOR_LOADER_CONFIG } from "../vscode/constants";
 import JSZip from "jszip";
 import commonLang from "../../helpers/i18n/common";
+import { findTaskDocumentContent } from '../tasks/notify';
 
 const css = getLazyCss(lazyCss)
 
@@ -211,15 +212,12 @@ const getRelativeImportAtPosition = ({
   return { importPath, startColumn, endColumn };
 };
 
-function findTaskDocumentContent(files: LowcodeFile[]): string | null {
+function getTaskDocumentContent(files: LowcodeFile[]): string | null {
   const configured = ((window as any).__LINGCHUANG_CONFIG__?.configDirName ?? (window as any)._sandbox_?.config?.configDirName);
-  const root = typeof configured === 'string' && configured.trim()
-    ? normalizeFilePath(configured.trim()).replace(/\/$/, '')
-    : '.lingchuang';
-  const taskFiles = files.filter(file => normalizeFilePath(file.fileName).endsWith('/tasks/TASKS.md'));
-  const unbranched = taskFiles.find(file => normalizeFilePath(file.fileName) === `${root}/tasks/TASKS.md`);
-  const selected = unbranched ?? (taskFiles.length === 1 ? taskFiles[0] : null);
-  return selected ? safeDecodeSource(selected.source) : null;
+  return findTaskDocumentContent(files, {
+    configDirName: configured,
+    fallbackRoot: '.lingchuang',
+  });
 }
 
 function LowcodeView(params: Params) {
@@ -271,9 +269,13 @@ function LowcodeView(params: Params) {
 
   // 用稳定的 key 字符串表示 files 快照，用于监听变化
   const filesKey = files.map((f) => `${f.fileName}:${f.source}`).join('|');
-  const taskContent = useMemo(() => findTaskDocumentContent(files), [filesKey]);
+  const taskContent = useMemo(() => getTaskDocumentContent(files), [filesKey]);
   const hasTaskPanel = useMemo(() => hasTasks(taskContent), [taskContent]);
   useEffect(() => context.setTasksContent(taskContent), [taskContent]);
+  const hasAutoSelectedTaskRef = useRef(false);
+  useEffect(() => {
+    hasAutoSelectedTaskRef.current = false;
+  }, [componentId]);
   const treeNodes = useMemo(() => filesJsonToTree(files), [filesKey]);
   const rootNode = useMemo<FileTreeNode>(() => ({
     type: "directory",
@@ -320,6 +322,12 @@ function LowcodeView(params: Params) {
 
   useEffect(() => {
     if (!hasTaskPanel && bottomTab === 'task') setBottomTab('version');
+  }, [bottomTab, hasTaskPanel, setBottomTab]);
+
+  useEffect(() => {
+    if (!hasTaskPanel || hasAutoSelectedTaskRef.current) return;
+    hasAutoSelectedTaskRef.current = true;
+    if (bottomTab === 'version') setBottomTab('task');
   }, [bottomTab, hasTaskPanel, setBottomTab]);
 
   const coderOptions = useMemo(() => {

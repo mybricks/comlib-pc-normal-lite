@@ -24,6 +24,8 @@ import {
 } from '../editors/visualEditCommit';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 import commonLang from '../../helpers/i18n/common';
+import { agentTurnLifecycle } from './agent-turn-lifecycle';
+import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
 
 // ─── 内部状态 ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +34,18 @@ import commonLang from '../../helpers/i18n/common';
  */
 const projectRefMap = new Map<string, { current: ReturnType<typeof createProject> | undefined }>();
 const requestSourceSnapshotMap = new WeakMap<object, Map<string, string>>();
+
+function refreshTaskNotification(): void {
+  const files = context.component?.params?.data?.files ?? [];
+  const configured = (window as any).__LINGCHUANG_CONFIG__?.configDirName
+    ?? (window as any)._sandbox_?.config?.configDirName;
+  const content = findTaskDocumentContent(files, {
+    configDirName: configured,
+    fallbackRoot: '.agent',
+  });
+  context.setTasksContent(content);
+  context.notifyUserTaskInfo(content ? parseTasksForNotify(content) : []);
+}
 
 function getProjectRef(comId: string) {
   if (!projectRefMap.has(comId)) {
@@ -1054,6 +1068,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
           comId,
           context
         );
+        refreshTaskNotification();
       },
 
       async deleteFiles(paths: string[]) {
@@ -1066,6 +1081,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
           comId,
           context
         );
+        refreshTaskNotification();
       },
 
       async exportResourceCode(): Promise<string> {
@@ -1125,6 +1141,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         context.component?.events.emit('vibing', true);
       },
       async beforeTurn() {
+        agentTurnLifecycle.onStart(comId);
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
         loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
@@ -1171,7 +1188,8 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         loadingRef.current?.dispose();
         loadingRef.current = null;
 
-        turn.extra?.onComplete?.()
+        refreshTaskNotification();
+        await agentTurnLifecycle.onComplete(comId, turn);
 
         context.component?.events.emit('vibing', false);
       },
@@ -1347,6 +1365,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   context.connectToAIRef = connectToAIRef
   context.remoteFs = isRemoteAgent ? remoteFs : undefined
   context.diff = (...versionIds: string[]) => diffVersions(history, ...versionIds);
+  refreshTaskNotification();
 
   // SPA 写文件 / 读 diff 走 _sandbox_.helpers（不改 plugin-ai；由组件库补挂能力）
   // 注意：必须在 context.version 初始化之后再挂 updateFiles，避免还原与版本初始化竞态

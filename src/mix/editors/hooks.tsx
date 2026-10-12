@@ -33,6 +33,7 @@ import { randomUUID } from '../utils/uuid'
 
 
 import context, { config } from '../context';
+import { agentTurnLifecycle } from '../sandbox/agent-turn-lifecycle';
 // import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
 import type {Props} from './types';
 import prototype from '../../utils/ai-code/render/mybricks/prototype'
@@ -416,13 +417,18 @@ export function buildHooks(props: Props) {
       const message = getAuditPageMessage(options);
       const detail = message ? `的${message}文档` : '文档';
       const ele = hookContext.focusArea.ele;
+      const agentMessage = config.getFrontendMode() === 'local-iframe'
+        ? `更新页面「${id}」${detail}`
+        : `更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
 
-      (window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
-        message: config.getFrontendMode() === 'local-iframe' ? `更新页面「${id}」${detail}` : `更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`,
-        extra: {
-          onComplete,
-          onError,
-        },
+      agentTurnLifecycle.register(hookContext.id, (turn) => {
+        if (turn?.status === 'success') {
+          return onComplete()
+        }
+        return onError()
+      })
+      window._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
+        message: agentMessage,
       });
     },
     '@getDoc'(params) {
@@ -474,6 +480,7 @@ export function buildHooks(props: Props) {
       const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
       const chipId = randomUUID()
       const analyzeFilePath = `.agent/temp/analyse-${randomUUID().slice(0, 5)}.md`
+      console.log('[mybricks] updateDoc: request analysis', { analyzeFilePath, chipId })
       const chip = {
         id: chipId,
         label: ele.tagName.toLowerCase(),
@@ -483,33 +490,39 @@ export function buildHooks(props: Props) {
         }
       }
 
+      const agentMessage = `[$mbs-template:analyze-selection] 分析下这个选择区域 [[chip:${chip.id}]]，整理出分析报告markdown 放到 ${analyzeFilePath} 里。\n 注意：这是一次性报告，直接写入即可，写入后会展示在设计器窗口编辑区的右侧，一段时间会被自动清理。`
+      agentTurnLifecycle.register(params.id, async (turn) => {
+        if (turn?.status !== 'success') return
+        const analyzeFile = data.files.find((file) => file.fileName === analyzeFilePath)
+        const result = analyzeFile ? decodeURIComponent(analyzeFile.source) : ''
+        console.log('[mybricks] updateDoc: analysis completed', {
+          analyzeFilePath,
+          hasTemporaryFile: !!analyzeFile,
+          resultLength: result.length,
+        })
+
+        if (analyzeFile) {
+          console.log('[mybricks] updateDoc: remove temporary file', { analyzeFilePath })
+          context.updateFile({ fileName: analyzeFilePath, type: 'delete' })
+        }
+
+        const doc = {
+          createTime: new Date().getTime(),
+          content: result
+        }
+
+        if (result) {
+          data._docs[key] = doc
+        }
+        await onComplete(doc)
+      })
       window._sandbox_.helpers.sendToAgent(params.id, {
-        message: `[$mbs-template:analyze-selection] 分析下这个选择区域 [[chip:${chip.id}]]，整理出分析报告markdown 放到 ${analyzeFilePath} 里。\n 注意：这是一次性报告，直接写入即可，写入后会展示在设计器窗口编辑区的右侧，一段时间会被自动清理。`,
+        message: agentMessage,
         meta: {
           chips: [chip],
         },
-        extra: {
-          async onComplete(md?: string) {
-            const analyzeFile = data.files.find((file) => file.fileName === analyzeFilePath)
-            const result = analyzeFile ? decodeURIComponent(analyzeFile.source) : md ?? ''
-
-            if (analyzeFile) {
-              context.updateFile({ fileName: analyzeFilePath, type: 'delete' })
-            }
-
-            const doc = {
-              createTime: new Date().getTime(),
-              content: result
-            }
-
-            if (result) {
-              data._docs[key] = doc
-            }
-            await onComplete(doc)
-          }
-        },
         aiRole: "fast",
-      });
+      })
     },
     ...hooks
   };

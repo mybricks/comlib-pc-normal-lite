@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import context from '../../mix/context'
 import { randomUUID } from '../../mix/utils/uuid'
+import { getLazyCss } from '../../mix/lowcodeView/utils/css'
 import { Popconfirm } from '../version-list'
-import taskPanelCss from './index.lazy.less'
+import * as lazyCss from './index.lazy.less'
 
-const css = (taskPanelCss as any).locals || taskPanelCss
+const css = getLazyCss(lazyCss)
 
 type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
 interface TaskMetadata {
