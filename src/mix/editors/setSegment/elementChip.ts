@@ -490,8 +490,11 @@ function getIdentifyingInlineStyle(ele: Element, excludeProperties: string[]): s
 }
 
 export function getElementLabel(ele: Element | undefined, fallback: string): string {
-  return ele?.getAttribute('data-zone-title')?.slice(1) ||
-    (ele as HTMLElement | undefined)?.dataset?.zoneTitle?.slice(1) ||
+  const hasClass = Boolean(ele?.classList?.length)
+  const getZoneTitle = (title: string | null | undefined) =>
+    title ? (hasClass ? title.slice(1) : title) : undefined
+  return getZoneTitle(ele?.getAttribute('data-zone-title')) ||
+    getZoneTitle((ele as HTMLElement | undefined)?.dataset?.zoneTitle) ||
     pickDistinguishingClassName(ele) ||
     ele?.tagName?.toLowerCase?.() ||
     fallback
