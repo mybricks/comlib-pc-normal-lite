@@ -12,6 +12,7 @@ import context, { Version } from '../context';
 import { debugLogs } from '../context/debugLogs';
 import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
+import { createBabelPageAnalysis } from '../agent/page-analysis';
 import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
@@ -1133,8 +1134,12 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   };
 
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
+  const pageAnalysis = createBabelPageAnalysis(
+    () => designerFs.getFiles(),
+    { configDirName: (window as any)._sandbox_.config.configDirName },
+  );
   const connectToAIRef = connectToAI(comId, {
-    designer: designerFs,
+    designer: { ...designerFs, pageAnalysis },
     hooks: {
       async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();

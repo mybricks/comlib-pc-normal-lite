@@ -15,6 +15,7 @@ import {
 import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
+import { createHttpPageAnalysis } from './page-analysis'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -500,6 +501,7 @@ export function registerSandbox(comId: string) {
   // 直接注册 AgentSandbox，避免通过 V1 getFiles() 全量加载文件内容。
   const { history, isRemoteAgent } = connectToAI(comId, {
     agentSandbox,
+    pageAnalysis: createHttpPageAnalysis(),
     mentions: [buildTaskMentionProvider()],
     hooks: {
       async beforeRequest(params,) {
