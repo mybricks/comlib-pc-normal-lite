@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { genSvgReplacer, registerSvgAppliedCallback, applyRawSvg } from '../../styleProxy';
 import IconLibraryModal from '../IconLibraryModal';
-import { DownloadIcon } from '../../icons/ai-img';
+import { DownloadIcon, UploadIcon } from '../../icons/ai-img';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 import lang from '../i18n';
@@ -82,25 +82,29 @@ function SvgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
         <button
           type="button"
           className={css.btn}
+          data-mybricks-tip={lang.selectFromIconLibraryTip}
           onClick={() => setPickerOpen(true)}
         >
           {lang.selectFromIconLibrary}
-          <svg
-            data-mybricks-tip={lang.selectFromIconLibraryTip}
-            viewBox="0 0 1024 1024"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ width: 13, height: 13, flexShrink: 0, opacity: 0.30, display: 'block' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <path d="M512 64C264.8 64 64 264.8 64 512s200.8 448 448 448 448-200.8 448-448S759.2 64 512 64z m32 704h-64v-64h64v64z m11.2-203.2l-5.6 4.8c-3.2 2.4-5.6 8-5.6 12.8v58.4h-64v-58.4c0-24.8 11.2-48 29.6-63.2l5.6-4.8c56-44.8 83.2-68 83.2-108C598.4 358.4 560 320 512 320c-49.6 0-86.4 36.8-86.4 86.4h-64C361.6 322.4 428 256 512 256c83.2 0 150.4 67.2 150.4 150.4 0 72.8-49.6 112.8-107.2 158.4z" fill="currentColor" />
-          </svg>
         </button>
         <button
           type="button"
-          className={css.btn}
+          aria-label={lang.uploadSvg}
+          data-mybricks-tip={JSON.stringify({ content: lang.uploadSvg, position: 'left' })}
           onClick={() => svgReplacer.set(syntheticParams)}
+          style={{
+            flexShrink: 0,
+            width: 26,
+            height: 26,
+            padding: 4,
+            boxSizing: 'border-box',
+            border: '1px solid var(--mybricks-border-color-main, #ddd)',
+            borderRadius: 6,
+            backgroundColor: 'var(--mybricks-bg-color-main, #fff)',
+            cursor: 'pointer',
+          }}
         >
-          {lang.uploadSvg}
+          <UploadIcon style={{ display: 'block', width: '100%', height: '100%' }} />
         </button>
         {currentSvgHtml && (
           <button
