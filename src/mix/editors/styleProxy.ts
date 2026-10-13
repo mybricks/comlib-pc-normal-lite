@@ -8,6 +8,12 @@ import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpd
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
+import {
+  createDOMSourceLocationSnapshot,
+  restoreDOMSourceLocationSnapshot,
+  shiftDOMSourceLocationsAfterReplacement,
+  type SourceReplacement,
+} from './setSegment/sourceLocation'
 
 export const STATIC_SRC_RE = /\bsrc=(["'])([^"']*)\1|\bsrc=\{["'`]([^"'`]*)["'`]\}/;
 
@@ -2379,12 +2385,29 @@ export function genImgSrcReplacer() {
         };
 
         if (jsxPath && jsxFile && STATIC_SRC_RE.test(snippet) && !hasRepeatedLoc) {
-          const newSnippet = snippet.replace(STATIC_SRC_RE, `src="${newSrc}"`);
+          const srcMatch = snippet.match(STATIC_SRC_RE);
+          const newSrcAttribute = `src="${newSrc}"`;
+          const newSnippet = snippet.replace(STATIC_SRC_RE, newSrcAttribute);
           const newSource = source.slice(0, start) + newSnippet + source.slice(end);
+          const sourceReplacement: SourceReplacement | null =
+            srcMatch && typeof srcMatch.index === 'number' && typeof start === 'number' && typeof end === 'number'
+              ? {
+                start: start + srcMatch.index,
+                end: start + srcMatch.index + srcMatch[0].length,
+                newLength: newSrcAttribute.length,
+              }
+              : null;
+          const shadowRoot = getShadowDoc();
+          const sourceLocationSnapshot = sourceReplacement
+            ? createDOMSourceLocationSnapshot(shadowRoot, jsxPath)
+            : null;
 
           undoRedoManager.executeBranch({
             execute() {
               context.updateFile({ fileName: jsxPath, content: newSource, type: undefined, noUpdateFileSystem: true });
+              if (sourceReplacement) {
+                shiftDOMSourceLocationsAfterReplacement(shadowRoot, jsxPath, sourceReplacement);
+              }
               applyPreview(newSrc);
               context.component?.actions.addUserAction({
                 id: actionId,
@@ -2395,6 +2418,9 @@ export function genImgSrcReplacer() {
             },
             undo() {
               context.updateFile({ fileName: jsxPath, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' });
+              if (sourceLocationSnapshot) {
+                restoreDOMSourceLocationSnapshot(sourceLocationSnapshot);
+              }
               applyPreview(previousSrc);
               context.component?.actions.removeUserAction(actionId);
             },

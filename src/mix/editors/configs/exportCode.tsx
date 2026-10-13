@@ -13,6 +13,7 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
   const [prdVisible, setPrdVisible] = useState(false);
   const [iconLibVisible, setIconLibVisible] = useState(false);
   const showPrdDocumentButton = config.getShowPrdDocumentButton();
+  const showSettingIconLibraryButton = config.getShowSettingIconLibraryButton()
 
   const compiled = React.useMemo(() => {
     const files = context.component?.params?.data?.files;
@@ -38,9 +39,9 @@ function ProjectActionsBar({ comId, props }: { comId: string; props: Props }) {
           查看PRD文档
         </button>
       )}
-      <button type="button" className={css.actionBtn} onClick={() => setIconLibVisible(true)}>
+      {showSettingIconLibraryButton && <button type="button" className={css.actionBtn} onClick={() => setIconLibVisible(true)}>
         {lang.iconLibrarySettings}
-      </button>
+      </button>}
       {prdVisible && compiled && (
         <RequirementViewModal compiled={compiled} onClose={() => setPrdVisible(false)} />
       )}

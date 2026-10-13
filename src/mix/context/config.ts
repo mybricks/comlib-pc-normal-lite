@@ -132,6 +132,12 @@ class Config {
     return window._sandbox_?.config?.componentRuntime?.showPrdDocumentButton !== false
   }
 
+  /** 是否展示 icon 编辑器 */
+  getShowSettingIconLibraryButton() {
+    const showSettingIconLibraryButton = window._sandbox_?.config?.componentRuntime?.showSettingIconLibraryButton
+    return typeof showSettingIconLibraryButton === 'boolean' ? showSettingIconLibraryButton : true
+  }
+
   /** 获取配置的版本号 */
   getVersion() {
     return window._sandbox_.config.componentRuntime?.version

@@ -327,16 +327,19 @@ const createMyBricks = (props: CreateMyBricksProps) => {
   
   const { comId, runtimeMode, env, data, logger } = props;
 
-  if (frontendMode === 'prototype') {
+if (frontendMode === 'prototype') {
     prototype.events.offAll()
 
     update((appConfig) => {
       prototype.events.emit('appConfig', appConfig)
-      if (appConfig.viewports.length > 1) {
-        mixContext.component?.actions.updatePages?.([], {
-          breakpoints: appConfig.viewports
-        })
-      }
+      mixContext.component?.actions.updatePages?.([], {
+        breakpoints: appConfig.viewports
+      })
+      // if (appConfig.viewports.length > 1) {
+      //   mixContext.component?.actions.updatePages?.([], {
+      //     breakpoints: appConfig.viewports
+      //   })
+      // }
     })
   }
   
