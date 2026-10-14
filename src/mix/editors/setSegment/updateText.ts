@@ -56,10 +56,6 @@ const runUpdateTextByAI = (fromEle, content: string) => {
 
 const updateText = (options) => {
   const { fromEle, content } = options
-  if (!content.trim()) {
-    // 不允许空字符
-    return
-  }
 
   const zoneTextEditable = fromEle.dataset['zoneTextEditable']
 
