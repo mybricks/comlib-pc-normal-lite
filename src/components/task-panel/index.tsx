@@ -856,11 +856,11 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
           onClose={() => setActionHint(null)}
         />
       )}
-      <AttentionHint
+      {/* <AttentionHint
         steps={steps}
         onClick={() => setFilter(ATTENTION_STATUS)}
         onHoverChange={setHintHovering}
-      />
+      /> */}
       <div className={css['panel-list']}>
         {filtered.length > 0
           ? filtered
