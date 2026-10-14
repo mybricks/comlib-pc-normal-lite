@@ -10,7 +10,7 @@ interface NextRuntimeProps extends RenderProps {
 
 interface NextRuntimeRef extends RenderRef {}
 
-const NextRuntime = forwardRef<NextRuntimeRef, NextRuntimeProps>((props, ref) => {
+const NextRuntime = ((props, ref) => {
 	const WrapperComponent = useWrapperComponent(props.wrapper)
 
 	return (

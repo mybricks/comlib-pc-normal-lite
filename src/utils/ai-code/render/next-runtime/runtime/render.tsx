@@ -37,7 +37,7 @@ interface RenderRef {
   fileSystem: FileSystem
 }
 
-const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
+const Render = ((props, ref) => {
   const fileSystem = useRef(new FileSystem({
     dependencies: props.dependencies,
     css: props.css,
