@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import context from '../../mix/context'
 import { randomUUID } from '../../mix/utils/uuid'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
@@ -6,6 +6,49 @@ import { Popconfirm } from '../version-list'
 import * as lazyCss from './index.lazy.less'
 
 const css = getLazyCss(lazyCss)
+
+function useDismissOnOutsideClick(onDismiss: () => void) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) {
+        onDismiss()
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [onDismiss])
+
+  return ref
+}
+
+function TaskActionHint({
+  message,
+  className,
+  onClose,
+}: {
+  message: string
+  className: string
+  onClose: () => void
+}) {
+  const hintRef = useDismissOnOutsideClick(onClose)
+
+  return (
+    <div ref={hintRef} className={className} role="status">
+      <span>{message}</span>
+      <button
+        type="button"
+        className={css['task-action-hint-close']}
+        aria-label="关闭提示"
+        onClick={(e) => { e.stopPropagation(); onClose() }}
+      >
+        ×
+      </button>
+    </div>
+  )
+}
 
 type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
 interface TaskMetadata {
@@ -510,6 +553,7 @@ function TaskRow({
 }) {
   const [expanded, setExpanded] = useState(false)
   const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
+  const [actionHint, setActionHint] = useState<string | null>(null)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
   const hasDetail = !!task.detail
   const transitions = getTaskTransitions(task)
@@ -531,6 +575,7 @@ function TaskRow({
         meta: { chips: [chip] },
         animation: true,
       })
+      setActionHint('已添加到对话输入框')
       return
     }
     ;(context.plugins as any)?.showAIDialog?.()
@@ -538,6 +583,7 @@ function TaskRow({
 
   const handleRevert = () => {
     sendTaskMessage(`[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`)
+    setActionHint('已交给 AI 处理')
   }
 
   const handleTransition = (transition: TaskTransition) => {
@@ -555,16 +601,19 @@ function TaskRow({
       if (typeof appendToSender === 'function' && componentId) {
         ;(context.plugins as any)?.showAIDialog?.()
         appendToSender(componentId, requestPayload)
+        setActionHint('已添加到对话输入框，请补充原因后发送')
         return
       }
 
       const reason = window.prompt('请填写原因')?.trim()
       if (!reason) return
       sendTaskMessage(`${message}\n\n原因：${reason}`)
+      setActionHint('已交给 AI 处理')
       return
     }
 
     sendTaskMessage(message)
+    setActionHint('已交给 AI 处理')
   }
 
   return (
@@ -574,6 +623,7 @@ function TaskRow({
         selected ? css['task-card-selected'] : '',
         batchMode ? css['task-card-batch-mode'] : '',
         batchMode && !selectable ? css['task-card-batch-disabled'] : '',
+        actionHint ? css['task-card-has-hint'] : '',
       ].filter(Boolean).join(' ')}
       onClick={() => { if (batchMode && selectable) onToggleSelect?.() }}
     >
@@ -616,7 +666,7 @@ function TaskRow({
           </span>
           {allowDelete && (
             <Popconfirm
-              title="删除后任务和相关修改都会被删除，确认删除此任务？"
+              title="删除后任务和相关修改都会被删除，确认让 AI 删除此任务？"
               visible={revertConfirmVisible}
               onVisible={setRevertConfirmVisible}
               onConfirm={handleRevert}
@@ -653,6 +703,14 @@ function TaskRow({
           )}
         </div>
       </div>
+
+      {actionHint && (
+        <TaskActionHint
+          message={actionHint}
+          className={css['task-row-action-hint']}
+          onClose={() => setActionHint(null)}
+        />
+      )}
 
       {task.summary && (
         <div className={css['task-summary']}>{task.summary}</div>
@@ -706,6 +764,7 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
   const [hintHovering, setHintHovering] = useState(false)
   const [batchMode, setBatchMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [actionHint, setActionHint] = useState<string | null>(null)
 
   useEffect(() => {
     setFilter(null)
@@ -752,6 +811,7 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
       .map(task => `任务「${task.title}」：${transition.instruction}`)
       .join('\n')
     sendTaskMessage(message)
+    setActionHint('已交给 AI 处理')
     exitBatchMode()
   }
 
@@ -789,6 +849,13 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
         onBatchAction={handleBatchAction}
         onClearSelection={exitBatchMode}
       />
+      {actionHint && (
+        <TaskActionHint
+          message={actionHint}
+          className={css['task-action-hint']}
+          onClose={() => setActionHint(null)}
+        />
+      )}
       <AttentionHint
         steps={steps}
         onClick={() => setFilter(ATTENTION_STATUS)}

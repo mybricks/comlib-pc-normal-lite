@@ -3,9 +3,61 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
   overflow: hidden;
   padding: 0 15px;
   box-sizing: border-box;
+}
+
+.task-action-hint {
+  position: absolute;
+  top: 38px;
+  right: 15px;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(320px, calc(100% - 30px));
+  padding: 9px 10px 9px 12px;
+  border: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+  border-radius: 6px;
+  background: var(--mybricks-bg-color-secondary, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .16);
+  color: var(--mybricks-text-color-main);
+  font-size: 12px;
+  line-height: 1.5;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -5px;
+    right: 16px;
+    width: 8px;
+    height: 8px;
+    transform: rotate(45deg);
+    border-top: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+    border-left: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+    background: var(--mybricks-bg-color-secondary, #fff);
+  }
+}
+
+.task-action-hint-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mybricks-text-color-disabled, #999);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover { color: var(--mybricks-text-color-main); }
 }
 
 .summary-bar {
@@ -122,6 +174,38 @@
   position: relative;
   &:last-child { margin-bottom: 0; }
   &:hover { z-index: 1; }
+}
+.task-card-has-hint { z-index: 2; }
+.task-row-action-hint {
+  position: absolute;
+  top: 37px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(280px, calc(100% - 16px));
+  padding: 9px 10px 9px 12px;
+  border: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+  border-radius: 6px;
+  background: var(--mybricks-bg-color-secondary, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .16);
+  color: var(--mybricks-text-color-main);
+  font-size: 12px;
+  line-height: 1.5;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: -5px;
+    right: 16px;
+    width: 8px;
+    height: 8px;
+    transform: rotate(45deg);
+    border-top: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+    border-left: 1px solid var(--mybricks-border-color-main, #e8e8e8);
+    background: var(--mybricks-bg-color-secondary, #fff);
+  }
 }
 .task-card-header {
   display: flex;
