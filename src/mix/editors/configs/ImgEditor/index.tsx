@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import context from '../../../context';
 import { STATIC_SRC_RE, genImgSrcReplacer, registerImgAppliedCallback } from '../../styleProxy';
-import { AiBlingblingIcon } from '../../icons/ai-svg-blingbling';
 import * as styles from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 import { DownloadIcon } from '../../icons/ai-img';
@@ -148,7 +147,6 @@ function ImgEditorPanel({ editConfig, comId }: { editConfig: any; comId: string 
           data-mybricks-tip={isDynamic ? lang.uploadWithAI : lang.uploadAndReplace}
           onClick={() => imgReplacer.set(syntheticParams)}
         >
-          {isDynamic && <AiBlingblingIcon style={{ flexShrink: 0, marginRight: 4, transform: 'rotate(180deg)' }} />}
           {lang.changeImage}
         </button>
         <button
