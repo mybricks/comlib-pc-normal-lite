@@ -1,4 +1,5 @@
 import { convertHyphenToCamel, convertCamelToHyphen } from "../../../../utils/string";
+import { splitTopLevelRules } from "./splitTopLevelRules";
 
 interface Rule {
   selectors?: {
@@ -466,9 +467,10 @@ class Parse {
   }
 }
 
-export const parseLess = (code: string) => {
+const tryParseLess = (code: string): CSSObj | null => {
   const less = window.less;
-  let cssObj: CSSObj = {};
+  // null 明确表示解析/转换失败；合法空文件的结果仍然是 {}。
+  let cssObj: CSSObj | null = null;
 
   const { sanitized, globalMap } = extractGlobals(code);
 
@@ -503,6 +505,9 @@ export const parseLess = (code: string) => {
   return cssObj;
 };
 
+// 普通样式编辑保持原接口：失败返回 {}，不自动删除错误规则。
+export const parseLess = (code: string): CSSObj => tryParseLess(code) ?? {};
+
 const formatCSSString = (cssObj: CSSObj, indent = "") => {
   let code = "";
   const entriesCSSObj = Object.entries(cssObj);
@@ -527,4 +532,35 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
 
 export const stringifyLess = (cssObj: CSSObj) => {
   return formatCSSString(cssObj);
+};
+
+/** 只执行原规范化过程，分块和最终合并都调用它，避免失败后递归恢复。 */
+const normalizeOnce = (code: string): string | null => {
+  try {
+    const cssObj = tryParseLess(code);
+    return cssObj === null ? null : stringifyLess(cssObj);
+  } catch {
+    return null;
+  }
+};
+
+/** 导入规范化：正常文件只解析一次，失败文件才按第一层规则恢复。 */
+export const normalizeRestoreLess = (code: string): string => {
+  const normalized = normalizeOnce(code);
+  if (normalized !== null) return normalized;
+
+  const blocks = splitTopLevelRules(code);
+  if (!blocks) return code;
+
+  const recovered: string[] = [];
+  for (const block of blocks) {
+    const result = normalizeOnce(block);
+    if (result !== null && result.trim()) recovered.push(result);
+  }
+  if (!recovered.length) return code;
+
+  // .a { color: red }、.a { background: white } 单独输出仍是两个块。
+  // 合并后再走原规范化，才能与编辑器的同名规则、同条件 @media 合并保持一致。
+  // 终检失败保留原文件，不再分块重试，也不把失败误写为空文件。
+  return normalizeOnce(recovered.join("\n\n")) ?? code;
 };
