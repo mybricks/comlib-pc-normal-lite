@@ -18,10 +18,13 @@ export interface PageAnalysisOptions {
 const DEFAULT_CONFIG_DIR_NAME = '.agent';
 
 type Location = { line: number; column: number };
+type LineRange = { startLine: number; endLine: number };
 type AuditItem = {
   name: string;
   file: string;
   location?: Location;
+  /** The JSX element range used by the YAML `loc` event-coverage check. */
+  lineRange?: LineRange;
   target?: string;
   detail?: string;
 };
@@ -44,6 +47,13 @@ function isSourceFile(file: AuditSourceFile): boolean {
 function location(node: any): Location | undefined {
   const start = node?.loc?.start;
   return start ? { line: start.line, column: start.column + 1 } : undefined;
+}
+
+function lineRange(node: any): LineRange | undefined {
+  const startLine = node?.loc?.start?.line;
+  const endLine = node?.loc?.end?.line;
+  if (typeof startLine !== 'number') return undefined;
+  return { startLine, endLine: typeof endLine === 'number' ? endLine : startLine };
 }
 
 function elementName(node: any): string {
@@ -149,6 +159,7 @@ function createAuditCollector(file: AuditSourceFile) {
         name: eventName,
         file: file.path,
         location: location(path.node),
+        lineRange: lineRange(element),
         target: elementName(element?.openingElement?.name),
         detail: expressionText(file.content, path.node.value?.expression ?? path.node.value),
       });
@@ -284,6 +295,7 @@ function validateGraphFiles(files: AuditSourceFile[], configDirName: string) {
   ));
   const sourcePaths = new Set(files.filter(isSourceFile).map((file) => file.path.replace(/^\.\//, '')));
   const diagnostics: Array<{ file: string; message: string }> = [];
+  const documentedEvents: AuditItem[] = [];
 
   if (!graphFiles.length) {
     diagnostics.push({ file: graphPrefix, message: '未找到 YAML 审计文档。' });
@@ -324,10 +336,134 @@ function validateGraphFiles(files: AuditSourceFile[], configDirName: string) {
           diagnostics.push({ file: file.path, message: `${label} 的 ${field} 必须为数组。` });
         }
       }
+
+      if (typeof value.fileName !== 'string' || !Array.isArray(value.events)) continue;
+      for (const [eventIndex, event] of value.events.entries()) {
+        const eventLabel = `${label} 的 events 第 ${eventIndex + 1} 项`;
+        if (!event || typeof event !== 'object' || Array.isArray(event)) continue;
+        const eventValue = event as Record<string, unknown>;
+        const name = typeof eventValue.name === 'string'
+          ? eventValue.name
+          : typeof eventValue.field === 'string'
+            ? eventValue.field
+            : typeof eventValue.api === 'string'
+              ? eventValue.api
+              : '';
+        const loc = typeof eventValue.loc === 'string' ? eventValue.loc.trim() : '';
+        if (!loc) {
+          diagnostics.push({ file: file.path, message: `${eventLabel} 缺少 loc。` });
+          continue;
+        }
+        const parsedLoc = parseYamlLoc(loc);
+        if (!parsedLoc) {
+          diagnostics.push({ file: file.path, message: `${eventLabel} 的 loc 无法解析：${loc}。` });
+          continue;
+        }
+        if (!parsedLoc.hasJsxTag) {
+          diagnostics.push({ file: file.path, message: `${eventLabel} 的 loc 必须包含 JSX 标签：${loc}。` });
+        }
+        if (name) {
+          documentedEvents.push({
+            name,
+            file: value.fileName.replace(/^\.\//, ''),
+            lineRange: { startLine: parsedLoc.startLine, endLine: parsedLoc.endLine },
+            target: parsedLoc.tagName,
+          });
+        }
+      }
     }
   }
 
-  return { graphFiles: graphFiles.map((file) => file.path), diagnostics };
+  // local-iframe 从每个页面入口递归分析本地依赖。非 iframe 还没有模块依赖图，
+  // 因此审计所有源码文件，避免漏掉未单独列为 YAML 节点的本地组件。
+  const sourceFiles = files.filter(isSourceFile);
+  const analyzedEvents = sourceFiles.flatMap((file) => {
+    const report = analyzeFile(file);
+    for (const message of report.diagnostics) {
+      diagnostics.push({ file: file.path, message: `无法分析源码事件：${message}` });
+    }
+    return report.events;
+  });
+
+  for (const event of analyzedEvents) {
+    const sourceRange = event.lineRange;
+    const documented = documentedEvents.some((item) => (
+      item.name === event.name
+      && filesMatch(item.file, event.file)
+      && item.target === event.target
+      && Boolean(item.lineRange && sourceRange && rangesOverlap(
+        item.lineRange.startLine,
+        item.lineRange.endLine,
+        sourceRange.startLine,
+        sourceRange.endLine,
+      ))
+    ));
+    if (documented) continue;
+    diagnostics.push({
+      file: event.file,
+      message: `${event.name} 未在 YAML 中按 loc 覆盖（建议 ${formatYamlLoc(event)}）。`,
+    });
+  }
+
+  return {
+    graphFiles: graphFiles.map((file) => file.path),
+    diagnostics,
+    eventCoverage: {
+      sourceFiles: sourceFiles.map((file) => file.path),
+      analyzedEvents: toEventCoverageItems(analyzedEvents),
+      documentedEvents: toEventCoverageItems(documentedEvents),
+    },
+  };
+}
+
+function toEventCoverageItems(events: AuditItem[]) {
+  return events.map((event) => ({
+    name: event.name,
+    file: event.file,
+    loc: formatYamlLoc(event),
+  }));
+}
+
+type ParsedYamlLoc = LineRange & { tagName: string; hasJsxTag: boolean };
+
+function parseYamlLoc(loc: string): ParsedYamlLoc | undefined {
+  const value = loc.trim().replace(/^['"]|['"]$/g, '');
+  const tagged = /^([A-Za-z_$][\w$-]*(?:\.[A-Za-z_$][\w$]*)*):([1-9]\d*)(?:-([1-9]\d*))?$/.exec(value);
+  if (!tagged) return undefined;
+  const startLine = Number(tagged[2]);
+  const tagName = (tagged[1] ?? '').trim();
+  const endLine = tagged[3] ? Number(tagged[3]) : startLine;
+  if (endLine < startLine) return undefined;
+  return {
+    startLine,
+    endLine,
+    tagName,
+    hasJsxTag: !isFragmentTag(tagName),
+  };
+}
+
+function formatYamlLoc(event: AuditItem): string {
+  const range = event.lineRange;
+  if (!range) return event.target || 'root';
+  const lines = range.startLine === range.endLine
+    ? String(range.startLine)
+    : `${range.startLine}-${range.endLine}`;
+  return event.target ? `${event.target}:${lines}` : `L${lines}`;
+}
+
+function isFragmentTag(tagName: string): boolean {
+  const head = tagName.split('.')[0] ?? tagName;
+  return !head || head === 'Fragment';
+}
+
+function filesMatch(left: string, right: string): boolean {
+  const a = left.replace(/\\/g, '/').replace(/^\.\//, '');
+  const b = right.replace(/\\/g, '/').replace(/^\.\//, '');
+  return a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart <= bEnd && bStart <= aEnd;
 }
 
 /** Tool declarations live in plugin-ai; comlib exposes only Babel-backed page analysis. */
@@ -359,16 +495,17 @@ export function createBabelPageAnalysis(
 
   const validatePage = async () => {
       const files = await getFiles();
-      const { graphFiles, diagnostics } = validateGraphFiles(files, configDirName);
+      const { graphFiles, diagnostics, eventCoverage } = validateGraphFiles(files, configDirName);
       return {
         output: diagnostics.length
           ? `页面文档校验失败：\n${diagnostics.map((item) => `- ${item.file}: ${item.message}`).join('\n')}`
-          : `页面文档校验通过：${graphFiles.length} 个 YAML 审计文档均符合基础结构。`,
+          : `页面文档校验通过：${graphFiles.length} 个 YAML 审计文档的基础结构与事件覆盖均符合要求。`,
         metadata: {
           passed: diagnostics.length === 0,
           configDirName,
           graphFiles,
           diagnostics,
+          eventCoverage,
         },
       };
   };

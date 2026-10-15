@@ -1299,6 +1299,10 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     await workspaceReady;
   }
 
+  // 与 local-iframe 一致：注册完成后主动把已有审计 graph 同步到设计器。
+  // remote Agent 的 workspace 快照已在上方完成回写，避免用旧 files 生成通知。
+  context.notifyGraphDocuments();
+
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────
 
   async function rollbackToVersion(versionId: string): Promise<void> {

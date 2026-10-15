@@ -418,8 +418,8 @@ export function buildHooks(props: Props) {
       const detail = message ? `的${message}文档` : '文档';
       const ele = hookContext.focusArea.ele;
       const agentMessage = config.getFrontendMode() === 'local-iframe'
-        ? `使用 audit-power 技能来更新页面「${id}」${detail}`
-        : `使用 audit-power 技能来更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
+        ? `使用 audit-power 来更新页面「${id}」${detail}`
+        : `使用 audit-power 来更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
 
       agentTurnLifecycle.register(hookContext.id, (turn) => {
         if (turn?.status === 'success') {
