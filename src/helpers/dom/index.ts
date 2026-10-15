@@ -9,20 +9,30 @@ export interface DomLoc {
 export type DOMMovePlacement = 'before' | 'after' | 'child'
 
 export function isDOMMoveAllowed(
-  fromEle: Element | null | undefined,
-  toEle: Element | null | undefined,
+  fromEle: Node | null | undefined,
+  toEle: Node | null | undefined,
   type: string,
 ): type is DOMMovePlacement {
   if (!fromEle || !toEle) return false
   if (type !== 'before' && type !== 'after' && type !== 'child') return false
   if (fromEle === toEle) return false
 
-  // 祖先节点不能移动到自己的后代内部，否则会形成 DOM 循环。
-  if (type === 'child' && fromEle.contains(toEle)) return false
+  // 只有元素节点可以作为 child 容器；文本节点只能作为 before/after 锚点。
+  if (type === 'child') {
+    if (fromEle.nodeType !== Node.ELEMENT_NODE || toEle.nodeType !== Node.ELEMENT_NODE) return false
+    // 祖先节点不能移动到自己的后代内部，否则会形成 DOM 循环。
+    if ((fromEle as Element).contains(toEle)) return false
+  }
 
   // 已经处于目标位置时无需再次移动。
-  if (type === 'before' && toEle.previousElementSibling === fromEle) return false
-  if (type === 'after' && toEle.nextElementSibling === fromEle) return false
+  const previousSibling = toEle.nodeType === Node.ELEMENT_NODE
+    ? (toEle as Element).previousElementSibling
+    : toEle.previousSibling
+  const nextSibling = toEle.nodeType === Node.ELEMENT_NODE
+    ? (toEle as Element).nextElementSibling
+    : toEle.nextSibling
+  if (type === 'before' && previousSibling === fromEle) return false
+  if (type === 'after' && nextSibling === fromEle) return false
 
   return true
 }

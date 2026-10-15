@@ -517,15 +517,23 @@ export function parseElementInfo(ele: Element | undefined, label: string, option
   }
 }
 
-function getElementLabeForAiRequest(ele: Element) {
-  const zoneSelector = ele.getAttribute('data-zone-selector')
-  const tagName = ele.tagName.toLowerCase()
+function getElementLabeForAiRequest(ele: Element | Node) {
+  if (ele.nodeType !== Node.ELEMENT_NODE) {
+    const text = ele.textContent?.trim().replace(/\s+/g, ' ').slice(0, 30)
+    const parent = ele.parentElement
+    const parentLabel = parent ? getElementLabeForAiRequest(parent) : '文本节点'
+    return text ? `${parentLabel} 中的文本「${text}」` : `${parentLabel} 中的文本节点`
+  }
+
+  const element = ele as Element
+  const zoneSelector = element.getAttribute('data-zone-selector')
+  const tagName = element.tagName.toLowerCase()
   if (zoneSelector) {
     const selector = JSON.parse(zoneSelector)[0].split(' ').slice(-1)
     return `${tagName}${selector}`
   }
 
-  return `${tagName}${Array.from(ele.classList).slice(-1) || ''}`
+  return `${tagName}${Array.from(element.classList).slice(-1) || ''}`
 }
 
 export function buildElementDeleteAiRequest({ ele }: { ele: Element }) {
@@ -871,7 +879,7 @@ const ELEMENT_MOVE_PLACEMENT_LABEL = {
   child: '内'
 }
 
-export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element; toEle: Element; placement: 'before' | 'after' | 'child' }) {
+export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element; toEle: Element | Node; placement: 'before' | 'after' | 'child' }) {
   const chipFrom = {
     id: randomUUID(),
     label: getElementLabeForAiRequest(fromEle),
@@ -887,7 +895,7 @@ export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromE
     type: 'dom',
     data: {
       ele: toEle,
-      info: buildDomChipInfo(toEle)
+      info: buildDomChipInfo(toEle.nodeType === Node.ELEMENT_NODE ? toEle as Element : toEle.parentElement ?? undefined)
     }
   }
 

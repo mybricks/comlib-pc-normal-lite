@@ -14,7 +14,7 @@ function buildLabel(ele: HTMLElement) {
 
 interface Props {
   fromEle: HTMLElement
-  toEle: HTMLElement
+  toEle: HTMLElement | Text
   type: 'before' | 'after' | 'child'
 }
 
@@ -43,7 +43,8 @@ export default function ({ fromEle, toEle, type }: Props) {
     execute() {
       if (!toEle.parentNode) return
       if (type === 'child') {
-        toEle.appendChild(fromEle)
+        const targetElement = toEle as HTMLElement
+        targetElement.appendChild(fromEle)
       } else {
         toEle.parentNode.insertBefore(fromEle, type === 'before' ? toEle : toEle.nextSibling)
       }
