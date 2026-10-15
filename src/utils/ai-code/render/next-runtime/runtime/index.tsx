@@ -10,7 +10,7 @@ interface NextRuntimeProps extends RenderProps {
 
 interface NextRuntimeRef extends RenderRef {}
 
-const NextRuntime = ((props, ref) => {
+const NextRuntime = ((props) => {
 	const WrapperComponent = useWrapperComponent(props.wrapper)
 
 	return (
@@ -20,7 +20,7 @@ const NextRuntime = ((props, ref) => {
 				onError={() => {}}
 			>
 				<Render
-					ref={ref}
+					// ref={ref}
 					{...props}
 					// @ts-ignore 引擎特殊处理逻辑
 					// _onError_={(error) => {

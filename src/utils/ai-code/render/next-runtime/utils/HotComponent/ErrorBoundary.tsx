@@ -57,6 +57,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render(): ReactNode {
     const { hasError, error } = this.state
     const { children, ErrorView } = this.props
+    console.log('children', children)
 
     if (hasError) {
       return <ErrorView error={error!}/>
