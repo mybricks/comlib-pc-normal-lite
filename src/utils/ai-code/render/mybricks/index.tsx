@@ -1254,8 +1254,8 @@ if (frontendMode === 'prototype') {
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
         const [style, setStyle] = useState<React.CSSProperties>({
           width: canvasWidth,
-          // minWidth: canvasWidth,
-          // maxWidth: canvasWidth,
+          minWidth: canvasWidth,
+          maxWidth: canvasWidth,
           height: canvasHeight
         });
         const lessRef = useRef<{ filename: string, off: () => void }>({
@@ -1277,8 +1277,8 @@ if (frontendMode === 'prototype') {
             const width = getPopupWidth(appConfig)
             setStyle((prev) => ({
               ...prev,
-              // minWidth: width,
-              // maxWidth: width,
+              minWidth: width,
+              maxWidth: width,
               
               width
             }))
@@ -1337,6 +1337,8 @@ if (frontendMode === 'prototype') {
                         if (width) {
                           const numberWidth = parseInt(width)
                           style.width = numberWidth > canvasWidth ? canvasWidth : numberWidth
+                          style.minWidth = style.width
+                          style.maxWidth = style.width
                         }
                         if (height) {
                           style.height = height

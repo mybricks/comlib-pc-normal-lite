@@ -1136,7 +1136,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
   const pageAnalysis = createBabelPageAnalysis(
     () => designerFs.getFiles(),
-    { configDirName: (window as any)._sandbox_.config.configDirName },
+    { configDirName: (window as any)._sandbox_?.config?.configDirName },
   );
   const connectToAIRef = connectToAI(comId, {
     designer: { ...designerFs, pageAnalysis },

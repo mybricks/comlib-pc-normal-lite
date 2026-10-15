@@ -12,8 +12,10 @@ type SourceProvider = () => AuditSourceFile[] | Promise<AuditSourceFile[]>;
 
 export interface PageAnalysisOptions {
   /** The project configuration directory containing graph YAML files. */
-  configDirName: string;
+  configDirName?: string;
 }
+
+const DEFAULT_CONFIG_DIR_NAME = '.agent';
 
 type Location = { line: number; column: number };
 type AuditItem = {
@@ -331,13 +333,13 @@ function validateGraphFiles(files: AuditSourceFile[], configDirName: string) {
 /** Tool declarations live in plugin-ai; comlib exposes only Babel-backed page analysis. */
 export function createBabelPageAnalysis(
   getFiles: SourceProvider,
-  options: PageAnalysisOptions,
+  options: PageAnalysisOptions = {},
 ): {
   understandPage(params: { file: string; profile?: string }): Promise<{ output: string; metadata: Record<string, unknown> }>;
   validatePage(): Promise<{ output: string; metadata: Record<string, unknown> }>;
 } {
-  const configDirName = options.configDirName.replace(/^\/+|\/+$/g, '');
-  if (!configDirName) throw new Error('page-analysis: configDirName is required');
+  const configuredConfigDirName = options.configDirName?.trim().replace(/^\/+|\/+$/g, '');
+  const configDirName = configuredConfigDirName || DEFAULT_CONFIG_DIR_NAME;
   const understandPage = async (params: { file: string; profile?: string }) => {
       const files = normalizeRequestedFiles(params, await getFiles());
       const reports = files.map(analyzeFile);
