@@ -97,7 +97,7 @@ export default function IconLibraryModal({
     plugins?.showAIDialog?.();
     try {
       const result = aiService?.request({
-        message: `调用图标生成工具，生成图标，用户需求：${content}`,
+        message: `${lang.svgGenMessagePrefix}${content}`,
         attachments: [],
       });
       if (result && typeof result.then === 'function') {
