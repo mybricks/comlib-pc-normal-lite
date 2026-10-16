@@ -1,4 +1,5 @@
 import { convertHyphenToCamel, convertCamelToHyphen } from "../../../../utils/string";
+import { splitTopLevelRules } from "./splitTopLevelRules";
 
 interface Rule {
   selectors?: {
@@ -466,9 +467,10 @@ class Parse {
   }
 }
 
-export const parseLess = (code: string) => {
+const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj | null => {
   const less = window.less;
-  let cssObj: CSSObj = {};
+  // null 明确表示解析/转换失败；合法空文件的结果仍然是 {}。
+  let cssObj: CSSObj | null = null;
 
   const { sanitized, globalMap } = extractGlobals(code);
 
@@ -476,7 +478,7 @@ export const parseLess = (code: string) => {
     // 直接 parse Less 源码（不经过 render 编译），保留嵌套结构
     (less as any).parse(sanitized, (error: any, output: any) => {
       if (error) {
-        // console.error(error);
+        onError?.(error);
       } else {
         try {
           const parse = new Parse(output);
@@ -492,16 +494,19 @@ export const parseLess = (code: string) => {
           });
           cssObj = restoreGlobals(flatObj, globalMap);
         } catch (parseErr) {
-          // ignore
+          onError?.(parseErr);
         }
       }
     });
   } catch (error) {
-    // console.error(error);
+    onError?.(error);
   }
 
   return cssObj;
 };
+
+// 普通样式编辑保持原接口：失败返回 {}，不自动删除错误规则。
+export const parseLess = (code: string): CSSObj => tryParseLess(code) ?? {};
 
 const formatCSSString = (cssObj: CSSObj, indent = "") => {
   let code = "";
@@ -527,4 +532,42 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
 
 export const stringifyLess = (cssObj: CSSObj) => {
   return formatCSSString(cssObj);
+};
+
+/** 只执行原规范化过程，分块和最终合并都调用它，避免失败后递归恢复。 */
+const normalizeOnce = (code: string, onError?: (error: unknown) => void): string | null => {
+  try {
+    const cssObj = tryParseLess(code, onError);
+    return cssObj === null ? null : stringifyLess(cssObj);
+  } catch (error) {
+    onError?.(error);
+    return null;
+  }
+};
+
+/** 导入规范化：正常文件只解析一次，失败文件才按第一层规则恢复。 */
+export const normalizeRestoreLess = (code: string, filePath = '(未知文件)'): string => {
+  const normalized = normalizeOnce(code);
+  if (normalized !== null) return normalized;
+
+  const blocks = splitTopLevelRules(code);
+  if (!blocks) return code;
+
+  const recovered: string[] = [];
+  for (const [index, block] of blocks.entries()) {
+    let error: unknown;
+    const result = normalizeOnce(block, (cause) => { error = cause; });
+    // 只在分块失败时告警，保留完整原文，便于定位如 @media �screen 这样的异常规则。
+    if (result === null) {
+      console.warn('[normalizeRestoreLess] 规则块规范化失败，分块恢复时跳过',
+        { filePath, blockIndex: index + 1, error }, block);
+    }
+    if (result !== null && result.trim()) recovered.push(result);
+  }
+  if (!recovered.length) return code;
+
+  // .a { color: red }、.a { background: white } 单独输出仍是两个块。
+  // 合并后再走原规范化，才能与编辑器的同名规则、同条件 @media 合并保持一致。
+  // 终检失败保留原文件，不再分块重试，也不把失败误写为空文件。
+  return normalizeOnce(recovered.join("\n\n")) ?? code;
 };

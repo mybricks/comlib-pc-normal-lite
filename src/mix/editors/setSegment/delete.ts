@@ -19,12 +19,6 @@ const createDeletePlaceholder = (length: number) => {
 const runDeleteByAI = (fromEle) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
   const actionId = randomUUID()
-  // const chip = {
-  //   id: randomUUID(),
-  //   type: 'element-delete',
-  //   label: `删除 ${fromLabel} `,
-  //   data: buildElementDeleteChipData(fromEle, fromLabel),
-  // }
 
   const parent = fromEle.parentNode
   const nextSibling = fromEle.nextSibling

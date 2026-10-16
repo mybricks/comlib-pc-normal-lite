@@ -139,13 +139,6 @@ const createAIPreviewClone = (fromEle: HTMLElement) => {
 const runDuplicateByAI = (fromEle: HTMLElement, jsx: string, title: string) => {
   const clone = createAIPreviewClone(fromEle)
   const actionId = randomUUID()
-  // const targetLabel = getElementLabel(fromEle, '节点')
-  // const chip = {
-  //   id: randomUUID(),
-  //   type: 'element-insert',
-  //   label: title,
-  //   data: buildElementInsertChipData(fromEle, 'after', jsx, '', targetLabel),
-  // }
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementDuplicateAiRequest({ ele: fromEle }),

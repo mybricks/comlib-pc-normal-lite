@@ -23,12 +23,6 @@ const toSafeJSXText = (content: string) => {
 const runUpdateTextByAI = (fromEle, content: string) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
   const actionId = randomUUID()
-  // const chip = {
-  //   id: randomUUID(),
-  //   type: 'element-text-update',
-  //   label: `修改 ${fromLabel} 文案`,
-  //   data: buildElementTextUpdateChipData(fromEle, content, fromLabel),
-  // }
 
   const previousInnerHTML = fromEle.innerHTML
   const nextValue = toSafeJSXText(content)
@@ -56,10 +50,6 @@ const runUpdateTextByAI = (fromEle, content: string) => {
 
 const updateText = (options) => {
   const { fromEle, content } = options
-  if (!content.trim()) {
-    // 不允许空字符
-    return
-  }
 
   const zoneTextEditable = fromEle.dataset['zoneTextEditable']
 

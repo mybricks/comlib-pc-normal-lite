@@ -718,17 +718,36 @@ const patchSingleElementInlineStyle = (
       // Merge newly-appended prop offsets into latestStyleInfo so the return value reflects accurate positions.
       latestStyleInfo = { ...latestStyleInfo, ...appendResult.styleInfoUpdates }
     } else {
-      // 没有 data-style-info 表示源码标签可能尚无静态 style 属性；若运行时已有 style，通常来自变量 style={x}，不能安全再注入一个 style 属性。
-      if (initialInlineCssText) return null
+      // data-style-info 可能因其它编辑器只改了 DOM 而暂时缺失。此时仍先按开标签
+      // 查找并追加已有的 style={{...}}；只有源码确实已有 style 属性但无法安全解析时才放弃。
+      // 若源码没有 style 属性，运行时 cssText 可能只是此前编辑器留下的 DOM 状态，
+      // 注入当前要保存的属性比直接丢弃本次更新更符合源码写回预期。
+      const appendResult = appendPropsToExistingInlineStyle(newCode, jsxInfo.loc, null, propsToAdd)
+      if (appendResult) {
+        newCode = appendResult.newSource
+        latestStyleInfo = appendResult.styleInfoUpdates
+      }
+      const jsxStart: number | undefined = jsxInfo.loc?.jsx?.start
       const tagEnd: number | undefined = jsxInfo.loc?.tag?.end
-      if (tagEnd == null) return null
-      const injectResult = injectStyleAttrIntoJSX(newCode, tagEnd, propsToAdd)
-      if (!injectResult) return null
-      newCode = injectResult.newSource
-      // injectStyleAttrIntoJSX produced a brand-new style attr; capture the fresh offsets.
-      latestStyleInfo = injectResult.styleInfo
+      const openingTag = jsxStart != null && tagEnd != null
+        ? newCode.slice(jsxStart, tagEnd)
+        : ''
+      if (appendResult || /\sstyle\s*=/.test(openingTag)) {
+        if (!appendResult) return null
+      } else {
+        // No source style attribute exists, so a DOM-only inline update can be
+        // persisted by injecting the edited properties into the JSX tag.
+        const tagEnd: number | undefined = jsxInfo.loc?.tag?.end
+        if (tagEnd == null) return null
+        const injectResult = injectStyleAttrIntoJSX(newCode, tagEnd, propsToAdd)
+        if (!injectResult) return null
+        newCode = injectResult.newSource
+        // injectStyleAttrIntoJSX produced a brand-new style attr; capture the fresh offsets.
+        latestStyleInfo = injectResult.styleInfo
+      }
     }
     const insertion = getSingleInsertionReplacement(codeBeforeAppend, newCode)
+    console.log('insertion', insertion)
     if (!insertion) return null
     sourceReplacements.push(insertion)
   }
@@ -1299,12 +1318,6 @@ export default function createSetStyleHandler(
             // const label = getElementLabel(ele, '节点1')
             const title = getStyleActionTitle(ele)
             const actionId = randomUUID()
-            // const chip = {
-            //   id: randomUUID(),
-            //   type: 'element-style-update',
-            //   label: `调整 ${label} 样式`,
-            //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-            // }
             const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
               ele,
               key,
@@ -1583,12 +1596,6 @@ export default function createSetStyleHandler(
           // const label = getElementLabel(ele, '节点1')
           const title = getStyleActionTitle(ele)
           const actionId = randomUUID()
-          // const chip = {
-          //   id: randomUUID(),
-          //   type: 'element-style-update',
-          //   label: `调整 ${label} 样式`,
-          //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-          // }
           const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
             ele,
             key,

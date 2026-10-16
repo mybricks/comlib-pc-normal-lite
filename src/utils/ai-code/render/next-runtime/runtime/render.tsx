@@ -100,12 +100,14 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
 
   useLayoutEffect(() => {
     if (vibingEnded) {
+      let resultError: any = null
       // vibe 结束
       if (!isInitialized) {
         const error = new Error(`入口文件 \`${props.entryFile}\` 缺失，组件无法渲染`)
         fileSystem.current.error = error
         // 缺失入口文件
-        setError(error)
+        // setError(error)
+        resultError = error
       } else {
         const { tempFilesMap, tempDependencies } = fileSystem.current
 
@@ -132,11 +134,13 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
         })
 
         if (errorMessage) {
-          setError(new Error(errorMessage))
+          resultError = new Error(errorMessage)
+          // setError(new Error(errorMessage))
         }
       }
+      setError(resultError)
     } else {
-      setError(null)
+      // setError(null)
     }
   }, [vibingEnded, isInitialized])
 
