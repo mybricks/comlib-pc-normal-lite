@@ -1419,7 +1419,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         if (ext !== 'less' && ext !== 'css') return file
         if (!file.content?.trim()) return file
         try {
-          const normalized = normalizeRestoreLess(file.content)
+          const normalized = normalizeRestoreLess(file.content, file.path)
           return { ...file, content: normalized }
         } catch {
           // 意外异常保留本文件，继续规范化后续文件。

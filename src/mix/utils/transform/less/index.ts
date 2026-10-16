@@ -467,7 +467,7 @@ class Parse {
   }
 }
 
-const tryParseLess = (code: string): CSSObj | null => {
+const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj | null => {
   const less = window.less;
   // null 明确表示解析/转换失败；合法空文件的结果仍然是 {}。
   let cssObj: CSSObj | null = null;
@@ -478,7 +478,7 @@ const tryParseLess = (code: string): CSSObj | null => {
     // 直接 parse Less 源码（不经过 render 编译），保留嵌套结构
     (less as any).parse(sanitized, (error: any, output: any) => {
       if (error) {
-        // console.error(error);
+        onError?.(error);
       } else {
         try {
           const parse = new Parse(output);
@@ -494,12 +494,12 @@ const tryParseLess = (code: string): CSSObj | null => {
           });
           cssObj = restoreGlobals(flatObj, globalMap);
         } catch (parseErr) {
-          // ignore
+          onError?.(parseErr);
         }
       }
     });
   } catch (error) {
-    // console.error(error);
+    onError?.(error);
   }
 
   return cssObj;
@@ -535,17 +535,18 @@ export const stringifyLess = (cssObj: CSSObj) => {
 };
 
 /** 只执行原规范化过程，分块和最终合并都调用它，避免失败后递归恢复。 */
-const normalizeOnce = (code: string): string | null => {
+const normalizeOnce = (code: string, onError?: (error: unknown) => void): string | null => {
   try {
-    const cssObj = tryParseLess(code);
+    const cssObj = tryParseLess(code, onError);
     return cssObj === null ? null : stringifyLess(cssObj);
-  } catch {
+  } catch (error) {
+    onError?.(error);
     return null;
   }
 };
 
 /** 导入规范化：正常文件只解析一次，失败文件才按第一层规则恢复。 */
-export const normalizeRestoreLess = (code: string): string => {
+export const normalizeRestoreLess = (code: string, filePath = '(未知文件)'): string => {
   const normalized = normalizeOnce(code);
   if (normalized !== null) return normalized;
 
@@ -553,8 +554,14 @@ export const normalizeRestoreLess = (code: string): string => {
   if (!blocks) return code;
 
   const recovered: string[] = [];
-  for (const block of blocks) {
-    const result = normalizeOnce(block);
+  for (const [index, block] of blocks.entries()) {
+    let error: unknown;
+    const result = normalizeOnce(block, (cause) => { error = cause; });
+    // 只在分块失败时告警，保留完整原文，便于定位如 @media �screen 这样的异常规则。
+    if (result === null) {
+      console.warn('[normalizeRestoreLess] 规则块规范化失败，分块恢复时跳过',
+        { filePath, blockIndex: index + 1, error }, block);
+    }
     if (result !== null && result.trim()) recovered.push(result);
   }
   if (!recovered.length) return code;
