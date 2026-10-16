@@ -1501,13 +1501,6 @@ export function genStyleValue(props) {
     });
     // const label = getElementLabel(ele, '节点1');
     const actionId = randomUUID();
-    // const chip = {
-    //   id: randomUUID(),
-    //   type: 'element-style-update',
-    //   label: `调整 ${label} 样式`,
-    //   data: buildElementStyleUpdateChipData(ele, styleChanges, label),
-    // };
-
     const applyPreview = () => {
       styleChanges.forEach(({ key, value }) => {
         const property = convertCamelToHyphen(key);
@@ -2426,12 +2419,6 @@ export function genImgSrcReplacer() {
             },
           });
         } else {
-          // const chip = {
-          //   id: randomUUID(),
-          //   type: 'element-image-update',
-          //   label: title,
-          //   data: buildElementImageUpdateChipData(ele, newSrc, label),
-          // };
           undoRedoManager.executeBranch({
             aiRequest: buildElementImageUpdateAiRequest({
               ele,
@@ -2804,13 +2791,6 @@ export function applyRawSvg(params: any, rawSvg: string): void {
     return
   }
 
-  // const chip = {
-  //   id: randomUUID(),
-  //   type: 'element-svg-update',
-  //   label: title,
-  //   data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
-  // }
-
   undoRedoManager.executeBranch({
     aiRequest: buildElementSvgUpdateAiRequest({
       ele,
@@ -2999,13 +2979,6 @@ export function applyIconWithSvg(params: any, rawSvg: string): void {
     })
     return
   }
-
-  // const chip = {
-  //   id: randomUUID(),
-  //   type: 'element-svg-update',
-  //   label: title,
-  //   data: buildElementSvgUpdateChipData(ele, jsxSvg, label),
-  // }
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementSvgUpdateAiRequest({

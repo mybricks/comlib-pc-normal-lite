@@ -489,14 +489,19 @@ function getIdentifyingInlineStyle(ele: Element, excludeProperties: string[]): s
   return parts.length ? parts.join('; ') : '无（除本次目标样式外）'
 }
 
-export function getElementLabel(ele: Element | undefined, fallback: string): string {
-  const hasClass = Boolean(ele?.classList?.length)
+export function getElementLabel(ele: Element | Node | undefined, fallback: string): string {
+  if (ele && ele.nodeType !== Node.ELEMENT_NODE) {
+    return getElementLabel(ele.parentElement ?? undefined, fallback)
+  }
+
+  const element = ele as Element | undefined
+  const hasClass = Boolean(element?.classList?.length)
   const getZoneTitle = (title: string | null | undefined) =>
     title ? (hasClass ? title.slice(1) : title) : undefined
-  return getZoneTitle(ele?.getAttribute('data-zone-title')) ||
-    getZoneTitle((ele as HTMLElement | undefined)?.dataset?.zoneTitle) ||
-    pickDistinguishingClassName(ele) ||
-    ele?.tagName?.toLowerCase?.() ||
+  return getZoneTitle(element?.getAttribute('data-zone-title')) ||
+    getZoneTitle((element as HTMLElement | undefined)?.dataset?.zoneTitle) ||
+    pickDistinguishingClassName(element) ||
+    element?.tagName?.toLowerCase?.() ||
     fallback
 }
 
@@ -519,10 +524,11 @@ export function parseElementInfo(ele: Element | undefined, label: string, option
 
 function getElementLabeForAiRequest(ele: Element | Node) {
   if (ele.nodeType !== Node.ELEMENT_NODE) {
-    const text = ele.textContent?.trim().replace(/\s+/g, ' ').slice(0, 30)
+    // const text = ele.textContent?.trim().replace(/\s+/g, ' ').slice(0, 30)
     const parent = ele.parentElement
     const parentLabel = parent ? getElementLabeForAiRequest(parent) : '文本节点'
-    return text ? `${parentLabel} 中的文本「${text}」` : `${parentLabel} 中的文本节点`
+    return parentLabel
+    // return text ? `${parentLabel} 中的文本「${text}」` : `${parentLabel} 中的文本节点`
   }
 
   const element = ele as Element
@@ -554,50 +560,6 @@ export function buildElementDeleteAiRequest({ ele }: { ele: Element }) {
   }
 }
 
-export function buildElementDeleteChipData(ele: Element, label = getElementLabel(ele, '节点1')): ParsedElementDeleteChipData {
-  const opLabel = randomUUID(8)
-  const target = parseElementInfo(ele, label)
-  const changeRequirements = [
-    '1. 从 JSX 中完整移除【被删除元素】节点（含其所有子节点）',
-    ...(target.hasRepeatContext
-      ? ['2. 如果【被删除元素】疑似位于循环 JSX / map 渲染中，默认只删除当前元素对应的数据项或条件分支，不要直接删除整个 map/循环表达式或循环模板节点']
-      : []),
-    `${target.hasRepeatContext ? 3 : 2}. 同时移除该元素相关的 import 语句（如该组件不再被使用）`,
-    `${target.hasRepeatContext ? 4 : 3}. 同时移除该元素独有的样式类定义（如对应 CSS/Less 中仅被该元素使用的类）`,
-    `${target.hasRepeatContext ? 5 : 4}. 保持其余元素的顺序、缩进和结构不变`,
-  ]
-  const notes = [
-    ...(target.hasRepeatContext
-      ? ['如果无法判断用户是要删除当前这一项，还是删除循环 JSX 中的全部同类项，请先向用户确认，不要贸然移除整个 map/循环结构。']
-      : []),
-    '如果你认为此操作不合法（例如删除会导致父容器渲染异常），请用一句话向用户说明原因，不要修改任何代码。',
-  ]
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    target,
-    detailText: [
-      `<element-delete-operation id="${opLabel}">`,
-      `## 操作意图（${opLabel}）`,
-      '用户触发了删除操作，请在 JSX 源码中移除对应的元素节点（含其完整子树）。',
-      '',
-      '## 被删除元素',
-      `- 名称：${target.name}`,
-      `- 代码位置：${target.codeLocation}`,
-      target.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(target.domSummary, '  '),
-      '',
-      '## 修改要求',
-      ...changeRequirements,
-      '',
-      '## 注意',
-      ...notes,
-      '</element-delete-operation>',
-    ].join('\n'),
-  }
-}
-
 export function buildElementTextUpdateAiRequest({ ele, content }: { ele: Element; content: string }) {
   const chip = {
     id: randomUUID(),
@@ -613,56 +575,6 @@ export function buildElementTextUpdateAiRequest({ ele, content }: { ele: Element
     type: 'element-text-update',
     message: `将 [[chip:${chip.id}]] 文本修改为「${content}」.`,
     chips: [chip]
-  }
-}
-
-export function buildElementTextUpdateChipData(ele: Element, content: string, label = getElementLabel(ele, '节点1')): ParsedElementTextUpdateChipData {
-  const opLabel = randomUUID(8)
-  const target = parseElementInfo(ele, label, { includeCurrentText: true })
-  const nextText = content ?? ''
-  const changeRequirements = [
-    '1. 只修改【目标文本元素】对应的文案内容，不重写无关 JSX 结构',
-    '2. 将目标文案改为【目标新文案】中给出的完整内容；如果包含换行，按现有项目文本换行习惯处理（如 <br/> 或字符串换行）',
-    ...(target.hasRepeatContext
-      ? ['3. 如果【目标文本元素】疑似位于循环 JSX / map 渲染中，默认只修改当前元素对应的数据项或条件分支，不要直接修改整个 map 模板导致全部同类项文案变化']
-      : []),
-    `${target.hasRepeatContext ? 4 : 3}. 保持该元素的组件、属性、样式类名、事件绑定和相邻元素结构不变`,
-    `${target.hasRepeatContext ? 5 : 4}. 不要因为只改文案而新增无关组件、状态或样式`,
-  ]
-  const notes = [
-    ...(target.hasRepeatContext
-      ? ['如果无法判断用户是要只修改当前这一项，还是修改循环 JSX 中的全部同类项，请先向用户确认，不要贸然改动整个 map/循环模板。']
-      : []),
-    '如果无法在源码中可靠定位该文本，请用一句话向用户说明原因，不要修改任何代码。',
-  ]
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    target,
-    content: nextText,
-    detailText: [
-      `<element-text-update-operation id="${opLabel}">`,
-      `## 操作意图（${opLabel}）`,
-      '用户触发了文本修改操作，请在 JSX 源码中把目标文本元素的文案改为指定新文案。',
-      '',
-      '## 目标文本元素',
-      `- 名称：${target.name}`,
-      `- 代码位置：${target.codeLocation}`,
-      `- 当前 DOM 文本：${target.currentText ?? '无可识别文本'}`,
-      target.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(target.domSummary, '  '),
-      '',
-      '## 目标新文案',
-      nextText || '（空文本）',
-      '',
-      '## 修改要求',
-      ...changeRequirements,
-      '',
-      '## 注意',
-      ...notes,
-      '</element-text-update-operation>',
-    ].join('\n'),
   }
 }
 
@@ -684,50 +596,6 @@ export function buildElementImageUpdateAiRequest({ ele, src }: { ele: Element; s
   }
 }
 
-export function buildElementImageUpdateChipData(
-  ele: Element,
-  nextSrc: string,
-  label = getElementLabel(ele, '图片'),
-): ParsedElementImageUpdateChipData {
-  const opLabel = randomUUID(8)
-  const target = parseElementInfo(ele, label)
-  const currentSrc = ele.getAttribute('src') ?? ''
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    target,
-    currentSrc,
-    nextSrc,
-    detailText: [
-      `<element-image-update-operation id="${opLabel}">`,
-      `## 操作意图（${opLabel}）`,
-      '用户上传了新图片，请在 JSX 源码中将目标图片元素的 src 替换为指定链接。',
-      '',
-      '## 目标图片元素',
-      `- 名称：${target.name}`,
-      `- 代码位置：${target.codeLocation}`,
-      target.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(target.domSummary, '  '),
-      '',
-      '## 图片地址',
-      `- 当前地址：${currentSrc || '未设置'}`,
-      `- 新地址：${nextSrc}`,
-      '',
-      '## 修改要求',
-      '1. 只修改目标图片元素及其实际控制 src 的 JSX 属性；如果 src 由变量、组件 prop 或数据项控制，请在对应来源中替换为新地址',
-      '2. 保持图片元素的其他属性、样式、事件和相邻 JSX 结构不变',
-      '3. 如果目标图片位于循环 JSX / map 渲染中，默认仅替换当前项对应的图片地址；无法确认范围时先向用户确认',
-      '',
-      '## 注意',
-      '如果无法可靠定位控制该图片地址的源码，请用一句话说明原因，不要修改无关代码。',
-      '</element-image-update-operation>',
-    ].join('\n'),
-  }
-}
-
-
-
 export function buildElementSvgUpdateAiRequest({ ele, svg }: { ele: Element; svg: string }) {
   const chip = {
     id: randomUUID(),
@@ -748,48 +616,6 @@ export function buildElementSvgUpdateAiRequest({ ele, svg }: { ele: Element; svg
       `\`\`\``
     ].join('\n'),
     chips: [chip]
-  }
-}
-
-export function buildElementSvgUpdateChipData(
-  ele: Element,
-  nextSvg: string,
-  label = getElementLabel(ele, '图标'),
-): ParsedElementSvgUpdateChipData {
-  const opLabel = randomUUID(8)
-  const target = parseElementInfo(ele, label)
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    target,
-    nextSvg,
-    detailText: [
-      `<element-svg-update-operation id="${opLabel}">`,
-      `## 操作意图（${opLabel}）`,
-      '用户上传了新的 SVG 图标。请在 JSX 源码中将目标图标组件或 SVG 元素替换为下方给出的 SVG JSX。',
-      '',
-      '## 目标图标元素',
-      `- 名称：${target.name}`,
-      `- 代码位置：${target.codeLocation}`,
-      target.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(target.domSummary, '  '),
-      '',
-      '## 新 SVG JSX',
-      '```tsx',
-      nextSvg,
-      '```',
-      '',
-      '## 修改要求',
-      '1. 只替换目标图标实际对应的 JSX 节点；不要修改无关元素、样式或组件结构',
-      '2. 如果原图标是组件引用，替换后移除仅被该图标使用的 import；保留仍被其他位置使用的 import',
-      '3. 保留目标节点原有的布局尺寸、定位和外层样式效果；需要时将原有控制尺寸或颜色的属性合理迁移到新 SVG',
-      '4. 如果目标位于循环 JSX / map 渲染中，默认仅替换当前项对应的图标；无法确认范围时先向用户确认',
-      '',
-      '## 注意',
-      '如果无法可靠定位目标图标的源码，请用一句话说明原因，不要修改无关代码。',
-      '</element-svg-update-operation>',
-    ].join('\n'),
   }
 }
 
@@ -817,66 +643,19 @@ export function buildElementStyleUpdateAiRequest({ ele, styles }: { ele: Element
   }
 }
 
-export function buildElementStyleUpdateChipData(
-  ele: Element,
-  styles: Array<{ key: string; value: number | string | null | undefined }>,
-  label = getElementLabel(ele, '节点1'),
-): ParsedElementStyleUpdateChipData {
-  const opLabel = randomUUID(8)
-  const target = parseElementInfo(ele, label)
-  const classNames = getElementClassNames(ele)
-  const normalizedStyles = styles.map(({ key, value }) => ({
-    property: toKebabCase(key),
-    value: value ?? null,
-  }))
-  const identifyingInlineStyle = getIdentifyingInlineStyle(
-    ele,
-    normalizedStyles.map(({ property }) => property),
-  )
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    target,
-    styles: normalizedStyles,
-    detailText: [
-      `<element-style-update-operation id="${opLabel}">`,
-      `## 操作意图（${opLabel}）`,
-      '用户通过可视化编辑调整元素样式。该样式由组件 prop 控制，无法安全地直接写入 CSS，需要修改 JSX 源码中对应的 prop。',
-      '',
-      '## 目标元素',
-      `- 名称：${target.name}`,
-      `- 类名：${classNames || '无'}`,
-      `- 代码位置：${target.codeLocation}`,
-      `- 当前内联样式（用于对齐到正确 prop，不含本次要改的属性）：${identifyingInlineStyle}`,
-      target.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(target.domSummary, '  '),
-      '',
-      '## 目标样式',
-      ...normalizedStyles.map(({ property, value }) => (
-        value === null || value === undefined || value === ''
-          ? `- 删除 ${property}`
-          : `- ${property}: ${typeof value === 'number' ? `${value}px` : value}`
-      )),
-      '',
-      '## 修改要求',
-      '1. 只修改真正渲染出【当前这个目标节点】的 JSX prop；同一个组件可能渲染出多个结构相似的内部节点，必须用上面的「类名」和「当前内联样式」确定是哪一个，不要只看兄弟节点或相邻 prop',
-      '2. 使运行时效果与目标样式一致；如果 prop 的单位或语义不同，请按该组件现有 API 做等价换算',
-      '3. 保持其他属性、事件和相邻节点不变；标记为“删除”的属性应移除或恢复为组件默认值，不重构无关 JSX、CSS 或组件结构',
-      '',
-      '## 注意',
-      '- 其他 prop 上已经有同名样式，不代表当前节点已经生效。必须先核对目标节点对应 prop 本身是否已写入该属性，才能判定“无需修改”',
-      '- 画布预览可能已临时加上目标样式，不能据此认为源码已完成',
-      '- 如果无法可靠定位控制该样式的 prop，请用一句话说明原因，不要修改无关代码。',
-      '</element-style-update-operation>',
-    ].join('\n'),
-  }
-}
-
 const ELEMENT_MOVE_PLACEMENT_LABEL = {
   before: '前',
   after: '后',
   child: '内'
+}
+
+function textNodeDesc(ele: Element | Node) {
+  if (ele.nodeType !== Node.ELEMENT_NODE) {
+    const text = ele.textContent?.trim().replace(/\s+/g, ' ').slice(0, 30)
+    return text ? ` 内的文本节点「${text}」` : ` 内的文本节点`
+  }
+
+  return ''
 }
 
 export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element; toEle: Element | Node; placement: 'before' | 'after' | 'child' }) {
@@ -901,71 +680,8 @@ export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromE
 
   return {
     type: 'element-move',
-    message: `将 [[chip:${chipFrom.id}]] 移动到 [[chip:${chipTo.id}]] ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]}.`,
+    message: `将 [[chip:${chipFrom.id}]] 移动到 [[chip:${chipTo.id}]]${textNodeDesc(toEle)} ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]}.`,
     chips: [chipFrom, chipTo]
-  }
-}
-
-export function buildElementMoveChipData(
-  fromEle: Element,
-  toEle: Element,
-  placement: 'before' | 'after' | 'child',
-  fromLabel = getElementLabel(fromEle, '节点1'),
-  toLabel = getElementLabel(toEle, '节点2')
-): ParsedElementMoveChipData {
-  const opLabel = randomUUID(8)
-  const direction = PLACEMENT_LABEL[placement] ?? placement
-  const from = parseElementInfo(fromEle, fromLabel)
-  const to = parseElementInfo(toEle, toLabel)
-  const hasRepeatContext = from.hasRepeatContext || to.hasRepeatContext
-  const changeRequirements = [
-    '1. 只移动【被拖拽元素】的 JSX 节点（含其完整子树），不修改任何属性或样式',
-    `2. 将【被拖拽元素】放到【参照元素】的${direction}`,
-    ...(hasRepeatContext
-      ? ['3. 如果任一元素疑似位于循环 JSX / map 渲染中，默认只调整当前元素对应的数据项或条件分支的顺序，不要直接移动整个 map/循环表达式或循环模板节点']
-      : []),
-    `${hasRepeatContext ? 4 : 3}. 保持其余元素的顺序和缩进不变`,
-    `${hasRepeatContext ? 5 : 4}. 如果两个元素在不同父容器中，请自行判断最合理的移动方案`,
-  ]
-  const notes = [
-    ...(hasRepeatContext
-      ? ['如果无法判断用户是要只移动当前这一项，还是调整循环 JSX 中的全部同类项顺序，请先向用户确认，不要贸然改动整个 map/循环模板。']
-      : []),
-    '如果你认为此操作不合法，请用一句话向用户说明原因，不要修改任何代码。',
-  ]
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    from,
-    to,
-    placement,
-    direction,
-    detailText: [
-      `<element-move-operation id="${opLabel}" direction="${direction}">`,
-      `## 操作意图（${opLabel}）`,
-      `用户通过拖拽，将【被拖拽元素】移动到【参照元素】的${direction}，请在 JSX 源码中完成对应的顺序调整。`,
-      '',
-      '## 被拖拽元素（需要移动）',
-      `- 名称：${from.name}`,
-      `- 代码位置：${from.codeLocation}`,
-      from.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(from.domSummary, '  '),
-      '',
-      '## 参照元素（位置不变，作为锚点）',
-      `- 名称：${to.name}`,
-      `- 代码位置：${to.codeLocation}`,
-      to.repeatContextBlock,
-      '- DOM 结构摘要：',,
-      indentText(to.domSummary, '  '),
-      '',
-      '## 修改要求',
-      ...changeRequirements,
-      '',
-      '## 注意',
-      ...notes,
-      '</element-move-operation>',
-    ].join('\n'),
   }
 }
 
@@ -987,81 +703,26 @@ export function buildElementDuplicateAiRequest({ ele }: { ele: Element }) {
   }
 }
 
-export function buildElementInsertAiRequest({ ele, jsx, placement, importCode = '' }: { ele: Element; jsx: string; placement: 'before' | 'after' | 'child'; importCode?: string }) {
+export function buildElementInsertAiRequest({ ele, jsx, placement, importCode = '' }: { ele: Element | Node; jsx: string; placement: 'before' | 'after' | 'child'; importCode?: string }) {
   const chip = {
     id: randomUUID(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
       ele,
-      info: buildDomChipInfo(ele)
+      info: buildDomChipInfo(ele.nodeType === Node.ELEMENT_NODE ? ele as Element : ele.parentElement ?? undefined)
     }
   }
 
   return {
     type: 'element-insert',
     message: [
-      `在 [[chip:${chip.id}]] ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]} 插入 JSX 片段：`,
+      `在 [[chip:${chip.id}]]${textNodeDesc(ele)} ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]} 插入 JSX 片段：`,
       `\`\`\``,
       importCode,
       jsx,
       `\`\`\``
     ].filter((str) => !!str).join('\n'),
     chips: [chip]
-  }
-}
-
-export function buildElementInsertChipData(
-  ele: Element,
-  placement: 'before' | 'after' | 'child',
-  jsx: string,
-  importCode = '',
-  label = getElementLabel(ele, '节点1'),
-): ParsedElementInsertChipData {
-  const opLabel = randomUUID(8)
-  const direction = placement === 'before' ? '前面（上方）' : placement === 'after' ? '后面（下方）' : '内部'
-  const target = parseElementInfo(ele, label)
-  const normalizedImports = importCode.trim()
-  const normalizedJsx = jsx.trim()
-
-  return {
-    inlineText: `执行「${opLabel}」，`,
-    target,
-    placement,
-    direction,
-    importCode: normalizedImports,
-    jsx: normalizedJsx,
-    detailText: [
-      `<element-insert-operation id="${opLabel}" placement="${placement}">`,
-      `## 操作意图（${opLabel}）`,
-      `用户通过可视化编辑，在【目标元素】的${direction}插入 JSX 片段，请在源码中完成对应插入。`,
-      '',
-      '## 目标元素',
-      `- 名称：${target.name}`,
-      `- 代码位置：${target.codeLocation}`,
-      target.repeatContextBlock,
-      '- DOM 结构摘要：',
-      indentText(target.domSummary, '  '),
-      '',
-      '## 需要导入',
-      normalizedImports || '无',
-      '',
-      '## JSX 片段',
-      '```tsx',
-      normalizedJsx,
-      '```',
-      '',
-      '## 修改要求',
-      '1. 只在目标元素指定位置插入给出的 JSX 片段，不改写无关结构',
-      '2. 合并同一模块的命名 import，避免重复导入和重复标识符',
-      '3. 保持现有代码的缩进、结构及其他元素不变',
-      ...(target.hasRepeatContext
-        ? ['4. 如果目标元素位于循环 JSX / map 渲染中，默认只对当前元素对应的源码位置执行插入；无法确认范围时先向用户确认']
-        : []),
-      '',
-      '## 注意',
-      '如果无法可靠定位目标元素的源码，请用一句话说明原因，不要修改无关代码。',
-      '</element-insert-operation>',
-    ].join('\n'),
   }
 }

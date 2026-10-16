@@ -1318,12 +1318,6 @@ export default function createSetStyleHandler(
             // const label = getElementLabel(ele, '节点1')
             const title = getStyleActionTitle(ele)
             const actionId = randomUUID()
-            // const chip = {
-            //   id: randomUUID(),
-            //   type: 'element-style-update',
-            //   label: `调整 ${label} 样式`,
-            //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-            // }
             const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
               ele,
               key,
@@ -1602,12 +1596,6 @@ export default function createSetStyleHandler(
           // const label = getElementLabel(ele, '节点1')
           const title = getStyleActionTitle(ele)
           const actionId = randomUUID()
-          // const chip = {
-          //   id: randomUUID(),
-          //   type: 'element-style-update',
-          //   label: `调整 ${label} 样式`,
-          //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-          // }
           const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
             ele,
             key,
