@@ -658,7 +658,7 @@ function textNodeDesc(ele: Element | Node) {
   return ''
 }
 
-export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element; toEle: Element | Node; placement: 'before' | 'after' | 'child' }) {
+export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element | Node; toEle: Element | Node; placement: 'before' | 'after' | 'child' }) {
   const chipFrom = {
     id: randomUUID(),
     label: getElementLabeForAiRequest(fromEle),
@@ -680,7 +680,7 @@ export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromE
 
   return {
     type: 'element-move',
-    message: `将 [[chip:${chipFrom.id}]] 移动到 [[chip:${chipTo.id}]]${textNodeDesc(toEle)} ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]}.`,
+    message: `将 [[chip:${chipFrom.id}]]${textNodeDesc(fromEle)} 移动到 [[chip:${chipTo.id}]]${textNodeDesc(toEle)} ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]}.`,
     chips: [chipFrom, chipTo]
   }
 }

@@ -428,15 +428,22 @@ const changeOrder = (options) => {
     : toEle.parentElement
   if (!toElement) return
 
-  const fromDataLoc = fromEle.getAttribute('data-loc')
-  let fromDOM = fromEle
+  // before/after 也支持以文本节点作为来源；源码定位和组件信息只存在于元素节点上。
+  const fromElement = fromEle.nodeType === Node.ELEMENT_NODE
+    ? fromEle as Element
+    : fromEle.parentElement
+  if (!fromElement) return
 
-  let useAI = false
+  const fromDataLoc = fromElement.getAttribute('data-loc')
+  let fromDOM = fromElement
+
+  // 文本节点没有独立的 JSX 范围，不能走按 data-loc 重排源码的快速路径。
+  let useAI = fromEle.nodeType !== Node.ELEMENT_NODE || toEle.nodeType !== Node.ELEMENT_NODE
 
   if (!fromDataLoc) {
     // 说明这个dom元素是在某段JSX的内部实现
     // 找到实现它的组件dom，这里有代码信息 loc
-    fromDOM = fromEle.closest('[data-loc]')
+    fromDOM = fromElement.closest('[data-loc]')
     // 此时一定是走AI了
     useAI = true
   }
@@ -462,7 +469,7 @@ const changeOrder = (options) => {
   const getWidgetName = (el: Element): string | null => {
     return el.getAttribute('data-widget-name') ?? el.closest('[data-widget-name]')?.getAttribute('data-widget-name') ?? null
   }
-  if (getWidgetName(fromEle) !== getWidgetName(toElement)) {
+  if (getWidgetName(fromElement) !== getWidgetName(toElement)) {
     useAI = true
   }
 
@@ -493,7 +500,7 @@ const changeOrder = (options) => {
   const fileEntry = files.find((f) => f.fileName === fromFile)
   const source = fileEntry ? decodeURIComponent(fileEntry.source) : ''
   const childWidgetRoot = type === 'child'
-    ? getWidgetRoot(fromEle)
+    ? getWidgetRoot(fromElement)
     : null
   const canUseChildFastPath = type !== 'child'
     || (childWidgetRoot != null && childWidgetRoot === getWidgetRoot(toElement))
@@ -524,7 +531,7 @@ const changeOrder = (options) => {
       if (newSource !== null && validateSource(newSource, fromFile)) {
         const locSnapshotRoot = placement === 'child'
           ? childWidgetRoot
-          : fromEle.parentElement
+          : fromElement.parentElement
         // execute 会直接更新当前 DOM 上的定位信息；undo 时必须还原移动前快照，
         // 否则源码已回退但 DOM 仍保留移动后的 data-loc，再次操作仍会错位。
         const locSnapshot = createDOMSourceLocationSnapshot(locSnapshotRoot, fromFile)
@@ -533,7 +540,7 @@ const changeOrder = (options) => {
         const fromNextSibling = fromEle.nextSibling
         const toParent = toEle.parentNode
         const toNextSibling = toEle.nextSibling
-        const fromLabel = getElementLabel(fromEle, '节点1')
+        const fromLabel = getElementLabel(fromElement, '节点1')
         const toLabel = getElementLabel(toElement, '节点2')
         const moveDescription = buildMoveDescription(fromLabel, toLabel, type)
         const actionId = randomUUID()
@@ -571,7 +578,7 @@ const changeOrder = (options) => {
     }
   }
 
-  const fromLabel = getElementLabel(fromEle, '节点1')
+  const fromLabel = getElementLabel(fromElement, '节点1')
   const toLabel = getElementLabel(toElement, '节点2')
   const placement = type === 'before' ? 'before' : type === 'after' ? 'after' : 'child'
 

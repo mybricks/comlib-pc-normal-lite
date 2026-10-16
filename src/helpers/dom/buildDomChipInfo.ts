@@ -396,19 +396,23 @@ function extractDomSummary(
   return result;
 }
 
-export default function buildDomChipInfo(ele?: Element): string {
-  if (!ele) {
+export default function buildDomChipInfo(ele?: Element | Node): string {
+  const element = ele?.nodeType === Node.ELEMENT_NODE
+    ? ele as Element
+    : ele?.parentElement
+
+  if (!element) {
     return [
       " - 代码位置：未知",
       " - 该区域到叶子节点的Dom结构摘要：未知",
     ].join("\n");
   }
 
-  const repeatContextLines = formatRepeatContexts(collectRepeatAncestorContexts(ele));
+  const repeatContextLines = formatRepeatContexts(collectRepeatAncestorContexts(element));
   return [
-    ` - 相关代码：${getDomCodeLocation(ele)}`,
+    ` - 相关代码：${getDomCodeLocation(element)}`,
     ...repeatContextLines,
     " - 该区域到叶子节点的Dom结构摘要：",
-    indentText(extractDomSummary(ele), "   "),
+    indentText(extractDomSummary(element), "   "),
   ].join("\n");
 }
