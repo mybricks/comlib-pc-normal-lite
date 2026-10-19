@@ -208,7 +208,8 @@ class Context {
         const targetFileName = resolveGraphSourceFile(fileName, graph, files)
         const sourceFile = findSourceFile(targetFileName, files)
         const jsDocMap = getStoredJsDocMap(sourceFile)
-        const selectedData = Object.keys(jsDocMap).length > 0 ? jsDocMap : graph.data
+        // Graph YAML 是页面文档的主数据；JSDoc 只在 graph 没有可用节点时兜底。
+        const selectedData = Object.keys(graph.data).length > 0 ? graph.data : jsDocMap
         const notifyFileName = targetFileName || fileName
         const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
 
@@ -364,10 +365,11 @@ class Context {
             const graphEntry = hasGraphFiles
               ? findGraphForSourceFile(fileName, files, configDirName)
               : undefined
-            // JSDoc 是第一优先级；只有当前文件没有可用 JSDoc 时才回退到 graph YAML。
-            const notifyData = Object.keys(transformJsDoc).length > 0
-              ? transformJsDoc
-              : graphEntry?.graph.data ?? {}
+            // Graph YAML 是页面文档的主数据；JSDoc 只在没有可用 graph 数据时兜底。
+            const graphData = graphEntry?.graph.data ?? {}
+            const notifyData = Object.keys(graphData).length > 0
+              ? graphData
+              : transformJsDoc
             const notifyChangedValue = transformNewFormatForNotifyChanged(notifyData, fileName)
             // if (notifyChangedValue.docs?.length) {
             //   notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
@@ -531,8 +533,10 @@ class Context {
               const targetFileName = resolveGraphSourceFile(fileName, graph, files)
               const sourceFile = findSourceFile(targetFileName, files)
               const jsDocMap = getStoredJsDocMap(sourceFile)
-              const selectedData = Object.keys(jsDocMap).length > 0 ? jsDocMap : graph.data
               const notifyFileName = targetFileName || fileName
+              // 由 YAML updateFile 触发时，刚解析的 graph 是主数据；JSDoc 仅在 graph
+              // 没有可用节点时兜底，避免缓存覆盖本次 YAML 编辑。
+              const selectedData = Object.keys(graph.data).length > 0 ? graph.data : jsDocMap
               const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
 
               if (hasMybricksGraphDirectory(files, configDirName) && hasMybricksGraphFile(files, configDirName)) {
