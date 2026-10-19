@@ -13,11 +13,10 @@ function resolveRelativeLessPath(fromFile: string, importPath: string): string {
 }
 
 /**
- * 从入口 tsx 源码提取 less import（含副作用导入）。
- * 多个 import 时取最后一个，作为入口文件的兜底 less。
+ * 从 TSX 源码提取 Less import（含副作用导入），供普通写回与布局批量写回复用。
  */
-function extractLessImportFromSource(fileName: string, source?: string): string | null {
-  if (!source) return null
+export function extractLessImportsFromSource(fileName: string, source?: string): string[] {
+  if (!source) return []
   let code = source
   try {
     code = decodeURIComponent(source)
@@ -28,12 +27,12 @@ function extractLessImportFromSource(fileName: string, source?: string): string 
   // import css from './index.less' / import './index.less' / import "style.less"
   const re =
     /(?:^|[\n;])\s*import\s+(?:[^'";\n]*?\s+from\s+)?['"]([^'"]+\.less)['"]/g
-  let last: string | null = null
+  const paths: string[] = []
   let match: RegExpExecArray | null
   while ((match = re.exec(code)) !== null) {
-    last = resolveRelativeLessPath(fileName, match[1])
+    paths.push(resolveRelativeLessPath(fileName, match[1]))
   }
-  return last
+  return paths
 }
 
 function pickByFileName(files: FileEntry[]): string | null {
@@ -65,7 +64,7 @@ export function resolveLessFilePath(
       files.find((f) => f.fileName === entryName) ||
       files.find((f) => f.fileName === 'index.tsx')
     const fromEntry = entry
-      ? extractLessImportFromSource(entry.fileName, entry.source)
+      ? extractLessImportsFromSource(entry.fileName, entry.source).slice(-1)[0]
       : null
     if (fromEntry) return fromEntry
 

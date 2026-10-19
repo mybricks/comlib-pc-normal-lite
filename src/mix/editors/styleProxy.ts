@@ -7,6 +7,8 @@ import { randomUUID } from '../utils/uuid'
 import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
+import { prepareLayoutStyleChange, resolveLayoutStyleFile } from './style/helpers/layoutStyleChange'
+import { buildFreedomLayoutPlan, LAYOUT_MODE_KEY } from './style/helpers/layoutPlanning'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import {
   createDOMSourceLocationSnapshot,
@@ -985,6 +987,28 @@ function tryWriteNestedPseudo(
 
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
+/** Layout 使用完整源码 selector，只接受精确规则；不缩短选择器跨目标写入。 */
+function resolveLayoutRule(css: Record<string, any>, selector: string, target: HTMLElement): Record<string, any> {
+  if (css[selector] && typeof css[selector] === 'object') return css[selector];
+  const nested = resolveNestedRuleTarget(css, selector, Array.from(target.classList));
+  if (nested && nested.selector.replace(/\s+/g, ' ').trim() === selector.replace(/\s+/g, ' ').trim()) {
+    if (nested.branch) {
+      const shared = nested.container[nested.key];
+      splitTopLevelCommaKeys(nested.key).forEach(branch => {
+        nested.container[branch] = { ...shared, ...(nested.container[branch] || {}) };
+      });
+      delete nested.container[nested.key];
+    }
+    return nested.container[nested.branch || nested.key];
+  }
+  const merged = Object.keys(css).find(key => splitTopLevelCommaKeys(key).includes(selector));
+  if (merged) {
+    const key = splitCommaMergedTopLevelRuleForWrite(css, merged, selector);
+    return css[key];
+  }
+  return css[selector] = {};
+}
+
 export function genStyleValue(props) {
   type AIStylePayload = {
     jsxFileName?: string;
@@ -1539,8 +1563,52 @@ export function genStyleValue(props) {
     });
   };
 
+  /**
+   * 接收编辑器通过 value.set 发来的父容器样式，展开成父子元素各自的 Less 修改。
+   * buildFreedomLayoutPlan 先测量并列出“改哪里、改什么”；prepareLayoutStyleChange
+   * 再生成每个文件的新旧源码。两步全部完成后，才在下面调用 updateFile。
+   */
+  const changeLayout = (params: any, style: Record<string, any>) => {
+    try {
+      const component = context.component;
+      if (!component || (params.id && params.id !== component.params.id)) throw new Error('布局目标已变化，请重新选择容器');
+      const container = params.focusArea?.ele as HTMLElement;
+      const files = component.params.data.files || [];
+      const { plan } = buildFreedomLayoutPlan(container, component.params.id, style,
+        target => resolveLayoutStyleFile(target, files, config.getEntryFile()));
+      const updates = prepareLayoutStyleChange(plan, component?.params?.data?.files || [], component?.params?.id, resolveLayoutRule, config.getEntryFile());
+      // 父容器和不同目录的子组件可能同时改了多个 Less；把它们登记为一次操作，
+      // 用户按一次撤销就恢复这批文件。先结束之前拖动数值的合并分支，避免混成一次撤销。
+      pendingStyleFileBranch = null;
+      const actionId = randomUUID();
+      undoRedoManager.executeBranch({
+        execute() {
+          updates.forEach(update => {
+            context.updateFile({ fileName: update.fileName, content: update.current, type: undefined });
+          });
+          component?.actions.addUserAction({ id: actionId, type: 'update-style', title: '切换布局', refElement: plan.container });
+        },
+        undo() {
+          updates.forEach(update => {
+            context.updateFile({ fileName: update.fileName, content: update.previous, type: undefined, updateSource: 'undo' });
+          });
+          component?.actions.removeUserAction(actionId);
+        },
+      });
+    } catch (error) {
+      // value.set 没有成功回执；失败时只打印原因，编辑器重新读取实际 CSS 来显示当前布局。
+      console.warn('[freedom-layout]', error);
+    }
+  };
+
   return {
     set(params: any, value: any) {
+      // 本次提交包含 --layout-mode 才执行批量转换：值为 freedom 表示进入，null 表示退出。
+      // 已在自由布局中改颜色时，本次 value 没有这个字段，仍走下面的普通样式写入流程。
+      if (value && Object.prototype.hasOwnProperty.call(value, LAYOUT_MODE_KEY)) {
+        changeLayout(params, value);
+        return;
+      }
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
       // 源码更新触发 DOM 重编译后，宿主可能仍基于已断开的旧焦点回退 selector。

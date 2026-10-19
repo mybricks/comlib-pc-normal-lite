@@ -467,7 +467,7 @@ class Parse {
   }
 }
 
-const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj | null => {
+export const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj | null => {
   const less = window.less;
   // null 明确表示解析/转换失败；合法空文件的结果仍然是 {}。
   let cssObj: CSSObj | null = null;
