@@ -16,7 +16,10 @@ export default function() {
         const { state } = status
         const ctx = params
         if (state === 'ing') {
-          style = value
+          style = Object.entries(value).reduce((pre, [key, value]: any) => {
+            pre[key] = Math.max(value, 0)
+            return pre;
+          }, {})
         }
         handler(ctx, status)
       },
