@@ -1257,11 +1257,7 @@ if (frontendMode === 'prototype') {
       }
       const theme = mixContext.resolveActiveTheme();
       const envCssVariables = useEnvCssVariables();
-      const [popupStyle, setPopupStyle] = useState(() => {
-        return {
-          color: designParentElement ? window.getComputedStyle(designParentElement).color : ''
-        }
-      })
+      const [popupStyle, setPopupStyle] = useState({})
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1302,7 +1298,7 @@ if (frontendMode === 'prototype') {
 
           const fileSystem = mixContext.fileSystem!
           const offFileWatcher = fileSystem.events.on('fileChange', ({ filename, type }) => {
-            if (type === 'update' && filename.endsWith('.less')) {
+            if (type === 'update' && (filename.endsWith('.less') || filename.endsWith('.tsx'))) {
               setPopupStyle({
                 color: designParentElement ? window.getComputedStyle(designParentElement).color : ''
               })
@@ -1321,6 +1317,9 @@ if (frontendMode === 'prototype') {
         // }, [])
 
         useEffect(() => {
+          setPopupStyle({
+            color: designParentElement ? window.getComputedStyle(designParentElement).color : ''
+          })
           try {
             if (containerRef.current && container) {
               containerRef.current.setAttribute('data-zone-filename', params.filename)
