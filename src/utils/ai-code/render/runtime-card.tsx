@@ -435,6 +435,12 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
       return renderSender;
     })();
 
+    useEffect(() => {
+      if (!runtimeFiles.length) {
+        context.component?.actions.loaded?.()
+      }
+    }, [])
+
     return (
       <div ref={containerRef} className={css.container} style={{ display: 'contents' }}>
         <Wrapper env={env} canvasContainer={canvasContainer}>

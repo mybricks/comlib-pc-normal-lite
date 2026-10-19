@@ -1240,13 +1240,28 @@ if (frontendMode === 'prototype') {
     const ObservedComponent = Component;
     const { ErrorView } = params;
     let realProps = {}
+    let designParentElement: any = null
     const DialogRoot = (props) => {
       if (isDesign() && !props.__mybricks_show) {
         realProps = props
-        return null
+        return (
+          <div
+            ref={(element) => {
+              const parentElement = element?.parentElement
+              if (!parentElement) return
+              designParentElement = parentElement
+            }}
+            style={{ display: 'none' }}
+          />
+        )
       }
       const theme = mixContext.resolveActiveTheme();
       const envCssVariables = useEnvCssVariables();
+      const [popupStyle, setPopupStyle] = useState(() => {
+        return {
+          color: designParentElement ? window.getComputedStyle(designParentElement).color : ''
+        }
+      })
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1283,15 +1298,27 @@ if (frontendMode === 'prototype') {
               width
             }))
           })
+          setContainer(containerRef.current!)
+
+          const fileSystem = mixContext.fileSystem!
+          const offFileWatcher = fileSystem.events.on('fileChange', ({ filename, type }) => {
+            if (type === 'update' && filename.endsWith('.less')) {
+              setPopupStyle({
+                color: designParentElement ? window.getComputedStyle(designParentElement).color : ''
+              })
+            }
+          })
+
           return () => {
+            offFileWatcher()
             lessRef.current?.off?.()
             off()
           }
         }, [])
 
-        useLayoutEffect(() => {
-          setContainer(containerRef.current!)
-        }, [])
+        // useLayoutEffect(() => {
+        //   setContainer(containerRef.current!)
+        // }, [])
 
         useEffect(() => {
           try {
@@ -1391,7 +1418,7 @@ if (frontendMode === 'prototype') {
               ...envCssVariables,
               containerType: 'inline-size',
             }}>
-              <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
+              <div style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative', ...popupStyle }}>
                 {container && (
                   <PageContext.Provider value={{ container, onPageInfo: () => {} }}>
                     <ErrorView>
