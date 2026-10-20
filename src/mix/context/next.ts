@@ -185,7 +185,6 @@ class Context {
   /** 通知引擎文档相关更新 */
   notifyChanged(filename?: string, changeType?: 'delete' | 'update', value?: any) {
     try {
-      console.log('[mybricks] notifyChanged', { filename, changeType, value })
       if (!filename) {
         this.component?.actions?.notifyChanged?.()
       } else {
