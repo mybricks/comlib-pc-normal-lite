@@ -434,7 +434,7 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
     },
   })
 
-  return { type: 'success', actionId }
+  return { type: 'success', actionId, refElement: preview.container }
 }
 
 const insert = (options: InsertOptions) => {
@@ -571,7 +571,7 @@ const insert = (options: InsertOptions) => {
       },
     })
 
-    return { type: 'success', actionId }
+    return { type: 'success', actionId, refElement: preview.container }
   } catch (_) {
     console.error("insert:", _)
     return runInsertByAI(resolvedOptions, createPreview(code), title)
