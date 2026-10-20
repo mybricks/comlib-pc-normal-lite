@@ -6,10 +6,13 @@ export default function () {
     '@setStyle': createSetStyleHandler(
       (_ctx, params) => params.ele,
       (_ctx, params) => {
-        return Object.entries(params.style).reduce((pre, [key, value]: any) => {
-          pre[key] = Math.max(value, 0)
-          return pre;
-        }, {})
+        if (params.style) {
+          return Object.entries(params.style).reduce((pre, [key, value]: any) => {
+            pre[key] = Math.max(value, 0)
+            return pre;
+          }, {})
+        }
+        return undefined
       },
     ),
   }

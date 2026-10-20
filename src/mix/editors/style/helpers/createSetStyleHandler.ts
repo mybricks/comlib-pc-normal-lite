@@ -774,7 +774,7 @@ const patchSingleElementInlineStyle = (
  */
 export default function createSetStyleHandler(
   getEle: (ctx: any, params: any) => HTMLElement,
-  getStyle: (ctx: any, params: any) => Record<string, number>,
+  getStyle: (ctx: any, params: any) => Record<string, number> | undefined,
 ) {
   // [引擎兼容处理] start、finish状态可能没有style，在ing阶段进行收集
   let style = {}
@@ -963,7 +963,7 @@ export default function createSetStyleHandler(
         initialInlineCssText = ele.style?.cssText ?? ''
         initialInlineStyleValues = {}
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
-        style = getStyle(ctx, params)
+        style = getStyle(ctx, params)!
 
         // console.log('@setStyle:style', style)
 
