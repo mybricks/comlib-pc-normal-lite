@@ -1,3 +1,4 @@
+import { message } from 'antd';
 import context, { config } from '../context';
 import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
@@ -7,7 +8,11 @@ import { randomUUID } from '../utils/uuid'
 import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
-import { prepareLayoutStyleChange, resolveLayoutStyleFile } from './style/helpers/layoutStyleChange'
+import { prepareLayoutStyleChange, tryResolveLayoutStyleFile } from './style/helpers/layoutStyleChange'
+import { createLayoutJsxReader } from './style/helpers/layoutJsxSource'
+import { hasInlineLayout } from './style/helpers/layoutInlineStyle'
+import { commitLayoutFiles } from './style/helpers/layoutFileCommit'
+import type { LayoutElement, LayoutFileUpdate, LayoutInlineWrite } from './style/helpers/layoutTypes'
 import { buildFreedomLayoutPlan, LAYOUT_MODE_KEY } from './style/helpers/layoutPlanning'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import {
@@ -988,7 +993,7 @@ function tryWriteNestedPseudo(
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 /** Layout 使用完整源码 selector，只接受精确规则；不缩短选择器跨目标写入。 */
-function resolveLayoutRule(css: Record<string, any>, selector: string, target: HTMLElement): Record<string, any> {
+function resolveLayoutRule(css: Record<string, any>, selector: string, target: LayoutElement): Record<string, any> {
   if (css[selector] && typeof css[selector] === 'object') return css[selector];
   const nested = resolveNestedRuleTarget(css, selector, Array.from(target.classList));
   if (nested && nested.selector.replace(/\s+/g, ' ').trim() === selector.replace(/\s+/g, ' ').trim()) {
@@ -1563,41 +1568,47 @@ export function genStyleValue(props) {
     });
   };
 
-  /**
-   * 接收编辑器通过 value.set 发来的父容器样式，展开成父子元素各自的 Less 修改。
-   * buildFreedomLayoutPlan 先测量并列出“改哪里、改什么”；prepareLayoutStyleChange
-   * 再生成每个文件的新旧源码。两步全部完成后，才在下面调用 updateFile。
-   */
+  const reportLayoutError = (error: unknown) => {
+    console.warn('[freedom-layout]', error);
+    message.warning('布局修改未完成，请查看控制台中的具体原因');
+  };
+
+  const submitLayoutFiles = (updates: LayoutFileUpdate[], target: LayoutElement, title: string) => {
+    const component = context.component!;
+    pendingStyleFileBranch = null;
+    const actionId = randomUUID();
+    const apply = (undo = false) => {
+      if (context.component !== component) throw new Error('布局所属组件已变化');
+      commitLayoutFiles(updates, (fileName, content, updateSource) => {
+        context.updateFile({ fileName, content, type: undefined, updateSource });
+      }, () => component.params.data._errors || [], undo);
+    };
+    undoRedoManager.executeBranch({
+      execute() {
+        apply();
+        component.actions.addUserAction({ id: actionId, type: 'update-style', title, refElement: target });
+      },
+      undo() {
+        apply(true);
+        component.actions.removeUserAction(actionId);
+      },
+    });
+  };
+
+  /** 先准备全部 Less / JSX 文件，再作为同一次布局操作提交。 */
   const changeLayout = (params: any, style: Record<string, any>) => {
     try {
       const component = context.component;
       if (!component || (params.id && params.id !== component.params.id)) throw new Error('布局目标已变化，请重新选择容器');
       const container = params.focusArea?.ele as HTMLElement;
       const files = component.params.data.files || [];
+      const jsx = createLayoutJsxReader(files);
       const { plan } = buildFreedomLayoutPlan(container, component.params.id, style,
-        target => resolveLayoutStyleFile(target, files, config.getEntryFile()));
-      const updates = prepareLayoutStyleChange(plan, component?.params?.data?.files || [], component?.params?.id, resolveLayoutRule, config.getEntryFile());
-      // 父容器和不同目录的子组件可能同时改了多个 Less；把它们登记为一次操作，
-      // 用户按一次撤销就恢复这批文件。先结束之前拖动数值的合并分支，避免混成一次撤销。
-      pendingStyleFileBranch = null;
-      const actionId = randomUUID();
-      undoRedoManager.executeBranch({
-        execute() {
-          updates.forEach(update => {
-            context.updateFile({ fileName: update.fileName, content: update.current, type: undefined });
-          });
-          component?.actions.addUserAction({ id: actionId, type: 'update-style', title: '切换布局', refElement: plan.container });
-        },
-        undo() {
-          updates.forEach(update => {
-            context.updateFile({ fileName: update.fileName, content: update.previous, type: undefined, updateSource: 'undo' });
-          });
-          component?.actions.removeUserAction(actionId);
-        },
-      });
+        target => tryResolveLayoutStyleFile(target, files, config.getEntryFile()), jsx.resolve);
+      const updates = prepareLayoutStyleChange(plan, files, component.params.id, resolveLayoutRule, config.getEntryFile());
+      submitLayoutFiles(updates, container, '切换布局');
     } catch (error) {
-      // value.set 没有成功回执；失败时只打印原因，编辑器重新读取实际 CSS 来显示当前布局。
-      console.warn('[freedom-layout]', error);
+      reportLayoutError(error);
     }
   };
 
@@ -1638,6 +1649,25 @@ export function genStyleValue(props) {
       const hasDragInsert = !!(ele as HTMLElement | null)?.hasAttribute('data-drag-insert');
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
+
+      // 已由布局管理的内联节点直接写 JSX，包括无 class 的节点；不进入 AI 预览分支。
+      // 显式 class / 伪类 selector 继续沿用原来的定向写入路径。
+      if (rawSelector === 'inline' && ele && hasInlineLayout(ele as LayoutElement)) {
+        try {
+          const target = ele as LayoutElement;
+          const files = aiComParams?.data?.files || [];
+          const anchor = createLayoutJsxReader(files).resolve(target);
+          if (!anchor) throw new Error('找不到可写的 JSX 节点');
+          const style = { ...value };
+          (deletions || []).forEach(key => { if (!(key in style)) style[key] = null; });
+          const write: LayoutInlineWrite = { kind: 'jsx-inline', target, sourceLocation: target.dataset.loc || '',
+            fileName: anchor.fileName, anchor, role: target.style.getPropertyValue('--layout-item').trim() === 'freedom' ? 'item' : 'container', operation: 'edit', style };
+          const updates = prepareLayoutStyleChange({ componentId: aiComParams.id, container: target, writes: [write] },
+            files, aiComParams.id, resolveLayoutRule, config.getEntryFile());
+          submitLayoutFiles(updates, target, getStyleActionTitle(target));
+        } catch (error) { reportLayoutError(error); }
+        return;
+      }
 
       if (rawSelector === 'inline' && (explicitClearPatch || rewritingInlineShorthand)) {
         const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
@@ -2341,6 +2371,10 @@ export function genStyleValue(props) {
       }
     },
     previewBatch(params: any, value: any) {
+      // 无 class 节点的编辑请求可能经 previewBatch 到达，布局内联节点仍应直接落盘。
+      const target = params.focusArea?.ele as LayoutElement | undefined;
+      const selector = (window as any).__mybricks_style_explicit_selector ?? params.selector;
+      if (target && selector === 'inline' && hasInlineLayout(target)) return this.set(params, value);
       const deletions: string[] = ((window as any).__mybricks_style_deletions || []).slice();
       const hasDataZoneSelector = !!(params.focusArea?.ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = !!params.focusArea?.ele && !hasDataZoneSelector;

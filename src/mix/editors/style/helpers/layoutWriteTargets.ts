@@ -1,64 +1,79 @@
-import type { LayoutStylePatch, LayoutStyleValue, LayoutStyleWrite, LayoutTargetInfo } from './layoutTypes'
+import { hasInlineLayout } from './layoutInlineStyle'
+import type { LayoutElement, LayoutStylePatch, LayoutStyleValue, LayoutStyleWrite, LayoutLessWrite, LayoutTargetInfo } from './layoutTypes'
 
-/**
- * 用浏览器里的 selector 查 DOM，用源码 selector 提示错误。
- * 如果当前容器的两张卡片都匹配 .item，给 .item 写 left 会同时移动两张，无法分别保存坐标。
- * 其他容器或页面也复用 .item 则允许，它们继续跟随同一份组件样式同步变化。
- */
-function assertUniqueLayoutTarget(container: HTMLElement, target: HTMLElement, selector: string, runtimeSelector: string): void {
-  if (!selector || selector === 'inline') throw new Error('当前仅支持有独立 class、由 Less 配置定位的普通子元素')
-  let matches: Element[] = []
-  try {
-    matches = Array.from((target.getRootNode() as Document | ShadowRoot).querySelectorAll(runtimeSelector))
-  } catch { /* 无效选择器按无法匹配处理。 */ }
-  const localMatches = matches.filter(element => container.contains(element))
-  if (localMatches.length !== 1 || localMatches[0] !== target) {
-    throw new Error(localMatches.length > 1
-      ? `当前布局内有 ${localMatches.length} 个元素共用样式 ${selector}，无法分别写入定位`
-      : `样式 ${selector} 无法匹配当前元素，请重新选择容器`)
+/** 子节点不可写时跳过；父容器不可写时仍停止切换。仅用于写文件前的准备过程。 */
+export function prepareLayoutTarget<T>(container: Element, target: Node, prepare: () => T): T | undefined {
+  try { return prepare() } catch (error) {
+    if (target === container) throw error
+    console.warn('[freedom-layout][skip]', { target, reason: error instanceof Error ? error.message : String(error) })
+    return undefined
   }
 }
 
-/**
- * 输入是“这个节点要改哪些属性”，输出是“这些属性分别写到它所在 Less 的哪些 selector”。
- * 例如 position 原本由 .card 声明，就修改 .card；left 原本没声明，则使用该节点的默认写入规则。
- * 如果两项最终选中不同的 selector，会返回两条记录；同一 selector 的属性合成一条。
- * 本函数也检查内联样式和 selector 冲突，所有检查完成前都不写文件。
- */
-export function resolveLayoutStyleWrites(container: HTMLElement, item: LayoutTargetInfo, style: LayoutStylePatch): LayoutStyleWrite[] {
+/** 文件相同不代表是同一节点，必须同时比较 JSX 范围和开标签位置。 */
+function jsxSourceKey(target: Element | null): string | undefined {
+  try {
+    const loc = JSON.parse(target?.getAttribute('data-loc') || '')
+    if (typeof loc.files?.jsx !== 'string' || !loc.files.jsx ||
+      !Number.isInteger(loc.jsx?.start) || !Number.isInteger(loc.jsx?.end) || !Number.isInteger(loc.tag?.end) ||
+      loc.jsx.start < 0 || loc.tag.end <= loc.jsx.start || loc.tag.end > loc.jsx.end) return undefined
+    return JSON.stringify([loc.files.jsx, loc.jsx.start, loc.jsx.end, loc.tag.end])
+  } catch { return undefined }
+}
+
+function uniquelyMatches(container: HTMLElement, target: LayoutElement, selector: string): boolean {
+  try {
+    const matches = Array.from((target.getRootNode() as Document | ShadowRoot).querySelectorAll(selector))
+    if (!matches.includes(target)) return false
+    const targetSource = jsxSourceKey(target)
+    const containerSource = jsxSourceKey(container)
+    return matches.every(element => {
+      if (element === target) return true
+      // 同一容器内的多个匹配必须各写内联；容器外也不能仅因 class 相同就共享定位。
+      if (container.contains(element) || !targetSource || jsxSourceKey(element) !== targetSource) return false
+      // 保留同一组件重复引用的同步行为，但子元素和它的直接父容器都必须同源。
+      return target === container || (!!containerSource && jsxSourceKey(element.parentElement) === containerSource)
+    })
+  } catch { return false }
+}
+
+/** 同一节点的布局字段整体选择写入路径，任何共享规则都不会被局部改写。 */
+export function resolveLayoutStyleWrites(
+  container: HTMLElement, item: LayoutTargetInfo, style: LayoutStylePatch, entering: boolean,
+): LayoutStyleWrite[] {
   const { target, sourceLocation, fileName, resolution } = item
-  const grouped = new Map<string, LayoutStyleWrite>()
+  let inline: Record<string, unknown>
+  try { inline = JSON.parse(target.dataset.styleInfo || '{}') } catch { throw new Error('元素缺少有效的内联源码信息') }
+  const grouped = new Map<string, LayoutLessWrite>()
+  const managed = hasInlineLayout(target)
+  // right/bottom/inset 也属于本次定位组，不能留给内联值覆盖 Less 的新坐标。
+  const affected = new Set([...Object.keys(style), ...(target !== container ? ['right', 'bottom', 'inset', 'insetBlock', 'insetInline'] : [])])
+  let useInline = managed || !fileName || !resolution.defaultSource || [...affected].some(key =>
+    inline[key] || target.style.getPropertyValue(key.replace(/[A-Z]/g, c => '-' + c.toLowerCase())))
   const put = (source: { sourceSelector: string; selectorPart: string }, key: string, value: LayoutStyleValue) => {
+    if (!uniquelyMatches(container, target, source.selectorPart)) useInline = true
     const selector = source.sourceSelector
-    assertUniqueLayoutTarget(container, target, selector, source.selectorPart)
-    const group: LayoutStyleWrite = grouped.get(selector) || { target, sourceLocation, fileName, selector, style: {} }
+    const group = grouped.get(selector) || { kind: 'less' as const, target, sourceLocation, fileName: fileName!, selector, style: {} }
     group.style[key] = value
     grouped.set(selector, group)
   }
-
-  // data-style-info 记录 JSX style 的源码信息，target.style 则是 DOM 当前的内联声明。
-  // 两边都检查：只改 Less 可能被 style 覆盖，用户会看到“写了源码，但页面没变”。
-  let inline: Record<string, unknown>
-  try { inline = JSON.parse(target.dataset.styleInfo || '{}') } catch {
-    throw new Error('元素缺少有效的源码定位信息，无法切换自由布局')
-  }
   for (const [key, value] of Object.entries(style)) {
-    const propertyName = key.replace(/[A-Z]/g, c => '-' + c.toLowerCase())
-    if (inline[key] || target.style.getPropertyValue(propertyName)) {
-      throw new Error('当前仅支持有独立 class、由 Less 配置定位的普通子元素')
-    }
     const property = resolution.get(key)
-    if (value == null) {
-      // 例如 .card 和 .layout .card 都声明了 position:absolute；只删优先级最高的一条，
-      // 另一条又会生效。因此删除时要处理该属性的全部候选规则，而不只处理 winner。
-      property.candidates.forEach(candidate => put(candidate.source, key, null))
-    } else {
-      // 已声明的属性在原先生效的规则中修改；新属性才使用默认规则。
-      // 原声明带 !important 时继续保留，否则新值可能被其他规则覆盖。
+    if (value == null) property.candidates.forEach(candidate => put(candidate.source, key, null))
+    else {
       const source = property.winner?.source || resolution.defaultSource
-      if (!source) throw new Error('当前仅支持有独立 class、由 Less 配置定位的普通子元素')
+      if (!source) { useInline = true; continue }
       put(source, key, property.winner?.important ? `${value} !important` : value)
     }
   }
-  return Array.from(grouped.values())
+  if (!useInline) return Array.from(grouped.values())
+  if (!item.jsx) throw new Error('该元素的样式不能独立写入 Less，且缺少可写的原生 JSX 节点')
+  // inline 无法覆盖 stylesheet !important；不得提交一个视觉上不会生效的计划。
+  for (const key of affected) {
+    if (resolution.hasImportantDeclaration(key)) {
+      throw new Error(`布局属性 ${key} 受 !important 规则控制，需要专用覆盖策略`)
+    }
+  }
+  return [{ kind: 'jsx-inline', target, sourceLocation, fileName: item.jsx.fileName, anchor: item.jsx,
+    role: target === container ? 'container' : 'item', operation: entering ? 'enter' : 'exit', style }]
 }

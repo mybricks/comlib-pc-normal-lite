@@ -1,5 +1,7 @@
+import type { LayoutElement } from './layoutTypes'
+
 // layoutPlanning 在进入自由布局时调用这里：先测量子元素，再生成要写入的定位和尺寸属性。
-// 测量使用 offsetLeft/Top/Width/Height，单位为布局中的 CSS 像素；这里不修改 DOM 或 Less。
+// HTML 使用 offset；外层 SVG 使用外框并还原画布缩放。这里不修改 DOM 或源码。
 type StyleChangeItem = { key: string; value: string }
 
 export interface PositionSnapshot {
@@ -11,6 +13,31 @@ export interface PositionSnapshot {
   height?: number
 }
 
+/** 只接管 HTML 布局中的整个 SVG，不处理 circle/path 等内部图形。 */
+export function isLayoutSvg(element: Element): element is SVGSVGElement {
+  return element.namespaceURI === 'http://www.w3.org/2000/svg' && element.tagName.toLowerCase() === 'svg'
+}
+
+function captureSvgPosition(element: SVGSVGElement, parent?: HTMLElement): PositionSnapshot {
+  if (!parent) throw new Error('SVG 定位需要 HTML 父容器')
+  const rect = element.getBoundingClientRect()
+  const parentRect = parent.getBoundingClientRect()
+  const scaleX = parentRect.width / parent.offsetWidth
+  const scaleY = parentRect.height / parent.offsetHeight
+  if (![scaleX, scaleY].every(scale => Number.isFinite(scale) && scale > 0)) {
+    throw new Error('SVG 父容器没有可测量的布局尺寸')
+  }
+  const computed = element.ownerDocument.defaultView!.getComputedStyle(element)
+  // rect 是屏幕坐标，先还原缩放，再扣除父边框、保留的 margin，并补回滚动偏移。
+  // 测整个 SVG 视口，不用 getBBox（后者只含 circle/path 的图形范围）。
+  return {
+    left: Math.round((rect.left - parentRect.left) / scaleX - parent.clientLeft + parent.scrollLeft - (parseFloat(computed.marginLeft) || 0)),
+    top: Math.round((rect.top - parentRect.top) / scaleY - parent.clientTop + parent.scrollTop - (parseFloat(computed.marginTop) || 0)),
+    width: Math.round(rect.width / scaleX),
+    height: Math.round(rect.height / scaleY),
+  }
+}
+
 /**
  * 测量子元素切换前的位置，换算成相对 containingBlock 的 left/top。
  * containingBlock 就是正在切换自由布局的父容器；它目前可能还是 static，
@@ -18,11 +45,12 @@ export interface PositionSnapshot {
  * 应在父容器从 Flex 变成 block 之前调用，否则读到的已经是布局变化后的位置。
  */
 export function capturePositionSnapshot(
-  element: HTMLElement | null,
+  element: LayoutElement | null,
   options: { containingBlock?: HTMLElement } = {},
 ): PositionSnapshot {
   if (!element) return { left: 0, top: 0 }
   const parent = options.containingBlock
+  if (isLayoutSvg(element)) return captureSvgPosition(element, parent)
   let left = element.offsetLeft
   let top = element.offsetTop
   if (parent && element.offsetParent !== parent) {

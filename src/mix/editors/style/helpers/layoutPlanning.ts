@@ -1,7 +1,7 @@
-import { capturePositionSnapshot, buildAbsolutePositionChanges } from './layoutPosition'
+import { capturePositionSnapshot, buildAbsolutePositionChanges, isLayoutSvg } from './layoutPosition'
 import { inspectLayoutTarget } from './layoutStyleSources'
-import { resolveLayoutStyleWrites } from './layoutWriteTargets'
-import type { LayoutStylePatch, LayoutTargetInfo, LayoutWritePlan } from './layoutTypes'
+import { prepareLayoutTarget, resolveLayoutStyleWrites } from './layoutWriteTargets'
+import type { LayoutElement, LayoutJsxAnchor, LayoutStylePatch, LayoutTargetInfo, LayoutWritePlan } from './layoutTypes'
 
 // 父容器的 --layout-mode: freedom 表示当前使用自由布局，编辑器据此显示按钮高亮。
 export const LAYOUT_MODE_KEY = '--layout-mode'
@@ -9,42 +9,48 @@ export const LAYOUT_MODE_KEY = '--layout-mode'
 const LAYOUT_ITEM_KEY = '--layout-item'
 
 /**
- * 返回 [父容器, 直接子元素1, 直接子元素2, ...]，每项带着自己的 Less 文件和样式来源。
+ * 返回 [父容器, 直接子元素1, 直接子元素2, ...]，每项带着可用的 Less / JSX 来源。
  * 例如父布局引用 Card 组件，只转换 Card 渲染出的根元素，不处理 Card 内部的标题、按钮。
- * 这里先检查每个节点是否可转换；任一节点不支持就抛错，调用方此时还没有写文件。
- * resolveFile 由调用方提供，因此父容器和子组件可以分别写入不同目录下的 Less。
+ * 逐个收集可写节点；不可写的子节点跳过，父容器不可写才停止切换。
+ * resolveFile 由调用方提供，因此父容器和子组件可以分别写入不同目录下的源码。
  */
 function collectLayoutTargets(
   container: HTMLElement,
   componentId: string,
-  entering: boolean,
-  resolveFile: (target: HTMLElement) => string,
+  resolveFile: (target: LayoutElement) => string | undefined,
+  resolveJsx?: (target: LayoutElement) => LayoutJsxAnchor | undefined,
 ): LayoutTargetInfo[] {
   if (!container?.isConnected || !componentId) throw new Error('无法定位元素的样式源码，请重新选择容器')
-  const children = Array.from(container.children) as HTMLElement[]
-  // <div>文字<span /></div> 中的“文字”没有独立 DOM 元素，无法单独写 position/left/top。
-  // 忽略缩进换行等空白文本；有实际文字时中止，避免只转换 span 后破坏原布局。
-  if (Array.from(container.childNodes).some(node => node.nodeType === 3 && node.textContent?.trim())) {
-    throw new Error('当前仅支持有独立 class、由 Less 配置定位的普通子元素')
+  const children = Array.from(container.children) as LayoutElement[]
+  // 裸文本没有独立 style，继续留在文档流中，不影响其他子元素转换。
+  for (const node of Array.from(container.childNodes)) {
+    if (node.nodeType === 3 && node.textContent?.trim()) {
+      prepareLayoutTarget(container, node, () => { throw new Error('裸文本没有独立样式，已跳过') })
+    }
   }
-  return [container, ...children].map(target => {
-    if (target.namespaceURI !== 'http://www.w3.org/1999/xhtml' || !target.isConnected || !target.dataset.zoneSelector) {
-      throw new Error('当前仅支持有独立 class、由 Less 配置定位的普通子元素')
-    }
-    const sourceLocation = target.dataset.loc || ''
-    const fileName = resolveFile(target)
-    if (!fileName) throw new Error('无法确定元素的 Less 文件，请更新组件库后重试')
-    const resolution = inspectLayoutTarget(target, componentId)
-    if (!resolution.defaultSource) throw new Error('当前仅支持有独立 class、由 Less 配置定位的普通子元素')
-    const computed = target.ownerDocument.defaultView!.getComputedStyle(target)
-    if (entering && target !== container) {
-      // fixed/sticky 有视口定位或滚动吸附语义，当前没有实现将它们转换后再恢复的规则。
-      if (['fixed', 'sticky'].includes(computed.position)) throw new Error('当前自由布局暂不支持 fixed 或 sticky 子元素')
-      // 例如装饰图原本相对外层页面定位；父容器变成 relative 后，装饰图可能改为相对父容器定位。
-      // 当前不会重新换算这类装饰图的坐标，所以只允许 offsetParent 已经是当前容器的情况。
-      if (computed.position === 'absolute' && target.offsetParent !== container) throw new Error('已有绝对定位子元素以外层元素为参照，暂不支持本次切换')
-    }
-    return { target, sourceLocation, fileName, resolution, display: computed.display, position: computed.position }
+  return [container, ...children].flatMap(target => {
+    const item = prepareLayoutTarget(container, target, () => {
+      if (!target.isConnected || (target.namespaceURI !== 'http://www.w3.org/1999/xhtml' &&
+        !(target !== container && isLayoutSvg(target) && container.namespaceURI === 'http://www.w3.org/1999/xhtml'))) {
+        throw new Error('当前节点需要独立 HTML 元素或外层 SVG 和可写源码')
+      }
+      const sourceLocation = target.dataset.loc || ''
+      // Less / JSX 是备选来源，一条路径解析失败不应阻止另一条可写路径。
+      const sourceErrors: unknown[] = []
+      const trySource = <T>(resolve: () => T): T | undefined => {
+        try { return resolve() } catch (error) { sourceErrors.push(error); return undefined }
+      }
+      const jsx = trySource(() => resolveJsx?.(target))
+      const fileName = trySource(() => resolveFile(target))
+      const resolution = inspectLayoutTarget(target, componentId)
+      if (!jsx && (!fileName || !resolution.defaultSource)) {
+        throw sourceErrors[0] || new Error('当前节点没有可写的 Less 或原生 JSX 来源')
+      }
+      const computed = target.ownerDocument.defaultView!.getComputedStyle(target)
+
+      return { target, sourceLocation, fileName, jsx, resolution, display: computed.display, position: computed.position }
+    })
+    return item ? [item] : []
   })
 }
 
@@ -69,9 +75,15 @@ function createContainerStyle(parent: LayoutTargetInfo, patch: LayoutStylePatch,
  * 尺寸是否补固定值由 layoutPosition 决定；返回 null 表示这个节点不需要修改。
  */
 function createEnterItemStyle(item: LayoutTargetInfo, container: HTMLElement): LayoutStylePatch | null {
+  if (['fixed', 'sticky'].includes(item.position)) throw new Error('fixed / sticky 子元素暂不接管定位')
+  if (item.position === 'absolute' && !isLayoutSvg(item.target) && item.target.offsetParent !== container) {
+    throw new Error('已有 absolute 子元素以外层元素为参照，已跳过')
+  }
   // 原本就是 absolute 的装饰图保持原样，也不加标记，避免退出时误删用户原有的定位。
   if (item.position === 'absolute') return null
-  const authoredStyle = Object.fromEntries(['width', 'height'].map(key => [key, item.resolution.get(key).winner?.value]))
+  const authoredStyle = Object.fromEntries(['width', 'height'].map(key => [key,
+    item.resolution.ownValue(key) ?? (isLayoutSvg(item.target) ? item.target.getAttribute(key) : undefined),
+  ]))
   const snapshot = capturePositionSnapshot(item.target, { containingBlock: container })
   const changes = buildAbsolutePositionChanges(snapshot, authoredStyle)
   return { ...Object.fromEntries(changes.map(change => [change.key, change.value])), [LAYOUT_ITEM_KEY]: 'freedom' }
@@ -83,12 +95,12 @@ function createEnterItemStyle(item: LayoutTargetInfo, container: HTMLElement): L
  * 当前只清理定位，不恢复切换前的完整样式；转换时补过的 width/height 也会保留。
  */
 function createExitItemStyle(item: LayoutTargetInfo): LayoutStylePatch | null {
-  if (item.resolution.get(LAYOUT_ITEM_KEY).winner?.value.trim() !== 'freedom') return null
+  if (item.resolution.ownValue(LAYOUT_ITEM_KEY)?.trim() !== 'freedom') return null
   return { position: null, left: null, top: null, right: null, bottom: null, [LAYOUT_ITEM_KEY]: null }
 }
 
 /**
- * 自由布局转换入口，由 styleProxy.changeLayout 调用，返回“各文件、各 selector 要改哪些属性”。
+ * 自由布局转换入口，由 styleProxy.changeLayout 调用，返回“各文件、各节点要改哪些属性”。
  *
  * containerPatch 来自编辑器的 value.set：
  * - 进入：{ '--layout-mode': 'freedom' }。
@@ -106,18 +118,33 @@ export function buildFreedomLayoutPlan(
   container: HTMLElement,
   componentId: string,
   containerPatch: LayoutStylePatch,
-  resolveFile: (target: HTMLElement) => string,
+  resolveFile: (target: LayoutElement) => string | undefined,
+  resolveJsx?: (target: LayoutElement) => LayoutJsxAnchor | undefined,
 ): { plan: LayoutWritePlan; containerStyle: LayoutStylePatch } {
   const entering = containerPatch[LAYOUT_MODE_KEY] === 'freedom'
   if (!entering && containerPatch[LAYOUT_MODE_KEY] !== null) throw new Error('不支持的布局标记')
-  const targets = collectLayoutTargets(container, componentId, entering, resolveFile)
+  const targets = collectLayoutTargets(container, componentId, resolveFile, resolveJsx)
   const containerStyle = createContainerStyle(targets[0], containerPatch, entering)
+  // 重复 JSX 来源整组跳过，不能先给第一个实例写入坐标，再跳过后续实例。
+  const anchorKey = (item: LayoutTargetInfo) => item.jsx
+    ? `${item.jsx.fileName}:${item.jsx.openingStart}:${item.jsx.openingEnd}` : undefined
+  const anchorCounts = new Map<string, number>()
+  for (const item of targets) {
+    const key = anchorKey(item)
+    if (key) anchorCounts.set(key, (anchorCounts.get(key) || 0) + 1)
+  }
   const writes: LayoutWritePlan['writes'] = []
   for (const item of targets) {
-    const style = item.target === container
-      ? containerStyle
-      : entering ? createEnterItemStyle(item, container) : createExitItemStyle(item)
-    if (style) writes.push(...resolveLayoutStyleWrites(container, item, style))
+    const prepared = prepareLayoutTarget(container, item.target, () => {
+      if ((anchorCounts.get(anchorKey(item) || '') || 0) > 1) {
+        throw new Error('同一 JSX 节点在当前容器内重复渲染，已跳过全部实例')
+      }
+      const style = item.target === container
+        ? containerStyle
+        : entering ? createEnterItemStyle(item, container) : createExitItemStyle(item)
+      return style ? resolveLayoutStyleWrites(container, item, style, entering) : []
+    })
+    if (prepared) writes.push(...prepared)
   }
   return { plan: { componentId, container, writes }, containerStyle }
 }

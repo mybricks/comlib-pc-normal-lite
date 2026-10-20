@@ -1,3 +1,4 @@
+import type { LayoutElement } from './layoutTypes'
 import { calculate, compare } from 'specificity'
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -284,7 +285,7 @@ interface LayoutSource {
  * defaultSource 用于新增属性：例如原本没有 left，就用优先级最高的可写规则；
  * 连匹配规则都没有时，尝试使用节点自身的业务 class，后续仍会检查它能否唯一匹配节点。
  */
-export function inspectLayoutTarget(target: HTMLElement, componentId: string) {
+export function inspectLayoutTarget(target: LayoutElement, componentId: string) {
   const root = target.getRootNode() as Document | ShadowRoot
   const view = target.ownerDocument.defaultView!
   const sheets = new Set<CSSStyleSheet>()
@@ -294,6 +295,7 @@ export function inspectLayoutTarget(target: HTMLElement, componentId: string) {
   })
   Array.from(root.adoptedStyleSheets || []).forEach(sheet => sheets.add(sheet))
   const sources: LayoutSource[] = []
+  const matchedDeclarations: CSSStyleDeclaration[] = []
   let order = 0
   const visit = (rules: CSSRuleList) => {
     for (const entry of Array.from(rules)) {
@@ -306,6 +308,7 @@ export function inspectLayoutTarget(target: HTMLElement, componentId: string) {
           if (state.pseudo) continue
           try {
             if (!target.matches(part)) continue
+            matchedDeclarations.push(rule.style)
             if (!subjectClassNames(state.subject, target).some(name => target.classList.contains(name))) continue
             const sourceSelector = resolveCssomSourceSelector(part, target, componentId)
             // 普通第三方规则即使命中节点，也不能直接当成页面 Less 的源码规则。
@@ -347,5 +350,18 @@ export function inspectLayoutTarget(target: HTMLElement, componentId: string) {
     })).sort((a, b) => Number(b.important) - Number(a.important) || rank(a.source, b.source))
     return { candidates, winner: candidates[0] }
   }
-  return { get, defaultSource: sources[0] || fallback }
+  const ownValue = (key: string): string | undefined => {
+    const property = key.replace(/[A-Z]/g, letter => '-' + letter.toLowerCase())
+    const inline = target.style.getPropertyValue(property)
+    const winner = get(key).winner
+    return winner?.important && target.style.getPropertyPriority(property) !== 'important'
+      ? winner.value : inline || winner?.value
+  }
+  const hasImportantDeclaration = (key: string) => {
+    const property = key.replace(/[A-Z]/g, letter => '-' + letter.toLowerCase())
+    return matchedDeclarations.some(style => style.getPropertyPriority(property) === 'important' ||
+      (!key.startsWith('--') && style.getPropertyPriority('all') === 'important'))
+  }
+  // 空规则可能未输出到 CSSOM，仍允许使用自身 class；文件归属和共享匹配由后续校验。
+  return { get, ownValue, hasImportantDeclaration, defaultSource: sources[0] || fallback || undefined }
 }
