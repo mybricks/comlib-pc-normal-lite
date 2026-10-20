@@ -53,3 +53,5 @@ export interface LayoutWritePlan {
   container: LayoutElement
   writes: LayoutStyleWrite[]
 }
+
+export type PreparedLayoutStyleChange = { updates: LayoutFileUpdate[]; acceptedWrites: LayoutStyleWrite[] }

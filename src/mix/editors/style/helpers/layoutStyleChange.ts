@@ -4,7 +4,7 @@ import { extractLessImportsFromSource, resolveLessFilePath } from './resolveLess
 import { prepareLayoutTarget } from './layoutWriteTargets'
 import { createLayoutJsxReader } from './layoutJsxSource'
 import { applyLayoutReplacements, prepareLayoutInlineWrite } from './layoutInlineStyle'
-import type { LayoutElement, LayoutStyleWrite, LayoutWritePlan, LayoutFileUpdate, LayoutReplacement } from './layoutTypes'
+import type { LayoutElement, LayoutStyleWrite, LayoutWritePlan, PreparedLayoutStyleChange, LayoutReplacement } from './layoutTypes'
 
 class LayoutStyleFileUnavailable extends Error {}
 
@@ -51,7 +51,7 @@ export function tryResolveLayoutStyleFile(target: LayoutElement, files: FileEntr
 }
 
 /** 全部准备完成再写文件；每个子元素的多条修改一起接受或一起跳过。 */
-export function prepareLayoutStyleChange(plan: LayoutWritePlan, files: FileEntry[], componentId: string, resolveRule: ResolveRule, entryFileName?: string): LayoutFileUpdate[] {
+export function prepareLayoutStyleChange(plan: LayoutWritePlan, files: FileEntry[], componentId: string, resolveRule: ResolveRule, entryFileName?: string): PreparedLayoutStyleChange {
   if (!plan || plan.componentId !== componentId || !plan.container?.isConnected || !plan.writes?.length) {
     throw new Error('布局目标已变化，请重新选择容器')
   }
@@ -62,6 +62,7 @@ export function prepareLayoutStyleChange(plan: LayoutWritePlan, files: FileEntry
   const reader = createLayoutJsxReader(files)
   const initialFiles = new Map<string, FileDraft>()
   const drafts = new Map<string, FileDraft>()
+  const acceptedWrites: LayoutStyleWrite[] = []
   const writesByTarget = new Map<LayoutElement, LayoutStyleWrite[]>()
   const anchorTargets = new Map<string, Set<LayoutElement>>()
   const anchorKey = (write: LayoutStyleWrite) => write.kind === 'jsx-inline'
@@ -138,9 +139,12 @@ export function prepareLayoutStyleChange(plan: LayoutWritePlan, files: FileEntry
       }
       return staged
     })
-    prepared?.forEach((draft, fileName) => drafts.set(fileName, draft))
+    if (prepared) {
+      prepared.forEach((draft, fileName) => drafts.set(fileName, draft))
+      acceptedWrites.push(...writes)
+    }
   }
-  return Array.from(drafts.values(), draft => {
+  const updates = Array.from(drafts.values(), draft => {
     const { fileName, previous } = draft
     if (draft.kind === 'less') return { fileName, previous, current: stringifyLess(draft.css) }
     const current = applyLayoutReplacements(previous, draft.replacements)
@@ -148,4 +152,5 @@ export function prepareLayoutStyleChange(plan: LayoutWritePlan, files: FileEntry
     createLayoutJsxReader([{ fileName, source: encodeURIComponent(current) }]).read(fileName)
     return { fileName, previous, current, replacements: draft.replacements }
   })
+  return { updates, acceptedWrites }
 }

@@ -1,3 +1,4 @@
+import type { ContainerSizePatch } from './layoutContainerSize'
 import { capturePositionSnapshot, buildAbsolutePositionChanges, isLayoutSvg } from './layoutPosition'
 import { inspectLayoutTarget } from './layoutStyleSources'
 import { prepareLayoutTarget, resolveLayoutStyleWrites } from './layoutWriteTargets'
@@ -55,15 +56,13 @@ function collectLayoutTargets(
 }
 
 /**
- * 进入时补齐父容器样式：普通容器用 block，行内容器用 inline-block；static 才补 relative。
+ * 进入时保留父容器的 display，static 才补 relative。
  * relative 让后续子元素的 left/top 相对这个容器计算，已有的父容器定位方式则继续保留。
  * 退出时直接使用编辑器传来的 display/flexDirection 等修改。
  */
 function createContainerStyle(parent: LayoutTargetInfo, patch: LayoutStylePatch, entering: boolean): LayoutStylePatch {
   const style = { ...patch }
   if (entering) {
-    // gap、flex-wrap、对齐声明留在 Less 中，切回 Flex 时仍能使用用户原来的配置。
-    style.display = ['inline', 'inline-flex', 'inline-block'].includes(parent.display) ? 'inline-block' : 'block'
     if (parent.position === 'static') style.position = 'relative'
   }
   return style
@@ -107,7 +106,7 @@ function createExitItemStyle(item: LayoutTargetInfo): LayoutStylePatch | null {
  * - 退出到纵向：{ '--layout-mode': null, display: 'flex', flexDirection: 'column' }。
  *
  * 先读父子节点，再生成样式，最后把每个属性分配到对应的源码 selector。
- * 例如父 .layout 写 block/relative，子 .card 写 absolute/left/top；两者可以位于不同 Less。
+ * 例如父 .layout 写自由布局标记并按需补 relative，子 .card 写 absolute/left/top；两者可以位于不同 Less。
  * 整个函数只读取页面并生成修改列表。必须全部完成后才能写文件，否则父布局先改变，
  * 后续子元素的测量位置就可能已经不再是用户切换前看到的位置。
  *
@@ -120,7 +119,7 @@ export function buildFreedomLayoutPlan(
   containerPatch: LayoutStylePatch,
   resolveFile: (target: LayoutElement) => string | undefined,
   resolveJsx?: (target: LayoutElement) => LayoutJsxAnchor | undefined,
-): { plan: LayoutWritePlan; containerStyle: LayoutStylePatch } {
+): { plan: LayoutWritePlan; containerStyle: LayoutStylePatch; containerTarget: LayoutTargetInfo } {
   const entering = containerPatch[LAYOUT_MODE_KEY] === 'freedom'
   if (!entering && containerPatch[LAYOUT_MODE_KEY] !== null) throw new Error('不支持的布局标记')
   const targets = collectLayoutTargets(container, componentId, resolveFile, resolveJsx)
@@ -146,5 +145,11 @@ export function buildFreedomLayoutPlan(
     })
     if (prepared) writes.push(...prepared)
   }
-  return { plan: { componentId, container, writes }, containerStyle }
+  return { plan: { componentId, container, writes }, containerStyle, containerTarget: targets[0] }
+}
+
+/** 新增最小尺寸后重新选父容器的写入路径；子项沿用已通过源码准备的计划。 */
+export function addContainerSizeProtection(plan: LayoutWritePlan, parent: LayoutTargetInfo, style: LayoutStylePatch, patch: ContainerSizePatch): LayoutWritePlan {
+  const parentWrites = resolveLayoutStyleWrites(plan.container as HTMLElement, parent, { ...style, ...patch }, true)
+  return { ...plan, writes: [...parentWrites, ...plan.writes.filter(write => write.target !== plan.container)] }
 }

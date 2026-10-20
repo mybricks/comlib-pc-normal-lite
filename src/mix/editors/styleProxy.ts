@@ -13,7 +13,8 @@ import { createLayoutJsxReader } from './style/helpers/layoutJsxSource'
 import { hasInlineLayout } from './style/helpers/layoutInlineStyle'
 import { commitLayoutFiles } from './style/helpers/layoutFileCommit'
 import type { LayoutElement, LayoutFileUpdate, LayoutInlineWrite } from './style/helpers/layoutTypes'
-import { buildFreedomLayoutPlan, LAYOUT_MODE_KEY } from './style/helpers/layoutPlanning'
+import { buildFreedomLayoutPlan, addContainerSizeProtection, LAYOUT_MODE_KEY } from './style/helpers/layoutPlanning'
+import { planContainerSizeProtection } from './style/helpers/layoutContainerSize'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import {
   createDOMSourceLocationSnapshot,
@@ -1603,10 +1604,18 @@ export function genStyleValue(props) {
       const container = params.focusArea?.ele as HTMLElement;
       const files = component.params.data.files || [];
       const jsx = createLayoutJsxReader(files);
-      const { plan } = buildFreedomLayoutPlan(container, component.params.id, style,
+      const { plan, containerTarget, containerStyle } = buildFreedomLayoutPlan(container, component.params.id, style,
         target => tryResolveLayoutStyleFile(target, files, config.getEntryFile()), jsx.resolve);
-      const updates = prepareLayoutStyleChange(plan, files, component.params.id, resolveLayoutRule, config.getEntryFile());
-      submitLayoutFiles(updates, container, '切换布局');
+      let prepared = prepareLayoutStyleChange(plan, files, component.params.id, resolveLayoutRule, config.getEntryFile());
+      if (style[LAYOUT_MODE_KEY] === 'freedom') {
+        const { patch, diagnostics } = planContainerSizeProtection(container, prepared.acceptedWrites);
+        if (Object.keys(patch).length) {
+          const guarded = addContainerSizeProtection({ ...plan, writes: prepared.acceptedWrites }, containerTarget, containerStyle, patch);
+          prepared = prepareLayoutStyleChange(guarded, files, component.params.id, resolveLayoutRule, config.getEntryFile());
+        }
+        if (diagnostics.length) console.warn('[freedom-layout][size]', { container, diagnostics });
+      }
+      submitLayoutFiles(prepared.updates, container, '切换布局');
     } catch (error) {
       reportLayoutError(error);
     }
@@ -1662,7 +1671,7 @@ export function genStyleValue(props) {
           (deletions || []).forEach(key => { if (!(key in style)) style[key] = null; });
           const write: LayoutInlineWrite = { kind: 'jsx-inline', target, sourceLocation: target.dataset.loc || '',
             fileName: anchor.fileName, anchor, role: target.style.getPropertyValue('--layout-item').trim() === 'freedom' ? 'item' : 'container', operation: 'edit', style };
-          const updates = prepareLayoutStyleChange({ componentId: aiComParams.id, container: target, writes: [write] },
+          const { updates } = prepareLayoutStyleChange({ componentId: aiComParams.id, container: target, writes: [write] },
             files, aiComParams.id, resolveLayoutRule, config.getEntryFile());
           submitLayoutFiles(updates, target, getStyleActionTitle(target));
         } catch (error) { reportLayoutError(error); }
