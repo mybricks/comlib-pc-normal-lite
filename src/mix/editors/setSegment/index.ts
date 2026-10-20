@@ -44,12 +44,18 @@ export default function () {
       const beforeFiles = undoRedoManager.getBranchInitialFiles()
       const styleOverlays = undoRedoManager.getBranchStyleOverlays()
 
-      if (!beforeFiles) return true
+      if (!beforeFiles) {
+        undoRedoManager.completeBranch()
+        return true
+      }
 
       if (message) {
         const componentId = context.component!.params.id
         const sendToAgent = window._sandbox_?.helpers?.sendToAgent
-        if (!sendToAgent) return true
+        if (!sendToAgent) {
+          undoRedoManager.completeBranch()
+          return true
+        }
         const files = getChangedFileNames(beforeFiles, getCurrentFileSnapshot())
         await context.syncManualFilesToRemoteFs(files)
 
@@ -65,6 +71,7 @@ export default function () {
             from: '@commitUserActions'
           }
         })
+        undoRedoManager.completeBranch()
         return true
       }
 
@@ -74,6 +81,7 @@ export default function () {
         undoRedoManager.record(command)
       }
       undoRedoManager.clearBranch()
+      undoRedoManager.completeBranch()
       return true
     },
     '@cancelUserActions'(...args) {

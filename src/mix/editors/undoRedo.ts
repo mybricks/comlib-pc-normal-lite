@@ -47,6 +47,8 @@ class UndoRedoManager {
   /** 画布即时编辑使用的分支栈，不会创建版本记录。 */
   private branchUndoStack: Command[] = []
   private branchRedoStack: Command[] = []
+  /** 分支会话是否已经开始。撤销栈为空时仍需阻止操作落到主栈。 */
+  private branchActive = false
   /** 分支开始前的完整源码快照，提交时用于生成主栈命令。 */
   private branchInitialFiles: FileSnapshot[] | null = null
   private branchHistoryListeners = new Set<(hasHistory: boolean) => void>()
@@ -74,6 +76,11 @@ class UndoRedoManager {
     this.branchHistoryListeners.forEach((listener) => listener(hasHistory))
   }
 
+  /** 标记分支提交流程已结束，但保留分支命令供轮后处理使用。 */
+  completeBranch() {
+    this.branchActive = false
+  }
+
   /** 执行命令 */
   execute(command: Command) {
     command.execute()
@@ -84,6 +91,7 @@ class UndoRedoManager {
   executeBranch(command: Command) {
     const isNewBranch = !this.branchInitialFiles && !this.branchUndoStack.length && !this.branchRedoStack.length
     if (isNewBranch) {
+      this.branchActive = true
       this.branchInitialFiles = getCurrentFileSnapshot()
     }
 
@@ -91,6 +99,7 @@ class UndoRedoManager {
       command.execute()
     } catch (error) {
       if (isNewBranch) {
+        this.branchActive = false
         this.branchInitialFiles = null
       }
       throw error
@@ -133,6 +142,7 @@ class UndoRedoManager {
   clearBranch() {
     this.branchUndoStack = []
     this.branchRedoStack = []
+    this.branchActive = false
     this.branchInitialFiles = null
     this.notifyBranchHistoryChange()
   }
@@ -179,6 +189,7 @@ class UndoRedoManager {
 
   /** 撤销 */
   undo() {
+    if (this.branchActive && !this.branchUndoStack.length) return
     if (this.branchUndoStack.length) {
       this.undoStack(this.branchUndoStack, this.branchRedoStack)
       this.notifyBranchHistoryChange()
@@ -190,6 +201,7 @@ class UndoRedoManager {
 
   /** 重做 */
   redo() {
+    if (this.branchActive && !this.branchRedoStack.length) return
     if (this.branchRedoStack.length) {
       this.redoStack(this.branchUndoStack, this.branchRedoStack)
       this.notifyBranchHistoryChange()
