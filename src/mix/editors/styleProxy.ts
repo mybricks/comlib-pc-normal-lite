@@ -1758,7 +1758,7 @@ export function genStyleValue(props) {
         drafts.set(path, { previous, cssObj });
       }
       const { cssObj } = drafts.get(path)!;
-      const fullSelector = demangleHashedSelector(selector);
+      const fullSelector = selector;
       const eleClassList = Array.from(target.classList);
       const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
       const entries = Object.entries(style);
