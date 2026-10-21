@@ -1154,6 +1154,30 @@ function patchLessRule(cssObj: Record<string, any>, params: {
   return { targetKey, targetContainer, resolvedTargetKey, targetStyle, explicitClearDidMutate };
 }
 
+/** 单次修改与批量计划共用原有的属性删除逻辑。 */
+function deleteLessProperties(targetStyle: Record<string, any>, deletions: string[]): boolean {
+  let didMutate = false;
+  deletions.forEach(key => {
+    if (
+      Object.prototype.hasOwnProperty.call(targetStyle, key) ||
+      Object.prototype.hasOwnProperty.call(targetStyle, kebabToCamelProp(key)) ||
+      Object.prototype.hasOwnProperty.call(targetStyle, camelToKebab(key))
+    ) {
+      didMutate = true;
+    }
+    delete targetStyle[key];
+    delete targetStyle[kebabToCamelProp(key)];
+    delete targetStyle[camelToKebab(key)];
+  });
+  return didMutate;
+}
+
+function removeEmptyLessRule({ targetStyle, targetContainer, resolvedTargetKey }: NonNullable<ReturnType<typeof patchLessRule>>) {
+  if (Object.keys(targetStyle).length === 0) {
+    delete targetContainer[resolvedTargetKey];
+  }
+}
+
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 export function genStyleValue(props) {
@@ -1730,10 +1754,15 @@ export function genStyleValue(props) {
       const fullSelector = demangleHashedSelector(selector);
       const eleClassList = Array.from(target.classList);
       const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
-      patchLessRule(cssObj, {
+      const entries = Object.entries(style);
+      const writes = Object.fromEntries(entries.filter(([, value]) => value !== null));
+      const deletions = entries.filter(([, value]) => value === null).map(([key]) => key);
+      const rule = patchLessRule(cssObj, {
         rawSelector: selector, fullSelector, ele: target, eleClassList, nestedCandidate,
-        value: style, lessValue: style,
-      });
+        value: writes, lessValue: writes, explicitClearPatch: getExplicitClearPatch(selector, style),
+      })!;
+      deleteLessProperties(rule.targetStyle, deletions);
+      removeEmptyLessRule(rule);
     }
 
     for (const [path, { previous, cssObj }] of drafts) {
@@ -2174,7 +2203,7 @@ export function genStyleValue(props) {
       });
       // 保留原来无法明确定位清空目标时，直接结束本次 set 的行为。
       if (!rule) return;
-      const { targetKey, targetContainer, resolvedTargetKey, targetStyle } = rule;
+      const { targetKey, targetStyle } = rule;
       let { explicitClearDidMutate } = rule;
 
       if (deletions && deletions.length > 0) {
@@ -2216,21 +2245,7 @@ export function genStyleValue(props) {
         const expandedDeletions = explicitClearPatch
           ? deletions.slice()
           : filterExpandedDeletions(deletions, value);
-        expandedDeletions.forEach(key => {
-          if (
-            explicitClearPatch &&
-            (
-              Object.prototype.hasOwnProperty.call(targetStyle, key) ||
-              Object.prototype.hasOwnProperty.call(targetStyle, kebabToCamelProp(key)) ||
-              Object.prototype.hasOwnProperty.call(targetStyle, camelToKebab(key))
-            )
-          ) {
-            explicitClearDidMutate = true;
-          }
-          delete targetStyle[key];
-          delete targetStyle[kebabToCamelProp(key)];
-          delete targetStyle[camelToKebab(key)];
-        });
+        explicitClearDidMutate = deleteLessProperties(targetStyle, expandedDeletions) || explicitClearDidMutate;
 
         // ── 逗号合并规则拆分删除 ──────────────────────────────────────────────
         // 例：.resetBtn, .queryBtn { min-width: 80px } 与更长路径的 .queryBtn 规则并存时，
@@ -2310,12 +2325,7 @@ export function genStyleValue(props) {
         return;
       }
 
-      if (Object.keys(targetStyle).length === 0) {
-        // 这段代码会强制转为baseselector，导致误删selector尾部的:hover等伪类
-        // const orphanKeys = findOrphanKeys(cssObj, targetKey);
-        // orphanKeys.forEach(key => delete cssObj[key]);
-        delete targetContainer[resolvedTargetKey];
-      }
+      removeEmptyLessRule(rule);
 
       const cssStr = stringifyLess(cssObj);
       updateStyleFileInBranch({
