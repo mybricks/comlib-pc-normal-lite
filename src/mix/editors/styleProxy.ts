@@ -7,6 +7,7 @@ import { randomUUID } from '../utils/uuid'
 import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
+import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import {
   createDOMSourceLocationSnapshot,
@@ -1734,6 +1735,11 @@ export function genStyleValue(props) {
     });
   };
 
+  const patchResolvedLessRule = createResolvedLessRulePatcher({
+    resolveTargetKey, getNestedSelectorMatchScore, absorbOrphans,
+    splitTopLevelCommaKeys, splitCommaMergedTopLevelRuleForWrite,
+  });
+
   type FreedomPlan = {
     changes: Array<{ target: HTMLElement; selector: string; style: Record<string, any> }>;
   };
@@ -1748,7 +1754,8 @@ export function genStyleValue(props) {
       if (!drafts.has(path)) {
         const file = files.find((file: { fileName: string; source: string }) => file.fileName === path)!;
         const previous = decodeURIComponent(file.source);
-        drafts.set(path, { previous, cssObj: parseLess(previous) });
+        const cssObj = parseLess(previous);
+        drafts.set(path, { previous, cssObj });
       }
       const { cssObj } = drafts.get(path)!;
       const fullSelector = demangleHashedSelector(selector);
@@ -1757,17 +1764,18 @@ export function genStyleValue(props) {
       const entries = Object.entries(style);
       const writes = Object.fromEntries(entries.filter(([, value]) => value !== null));
       const deletions = entries.filter(([, value]) => value === null).map(([key]) => key);
-      const rule = patchLessRule(cssObj, {
-        rawSelector: selector, fullSelector, ele: target, eleClassList, nestedCandidate,
-        value: writes, lessValue: writes, explicitClearPatch: getExplicitClearPatch(selector, style),
+      const rule = patchResolvedLessRule(cssObj, {
+        rawSelector: selector, fullSelector, eleClassList, nestedCandidate,
+        lessValue: writes, explicitClearPatch: getExplicitClearPatch(selector, style),
       })!;
       deleteLessProperties(rule.targetStyle, deletions);
       removeEmptyLessRule(rule);
     }
 
     for (const [path, { previous, cssObj }] of drafts) {
+      const current = stringifyLess(cssObj);
       updateStyleFileInBranch({
-        path, previous, current: stringifyLess(cssObj), ele: plan.changes[0].target,
+        path, previous, current, ele: plan.changes[0].target,
       });
     }
   };
