@@ -1776,9 +1776,7 @@ export function genStyleValue(props) {
     set(params: any, value: any) {
       if (params.freedomPlan) {
         return applyFreedomPlan(params.freedomPlan);
-        console.log("切换到freeform",params.freedomPlan)
       }
-      console.log("之前的样式路径")
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
       // 源码更新触发 DOM 重编译后，宿主可能仍基于已断开的旧焦点回退 selector。
