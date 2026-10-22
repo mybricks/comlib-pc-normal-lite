@@ -1736,20 +1736,18 @@ export function genStyleValue(props) {
   };
 
   const patchResolvedLessRule = createResolvedLessRulePatcher({
-    resolveTargetKey, getNestedSelectorMatchScore, absorbOrphans,
     splitTopLevelCommaKeys, splitCommaMergedTopLevelRuleForWrite,
   });
 
   type FreedomPlan = {
-    changes: Array<{ target: HTMLElement; selector: string; style: Record<string, any> }>;
+    changes: Array<{ target: HTMLElement; selector: string; lessFile: string; style: Record<string, any> }>;
   };
   const applyFreedomPlan = (plan: FreedomPlan) => {
     const files = context.component!.params.data.files;
     const drafts = new Map<string, { previous: string; cssObj: Record<string, any> }>();
 
-    for (const { target, selector, style } of plan.changes) {
-      const loc = JSON.parse(target.dataset.loc!);
-      const path = resolveLessFilePath(loc.files.less, files, config.getEntryFile());
+    for (const { target, selector, lessFile, style } of plan.changes) {
+      const path = resolveLessFilePath(lessFile, files, config.getEntryFile());
       // 同一文件只读取、解析一次，父子元素的修改累计到同一个 Less 对象。
       if (!drafts.has(path)) {
         const file = files.find((file: { fileName: string; source: string }) => file.fileName === path)!;
