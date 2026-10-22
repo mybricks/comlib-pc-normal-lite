@@ -7,6 +7,7 @@ import { randomUUID } from '../utils/uuid'
 import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
+import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import {
   createDOMSourceLocationSnapshot,
@@ -983,6 +984,201 @@ function tryWriteNestedPseudo(
   return false;
 }
 
+/** 共用 Less 规则修改；只修改传入的对象，文件提交由调用方负责。 */
+function patchLessRule(cssObj: Record<string, any>, params: {
+  rawSelector: string;
+  fullSelector: string;
+  ele: Element | null;
+  eleClassList: string[];
+  nestedCandidate: NestedRuleTarget | undefined;
+  value: Record<string, any>;
+  lessValue: Record<string, any>;
+  explicitClearPatch?: ReturnType<typeof getExplicitClearPatch>;
+}) {
+  const { rawSelector, fullSelector, ele, eleClassList, nestedCandidate, value, lessValue, explicitClearPatch } = params;
+  const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList, rawSelector });
+  const topLevelTarget = cssObj[targetKey] && typeof cssObj[targetKey] === 'object'
+    ? cssObj[targetKey] as Record<string, any>
+    : undefined;
+  const nestedCandidateStyle = nestedCandidate
+    ? nestedCandidate.container[nestedCandidate.key] as Record<string, any> | undefined
+    : undefined;
+  const topLevelDeclarations = topLevelTarget
+    ? Object.keys(topLevelTarget).filter(key => typeof topLevelTarget[key] !== 'object')
+    : [];
+  const isLikelyNestedOrphan = !!nestedCandidateStyle && !!topLevelTarget &&
+    topLevelDeclarations.length > 0 &&
+    topLevelDeclarations.length === Object.keys(topLevelTarget).length &&
+    topLevelDeclarations.every(key => nestedCandidateStyle[key] !== undefined);
+  const nestedTarget = nestedCandidate && (
+    !topLevelTarget ||
+    nestedCandidate.score > getNestedSelectorMatchScore(fullSelector, targetKey) ||
+    isLikelyNestedOrphan
+  )
+    ? nestedCandidate
+    : undefined;
+  const targetContainer = nestedTarget?.container ?? cssObj;
+  let resolvedTargetKey = nestedTarget?.key ?? targetKey;
+
+  // 清理旧逻辑已经追加到文件末尾、并覆盖嵌套规则同名声明的重复短规则。
+  if (!explicitClearPatch && nestedTarget && isLikelyNestedOrphan) {
+    delete cssObj[targetKey];
+  }
+
+  // 若 targetKey 是独立单类（如 ".cyan"），清除 cssObj 中可能残留的旧版复合选择器键。
+  // 例：历史写入产生了 ".topFeatureItem.cyan" 或 ".topFeatureItem.pages_xxx--cyan"，
+  // 它们的 CSS 优先级（0,2,0）高于 ".cyan"（0,1,0），会覆盖新写入的规则。
+  if (!explicitClearPatch && !nestedTarget && /^\.[\w-]+$/.test(targetKey)) {
+    const targetClass = targetKey.slice(1);
+    Object.keys(cssObj).forEach(key => {
+      if (key === targetKey) return;
+      const keyLastSeg = (key.trim().split(/\s+/).pop() || '');
+      const keyClasses = (keyLastSeg.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
+      if (keyClasses.length < 2) return; // 非复合类选择器，不处理
+      // 将哈希类名还原为原始类名（pages_xxx--cyan → cyan）
+      const normalizedClasses = keyClasses.map(c => {
+        const ddIdx = c.lastIndexOf('--');
+        return ddIdx > 0 ? c.slice(ddIdx + 2) : c;
+      });
+      if (normalizedClasses.includes(targetClass)) {
+        delete cssObj[key];
+      }
+    });
+  }
+
+  if (!explicitClearPatch && !nestedTarget) {
+    absorbOrphans(cssObj, targetKey);
+  }
+
+  // 嵌套逗号规则也要拆分后只修改当前分支，且拆分发生在原 at-rule/父规则容器内。
+  if (nestedTarget?.branch && nestedTarget.key !== nestedTarget.branch) {
+    const sharedStyle = targetContainer[nestedTarget.key];
+    if (sharedStyle && typeof sharedStyle === 'object' && !Array.isArray(sharedStyle)) {
+      splitTopLevelCommaKeys(nestedTarget.key).forEach(branchKey => {
+        const existing = targetContainer[branchKey];
+        targetContainer[branchKey] = existing && typeof existing === 'object' && !Array.isArray(existing)
+          ? { ...sharedStyle, ...existing }
+          : { ...sharedStyle };
+      });
+      delete targetContainer[nestedTarget.key];
+      resolvedTargetKey = nestedTarget.branch;
+    }
+  }
+
+  // 顶层逗号规则与嵌套规则采用相同的隔离语义：各分支继承原共享声明，
+  // 本次变更只落到面板当前选中的唯一分支。
+  if (!nestedTarget) {
+    resolvedTargetKey = splitCommaMergedTopLevelRuleForWrite(
+      cssObj,
+      resolvedTargetKey,
+      fullSelector,
+    );
+  }
+
+  if (explicitClearPatch && resolvedTargetKey.includes(',')) {
+    console.warn('[style-proxy][style-clear-skip]', {
+      selector: rawSelector,
+      reason: 'ambiguous-comma-selector',
+    });
+    return;
+  }
+
+  if (!targetContainer[resolvedTargetKey]) {
+    targetContainer[resolvedTargetKey] = {};
+  }
+  const targetStyle = targetContainer[resolvedTargetKey] as Record<string, any>;
+
+  const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
+  const eleTagName = ele ? (ele as HTMLElement).tagName : '';
+
+  // 扫描 CSSOM（shadow DOM）中匹配 ele 且特指度高于实际目标选择器的竞争规则（如 antd 复合类）。
+  // 每次写入动作扫描一次，供下方 forEach 使用，避免重复扫描。
+  const conflictTargetKey = nestedTarget
+    ? getNestedConflictSelector(fullSelector, nestedTarget.selector)
+    : targetKey;
+  const cssomOverriddenProps: Set<string> = ele
+    ? collectCSSOMOverriddenProps(ele as Element, conflictTargetKey, fullSelector)
+    : new Set();
+  let explicitClearDidMutate = false;
+
+  Object.entries(lessValue).forEach(([key, val]) => {
+    const existing = targetStyle[key];
+    // 当前 Less 文件中该属性是 Less 变量引用（@xxx）时，判断是否真正被用户改动：
+    // - 无法取到计算值 → 变量未解析 → 保留变量
+    // - 计算值与写入值归一化后相同 → editConfig 里只是旧缓存，用户未真正改动 → 保留变量
+    // - 不同 → 用户确实改了 → 允许覆盖
+    if (typeof existing === 'string' && /^\s*@[\w-]/.test(existing)) {
+      if (!computedStyle) return;
+      const computedVal = computedStyle.getPropertyValue(convertCamelToHyphen(key)).trim();
+      if (!computedVal) return;
+      if (normalizeCSSValue(computedVal) === normalizeCSSValue(String(val ?? ''))) return;
+    }
+
+    // 检测到以下任一竞争场景时，自动追加 !important 确保写入值生效：
+    // 1. cssObj 内部规则：th/td 等标签选择器组合（如 .tableHeadRow th > .colTag）
+    // 2. 外部样式表规则：antd 复合类选择器（如 .css-xxx.ant-btn-variant-solid > .headerStockInBtn）
+    let writeVal = val;
+    const hyphenKey = convertCamelToHyphen(key);
+    // 嵌套目标本身已包含父级选择器，不能再按单类规则扫描标签竞争，
+    // 否则会把当前组件的嵌套声明误判为覆盖源。
+    const hasInternalConflict = !nestedTarget && eleTagName && hasTagBasedCompetingRule(cssObj, targetKey, eleTagName, key);
+    const hasExternalConflict = cssomOverriddenProps.has(hyphenKey);
+    if (
+      writeVal !== null &&
+      writeVal !== undefined &&
+      !String(writeVal).includes('!important') &&
+      !explicitClearPatch &&
+      (hasInternalConflict || hasExternalConflict)
+    ) {
+      writeVal = String(writeVal) + ' !important';
+    }
+
+    const nextValue = preserveExistingImportant(existing, writeVal);
+    if (explicitClearPatch && existing !== nextValue) {
+      explicitClearDidMutate = true;
+    }
+    targetStyle[key] = nextValue;
+  });
+
+  // 若写入了 background-image: none（表示用户切换到纯色背景），
+  // 自动清除 background 简写属性，避免简写残留导致渐变未被覆盖。
+  // CSS 中 shorthand + longhand 同规则共存时行为不稳定，删除简写是最可靠的做法。
+  if (
+    targetStyle &&
+    'backgroundImage' in value &&
+    (value as any)['backgroundImage'] === 'none' &&
+    'background' in targetStyle
+  ) {
+    delete targetStyle['background'];
+  }
+
+  return { targetKey, targetContainer, resolvedTargetKey, targetStyle, explicitClearDidMutate };
+}
+
+/** 单次修改与批量计划共用原有的属性删除逻辑。 */
+function deleteLessProperties(targetStyle: Record<string, any>, deletions: string[]): boolean {
+  let didMutate = false;
+  deletions.forEach(key => {
+    if (
+      Object.prototype.hasOwnProperty.call(targetStyle, key) ||
+      Object.prototype.hasOwnProperty.call(targetStyle, kebabToCamelProp(key)) ||
+      Object.prototype.hasOwnProperty.call(targetStyle, camelToKebab(key))
+    ) {
+      didMutate = true;
+    }
+    delete targetStyle[key];
+    delete targetStyle[kebabToCamelProp(key)];
+    delete targetStyle[camelToKebab(key)];
+  });
+  return didMutate;
+}
+
+function removeEmptyLessRule({ targetStyle, targetContainer, resolvedTargetKey }: NonNullable<ReturnType<typeof patchLessRule>>) {
+  if (Object.keys(targetStyle).length === 0) {
+    delete targetContainer[resolvedTargetKey];
+  }
+}
+
 // ── 工厂函数 ──────────────────────────────────────────────────────────────────
 
 export function genStyleValue(props) {
@@ -1539,8 +1735,54 @@ export function genStyleValue(props) {
     });
   };
 
-  return {
+  const patchResolvedLessRule = createResolvedLessRulePatcher({
+    splitTopLevelCommaKeys, splitCommaMergedTopLevelRuleForWrite,
+  });
+
+  type FreedomPlan = {
+    changes: Array<{ target: HTMLElement; selector: string; lessFile: string; style: Record<string, any> }>;
+  };
+  const applyFreedomPlan = (plan: FreedomPlan) => {
+    const files = context.component!.params.data.files;
+    const drafts = new Map<string, { previous: string; cssObj: Record<string, any> }>();
+
+    for (const { target, selector, lessFile, style } of plan.changes) {
+      const path = resolveLessFilePath(lessFile, files, config.getEntryFile());
+      // 同一文件只读取、解析一次，父子元素的修改累计到同一个 Less 对象。
+      if (!drafts.has(path)) {
+        const file = files.find((file: { fileName: string; source: string }) => file.fileName === path)!;
+        const previous = decodeURIComponent(file.source);
+        const cssObj = parseLess(previous);
+        drafts.set(path, { previous, cssObj });
+      }
+      const { cssObj } = drafts.get(path)!;
+      const fullSelector = selector;
+      const eleClassList = Array.from(target.classList);
+      const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
+      const entries = Object.entries(style);
+      const writes = Object.fromEntries(entries.filter(([, value]) => value !== null));
+      const deletions = entries.filter(([, value]) => value === null).map(([key]) => key);
+      const rule = patchResolvedLessRule(cssObj, {
+        rawSelector: selector, fullSelector, eleClassList, nestedCandidate,
+        lessValue: writes, explicitClearPatch: getExplicitClearPatch(selector, style),
+      })!;
+      deleteLessProperties(rule.targetStyle, deletions);
+      removeEmptyLessRule(rule);
+    }
+
+    for (const [path, { previous, cssObj }] of drafts) {
+      const current = stringifyLess(cssObj);
+      updateStyleFileInBranch({
+        path, previous, current, ele: plan.changes[0].target,
+      });
+    }
+  };
+
+  const proxy = {
     set(params: any, value: any) {
+      if (params.freedomPlan) {
+        return applyFreedomPlan(params.freedomPlan);
+      }
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
       // 源码更新触发 DOM 重编译后，宿主可能仍基于已断开的旧焦点回退 selector。
@@ -1960,161 +2202,13 @@ export function genStyleValue(props) {
         return;
       }
 
-      const targetKey = resolveTargetKey({ cssObj, fullSelector, eleClassList, rawSelector });
-      const topLevelTarget = cssObj[targetKey] && typeof cssObj[targetKey] === 'object'
-        ? cssObj[targetKey] as Record<string, any>
-        : undefined;
-      const nestedCandidateStyle = nestedCandidate
-        ? nestedCandidate.container[nestedCandidate.key] as Record<string, any> | undefined
-        : undefined;
-      const topLevelDeclarations = topLevelTarget
-        ? Object.keys(topLevelTarget).filter(key => typeof topLevelTarget[key] !== 'object')
-        : [];
-      const isLikelyNestedOrphan = !!nestedCandidateStyle && !!topLevelTarget &&
-        topLevelDeclarations.length > 0 &&
-        topLevelDeclarations.length === Object.keys(topLevelTarget).length &&
-        topLevelDeclarations.every(key => nestedCandidateStyle[key] !== undefined);
-      const nestedTarget = nestedCandidate && (
-        !topLevelTarget ||
-        nestedCandidate.score > getNestedSelectorMatchScore(fullSelector, targetKey) ||
-        isLikelyNestedOrphan
-      )
-        ? nestedCandidate
-        : undefined;
-      const targetContainer = nestedTarget?.container ?? cssObj;
-      let resolvedTargetKey = nestedTarget?.key ?? targetKey;
-
-      // 清理旧逻辑已经追加到文件末尾、并覆盖嵌套规则同名声明的重复短规则。
-      if (!explicitClearPatch && nestedTarget && isLikelyNestedOrphan) {
-        delete cssObj[targetKey];
-      }
-
-      // 若 targetKey 是独立单类（如 ".cyan"），清除 cssObj 中可能残留的旧版复合选择器键。
-      // 例：历史写入产生了 ".topFeatureItem.cyan" 或 ".topFeatureItem.pages_xxx--cyan"，
-      // 它们的 CSS 优先级（0,2,0）高于 ".cyan"（0,1,0），会覆盖新写入的规则。
-      if (!explicitClearPatch && !nestedTarget && /^\.[\w-]+$/.test(targetKey)) {
-        const targetClass = targetKey.slice(1);
-        Object.keys(cssObj).forEach(key => {
-          if (key === targetKey) return;
-          const keyLastSeg = (key.trim().split(/\s+/).pop() || '');
-          const keyClasses = (keyLastSeg.match(/\.([^.#[:]+)/g) ?? []).map(c => c.slice(1));
-          if (keyClasses.length < 2) return; // 非复合类选择器，不处理
-          // 将哈希类名还原为原始类名（pages_xxx--cyan → cyan）
-          const normalizedClasses = keyClasses.map(c => {
-            const ddIdx = c.lastIndexOf('--');
-            return ddIdx > 0 ? c.slice(ddIdx + 2) : c;
-          });
-          if (normalizedClasses.includes(targetClass)) {
-            delete cssObj[key];
-          }
-        });
-      }
-
-      if (!explicitClearPatch && !nestedTarget) {
-        absorbOrphans(cssObj, targetKey);
-      }
-
-      // 嵌套逗号规则也要拆分后只修改当前分支，且拆分发生在原 at-rule/父规则容器内。
-      if (nestedTarget?.branch && nestedTarget.key !== nestedTarget.branch) {
-        const sharedStyle = targetContainer[nestedTarget.key];
-        if (sharedStyle && typeof sharedStyle === 'object' && !Array.isArray(sharedStyle)) {
-          splitTopLevelCommaKeys(nestedTarget.key).forEach(branchKey => {
-            const existing = targetContainer[branchKey];
-            targetContainer[branchKey] = existing && typeof existing === 'object' && !Array.isArray(existing)
-              ? { ...sharedStyle, ...existing }
-              : { ...sharedStyle };
-          });
-          delete targetContainer[nestedTarget.key];
-          resolvedTargetKey = nestedTarget.branch;
-        }
-      }
-
-      // 顶层逗号规则与嵌套规则采用相同的隔离语义：各分支继承原共享声明，
-      // 本次变更只落到面板当前选中的唯一分支。
-      if (!nestedTarget) {
-        resolvedTargetKey = splitCommaMergedTopLevelRuleForWrite(
-          cssObj,
-          resolvedTargetKey,
-          fullSelector,
-        );
-      }
-
-      if (explicitClearPatch && resolvedTargetKey.includes(',')) {
-        console.warn('[style-proxy][style-clear-skip]', {
-          selector: rawSelector,
-          reason: 'ambiguous-comma-selector',
-        });
-        return;
-      }
-
-      if (!targetContainer[resolvedTargetKey]) {
-        targetContainer[resolvedTargetKey] = {};
-      }
-      const targetStyle = targetContainer[resolvedTargetKey] as Record<string, any>;
-
-      const computedStyle = ele ? getComputedStyle(ele as HTMLElement) : null;
-      const eleTagName = ele ? (ele as HTMLElement).tagName : '';
-
-      // 扫描 CSSOM（shadow DOM）中匹配 ele 且特指度高于实际目标选择器的竞争规则（如 antd 复合类）。
-      // 每次写入动作扫描一次，供下方 forEach 使用，避免重复扫描。
-      const conflictTargetKey = nestedTarget
-        ? getNestedConflictSelector(fullSelector, nestedTarget.selector)
-        : targetKey;
-      const cssomOverriddenProps: Set<string> = ele
-        ? collectCSSOMOverriddenProps(ele as Element, conflictTargetKey, fullSelector)
-        : new Set();
-      let explicitClearDidMutate = false;
-
-      Object.entries(lessValue).forEach(([key, val]) => {
-        const existing = targetStyle[key];
-        // 当前 Less 文件中该属性是 Less 变量引用（@xxx）时，判断是否真正被用户改动：
-        // - 无法取到计算值 → 变量未解析 → 保留变量
-        // - 计算值与写入值归一化后相同 → editConfig 里只是旧缓存，用户未真正改动 → 保留变量
-        // - 不同 → 用户确实改了 → 允许覆盖
-        if (typeof existing === 'string' && /^\s*@[\w-]/.test(existing)) {
-          if (!computedStyle) return;
-          const computedVal = computedStyle.getPropertyValue(convertCamelToHyphen(key)).trim();
-          if (!computedVal) return;
-          if (normalizeCSSValue(computedVal) === normalizeCSSValue(String(val ?? ''))) return;
-        }
-
-        // 检测到以下任一竞争场景时，自动追加 !important 确保写入值生效：
-        // 1. cssObj 内部规则：th/td 等标签选择器组合（如 .tableHeadRow th > .colTag）
-        // 2. 外部样式表规则：antd 复合类选择器（如 .css-xxx.ant-btn-variant-solid > .headerStockInBtn）
-        let writeVal = val;
-        const hyphenKey = convertCamelToHyphen(key);
-        // 嵌套目标本身已包含父级选择器，不能再按单类规则扫描标签竞争，
-        // 否则会把当前组件的嵌套声明误判为覆盖源。
-        const hasInternalConflict = !nestedTarget && eleTagName && hasTagBasedCompetingRule(cssObj, targetKey, eleTagName, key);
-        const hasExternalConflict = cssomOverriddenProps.has(hyphenKey);
-        if (
-          writeVal !== null &&
-          writeVal !== undefined &&
-          !String(writeVal).includes('!important') &&
-          !explicitClearPatch &&
-          (hasInternalConflict || hasExternalConflict)
-        ) {
-          writeVal = String(writeVal) + ' !important';
-        }
-
-        const nextValue = preserveExistingImportant(existing, writeVal);
-        if (explicitClearPatch && existing !== nextValue) {
-          explicitClearDidMutate = true;
-        }
-        targetStyle[key] = nextValue;
+      const rule = patchLessRule(cssObj, {
+        rawSelector, fullSelector, ele, eleClassList, nestedCandidate, value, lessValue, explicitClearPatch,
       });
-
-      // 若写入了 background-image: none（表示用户切换到纯色背景），
-      // 自动清除 background 简写属性，避免简写残留导致渐变未被覆盖。
-      // CSS 中 shorthand + longhand 同规则共存时行为不稳定，删除简写是最可靠的做法。
-      if (
-        targetStyle &&
-        'backgroundImage' in value &&
-        (value as any)['backgroundImage'] === 'none' &&
-        'background' in targetStyle
-      ) {
-        delete targetStyle['background'];
-      }
+      // 保留原来无法明确定位清空目标时，直接结束本次 set 的行为。
+      if (!rule) return;
+      const { targetKey, targetStyle } = rule;
+      let { explicitClearDidMutate } = rule;
 
       if (deletions && deletions.length > 0) {
         // 若被删除的属性在 data-style-info 里有静态内联偏移（如手写 style={{}} 的属性），
@@ -2155,21 +2249,7 @@ export function genStyleValue(props) {
         const expandedDeletions = explicitClearPatch
           ? deletions.slice()
           : filterExpandedDeletions(deletions, value);
-        expandedDeletions.forEach(key => {
-          if (
-            explicitClearPatch &&
-            (
-              Object.prototype.hasOwnProperty.call(targetStyle, key) ||
-              Object.prototype.hasOwnProperty.call(targetStyle, kebabToCamelProp(key)) ||
-              Object.prototype.hasOwnProperty.call(targetStyle, camelToKebab(key))
-            )
-          ) {
-            explicitClearDidMutate = true;
-          }
-          delete targetStyle[key];
-          delete targetStyle[kebabToCamelProp(key)];
-          delete targetStyle[camelToKebab(key)];
-        });
+        explicitClearDidMutate = deleteLessProperties(targetStyle, expandedDeletions) || explicitClearDidMutate;
 
         // ── 逗号合并规则拆分删除 ──────────────────────────────────────────────
         // 例：.resetBtn, .queryBtn { min-width: 80px } 与更长路径的 .queryBtn 规则并存时，
@@ -2249,12 +2329,7 @@ export function genStyleValue(props) {
         return;
       }
 
-      if (Object.keys(targetStyle).length === 0) {
-        // 这段代码会强制转为baseselector，导致误删selector尾部的:hover等伪类
-        // const orphanKeys = findOrphanKeys(cssObj, targetKey);
-        // orphanKeys.forEach(key => delete cssObj[key]);
-        delete targetContainer[resolvedTargetKey];
-      }
+      removeEmptyLessRule(rule);
 
       const cssStr = stringifyLess(cssObj);
       updateStyleFileInBranch({
@@ -2297,6 +2372,11 @@ export function genStyleValue(props) {
       };
     },
   };
+
+  (window as any).__mybricks_applyStylePlan = (plan: FreedomPlan) =>
+    proxy.set({ freedomPlan: plan }, undefined);
+
+  return proxy;
 }
 
 let _imgAppliedCallback: ((src: string) => void) | null = null;

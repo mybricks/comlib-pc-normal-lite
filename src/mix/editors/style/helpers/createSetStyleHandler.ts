@@ -22,6 +22,7 @@ import {
 } from './patchJsxInlineStyle'
 import { resolveLessFilePath } from './resolveLessFilePath'
 import { getBoxShorthand, mergeBoxShorthand } from './boxShorthand'
+import { getCrossFileFreeformRules } from './getCrossFileFreeformRules'
 
 const getStyleActionTitle = (ele: HTMLElement) => {
   const label = getElementLabel(ele, '节点1')
@@ -1025,6 +1026,10 @@ export default function createSetStyleHandler(
                 }
               } catch {/** 某些伪类选择器 matches() 会报错，忽略 */}
             }
+          }
+          // 仅补充跨文件 freeform 子元素自身的定位规则，后续沿用原有调整链路。
+          if (getComputedStyle(ele).getPropertyValue('--freeform-position').trim() === 'absolute') {
+            matchedRules.push(...getCrossFileFreeformRules(ele, lessFile, shadowRoot))
           }
           const specificities = new Map<CSSStyleRule, ReturnType<typeof calculate>>()
           const sortableMatchedRules = matchedRules.filter((rule) => {
