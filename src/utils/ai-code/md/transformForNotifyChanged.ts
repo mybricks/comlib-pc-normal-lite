@@ -252,9 +252,12 @@ function addNotifyBinding<T extends Record<string, any>>(
     bindingResult.location = location
     const { startLine, endLine } = location
     const codeLine = `"codeLine":{"start":${startLine},"end":${endLine}}`
-    bindingResult.refSelector =
-      `[data-loc*='${escapeCssAttributeValue(fileName)}']` +
-      `[data-loc*='${escapeCssAttributeValue(codeLine)}']`
+    bindingResult.refSelector = ['data-loc', 'data-parent-loc']
+      .map(attribute =>
+        `[${attribute}*='${escapeCssAttributeValue(fileName)}']` +
+        `[${attribute}*='${escapeCssAttributeValue(codeLine)}']`,
+      )
+      .join(', ')
   }
   return bindingResult
 }
