@@ -10,14 +10,17 @@ import taskPanelCss from '../../../../components/task-panel/index.lazy.less'
 import * as taskPanelCssNS from '../../../../components/task-panel/index.lazy.less'
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
+// import Xterm from './xterm'
+// import { DEMO_LINES } from './xterm/demo'
 
-type TabKey = 'task' | 'review' | 'version'
+type TabKey = 'task' | 'review' | 'version' | 'terminal'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
 
 const TAB_LABELS: Record<TabKey, string> = {
   task: '任务',
   version: '版本',
   review: '影响',
+  // terminal: '终端',
 }
 
 
@@ -132,6 +135,23 @@ function ReviewPanel({ content }: { content: string | null }) {
   )
 }
 
+// function TerminalDemo() {
+//   const [output, setOutput] = useState(`${DEMO_LINES[0]}\n`)
+
+//   useEffect(() => {
+//     let nextLine = 1
+//     const timer = window.setInterval(() => {
+//       setOutput(current => `${current}${DEMO_LINES[nextLine]}\n`)
+//       nextLine += 1
+//       if (nextLine === DEMO_LINES.length) window.clearInterval(timer)
+//     }, 300)
+
+//     return () => window.clearInterval(timer)
+//   }, [])
+
+//   return <Xterm output={output} />
+// }
+
 function LowcodeViewShell() {
   const [activeTab, setActiveTab] = useState<TabKey>('task')
   const [tasksContent, setTasksContent] = useState<string | null>(null)
@@ -179,6 +199,7 @@ function LowcodeViewShell() {
         {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} allowDelete />}
         {activeTab === 'version' && <VersionPanel />}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
+        {/* {activeTab === 'terminal' && <div className={css['terminal-panel']}><TerminalDemo /></div>} */}
       </div>
     </div>
   )

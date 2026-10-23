@@ -16,6 +16,8 @@
     "@babel/types": "^8.0.5",
     "@mybricks/coder": "^0.0.91",
     "@mybricks/console-feed": "0.0.3",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "antd": "^5.22.2",
     "classnames": "^2.5.1",
     "css-tree": "2.3.1",

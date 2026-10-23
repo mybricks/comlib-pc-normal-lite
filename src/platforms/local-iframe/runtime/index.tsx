@@ -2,10 +2,29 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { registerSandbox } from '../sandbox'
 import context from '../../../mix/context'
 import myContext from '../context'
+import Xterm from '../../../components/xterm'
+import { DEMO_LINES } from '../../../components/xterm/demo'
 
 type RouteParamDraft = {
   key: string
   value: string
+}
+
+function TerminalDemo() {
+  const [output, setOutput] = useState(`${DEMO_LINES[0]}\n`)
+
+  useEffect(() => {
+    let nextLine = 1
+    const timer = window.setInterval(() => {
+      setOutput(current => `${current}${DEMO_LINES[nextLine]}\n`)
+      nextLine += 1
+      if (nextLine === DEMO_LINES.length) window.clearInterval(timer)
+    }, 300)
+
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return <Xterm output={output} />
 }
 
 function buildItemPath(path: string, params: RouteParamDraft[] = []) {
@@ -61,6 +80,7 @@ const RuntimeIframe = (props) => {
 	const currentIframesRef = useRef<RuntimeIframeItem[]>([])
 	const lastLoadedSignatureRef = useRef('')
 	currentIframesRef.current = iframes
+	const [ready, setReady] = useState(false)
 
 	const emitLoadedIfReady = useCallback((nextIframes: RuntimeIframeItem[]) => {
 		if (!nextIframes.every((item) => loadedSrcsRef.current.has(item.src))) {
@@ -176,7 +196,7 @@ const RuntimeIframe = (props) => {
 		emitLoadedIfReady(iframes)
 	}, [iframes])
 
-	return (
+	return ready ? (
 		<div style={{ display: 'contents' }}>
 			{iframes.map((item) => {
 				const src = buildIframeSrc(item.src)
@@ -218,7 +238,7 @@ const RuntimeIframe = (props) => {
 				)
 			})}
 		</div>
-	)
+	) : <div style={{ width: 1200, height: 800 }}><TerminalDemo /></div>
 }
 
 export default RuntimeIframe
