@@ -1,12 +1,10 @@
-import React, { useState, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { AiSendIcon } from '../../components/AiSendIcon';
 import * as styleNS from './style.lazy.less';
 import { getLazyCss } from '../../../lowcodeView/utils/css';
 import lang from '../i18n';
 
 const css = getLazyCss(styleNS);
-
-const SVG_PRESETS = [lang.svgPresetLine, lang.svgPresetFill, lang.svgPresetFlat, lang.svgPresetMono];
 
 export default function AIInputBar({
   onGenerate,
@@ -17,6 +15,12 @@ export default function AIInputBar({
   placeholder?: string;
   showPresets?: boolean;
 }) {
+  const SVG_PRESETS = useMemo(() => [
+    lang.svgPresetLine,
+    lang.svgPresetFill,
+    lang.svgPresetFlat,
+    lang.svgPresetMono,
+  ], []);
   const [value, setValue] = useState('');
   const canSubmit = Boolean(value.trim());
   const textareaRef = useRef<HTMLTextAreaElement>(null);

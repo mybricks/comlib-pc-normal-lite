@@ -25,7 +25,7 @@ type InsertCode = {
 
 interface InsertOptions {
   /** Target element. */
-  toEle: HTMLElement;
+  toEle: HTMLElement | Node;
   /** Insert before, after, or into the target element. */
   type: 'before' | 'after' | 'child';
   /** Code to insert. */
@@ -309,15 +309,15 @@ const createPreview = (code: InsertCode, location?: PreviewSourceLocation): Inse
   }
 }
 
-const mountPreview = (preview: InsertPreview, toEle: HTMLElement, type: 'before' | 'after' | 'child') => {
-  if (type === 'child') {
-    toEle.appendChild(preview.container)
+const mountPreview = (preview: InsertPreview, toEle: HTMLElement | Node, type: 'before' | 'after' | 'child') => {
+  if (toEle.nodeType === Node.ELEMENT_NODE && type === 'child') {
+    ;(toEle as HTMLElement).appendChild(preview.container)
     return true
   }
 
   const parent = toEle.parentNode
   if (!parent) return false
-  parent.insertBefore(preview.container, type === 'before' ? toEle : toEle.nextSibling)
+  parent.insertBefore(preview.container, type === 'before' || type === 'child' ? toEle : toEle.nextSibling)
   return true
 }
 
@@ -411,13 +411,6 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
   if (!preview) return handlePreviewFailure()
 
   const actionId = randomUUID()
-  // const targetLabel = getElementLabel(options.toEle, '节点')
-  // const chip = {
-  //   id: randomUUID(),
-  //   type: 'element-insert',
-  //   label: title,
-  //   data: buildElementInsertChipData(options.toEle, options.type, options.code.jsx, options.code.import, targetLabel),
-  // }
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementInsertAiRequest({
@@ -432,7 +425,7 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
         id: actionId,
         type: 'insert',
         title,
-        refElement: preview?.container ?? options.toEle,
+        refElement: preview.container,
       })
     },
     undo() {
@@ -441,23 +434,38 @@ const runInsertByAI = (options: ResolvedInsertOptions, preview: InsertPreview | 
     },
   })
 
-  return { type: 'success', actionId }
+  return { type: 'success', actionId, refElement: preview.container }
 }
 
 const insert = (options: InsertOptions) => {
-  const { toEle, type } = options
-  if (!toEle || (type !== 'before' && type !== 'after' && type !== 'child') || !options.code) return
+  const { type } = options
+  if (!options.toEle || (type !== 'before' && type !== 'after' && type !== 'child') || !options.code) return
 
+  const toEle = options.toEle
+  if (toEle.nodeType !== Node.ELEMENT_NODE) {
+    // 文本节点没有可安全映射到 JSX 元素范围的 data-loc，交给 AI 按文本上下文定位。
+    const resolvedOptions: ResolvedInsertOptions = {
+      ...options,
+      toEle,
+      code: typeof options.code === 'function' ? options.code() : options.code,
+    }
+    if (!resolvedOptions.code?.jsx?.trim()) return
+    const targetLabel = getElementLabel(toEle, '节点')
+    const title = `在 ${targetLabel}${type === 'before' ? '前' : type === 'after' ? '后' : '内部'}插入内容`
+    return runInsertByAI(resolvedOptions, createPreview(resolvedOptions.code), title)
+  }
+
+  const elementTarget = toEle as HTMLElement
   const code = typeof options.code === 'function' ? options.code() : options.code
   if (!code?.jsx?.trim()) return
 
-  const resolvedOptions: ResolvedInsertOptions = { ...options, code }
+  const resolvedOptions: ResolvedInsertOptions = { ...options, toEle: elementTarget, code }
 
   const targetLabel = getElementLabel(toEle, '节点')
   const title = `在 ${targetLabel}${type === 'before' ? '前' : type === 'after' ? '后' : '内部'}插入内容`
 
   try {
-    const locValue = toEle.dataset.loc
+    const locValue = elementTarget.dataset.loc
     if (!locValue) return runInsertByAI(resolvedOptions, createPreview(code), title)
 
     const shadowRoot = getShadowRoot()
@@ -523,7 +531,7 @@ const insert = (options: InsertOptions) => {
       source: imports.source,
       jsxInsertion,
       jsxStart: finalJsxStart,
-      contextElement: toEle,
+      contextElement: elementTarget,
       dataAttributes,
     })
     if (!preview) return handlePreviewFailure()
@@ -545,14 +553,14 @@ const insert = (options: InsertOptions) => {
         context.updateFile({ fileName, content: imports.source, type: undefined, noUpdateFileSystem: true })
         sourcePatches.forEach((patch) => {
           shiftDOMSourceLocationsAfterReplacement(shadowRoot, fileName, patch)
-          shiftTargetStartAtInsertionBoundary(toEle, patch)
+          shiftTargetStartAtInsertionBoundary(elementTarget, patch)
         })
-        mountPreview(preview, toEle, type)
+        mountPreview(preview, elementTarget, type)
         context.component!.actions.addUserAction({
           id: actionId,
           type: 'insert',
           title,
-          refElement: preview?.container ?? toEle,
+          refElement: preview.container,
         })
       },
       undo() {
@@ -563,7 +571,7 @@ const insert = (options: InsertOptions) => {
       },
     })
 
-    return { type: 'success', actionId }
+    return { type: 'success', actionId, refElement: preview.container }
   } catch (_) {
     console.error("insert:", _)
     return runInsertByAI(resolvedOptions, createPreview(code), title)

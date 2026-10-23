@@ -1,6 +1,7 @@
 import babelPlugin from './plugins/babelPlugin'
 import { getValidatorPlugins } from '../../mix/availableLibraries'
 import functionPropsPlugin from './plugins/functionPropsPlugin'
+import parentLocPlugin from './plugins/parentLocPlugin'
 import collectJsDocPlugin from './plugins/collectJsDocPlugin'
 import loggerPlugin from './plugins/loggerPlugin'
 import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
@@ -63,6 +64,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         styleAnalysisPlugin({ reactNative }),
         ...validatorPlugins,
         functionPropsPlugin(),
+        parentLocPlugin({ reactNative }),
         [collectJsDocPlugin, { result: jsDocMap, fileName }],
         loggerPlugin({ fileName }),
         zoneIndexPlugin({ fileName, reactNative }),

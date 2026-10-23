@@ -7,7 +7,7 @@ import {
   hasMybricksGraphDirectory,
   hasMybricksGraphFile,
   isMybricksGraphFile,
-  MYBRICKS_GRAPH_DIR,
+  getMybricksGraphDir,
   parseMybricksGraph,
   resolveGraphSourceFile,
   type FileLike,
@@ -404,18 +404,18 @@ export async function captureVersionGitDiff(resetBaseline = false): Promise<stri
   return result.stdout
 }
 
-async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
+async function compileLocalGraphFiles(localFiles: LocalFile[], configDirName: string): Promise<void> {
   // local iframe 链路只编译 YAML graph；不启用 JSDoc/Babel 编译。
   const files: FileLike[] = localFiles.map(file => ({
     fileName: file.path,
   }))
 
-  if (!hasMybricksGraphDirectory(files) || !hasMybricksGraphFile(files)) {
+  if (!hasMybricksGraphDirectory(files, configDirName) || !hasMybricksGraphFile(files, configDirName)) {
     return
   }
 
   for (const graphFile of localFiles) {
-    if (!isMybricksGraphFile(graphFile.path)) continue
+    if (!isMybricksGraphFile(graphFile.path, configDirName)) continue
 
     try {
       const graph = parseMybricksGraph(graphFile.content)
@@ -449,12 +449,14 @@ async function compileLocalGraphFiles(localFiles: LocalFile[]): Promise<void> {
 }
 
 export async function refreshLocalGraph(): Promise<void> {
-  const entries = await listLocalFiles(MYBRICKS_GRAPH_DIR, { recursive: true })
+  const configDirName = getDocumentRoot()
+  const graphDir = getMybricksGraphDir(configDirName)
+  const entries = await listLocalFiles(graphDir, { recursive: true })
   const graphPaths = entries
     .filter((entry) => entry.type === 'file')
     .map((entry) => entry.path)
   const files = await readLocalFiles(graphPaths)
-  await compileLocalGraphFiles(files)
+  await compileLocalGraphFiles(files, configDirName)
 }
 
 export function registerSandbox(comId: string) {

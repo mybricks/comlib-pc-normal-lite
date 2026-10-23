@@ -6,6 +6,7 @@ import {
   findGraphForSourceFile,
   findSourceFile,
   getStoredJsDocMap,
+  getMybricksGraphDir,
   hasMybricksGraphDirectory,
   hasMybricksGraphFile,
   isMybricksGraphFile,
@@ -43,6 +44,11 @@ async function hashFileContent(content: string): Promise<string | undefined> {
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
+}
+
+function getRuntimeConfigDirName(): string | undefined {
+  return (window as any).__LINGCHUANG_CONFIG__?.configDirName
+    ?? (window as any)._sandbox_?.config?.configDirName
 }
 
 const printMybricksGraphCompilation = (
@@ -179,13 +185,46 @@ class Context {
   /** 通知引擎文档相关更新 */
   notifyChanged(filename?: string, changeType?: 'delete' | 'update', value?: any) {
     try {
-      console.log('[mybricks] notifyChanged', { filename, changeType, value })
       if (!filename) {
         this.component?.actions?.notifyChanged?.()
       } else {
         this.component?.actions?.notifyChanged?.(filename, changeType, value)
       }
     } catch {}
+  }
+
+  /** 注册完成时把已有的 graph YAML 逐页同步到设计器。 */
+  notifyGraphDocuments() {
+    const files = this.component?.params?.data?.files ?? []
+    const configDirName = getRuntimeConfigDirName()
+
+    for (const graphFile of files) {
+      const fileName = typeof graphFile?.fileName === 'string' ? graphFile.fileName : ''
+      if (!isMybricksGraphFile(fileName, configDirName) || typeof graphFile?.source !== 'string') continue
+
+      try {
+        const graph = parseMybricksGraph(decodeURIComponent(graphFile.source))
+        const targetFileName = resolveGraphSourceFile(fileName, graph, files)
+        const sourceFile = findSourceFile(targetFileName, files)
+        const jsDocMap = getStoredJsDocMap(sourceFile)
+        // Graph YAML 是页面文档的主数据；JSDoc 只在 graph 没有可用节点时兜底。
+        const selectedData = Object.keys(graph.data).length > 0 ? graph.data : jsDocMap
+        const notifyFileName = targetFileName || fileName
+        const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
+
+        console.log('[mybricks][non-local-iframe] initial audit graph sync', {
+          graphFileName: fileName,
+          filename: notifyFileName,
+          value: notifyChangedValue,
+        })
+        this.notifyChanged(notifyFileName, 'update', notifyChangedValue)
+      } catch (error) {
+        console.error('[mybricks][non-local-iframe] initial audit graph sync failed', {
+          graphFileName: fileName,
+          error,
+        })
+      }
+    }
   }
 
   /** 通知引擎更新用户任务列表。 */
@@ -273,6 +312,7 @@ class Context {
     const aiComParams = aiCom.params;
     const files = aiComParams.data.files;
     const suffix = fileName.split('.').pop();
+    const configDirName = getRuntimeConfigDirName()
 
     if (type === "delete") {
       if (updateSource !== 'rollback') {
@@ -296,7 +336,7 @@ class Context {
       if ( ['jsx', 'tsx'].includes(suffix)) {
         this.notifyChanged(fileName, 'delete')
       }
-      if (isMybricksGraphFile(fileName)) {
+      if (isMybricksGraphFile(fileName, configDirName)) {
         let graph
         try {
           graph = deletedFile?.source
@@ -318,16 +358,17 @@ class Context {
         case 'tsx':
           try {
             // 先检查固定目录；目录不存在时完全跳过 YAML 文档查找。
-            const hasGraphFiles = hasMybricksGraphDirectory(files) && hasMybricksGraphFile(files)
+            const hasGraphFiles = hasMybricksGraphDirectory(files, configDirName) && hasMybricksGraphFile(files, configDirName)
             const { transformCode, jsDocMap } = transformTsx(content, { fileName });
             const transformJsDoc = Object.fromEntries(jsDocMap)
             const graphEntry = hasGraphFiles
-              ? findGraphForSourceFile(fileName, files)
+              ? findGraphForSourceFile(fileName, files, configDirName)
               : undefined
-            // JSDoc 是第一优先级；只有当前文件没有可用 JSDoc 时才回退到 graph YAML。
-            const notifyData = Object.keys(transformJsDoc).length > 0
-              ? transformJsDoc
-              : graphEntry?.graph.data ?? {}
+            // Graph YAML 是页面文档的主数据；JSDoc 只在没有可用 graph 数据时兜底。
+            const graphData = graphEntry?.graph.data ?? {}
+            const notifyData = Object.keys(graphData).length > 0
+              ? graphData
+              : transformJsDoc
             const notifyChangedValue = transformNewFormatForNotifyChanged(notifyData, fileName)
             // if (notifyChangedValue.docs?.length) {
             //   notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
@@ -465,7 +506,16 @@ class Context {
           break;
         case 'yaml':
         case 'yml':
-          if (isMybricksGraphFile(fileName)) {
+          {
+            const graphDir = getMybricksGraphDir(configDirName)
+            const isGraphFile = isMybricksGraphFile(fileName, configDirName)
+            console.log('[mybricks][non-local-iframe] audit graph routing', {
+              fileName,
+              configDirName,
+              graphDir,
+              isGraphFile,
+            })
+            if (isGraphFile) {
             try {
               const graph = parseMybricksGraph(content)
               updateFileContent({
@@ -482,11 +532,13 @@ class Context {
               const targetFileName = resolveGraphSourceFile(fileName, graph, files)
               const sourceFile = findSourceFile(targetFileName, files)
               const jsDocMap = getStoredJsDocMap(sourceFile)
-              const selectedData = Object.keys(jsDocMap).length > 0 ? jsDocMap : graph.data
               const notifyFileName = targetFileName || fileName
+              // 由 YAML updateFile 触发时，刚解析的 graph 是主数据；JSDoc 仅在 graph
+              // 没有可用节点时兜底，避免缓存覆盖本次 YAML 编辑。
+              const selectedData = Object.keys(graph.data).length > 0 ? graph.data : jsDocMap
               const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
 
-              if (hasMybricksGraphDirectory(files) && hasMybricksGraphFile(files)) {
+              if (hasMybricksGraphDirectory(files, configDirName) && hasMybricksGraphFile(files, configDirName)) {
                 printMybricksGraphCompilation(fileName, graph, notifyFileName, notifyChangedValue)
               }
 
@@ -495,6 +547,13 @@ class Context {
                 const file = files.find((f) => f.fileName === fileName);
                 fileSystem.update(fileName, { ...file, filename: fileName })
               }
+              console.log('[mybricks][non-local-iframe] notifyChanged', {
+                filename: notifyFileName,
+                changeType: 'update',
+                value: notifyChangedValue,
+                graphFileName: fileName,
+                targetFileName,
+              })
               this.notifyChanged(notifyFileName, 'update', notifyChangedValue)
             } catch (e: any) {
               updateFileContent({
@@ -512,6 +571,7 @@ class Context {
               ]
             }
             break
+            }
           }
         case 'txt':
         case 'json':

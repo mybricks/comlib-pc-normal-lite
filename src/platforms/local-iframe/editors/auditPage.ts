@@ -33,7 +33,7 @@ export default function (hookContext, params) {
   const message = getAuditPageMessage(options);
   const detail = message ? `的${message}文档` : '文档';
   const ele = hookContext.focusArea.ele;
-  const agentMessage = `使用 audit-power 技能来更新页面「${id}」${detail}`;
+  const agentMessage = `使用 audit-power 来更新页面「${id}」${detail}`;
 
   agentTurnLifecycle.register(hookContext.id, (turn) => {
     if (turn?.status === 'success') {

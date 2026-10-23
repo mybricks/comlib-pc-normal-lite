@@ -2,7 +2,14 @@ import YAML from 'yaml'
 import { parse as parseCssSelector } from 'css-tree'
 import type { NewSummaryBind, NewSummaryData, NewSummaryItem } from '../md/transformForNotifyChanged'
 
-export const MYBRICKS_GRAPH_DIR = '.lingchuang/graph'
+const DEFAULT_CONFIG_DIR_NAME = '.agent'
+
+export function getMybricksGraphDir(configDirName?: string): string {
+  const normalized = typeof configDirName === 'string'
+    ? configDirName.trim().replace(/^\/+|\/+$/g, '')
+    : ''
+  return `${normalized || DEFAULT_CONFIG_DIR_NAME}/graph`
+}
 
 export type FileLike = {
   fileName: string
@@ -408,21 +415,22 @@ export function parseMybricksGraph(content: string): MybricksGraphDocument {
   return { data, fileName, ...(pageRoute === undefined ? {} : { route: pageRoute }) }
 }
 
-export function isMybricksGraphFile(fileName: string): boolean {
+export function isMybricksGraphFile(fileName: string, configDirName?: string): boolean {
   const normalized = normalizeFileName(fileName)
-  return normalized.startsWith(`${MYBRICKS_GRAPH_DIR}/`) && /\.(yaml|yml)$/i.test(normalized)
+  return normalized.startsWith(`${getMybricksGraphDir(configDirName)}/`) && /\.(yaml|yml)$/i.test(normalized)
 }
 
-/** 先判断固定 graph 目录是否存在，再决定是否尝试 YAML 文档链路。 */
-export function hasMybricksGraphDirectory(files: FileLike[]): boolean {
+/** 先判断当前 configDirName 下的 graph 目录是否存在，再决定是否尝试 YAML 文档链路。 */
+export function hasMybricksGraphDirectory(files: FileLike[], configDirName?: string): boolean {
+  const graphDir = getMybricksGraphDir(configDirName)
   return files.some(file => {
     const normalized = normalizeFileName(file.fileName)
-    return normalized === MYBRICKS_GRAPH_DIR || normalized.startsWith(`${MYBRICKS_GRAPH_DIR}/`)
+    return normalized === graphDir || normalized.startsWith(`${graphDir}/`)
   })
 }
 
-export function hasMybricksGraphFile(files: FileLike[]): boolean {
-  return files.some(file => isMybricksGraphFile(file.fileName))
+export function hasMybricksGraphFile(files: FileLike[], configDirName?: string): boolean {
+  return files.some(file => isMybricksGraphFile(file.fileName, configDirName))
 }
 
 /** 页面文件使用顶层数组中 type: page 节点的 fileName；没有时回退第一个节点。 */
@@ -457,10 +465,11 @@ export function getStoredJsDocMap(file?: FileLike): NewSummaryData {
 export function findGraphForSourceFile(
   sourceFileName: string,
   files: FileLike[],
+  configDirName?: string,
 ): { fileName: string; graph: MybricksGraphDocument } | undefined {
   const normalizedSourceFileName = normalizeFileName(sourceFileName)
   for (const file of files) {
-    if (!isMybricksGraphFile(file.fileName)) continue
+    if (!isMybricksGraphFile(file.fileName, configDirName)) continue
     try {
       const graph = parseMybricksGraph(decodeSource(file.source))
       const targetFileName = resolveGraphSourceFile(file.fileName, graph, files)

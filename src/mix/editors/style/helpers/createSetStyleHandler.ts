@@ -22,6 +22,7 @@ import {
 } from './patchJsxInlineStyle'
 import { resolveLessFilePath } from './resolveLessFilePath'
 import { getBoxShorthand, mergeBoxShorthand } from './boxShorthand'
+import { getCrossFileFreeformRules } from './getCrossFileFreeformRules'
 
 const getStyleActionTitle = (ele: HTMLElement) => {
   const label = getElementLabel(ele, '节点1')
@@ -774,7 +775,7 @@ const patchSingleElementInlineStyle = (
  */
 export default function createSetStyleHandler(
   getEle: (ctx: any, params: any) => HTMLElement,
-  getStyle: (ctx: any, params: any) => Record<string, number>,
+  getStyle: (ctx: any, params: any) => Record<string, number> | undefined,
 ) {
   // [引擎兼容处理] start、finish状态可能没有style，在ing阶段进行收集
   let style = {}
@@ -963,7 +964,7 @@ export default function createSetStyleHandler(
         initialInlineCssText = ele.style?.cssText ?? ''
         initialInlineStyleValues = {}
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
-        style = getStyle(ctx, params)
+        style = getStyle(ctx, params)!
 
         // console.log('@setStyle:style', style)
 
@@ -1025,6 +1026,10 @@ export default function createSetStyleHandler(
                 }
               } catch {/** 某些伪类选择器 matches() 会报错，忽略 */}
             }
+          }
+          // 仅补充跨文件 freeform 子元素自身的定位规则，后续沿用原有调整链路。
+          if (getComputedStyle(ele).getPropertyValue('--freeform-position').trim() === 'absolute') {
+            matchedRules.push(...getCrossFileFreeformRules(ele, lessFile, shadowRoot))
           }
           const specificities = new Map<CSSStyleRule, ReturnType<typeof calculate>>()
           const sortableMatchedRules = matchedRules.filter((rule) => {
@@ -1318,12 +1323,6 @@ export default function createSetStyleHandler(
             // const label = getElementLabel(ele, '节点1')
             const title = getStyleActionTitle(ele)
             const actionId = randomUUID()
-            // const chip = {
-            //   id: randomUUID(),
-            //   type: 'element-style-update',
-            //   label: `调整 ${label} 样式`,
-            //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-            // }
             const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
               ele,
               key,
@@ -1602,12 +1601,6 @@ export default function createSetStyleHandler(
           // const label = getElementLabel(ele, '节点1')
           const title = getStyleActionTitle(ele)
           const actionId = randomUUID()
-          // const chip = {
-          //   id: randomUUID(),
-          //   type: 'element-style-update',
-          //   label: `调整 ${label} 样式`,
-          //   data: buildElementStyleUpdateChipData(ele, aiKeys, label),
-          // }
           const inlineStyleSnapshots = aiKeys.map(({ key, value }) => getInitialInlineStyleSnapshot(
             ele,
             key,

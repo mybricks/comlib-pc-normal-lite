@@ -95,9 +95,13 @@ export function buildGuiCardPromptItems() {
 export function buildGuiCardHooks() {
   return {
     '@switchPageShowType'(params, value) {
-      const desnPage = params.focusArea.dataset.desnPage
-      const showTypeMap = getGuiCardField(params, 'showTypeMap')
-      showTypeMap[desnPage] = value
+      try {
+        const desnPage = params.focusArea.ele.getAttribute('data-desn-page')
+        const showTypeMap = getGuiCardField(params, 'showTypeMap')
+        showTypeMap[desnPage] = value
+      } catch (e) {
+        console.error('@switchPageShowType:catch', e)
+      }
     }
   }
 }

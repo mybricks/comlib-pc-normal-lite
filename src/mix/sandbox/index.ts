@@ -23,7 +23,7 @@ import {
   createVisualEditMainCommand,
   takePendingVisualAICommit,
 } from '../editors/visualEditCommit';
-import { parseLess, stringifyLess } from '../utils/transform/less';
+import { normalizeRestoreLess } from '../utils/transform/less';
 import commonLang from '../../helpers/i18n/common';
 import { agentTurnLifecycle } from './agent-turn-lifecycle';
 import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
@@ -1299,6 +1299,10 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     await workspaceReady;
   }
 
+  // 与 local-iframe 一致：注册完成后主动把已有审计 graph 同步到设计器。
+  // remote Agent 的 workspace 快照已在上方完成回写，避免用旧 files 生成通知。
+  context.notifyGraphDocuments();
+
   // ── rollback 方法，挂到 context 供版本面板 UI 调用 ──────────────────────────
 
   async function rollbackToVersion(versionId: string): Promise<void> {
@@ -1404,6 +1408,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   /**
    * mhtml 还原落 V0 前：less 走与样式编辑器相同的 parseLess → stringifyLess，
    * 避免 Prettier/原始 less 与首次改样式后的整文件重排产生格式化 diff。
+   * 整份处理失败才逐块恢复，成功块合并后仍使用原规范化，不影响后续文件。
    */
   if (sandboxHelpers) {
     sandboxHelpers.normalizeRestoreFiles = (
@@ -1414,10 +1419,10 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         if (ext !== 'less' && ext !== 'css') return file
         if (!file.content?.trim()) return file
         try {
-          const normalized = stringifyLess(parseLess(file.content))
+          const normalized = normalizeRestoreLess(file.content, file.path)
           return { ...file, content: normalized }
-        } catch (error) {
-          console.warn('[normalizeRestoreFiles] less 规范化失败，保留原文', file.path, error)
+        } catch {
+          // 意外异常保留本文件，继续规范化后续文件。
           return file
         }
       })
