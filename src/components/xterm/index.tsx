@@ -72,6 +72,12 @@ export default function Xterm({ output, className, style, options }: XtermProps)
     previousOutputRef.current = output
   }, [output])
 
+  useEffect(() => {
+    const terminal = terminalRef.current
+    if (!terminal || !options) return
+    terminal.options = { ...options, disableStdin: true }
+  }, [options])
+
   return (
     <div
       ref={containerRef}

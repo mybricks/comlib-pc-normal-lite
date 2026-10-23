@@ -4,6 +4,7 @@ import { Doc } from './doc'
 import { Vibe } from './vibe'
 import { Debug } from './debug'
 import { Refresh } from './refresh'
+import { Runtime } from './runtime'
 
 class Context {
   vibe = new Vibe()
@@ -12,6 +13,7 @@ class Context {
   doc = new Doc()
   debug = new Debug()
   refresh = new Refresh()
+  runtime = new Runtime()
 }
 
 let context: Context | null = null
