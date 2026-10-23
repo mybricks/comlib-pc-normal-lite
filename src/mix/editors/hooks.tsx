@@ -230,21 +230,6 @@ export function buildHooks(props: Props) {
     },
 
     '@debug'(params: any, stop: any) {
-      if (config.getFrontendMode() === 'local-iframe') {
-        const events = context.component!.events;
-        if (stop) {
-          events.emit('debugTarget', {
-            src: undefined
-          });
-          return;
-        }
-        const page = params.focusArea.ele.closest('[data-zone-title]');
-        const src = page?.getAttribute('data-zone-title');
-         events.emit('debugTarget', {
-          src
-         })
-        return
-      }
       const events = context.component!.events;
       const onDebug = config.getOnDebug()
       if (stop) {

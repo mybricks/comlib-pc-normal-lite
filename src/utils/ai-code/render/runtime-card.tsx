@@ -186,7 +186,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     //   console.log(`[AI] 组件运行时初始化完成，组件 id: ${id}, env:`, env, ', data:', data)
     // })
 
-    // const containerRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const files = Array.isArray(data.files) ? data.files : [];
     const runtimeFiles = files.filter((file: any) => !isAgentFile(file.fileName));
     const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
@@ -442,18 +442,12 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     }, [])
 
     return (
-      <Wrapper env={env} canvasContainer={canvasContainer}>
-        {innerContent}
-      </Wrapper>
-    )
-
-    // return (
-    //   <div ref={containerRef} className={css.container} style={{ display: 'contents' }}>
-    //     <Wrapper env={env} canvasContainer={canvasContainer}>
-    //       {innerContent}
-    //     </Wrapper>
-    //   </div>
-    // );
+      <div ref={containerRef} className={css.container} style={{ display: 'contents' }}>
+        <Wrapper env={env} canvasContainer={canvasContainer}>
+          {innerContent}
+        </Wrapper>
+      </div>
+    );
 }
 
 export default genAIRuntime;
