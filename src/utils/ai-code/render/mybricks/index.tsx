@@ -887,7 +887,7 @@ if (frontendMode === 'prototype') {
 
     return (
       <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
-        <Page>
+        <Page path={rawPath}>
           <RouterContext.Provider value={contextValue}>
             <Component {...params}/>
           </RouterContext.Provider>
