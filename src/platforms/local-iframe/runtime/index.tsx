@@ -184,9 +184,8 @@ const normalizeBasePath = (basePath: string) => {
 	return withLeadingSlash.replace(/\/+$/, '')
 }
 
-const routerBasename = normalizeBasePath(window.__LINGCHUANG_CONFIG__?.router?.basename || '')
-
 const buildIframeSrc = (itemSrc: string, runtimeUrl?: string) => {
+	const routerBasename = normalizeBasePath(window.__LINGCHUANG_CONFIG__?.router?.basename || '')
 	const origin = runtimeUrl ? new URL(runtimeUrl).origin : window.location.origin
 	return `${origin}${routerBasename}${itemSrc === '/' ? '' : itemSrc}`
 }
