@@ -845,7 +845,7 @@ if (frontendMode === 'prototype') {
           containerType: 'inline-size',
         }}
       >
-        <div data-container style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative', transform: 'translate(0)' }}>
+        <div data-container style={{ width: '100%', height: '100%', position: 'relative', transform: 'translate(0)' }}>
           {container && (
             <Wrapper container={containerRef.current!.querySelector('[data-container]')!}>
               <PageContext.Provider value={container}>
