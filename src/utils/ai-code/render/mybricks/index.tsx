@@ -819,7 +819,8 @@ if (frontendMode === 'prototype') {
           // height: '100%',
           width: 'fit-content',
           height: 'fit-content',
-          overflow: isDesign() ? 'visible' : 'hidden',
+          // 设置hidden会导致引擎注入的调试工具条和宽高拖拽条被隐藏
+          // overflow: isDesign() ? 'visible' : 'hidden',
           ...style,
           ...(breakpoint ? {
             ...(breakpoint.width != null ? { width: breakpoint.width } : {}),
