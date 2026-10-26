@@ -312,6 +312,12 @@ const RuntimeIframe = (props) => {
 			if (update.status.state === 'starting') setReady(false)
 		})
 
+		// 兼容逻辑
+		if (!(window as any).__APP__.projectRuntime) {
+			// 老项目，直接 ready
+			setReady(true)
+		}
+
 		return () => {
 			prevIframesRef.current.forEach((item) => {
 				props.onIframeDestory?.(item.src)
