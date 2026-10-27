@@ -243,7 +243,8 @@ const RuntimeIframe = (props) => {
 				return {
 					...route,
 					id: route.src,
-					routerPath: route.src
+					routerPath: route.src,
+					fileName: route.src,
 				}
 			})
 		})
@@ -352,6 +353,12 @@ const RuntimeIframe = (props) => {
 		emitLoadedIfReady(iframes)
 	}, [iframes])
 
+	useEffect(() => {
+		if (debugSrc) {
+			context.component?.actions.loaded()
+		}
+	}, [debugSrc])
+
 	return ready ? (
 		<div style={{ display: 'contents' }}>
 			{iframes.map((item) => {
@@ -368,6 +375,7 @@ const RuntimeIframe = (props) => {
 						data-zone-type="page"
 						data-zone-kind="iframe"
 						data-zone-title={item.src}
+						data-zone-filename={item.src}
 						>
 						<iframe
 							id={item.src}
