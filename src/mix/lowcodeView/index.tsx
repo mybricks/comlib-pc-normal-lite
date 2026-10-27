@@ -996,7 +996,7 @@ function LowcodeView(params: Params) {
                 className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'task' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
                 onClick={() => setBottomTab('task')}
               >
-                任务
+                {commonLang.tasks}
               </div>
             )}
             <div

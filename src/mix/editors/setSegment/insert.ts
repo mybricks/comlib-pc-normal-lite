@@ -262,7 +262,7 @@ const markAIOnlyPreviewRoots = (container: HTMLDivElement) => {
   })
 }
 
-const createPreview = (code: InsertCode, location?: PreviewSourceLocation): InsertPreview | null => {
+export const createPreview = (code: InsertCode, location?: PreviewSourceLocation): InsertPreview | null => {
   if (!window.Babel || !code.jsx.trim()) return null
 
   try {

@@ -2,6 +2,7 @@ import updateText from './updateText'
 import deleteDom from './deleteDom'
 import moveDom from './moveDom'
 import duplicate from './duplicate'
+import insert from './insert'
 
 export default function (_, type, options) {
   console.log('updateSegment', { type, options })
@@ -13,6 +14,7 @@ export default function (_, type, options) {
     return moveDom(options)
   } else if (type === 'duplicate') {
     return duplicate(options)
+  } else if (type === 'insert') {
+    return insert(options)
   }
-  // type === 'insert' 组件拖入
 }

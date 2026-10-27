@@ -1,6 +1,7 @@
 import context, { type UserTaskInfo } from '../../../mix/context'
 import { parse as parseYaml } from 'yaml'
 import { parseTasksForNotify } from '../../../mix/tasks/notify'
+import { registerTaskReferResolver } from '../../../mix/tasks/refer'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
 import { transformLocalIframeFormatForNotifyChanged } from '../../../utils/ai-code/md/transformForNotifyChanged'
 import {
@@ -16,6 +17,7 @@ import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
 import { createHttpPageAnalysis } from './page-analysis'
+import { undoRedoManager } from '../../../mix/editors/undoRedo'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -470,6 +472,7 @@ export function registerSandbox(comId: string) {
     // console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
   }
+  registerTaskReferResolver(sandboxAPI)
 
   // const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
   //   current: null,
@@ -605,6 +608,13 @@ export function registerSandbox(comId: string) {
         //   }
         //   undoRedoManager.clearBranch()
         // }
+
+        try {
+          undoRedoManager.rollbackAIBranchCommands()
+          undoRedoManager.clearBranch()
+        } catch (e) {
+          console.log('报错', e)
+        }
 
         // turnLogs.setLog({
         //   message: isRemoteAgent
