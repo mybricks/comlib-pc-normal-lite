@@ -35,8 +35,8 @@ const TERMINAL_THEMES = {
 
 /** ProjectRuntime 的日志终端。所有启动入口都只订阅同一条 runtimeUpdate 流。 */
 function ProjectRuntimeTerminal({ componentId }: { componentId?: string }) {
-	const [output, setOutput] = useState(WAITING_RUNTIME_OUTPUT)
-	const [status, setStatus] = useState<'starting' | 'ready' | 'stopping' | 'error' | 'stopped'>('starting')
+	const [output, setOutput] = useState(() => myContext.runtime.getSnapshot().output || WAITING_RUNTIME_OUTPUT)
+	const [status, setStatus] = useState<'starting' | 'ready' | 'stopping' | 'error' | 'stopped'>(() => myContext.runtime.getSnapshot().status?.state || 'starting')
 	const [agentRequestState, setAgentRequestState] = useState<'idle' | 'processing' | 'finished-without-url'>('idle')
 	const runtimeUrlReceivedRef = useRef(false)
 	const isDark = useDarkMode()
@@ -60,14 +60,7 @@ function ProjectRuntimeTerminal({ componentId }: { componentId?: string }) {
 					setAgentRequestState((current) => current === 'processing' ? current : 'idle')
 				}
 			}
-			const chunk = update.logChunk
-				?? (update.logOnly ? '' : `[灵创] ${update.status.message}\n`)
-			// 新一次启动丢弃上一轮日志，避免终端里叠着旧输出。
-			if (update.status.state === 'starting' && !update.logOnly) {
-				setOutput(chunk || WAITING_RUNTIME_OUTPUT)
-				return
-			}
-			if (chunk) setOutput((current) => `${current}${chunk}`)
+			setOutput(myContext.runtime.getSnapshot().output || WAITING_RUNTIME_OUTPUT)
 		})
 	}, [])
 

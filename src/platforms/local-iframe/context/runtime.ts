@@ -2,6 +2,14 @@ import { Events } from '../../../utils/events'
 
 const CHANNEL = 'lingxi:project-runtime'
 const PLAYGROUND_ORIGIN = 'lingxi-playground://app'
+const MAX_LOG_LINES = 500
+const MAX_LOG_CHARS = 128 * 1024
+
+function limitOutput(output: string): string {
+  const bounded = output.slice(-MAX_LOG_CHARS)
+  const lines = bounded.split('\n')
+  return lines.length > MAX_LOG_LINES ? lines.slice(-MAX_LOG_LINES).join('\n') : bounded
+}
 
 export type ProjectRuntimeStatus = {
   projectId: string
@@ -11,20 +19,34 @@ export type ProjectRuntimeStatus = {
   errorDetail?: string
 }
 
+export type ProjectRuntimeProcessInfo = {
+  pid?: number
+  startedAt: string
+  scriptName: string
+  directory: string
+}
+
 export type ProjectRuntimeUpdate = {
   status: ProjectRuntimeStatus
   logChunk?: string
+  processLogChunk?: string
+  processLogSnapshot?: string
+  processInfo?: ProjectRuntimeProcessInfo
   logOnly?: boolean
+  logSnapshot?: boolean
   detail?: string
   phase?: string
 }
 
 type RuntimeMessage =
   | { channel: typeof CHANNEL; type: 'update'; update: ProjectRuntimeUpdate }
-  | { channel: typeof CHANNEL; type: 'start-result'; requestId: string; status?: ProjectRuntimeStatus; error?: string }
+  | { channel: typeof CHANNEL; type: 'start-result' | 'stop-result' | 'restart-result'; requestId: string; status?: ProjectRuntimeStatus; error?: string }
 
 type DirectPlaygroundRuntime = {
   start(options?: { timeoutMs?: number }): Promise<ProjectRuntimeStatus>
+  stop?(): Promise<ProjectRuntimeStatus>
+  restart?(): Promise<ProjectRuntimeStatus>
+  getSnapshot?(): ProjectRuntimeUpdate | undefined
   events: {
     on(type: 'update', listener: (update: ProjectRuntimeUpdate) => void): () => void
   }
@@ -44,6 +66,10 @@ export class Runtime {
     runtimeUpdate: ProjectRuntimeUpdate
   }>()
 
+  #status?: ProjectRuntimeStatus
+  #processInfo?: ProjectRuntimeProcessInfo
+  #output = ''
+  #processOutput = ''
   #nextRequestId = 0
   #directRuntime?: DirectPlaygroundRuntime
   #pending = new Map<string, {
@@ -60,6 +86,8 @@ export class Runtime {
       this.#directRuntime = { ...directRuntime, events: directEvents }
       console.info('[comlib:project-runtime] using direct Playground event bus')
       directEvents.on('update', this.#receiveUpdate)
+      const snapshot = directRuntime.getSnapshot?.()
+      if (snapshot) this.#receiveUpdate(snapshot)
       void this.start().catch((error) => {
         console.error('[comlib:project-runtime] initial start failed', error)
       })
@@ -83,24 +111,41 @@ export class Runtime {
     }
   }
 
-  /** 供将来的 comlib「启动」按钮调用；实际启动统一由 ProjectRuntime.start 完成。 */
   start(options: { timeoutMs?: number } = {}): Promise<ProjectRuntimeStatus> {
+    if (this.#directRuntime) return this.#directRuntime.start(options)
+    return this.#request('start', options)
+  }
+
+  stop(): Promise<ProjectRuntimeStatus> {
     if (this.#directRuntime) {
-      console.info('[comlib:project-runtime] requesting direct start', { timeoutMs: options.timeoutMs })
-      return this.#directRuntime.start(options)
+      return this.#directRuntime.stop?.() ?? Promise.reject(new Error('停止功能不可用，请重启客户端。'))
     }
+    return this.#request('stop')
+  }
+
+  restart(): Promise<ProjectRuntimeStatus> {
+    if (this.#directRuntime) {
+      return this.#directRuntime.restart?.() ?? Promise.reject(new Error('重启功能不可用，请重启客户端。'))
+    }
+    return this.#request('restart')
+  }
+
+  #request(type: 'start' | 'stop' | 'restart', options?: { timeoutMs?: number }): Promise<ProjectRuntimeStatus> {
     if (window.parent === window) return Promise.reject(new Error('ProjectRuntime Playground 桥接不可用。'))
     const requestId = `${Date.now()}-${++this.#nextRequestId}`
-    console.info('[comlib:project-runtime] requesting start', { requestId, timeoutMs: options.timeoutMs })
     return new Promise<ProjectRuntimeStatus>((resolve, reject) => {
       this.#pending.set(requestId, { resolve, reject })
       try {
-        window.parent.postMessage({ channel: CHANNEL, type: 'start', requestId, options }, PLAYGROUND_ORIGIN)
+        window.parent.postMessage({ channel: CHANNEL, type, requestId, options }, PLAYGROUND_ORIGIN)
       } catch (error) {
         this.#pending.delete(requestId)
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     })
+  }
+
+  getSnapshot(): { status?: ProjectRuntimeStatus; output: string; processOutput: string; processInfo?: ProjectRuntimeProcessInfo } {
+    return { status: this.#status, output: this.#output, processOutput: this.#processOutput, processInfo: this.#processInfo }
   }
 
   open(url: string): void {
@@ -113,7 +158,8 @@ export class Runtime {
     const message = event.data
     if (!message || message.channel !== CHANNEL) return
     if (message.type === 'update') return this.#receiveUpdate(message.update)
-    if (message.type !== 'start-result') return
+    if (!['start-result', 'stop-result', 'restart-result'].includes(message.type)) return
+    if (!('requestId' in message)) return
     const pending = this.#pending.get(message.requestId)
     if (!pending) return
     this.#pending.delete(message.requestId)
@@ -133,6 +179,20 @@ export class Runtime {
   }
 
   #receiveUpdate = (update: ProjectRuntimeUpdate): void => {
+    if (update.logSnapshot || (update.status.state === 'starting' && this.#status?.state !== 'starting')) {
+      this.#output = ''
+      this.#processOutput = ''
+      this.#processInfo = undefined
+    }
+    if (update.processInfo) this.#processInfo = update.processInfo
+    if (update.processLogSnapshot !== undefined) {
+      this.#processOutput = limitOutput(update.processLogSnapshot)
+    } else if (update.processLogChunk) {
+      this.#processOutput = limitOutput(this.#processOutput + update.processLogChunk)
+    }
+    this.#status = update.status
+    const chunk = update.logChunk ?? (update.logOnly || update.logSnapshot ? '' : `[灵创] ${update.status.message}\n`)
+    if (chunk) this.#output = limitOutput(this.#output + chunk)
     if (!update.logOnly) {
       console.info('[comlib:project-runtime] received update', {
         state: update.status.state,

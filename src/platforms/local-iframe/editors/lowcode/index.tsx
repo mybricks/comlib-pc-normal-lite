@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { message } from 'antd'
 import context from '../../../../mix/context'
 import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
 import myContext, { type VersionRecord } from '../../context'
-import VersionListView from '../../../../components/version-list'
+import VersionListView, { Popconfirm } from '../../../../components/version-list'
+import i18n from '../../../../helpers/i18n'
 import TaskPanel, { hasTasks } from '../../../../components/task-panel'
 import taskPanelCss from '../../../../components/task-panel/index.lazy.less'
 import * as taskPanelCssNS from '../../../../components/task-panel/index.lazy.less'
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
-// import Xterm from './xterm'
-// import { DEMO_LINES } from './xterm/demo'
+import Xterm from '../../../../components/xterm'
 
 type TabKey = 'task' | 'review' | 'version' | 'terminal'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
@@ -20,7 +20,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   task: '任务',
   version: '版本',
   review: '影响',
-  // terminal: '终端',
+  terminal: i18n({ zh: '进程', en: 'Process' }),
 }
 
 
@@ -135,22 +135,127 @@ function ReviewPanel({ content }: { content: string | null }) {
   )
 }
 
-// function TerminalDemo() {
-//   const [output, setOutput] = useState(`${DEMO_LINES[0]}\n`)
+function RuntimePanel() {
+  const [snapshot, setSnapshot] = useState(() => myContext.runtime.getSnapshot())
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [colors, setColors] = useState({ background: '#fff', foreground: '#333' })
+  const [pendingAction, setPendingAction] = useState<'start' | 'stop' | 'restart' | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'stop' | 'restart' | null>(null)
 
-//   useEffect(() => {
-//     let nextLine = 1
-//     const timer = window.setInterval(() => {
-//       setOutput(current => `${current}${DEMO_LINES[nextLine]}\n`)
-//       nextLine += 1
-//       if (nextLine === DEMO_LINES.length) window.clearInterval(timer)
-//     }, 300)
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const refreshColors = () => {
+      const style = getComputedStyle(panel)
+      const background = style.backgroundColor
+      const foreground = style.color
+      setColors(current => current.background === background && current.foreground === foreground
+        ? current : { background, foreground })
+    }
+    refreshColors()
+    const observer = new MutationObserver(refreshColors)
+    let node: Node | null = panel
+    while (node) {
+      if (node instanceof Element) observer.observe(node, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] })
+      const root = node.getRootNode()
+      node = node.parentNode || (root instanceof ShadowRoot ? root.host : null)
+    }
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', refreshColors)
+    return () => {
+      observer.disconnect()
+      media.removeEventListener('change', refreshColors)
+    }
+  }, [])
 
-//     return () => window.clearInterval(timer)
-//   }, [])
+  const terminalOptions = useMemo(() => ({
+    scrollback: 500,
+    fontSize: 13,
+    lineHeight: 1.5,
+    theme: { background: colors.background, foreground: colors.foreground },
+  }), [colors])
 
-//   return <Xterm output={output} />
-// }
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const off = myContext.runtime.events.on('runtimeUpdate', () => {
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = undefined
+        setSnapshot(myContext.runtime.getSnapshot())
+      }, 100)
+    }, false)
+    setSnapshot(myContext.runtime.getSnapshot())
+    return () => {
+      off()
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
+
+  const handleProcessAction = useCallback(async (action: 'start' | 'stop' | 'restart') => {
+    setPendingAction(action)
+    try {
+      await myContext.runtime[action]()
+    } catch (error) {
+      const messageHack = (window as any)['@m-ui/react']?.message
+      ;(messageHack || message).error(error instanceof Error ? error.message : i18n({ zh: '进程操作失败', en: 'Process action failed' }))
+    } finally {
+      setPendingAction(current => current === action ? null : current)
+    }
+  }, [])
+
+  const stateLabels = {
+    starting: i18n({ zh: '启动中', en: 'Starting' }),
+    ready: i18n({ zh: '运行中', en: 'Running' }),
+    stopping: i18n({ zh: '停止中', en: 'Stopping' }),
+    stopped: i18n({ zh: '已停止', en: 'Stopped' }),
+    error: i18n({ zh: '异常', en: 'Error' }),
+  }
+
+  const state = snapshot.status?.state
+  const active = state === 'starting' || state === 'ready'
+  const info = snapshot.processInfo
+
+  useEffect(() => {
+    if (!active || pendingAction) setConfirmAction(null)
+  }, [active, pendingAction])
+
+  return (
+    <div ref={panelRef} className={css['terminal-panel']} data-zone-type="ai-request">
+      <div className={css['terminal-status']}>
+        <div className={css['terminal-details']}>
+          <span>{i18n({ zh: '状态', en: 'Status' })}：{state ? stateLabels[state] : i18n({ zh: '未启动', en: 'Not started' })}</span>
+          {active && info?.pid && <span title={i18n({ zh: '项目启动命令的进程 ID', en: 'Process ID of the project start command' })}>{i18n({ zh: '启动进程 PID', en: 'Start process PID' })}：{info.pid}</span>}
+          {info?.scriptName && <span title={info.directory}>{i18n({ zh: '脚本', en: 'Script' })}：{info.scriptName}</span>}
+          {info?.startedAt && <span>{i18n({ zh: '启动时间', en: 'Started' })}：{new Date(info.startedAt).toLocaleTimeString()}</span>}
+          {state === 'ready' && snapshot.status?.url && <span title={snapshot.status.url}>{i18n({ zh: '地址', en: 'URL' })}：{snapshot.status.url}</span>}
+        </div>
+        <div className={css['terminal-actions']}>
+          {active ? <>
+            <Popconfirm
+              title={i18n({ zh: '重启会停止当前项目进程并重新启动，确认重启？', en: 'Restart the project process? The current process will stop first.' })}
+              visible={confirmAction === 'restart'}
+              onVisible={visible => setConfirmAction(visible ? 'restart' : null)}
+              onConfirm={() => void handleProcessAction('restart')}
+            >
+              <button type="button" disabled={Boolean(pendingAction)}>{i18n({ zh: '重启', en: 'Restart' })}</button>
+            </Popconfirm>
+            <Popconfirm
+              title={i18n({ zh: '停止后项目服务将不可用，确认停止？', en: 'Stop the project process? The project service will become unavailable.' })}
+              visible={confirmAction === 'stop'}
+              onVisible={visible => setConfirmAction(visible ? 'stop' : null)}
+              onConfirm={() => void handleProcessAction('stop')}
+            >
+              <button type="button" disabled={pendingAction === 'stop' || pendingAction === 'restart'}>{i18n({ zh: '停止', en: 'Stop' })}</button>
+            </Popconfirm>
+          </> : <button type="button" onClick={() => void handleProcessAction(state === 'error' ? 'restart' : 'start')} disabled={Boolean(pendingAction) || state === 'stopping'}>{i18n({ zh: '启动', en: 'Start' })}</button>}
+        </div>
+      </div>
+      <div className={css['terminal-output']}>
+        <Xterm output={snapshot.processOutput} options={terminalOptions} />
+      </div>
+    </div>
+  )
+}
 
 function LowcodeViewShell() {
   const [activeTab, setActiveTab] = useState<TabKey>('task')
@@ -181,7 +286,7 @@ function LowcodeViewShell() {
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div className={css['lowcode-view-toolbar-left']}>
-            {(['task', 'version', 'review'] as TabKey[])
+            {(['task', 'version', 'review', 'terminal'] as TabKey[])
               .filter(tab => tab !== 'task' || hasTaskPanel)
               .map((tab) => (
                 <div
@@ -199,7 +304,7 @@ function LowcodeViewShell() {
         {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} allowDelete />}
         {activeTab === 'version' && <VersionPanel />}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
-        {/* {activeTab === 'terminal' && <div className={css['terminal-panel']}><TerminalDemo /></div>} */}
+        {activeTab === 'terminal' && <RuntimePanel />}
       </div>
     </div>
   )
