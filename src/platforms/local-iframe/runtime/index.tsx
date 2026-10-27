@@ -267,8 +267,8 @@ const RuntimeIframe = (props) => {
 	useEffect(() => {
 		registerSandbox(props.id)
 
-		const routesEvents = (window as any).__APP__!.routesEvents
-		const cancelRoutesEventsRoutes = routesEvents.on('routes', (routes: RuntimeRouteEventItem[]) => {
+		const routesEvents = (window as any).__APP__?.routesEvents
+		const cancelRoutesEventsRoutes = routesEvents?.on?.('routes', (routes: RuntimeRouteEventItem[]) => {
 			const nextRoutes = routes.map((route) => {
 				return {
 					...route,
@@ -277,7 +277,7 @@ const RuntimeIframe = (props) => {
 			})
 
 			setIframes(nextRoutes)
-		})
+		}) ?? (() => {})
 
 		const onEventsDebugTargetCancel = myContext.debug.events.on('debugTarget', (props) => {
 			const nextSrc = props.src || ''
@@ -307,7 +307,7 @@ const RuntimeIframe = (props) => {
 		})
 
 		// 兼容逻辑
-		if (!(window as any).__APP__.projectRuntime) {
+		if (!(window as any).__APP__?.projectRuntime) {
 			// 老项目，直接 ready
 			setReady(true)
 		}

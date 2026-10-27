@@ -32,6 +32,7 @@ export type ProjectRuntimeUpdate = {
   processLogChunk?: string
   processLogSnapshot?: string
   processInfo?: ProjectRuntimeProcessInfo
+  supportsProcessControls?: boolean
   logOnly?: boolean
   logSnapshot?: boolean
   detail?: string
@@ -66,6 +67,7 @@ export class Runtime {
     runtimeUpdate: ProjectRuntimeUpdate
   }>()
 
+  #supportsControls = false
   #status?: ProjectRuntimeStatus
   #processInfo?: ProjectRuntimeProcessInfo
   #output = ''
@@ -82,11 +84,12 @@ export class Runtime {
     const app = (window as any).__APP__
     const directRuntime = app?.projectRuntime as DirectPlaygroundRuntime | undefined
     const directEvents = app?.projectRuntimeEvents as DirectPlaygroundRuntime['events'] | undefined
-    if (directRuntime && directEvents) {
+    if (typeof directRuntime?.start === 'function' && typeof directEvents?.on === 'function') {
+      this.#supportsControls = typeof directRuntime.stop === 'function' && typeof directRuntime.restart === 'function'
       this.#directRuntime = { ...directRuntime, events: directEvents }
       console.info('[comlib:project-runtime] using direct Playground event bus')
       directEvents.on('update', this.#receiveUpdate)
-      const snapshot = directRuntime.getSnapshot?.()
+      const snapshot = typeof directRuntime.getSnapshot === 'function' ? directRuntime.getSnapshot() : undefined
       if (snapshot) this.#receiveUpdate(snapshot)
       void this.start().catch((error) => {
         console.error('[comlib:project-runtime] initial start failed', error)
@@ -144,8 +147,8 @@ export class Runtime {
     })
   }
 
-  getSnapshot(): { status?: ProjectRuntimeStatus; output: string; processOutput: string; processInfo?: ProjectRuntimeProcessInfo } {
-    return { status: this.#status, output: this.#output, processOutput: this.#processOutput, processInfo: this.#processInfo }
+  getSnapshot(): { status?: ProjectRuntimeStatus; output: string; processOutput: string; processInfo?: ProjectRuntimeProcessInfo; supportsControls: boolean } {
+    return { status: this.#status, output: this.#output, processOutput: this.#processOutput, processInfo: this.#processInfo, supportsControls: this.#supportsControls }
   }
 
   open(url: string): void {
@@ -179,6 +182,7 @@ export class Runtime {
   }
 
   #receiveUpdate = (update: ProjectRuntimeUpdate): void => {
+    if (update.supportsProcessControls === true) this.#supportsControls = true
     if (update.logSnapshot || (update.status.state === 'starting' && this.#status?.state !== 'starting')) {
       this.#output = ''
       this.#processOutput = ''

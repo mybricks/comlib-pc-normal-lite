@@ -213,7 +213,6 @@ function RuntimePanel() {
 
   const state = snapshot.status?.state
   const active = state === 'starting' || state === 'ready'
-  const info = snapshot.processInfo
 
   useEffect(() => {
     if (!active || pendingAction) setConfirmAction(null)
@@ -224,12 +223,9 @@ function RuntimePanel() {
       <div className={css['terminal-status']}>
         <div className={css['terminal-details']}>
           <span>{i18n({ zh: '状态', en: 'Status' })}：{state ? stateLabels[state] : i18n({ zh: '未启动', en: 'Not started' })}</span>
-          {active && info?.pid && <span title={i18n({ zh: '项目启动命令的进程 ID', en: 'Process ID of the project start command' })}>{i18n({ zh: '启动进程 PID', en: 'Start process PID' })}：{info.pid}</span>}
-          {info?.scriptName && <span title={info.directory}>{i18n({ zh: '脚本', en: 'Script' })}：{info.scriptName}</span>}
-          {info?.startedAt && <span>{i18n({ zh: '启动时间', en: 'Started' })}：{new Date(info.startedAt).toLocaleTimeString()}</span>}
           {state === 'ready' && snapshot.status?.url && <span title={snapshot.status.url}>{i18n({ zh: '地址', en: 'URL' })}：{snapshot.status.url}</span>}
         </div>
-        <div className={css['terminal-actions']}>
+        {snapshot.supportsControls && <div className={css['terminal-actions']}>
           {active ? <>
             <Popconfirm
               title={i18n({ zh: '重启会停止当前项目进程并重新启动，确认重启？', en: 'Restart the project process? The current process will stop first.' })}
@@ -248,7 +244,7 @@ function RuntimePanel() {
               <button type="button" disabled={pendingAction === 'stop' || pendingAction === 'restart'}>{i18n({ zh: '停止', en: 'Stop' })}</button>
             </Popconfirm>
           </> : <button type="button" onClick={() => void handleProcessAction(state === 'error' ? 'restart' : 'start')} disabled={Boolean(pendingAction) || state === 'stopping'}>{i18n({ zh: '启动', en: 'Start' })}</button>}
-        </div>
+        </div>}
       </div>
       <div className={css['terminal-output']}>
         <Xterm output={snapshot.processOutput} options={terminalOptions} />
