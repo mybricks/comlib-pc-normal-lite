@@ -164,7 +164,7 @@ type StyleKeyRoute = {
   shorthandKey?: string;
 }
 
-const getInitialInlineStyleSnapshot = (
+export const getInitialInlineStyleSnapshot = (
   targetEle: HTMLElement,
   key: string,
   nextValue: string,
@@ -182,7 +182,7 @@ const getInitialInlineStyleSnapshot = (
   }
 }
 
-const applyInlineStyleSnapshots = (snapshots: InlineStyleSnapshot[], phase: 'execute' | 'undo') => {
+export const applyInlineStyleSnapshots = (snapshots: InlineStyleSnapshot[], phase: 'execute' | 'undo') => {
   snapshots.forEach((snapshot) => {
     if (phase === 'execute') {
       const nextValue = splitStyleValueAndPriority(snapshot.nextValue)

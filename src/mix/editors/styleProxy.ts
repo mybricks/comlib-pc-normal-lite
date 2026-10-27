@@ -9,6 +9,7 @@ import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, append
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
+import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots } from './style/helpers/createSetStyleHandler'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -1635,7 +1636,7 @@ export function genStyleValue(props) {
       undoRedoManager.executeBranch({
         execute() {
           currentBranch.files.forEach(({ current }, fileName) => {
-            context.updateFile({ fileName, content: current, type: undefined });
+            context.updateFile({ fileName, content: current, type: undefined, noUpdateFileSystem: true });
           });
           // 首次执行与 redo 都在这里登记操作，保证面板不受 debounce 延迟影响。
           if (currentBranch.ele && !currentBranch.actionApplied) {
@@ -1669,7 +1670,8 @@ export function genStyleValue(props) {
       }
       branch.ele = ele;
       branch.title = ele ? getStyleActionTitle(ele) : branch.title;
-      context.updateFile({ fileName: path, content: current, type: undefined });
+      //noUpdateFileSystem: true 只写入项目源码，不触发画布重渲染
+      context.updateFile({ fileName: path, content: current, type: undefined, noUpdateFileSystem: true });
     }
 
     finalizeStyleFileBranch();
@@ -1813,6 +1815,18 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
+      const applyInlineStyleToDOM = (inlineStyle: Record<string, string>, inlineDeletions: string[] = []) => {
+        if (!ele) return;
+        // 源码写入成功后调用；先删除旧声明，再应用新值，保持简写拆分的顺序。
+        const snapshots = inlineDeletions.map((key) =>
+          getInitialInlineStyleSnapshot(ele as HTMLElement, key, ''),
+        );
+        snapshots.push(...Object.entries(inlineStyle).map(([key, value]) =>
+          getInitialInlineStyleSnapshot(ele as HTMLElement, key, value),
+        ));
+        applyInlineStyleSnapshots(snapshots, 'execute');
+      };
+
       if (rawSelector === 'inline' && (explicitClearPatch || rewritingInlineShorthand)) {
         const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
         const styleInfo: Record<string, StyleInfoEntry> | null = styleInfoRaw
@@ -1839,6 +1853,7 @@ export function genStyleValue(props) {
           if (!result) return;
           (ele as HTMLElement).dataset.styleInfo = JSON.stringify(result.newStyleInfo);
           updateStyleFileInBranch({ path: jsxPath, current: result.newSource, previous: previousSource, ele });
+          applyInlineStyleToDOM(value, deletions!);
           return;
         }
 
@@ -1935,6 +1950,7 @@ export function genStyleValue(props) {
           previous: previousSource,
           ele,
         });
+        applyInlineStyleToDOM(explicitClearPatch.writes, explicitClearPatch.deletions);
         console.log('[style-proxy][style-clear-apply]', {
           selector: rawSelector,
           targetKind: 'inline',
@@ -2019,6 +2035,7 @@ export function genStyleValue(props) {
                 previous: jsxPrevSource,
                 ele,
               });
+              applyInlineStyleToDOM(Object.fromEntries(inlineEntries.map(({ key, val }) => [key, val])));
               // 同步更新 DOM 上的 data-style-info 偏移量，防止连续编辑时偏移量因字符长度变化而失效
               if (ele) {
                 patchDataStyleInfo(ele as HTMLElement, inlineEntries.map(({ val, valueStart, valueEnd }) => {
@@ -2095,6 +2112,7 @@ export function genStyleValue(props) {
               previous: jsxPrevSource,
               ele,
             });
+            applyInlineStyleToDOM({}, inlineDeletions);
             if (ele) {
               // newStyleInfo 为 null 表示 style 属性已被完全移除
               (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
@@ -2124,6 +2142,7 @@ export function genStyleValue(props) {
             previous: jsxPrevSource,
             ele,
           });
+          applyInlineStyleToDOM(propsToWrite);
           if (ele) {
             (ele as HTMLElement).dataset.styleInfo = JSON.stringify(injectedStyleInfo);
           }
@@ -2139,6 +2158,7 @@ export function genStyleValue(props) {
             previous: jsxPrevSource,
             ele,
           });
+          applyInlineStyleToDOM(propsToWrite);
           // 把新属性的偏移合并进 DOM 上的 data-style-info
           if (ele) {
             const mergedStyleInfo = { ...styleInfo, ...styleInfoUpdates };
@@ -2239,6 +2259,7 @@ export function genStyleValue(props) {
                   previous: jsxPrevForDel,
                   ele,
                 });
+                applyInlineStyleToDOM({}, inlineDelsForClass);
                 if (ele) {
                   (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
                 }
