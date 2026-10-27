@@ -917,6 +917,9 @@ function tryWriteNestedPseudo(
   value: Record<string, any>,
   deletions: string[] | null,
 ): boolean {
+  // 例如源码同时存在 `.certCheckItem .certLink:hover` 时，fullSelector 就是这条完整规则。
+  // 即使还能找到 `.certCheckItem { .certLink:hover { ... } }` 的嵌套候选，也不能把完整规则当成孤儿清理。
+  if (Object.prototype.hasOwnProperty.call(cssObj, fullSelector)) return false;
   const segments = fullSelector.trim().split(/\s+/).filter(Boolean);
   if (segments.length < 2) return false;
 
@@ -1003,6 +1006,9 @@ function patchLessRule(cssObj: Record<string, any>, params: {
   const nestedCandidateStyle = nestedCandidate
     ? nestedCandidate.container[nestedCandidate.key] as Record<string, any> | undefined
     : undefined;
+  // 例如修改 `.certCheckItem .certLink:hover` 的 font-size 时，cssObj 已有这条完整 selector，
+  // 但解析结果还可能残留一个看起来更像嵌套孤儿的候选；此时必须沿用 topLevelTarget，保留原来的 color:red。
+  const hasExactFullSelector = Object.prototype.hasOwnProperty.call(cssObj, fullSelector);
   const topLevelDeclarations = topLevelTarget
     ? Object.keys(topLevelTarget).filter(key => typeof topLevelTarget[key] !== 'object')
     : [];
@@ -1010,7 +1016,7 @@ function patchLessRule(cssObj: Record<string, any>, params: {
     topLevelDeclarations.length > 0 &&
     topLevelDeclarations.length === Object.keys(topLevelTarget).length &&
     topLevelDeclarations.every(key => nestedCandidateStyle[key] !== undefined);
-  const nestedTarget = nestedCandidate && (
+  const nestedTarget = !hasExactFullSelector && nestedCandidate && (
     !topLevelTarget ||
     nestedCandidate.score > getNestedSelectorMatchScore(fullSelector, targetKey) ||
     isLikelyNestedOrphan
