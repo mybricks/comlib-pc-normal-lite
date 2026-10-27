@@ -73,4 +73,8 @@ export default {
     zh: '任务：',
     en: 'Task: '
   }),
+  tasks: i18n({
+    zh: '任务',
+    en: 'Tasks'
+  }),
 }
