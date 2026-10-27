@@ -354,7 +354,7 @@ const RuntimeIframe = (props) => {
 
 	return ready ? (
 		<div style={{ display: 'contents' }}>
-			{iframes.map((item) => {
+			{iframes.map((item, index) => {
 				const src = buildIframeSrc(item.src, runtimeUrl)
 
 				return (
@@ -363,7 +363,8 @@ const RuntimeIframe = (props) => {
 						style={{
 							width: '1440px',
 							height: '100vh',
-							visibility: debugSrc ? (item.src === debugSrc ? 'visible' : 'hidden') : 'visible'
+							visibility: debugSrc ? (item.src === debugSrc ? 'visible' : 'hidden') : 'visible',
+							marginLeft: (debugSrc && index) ? 280 : 'unset'
 						}}
 						data-zone-type="page"
 						data-zone-kind="iframe"
