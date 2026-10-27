@@ -1180,13 +1180,15 @@ async function registerSandboxInternal(comId: string): Promise<void> {
             visualStyleOverlays: visualAICommit?.styleOverlays,
           });
         }
-        if (visualAICommit) {
-          // remote Agent 会实时回写源码；客户端虽不保存版本，也不能回滚画布上的结果。
-          if (!sourceChanged && !isRemoteAgent) {
-            undoRedoManager.rollbackAIBranchCommands()
+        try {
+          if (visualAICommit) {
+            // remote Agent 会实时回写源码；客户端虽不保存版本，也不能回滚画布上的结果。
+            if (!sourceChanged && !isRemoteAgent) {
+              undoRedoManager.rollbackAIBranchCommands()
+            }
+            undoRedoManager.clearBranch()
           }
-          undoRedoManager.clearBranch()
-        }
+        } catch {}
 
         turnLogs.setLog({
           message: isRemoteAgent
