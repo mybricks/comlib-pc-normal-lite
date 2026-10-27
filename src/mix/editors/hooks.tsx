@@ -550,7 +550,7 @@ export function buildHooks(props: Props) {
         }
 
         if (!closestMatch) {
-          return []
+          return null
         }
 
         return closestMatch.scripts.map(({ title, script }) => {
@@ -566,7 +566,6 @@ export function buildHooks(props: Props) {
           }
         })
       } catch (e) {
-        debugger
         console.log('@getZoneStatus', e)
       }
     },
