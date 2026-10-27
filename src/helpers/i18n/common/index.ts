@@ -69,4 +69,8 @@ export default {
     zh: '详情',
     en: 'Details'
   }),
+  taskReferencePrefix: i18n({
+    zh: '任务：',
+    en: 'Task: '
+  }),
 }

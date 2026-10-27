@@ -27,6 +27,7 @@ import { normalizeRestoreLess } from '../utils/transform/less';
 import commonLang from '../../helpers/i18n/common';
 import { agentTurnLifecycle } from './agent-turn-lifecycle';
 import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
+import { registerTaskReferResolver } from '../tasks/refer';
 
 const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
 
@@ -998,11 +999,13 @@ export function registerSandbox(comId: string): Promise<void> {
 }
 
 async function registerSandboxInternal(comId: string): Promise<void> {
-  const connectToAI = (window as any)._sandbox_?.connectToAI;
+  const sandboxAPI = (window as any)._sandbox_;
+  const connectToAI = sandboxAPI?.connectToAI;
   if (typeof connectToAI !== 'function') {
     // console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
   }
+  registerTaskReferResolver(sandboxAPI);
 
   const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
     current: null,

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import context from '../../mix/context'
 import { randomUUID } from '../../mix/utils/uuid'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
+import i18n from '../../helpers/i18n'
+import { findTaskDocumentFile } from '../../mix/tasks/notify'
 import { Popconfirm } from '../version-list'
 import * as lazyCss from './index.lazy.less'
 
@@ -41,7 +43,7 @@ function TaskActionHint({
       <button
         type="button"
         className={css['task-action-hint-close']}
-        aria-label="关闭提示"
+        aria-label={taskPanelCopy.closeHint()}
         onClick={(e) => { e.stopPropagation(); onClose() }}
       >
         ×
@@ -56,12 +58,14 @@ interface TaskMetadata {
   value: string
 }
 interface TaskItem {
+  id?: string
   title: string
   status: TaskStatus
   updatedAt?: string
   updatedAtTimestamp?: number
   handoverTo?: string
   handoverReason?: string
+  verificationCondition?: string
   metadata: TaskMetadata[]
   summary?: string
   detail?: string
@@ -75,6 +79,61 @@ interface FlowStep {
 }
 
 const TASK_FLOW_ORDER: TaskStatus[] = ['处理中', '待验证', '待交接', '已完成']
+
+// TASKS.md 的解析约定仍使用中文字段和值；这里只转换 Task Panel 可见的 UI 文案。
+const taskPanelCopy = {
+  closeHint: () => i18n({ zh: '关闭提示', en: 'Dismiss hint' }),
+  all: () => i18n({ zh: '全部', en: 'All' }),
+  noItems: () => i18n({ zh: '暂无', en: 'None' }),
+  selected: (count: number) => i18n({ zh: `已选 ${count} 项`, en: `${count} selected` }),
+  adjust: () => i18n({ zh: '调整', en: 'Update' }),
+  noSharedAction: () => i18n({ zh: '无共同可执行操作', en: 'No shared action' }),
+  clearSelection: () => i18n({ zh: '取消选择', en: 'Clear selection' }),
+  batchDisabled: () => i18n({ zh: '任务数量不足，无法批量调整', en: 'Select at least two tasks to update in bulk' }),
+  batchUpdate: () => i18n({ zh: '批量调整任务状态', en: 'Update task status in bulk' }),
+  batchUpdateShort: () => i18n({ zh: '批量调整', en: 'Bulk update' }),
+  verification: () => i18n({ zh: '验证条件', en: 'Verification' }),
+  handoverTo: () => i18n({ zh: '交接给', en: 'Handover to' }),
+  addToChat: () => i18n({ zh: '添加到对话', en: 'Add to chat' }),
+  deleteTask: () => i18n({ zh: '删除此任务', en: 'Delete task' }),
+  deleteConfirm: () => i18n({ zh: '删除后任务和相关修改都会被删除，确认让 AI 删除此任务？', en: 'Delete this task and its related changes?' }),
+  sameStatusOnly: () => i18n({ zh: '只能同时选择相同状态的任务', en: 'Only tasks with the same status can be selected together' }),
+  collapseDetails: () => i18n({ zh: '收起详情', en: 'Hide details' }),
+  expandDetails: () => i18n({ zh: '展开详情', en: 'Show details' }),
+  noResults: () => i18n({ zh: '无匹配结果', en: 'No matching tasks' }),
+  addedToChat: () => i18n({ zh: '已添加到对话输入框', en: 'Added to chat input' }),
+  addedToChatWithReason: () => i18n({ zh: '已添加到对话输入框，请补充原因后发送', en: 'Added to chat input. Add a reason before sending.' }),
+  handedToAI: () => i18n({ zh: '已交给 AI 处理', en: 'Sent to AI' }),
+  statusUpdated: () => i18n({ zh: '已更新任务状态', en: 'Task status updated' }),
+  statusUpdateFailed: () => i18n({ zh: '任务状态更新失败，请重试', en: 'Failed to update task status. Please try again.' }),
+  reasonPrompt: () => i18n({ zh: '请填写原因', en: 'Please provide a reason' }),
+  transitionReady: () => i18n({ zh: '代码已完成，等待我验证', en: 'Code complete, ready for verification' }),
+  transitionVerified: () => i18n({ zh: '已验证完成', en: 'Verification passed' }),
+  transitionNeedsFix: () => i18n({ zh: '任务有问题，请重新修改', en: 'Needs revision' }),
+  attentionTitle: () => i18n({ zh: '点击查看待验证任务', en: 'View tasks awaiting verification' }),
+  attentionBefore: (count: number) => i18n({ zh: `有 ${count} 个任务已经改完了，需要您帮忙验证下结果，如果没问题可以`, en: `${count} task${count === 1 ? '' : 's'} need verification. If everything looks right,` }),
+  attentionLink: () => i18n({ zh: '告知我', en: 'tell me' }),
+  attentionAfter: () => i18n({ zh: '结果', en: ' the result.' }),
+  attentionLinkTitle: () => i18n({ zh: '打开对话，告知我结果', en: 'Open chat and tell me the result' }),
+  status: (status: TaskStatus) => {
+    const copy: Record<TaskStatus, { zh: string; en: string }> = {
+      '处理中': { zh: '处理中', en: 'In progress' },
+      '待验证': { zh: '待验证', en: 'Needs verification' },
+      '待交接': { zh: '待交接', en: 'Pending handover' },
+      '已完成': { zh: '已完成', en: 'Completed' },
+    }
+    return i18n(copy[status])
+  },
+  metadataLabel: (label: string) => {
+    const copy: Record<string, { zh: string; en: string }> = {
+      '更新时间': { zh: '更新时间', en: 'Updated' },
+      '交接给': { zh: '交接给', en: 'Handover to' },
+      '交接原因': { zh: '交接原因', en: 'Handover reason' },
+      '验证进展': { zh: '验证进展', en: 'Verification progress' },
+    }
+    return copy[label] ? i18n(copy[label]) : label
+  },
+}
 
 const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
   '处理中': {
@@ -100,11 +159,7 @@ const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeTex
 }
 
 function extractMetaField(section: string, fieldName: string): string | undefined {
-  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = section.match(
-    new RegExp(`\\*{1,2}\\s*${escaped}\\s*\\*{0,2}\\s*[：:：]\\s*(.+)`, 'i')
-  )
-  return match?.[1]?.replace(/[*_`]/g, '').trim() || undefined
+  return extractMetadata(section).find((item) => item.label === fieldName)?.value
 }
 
 function extractSummary(section: string): string | undefined {
@@ -120,9 +175,22 @@ function extractSummary(section: string): string | undefined {
   return summaryLines.length ? summaryLines.join(' ') : undefined
 }
 
+function isVerificationConditionHeading(line: string): boolean {
+  const normalized = line.replace(/[*_`]/g, '')
+  // task-first 约定为单独一行 `**验证条件**：`，后面跟编号列表；
+  // 同时兼容旧的 Markdown 小节与列表字段写法。
+  return /^\s*(?:(?:#{2,4}\s+)|(?:-\s*))?验证条件\s*[：:]?\s*$/.test(normalized)
+}
+
+function isMetadataLine(line: string): boolean {
+  const normalized = line.replace(/[*_`]/g, '')
+  return /^\s*-\s*[^：:]+[：:]\s*\S/.test(normalized)
+}
+
 function extractDetail(section: string): string | undefined {
   const lines = section.split('\n')
   let passedTitle = false
+  let skippingVerification = false
   const detailLines: string[] = []
 
   for (const line of lines) {
@@ -130,7 +198,18 @@ function extractDetail(section: string): string | undefined {
       if (/^#+\s/.test(line)) passedTitle = true
       continue
     }
-    if (/^\s*-\s*\*{1,2}[^*\n]+\*{0,2}\s*[：:]\s*.+/.test(line)) continue
+    if (isVerificationConditionHeading(line)) {
+      skippingVerification = true
+      continue
+    }
+    if (skippingVerification) {
+      if (/^\s*#{1,4}\s+/.test(line) || isMetadataLine(line)) {
+        skippingVerification = false
+      } else {
+        continue
+      }
+    }
+    if (isMetadataLine(line)) continue
     if (/^>\s*/.test(line)) continue
     detailLines.push(line)
   }
@@ -140,19 +219,45 @@ function extractDetail(section: string): string | undefined {
 }
 
 function splitSections(content: string): string[] {
-  return content.split(/(?=^#{1,3}\s)/m).filter(s => /^#{1,3}\s/.test(s))
+  // 一个任务由 `## T-xxx` 开始，后续 `### 验证条件` 等子标题仍属于同一任务；
+  // 不能按所有 Markdown 标题切开，否则验证条件会脱离对应任务而无法常驻展示。
+  return content.split(/(?=^##\s)/m).filter(s => /^##\s/.test(s))
 }
 
 function extractMetadata(section: string): TaskMetadata[] {
   const metadata: TaskMetadata[] = []
-  const regex = /^\s*-\s*\*{1,2}\s*([^*\n]+?)\s*\*{0,2}\s*[：:]\s*(.+)$/gm
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(section))) {
+  for (const line of section.split('\n')) {
+    const normalized = line.replace(/[*_`]/g, '')
+    const match = normalized.match(/^\s*-\s*([^：:\n]+?)\s*[：:]\s*(.+)$/)
+    if (!match) continue
     const label = match[1].trim()
-    const value = match[2].replace(/[*_`]/g, '').trim()
-    if (label && label !== '状态' && value) metadata.push({ label, value })
+    const value = match[2].trim()
+    if (label && value) metadata.push({ label, value })
   }
   return metadata
+}
+
+/** 验证条件必须常驻展示，兼容单行字段、字段后的 bullet 列表和 Markdown 小节。 */
+function extractVerificationCondition(section: string): string | undefined {
+  const inline = extractMetaField(section, '验证条件')
+  if (inline) return inline
+
+  const lines = section.split('\n')
+  const start = lines.findIndex((line) => {
+    return isVerificationConditionHeading(line)
+  })
+  if (start < 0) return undefined
+
+  const values: string[] = []
+  for (const line of lines.slice(start + 1)) {
+    const normalized = line.replace(/[*_`]/g, '').trim()
+    if (/^#{1,4}\s+/.test(normalized)) break
+    if (isMetadataLine(normalized)) break
+    // 这里只识别区块边界，区块正文不作任何格式假设或转换。
+    values.push(line)
+  }
+  const content = values.join('\n').replace(/^(?:[ \t]*\n)+|(?:\n[ \t]*)+$/g, '')
+  return content || undefined
 }
 
 function normalizeTaskStatus(raw: string | undefined): TaskStatus {
@@ -173,22 +278,26 @@ function parseTaskUpdatedAt(raw: string | undefined): number | undefined {
 
 function parseTasks(content: string): TaskItem[] {
   const tasks: TaskItem[] = []
-  const sections = splitSections(content).filter(s => /^##\s/.test(s))
+  const sections = splitSections(content)
   for (const section of sections) {
     const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
     if (!title) continue
+    const id = title.match(/^(T-\d+)\b/)?.[1]
     const metadata = extractMetadata(section)
     const updatedAt = metadata.find(item => item.label === '更新时间')?.value
     const handoverTo = metadata.find(item => item.label === '交接给')?.value
     const handoverReason = metadata.find(item => item.label === '交接原因')?.value
+    const verificationCondition = extractVerificationCondition(section)
     tasks.push({
+      id,
       title,
       status: normalizeTaskStatus(extractMetaField(section, '状态')),
       updatedAt,
       updatedAtTimestamp: parseTaskUpdatedAt(updatedAt),
       handoverTo,
       handoverReason,
-      metadata: metadata.filter(item => item.label !== '交接给' && item.label !== '交接原因'),
+      verificationCondition,
+      metadata: metadata.filter(item => item.label !== '状态' && item.label !== '交接给' && item.label !== '交接原因' && item.label !== '验证条件'),
       summary: extractSummary(section),
       detail: extractDetail(section),
     })
@@ -245,9 +354,9 @@ function FlowFilterBar({
         <div
           className={`${css['flow-node']} ${css['flow-node-all']} ${!activeFilter ? css['flow-node-active'] : ''}`}
           onClick={() => onFilter(null)}
-          title="全部"
+          title={taskPanelCopy.all()}
         >
-          <span className={css['flow-node-label']}>全部</span>
+          <span className={css['flow-node-label']}>{taskPanelCopy.all()}</span>
           <span className={css['flow-node-count']}>{total}</span>
         </div>
         {steps.map(step => {
@@ -261,10 +370,10 @@ function FlowFilterBar({
                   step.disabled ? css['flow-node-disabled'] : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => onFilter(activeFilter === step.status ? null : step.status)}
-                title={step.disabled ? `${step.status}（暂无）` : step.status}
+                title={step.disabled ? `${taskPanelCopy.status(step.status as TaskStatus)} (${taskPanelCopy.noItems()})` : taskPanelCopy.status(step.status as TaskStatus)}
               >
                 <span className={css['flow-node-dot']} style={{ background: step.dot }} />
-                <span className={css['flow-node-label']}>{step.status}</span>
+                <span className={css['flow-node-label']}>{taskPanelCopy.status(step.status as TaskStatus)}</span>
                 <span className={css['flow-node-count']}>{step.count}</span>
               </div>
             </React.Fragment>
@@ -276,10 +385,10 @@ function FlowFilterBar({
       )}
       {batchMode ? (
         <div className={css['batch-toolbar']}>
-          <span className={css['batch-toolbar-count']}>已选 {selectedCount} 项</span>
+          <span className={css['batch-toolbar-count']}>{taskPanelCopy.selected(selectedCount)}</span>
           {batchTransitions.length > 0 ? (
             <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>调整</span>
+              <span className={css['task-status-selector-text']}>{taskPanelCopy.adjust()}</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
@@ -290,16 +399,16 @@ function FlowFilterBar({
                   e.currentTarget.value = ''
                 }}
               >
-                <option value="" disabled>调整</option>
+                <option value="" disabled>{taskPanelCopy.adjust()}</option>
                 {batchTransitions.map(transition => (
                   <option key={transition.target} value={transition.target}>{transition.label}</option>
                 ))}
               </select>
             </div>
           ) : (
-            <span className={css['batch-toolbar-empty']}>无共同可执行操作</span>
+            <span className={css['batch-toolbar-empty']}>{taskPanelCopy.noSharedAction()}</span>
           )}
-          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>取消选择</span>
+          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>{taskPanelCopy.clearSelection()}</span>
         </div>
       ) : (
         <span
@@ -308,9 +417,9 @@ function FlowFilterBar({
             batchDisabled ? css['batch-toggle-btn-disabled'] : '',
           ].filter(Boolean).join(' ')}
           onClick={() => { if (!batchDisabled) onToggleBatchMode() }}
-          title={batchDisabled ? '任务数量不足，无法批量调整' : '批量调整任务状态'}
+          title={batchDisabled ? taskPanelCopy.batchDisabled() : taskPanelCopy.batchUpdate()}
         >
-          批量调整
+          {taskPanelCopy.batchUpdateShort()}
         </span>
       )}
     </div>
@@ -351,15 +460,15 @@ function AttentionHint({
       onClick={onClick}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
-      title="点击查看待验证任务"
+      title={taskPanelCopy.attentionTitle()}
     >
       <span className={css['attention-hint-text']}>
-        有 <span className={css['attention-hint-count']}>{count}</span> 个任务已经改完了，需要您帮忙验证下结果，如果没问题可以
+        {taskPanelCopy.attentionBefore(count)}
       </span>
-      <span className={css['attention-hint-link']} onClick={handleTellMe} title="打开对话，告知我结果">
-        告知我
+      <span className={css['attention-hint-link']} onClick={handleTellMe} title={taskPanelCopy.attentionLinkTitle()}>
+        {taskPanelCopy.attentionLink()}
       </span>
-      <span className={css['attention-hint-text']}>结果</span>
+      <span className={css['attention-hint-text']}>{taskPanelCopy.attentionAfter()}</span>
     </div>
   )
 }
@@ -371,21 +480,21 @@ function DetailContent({ detail }: { detail: string }) {
       {detail.split('\n').map((line, i) => {
         const headingMatch = line.match(/^#{2,4}\s+(.+)/)
         if (headingMatch) {
-          return <div key={i} className={css['detail-heading']}>{headingMatch[1]}</div>
+          return <div key={i} className={css['detail-heading']}>{headingMatch[1].replace(/[*_`]/g, '')}</div>
         }
         const bulletMatch = line.match(/^\s*[-*]\s+(.+)/)
         if (bulletMatch) {
           return (
             <div key={i} className={css['detail-bullet']}>
               <span className={css['detail-bullet-dot']} />
-              {bulletMatch[1]}
+              {bulletMatch[1].replace(/[*_`]/g, '')}
             </div>
           )
         }
         if (!line.trim()) {
           return <div key={i} className={css['detail-gap']} />
         }
-        return <div key={i} className={css['detail-text']}>{line}</div>
+        return <div key={i} className={css['detail-text']}>{line.replace(/[*_`]/g, '')}</div>
       })}
     </div>
   )
@@ -445,6 +554,56 @@ interface TaskTransition {
   requiresReason?: boolean
 }
 
+function applyTaskTransition(content: string, taskId: string, targetStatus: TaskStatus): string {
+  const sections = content.split(/(?=^## )/m)
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+  return sections.map(section => {
+    if (!/^## /.test(section)) return section
+    const titleLine = section.split('\n')[0]
+    const id = titleLine.replace(/^## /, '').trim().match(/^(T-\d+)\b/)?.[1]
+    if (id !== taskId) return section
+
+    let updated = section.replace(
+      /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*)(.+)$/m,
+      `$1${targetStatus}`
+    )
+    updated = updated.replace(
+      /^(\s*-\s*\*{1,2}\s*更新时间\s*\*{0,2}\s*[：:]\s*)(.+)$/m,
+      `$1${timestamp}`
+    )
+    return updated
+  }).join('')
+}
+
+async function commitTaskTransition(taskId: string, targetStatus: TaskStatus): Promise<boolean> {
+  const sandboxHelpers = (window as any)._sandbox_?.helpers
+  if (typeof sandboxHelpers?.updateFiles !== 'function') return false
+
+  const files = (context.component?.params?.data?.files) ?? []
+  const configured = (window as any).__LINGCHUANG_CONFIG__?.configDirName
+    ?? (window as any)._sandbox_?.config?.configDirName
+  const file = findTaskDocumentFile(files, { configDirName: configured, fallbackRoot: '.agent' })
+  if (!file?.fileName || !file.source) return false
+
+  let content: string
+  try {
+    content = decodeURIComponent(file.source)
+  } catch {
+    content = file.source
+  }
+  // Do not update a different or stale document than the one shown in the panel.
+  if (content !== context.tasksContent) return false
+
+  const updated = applyTaskTransition(content, taskId, targetStatus)
+  if (updated === content) return false
+
+  await sandboxHelpers.updateFiles([{ path: file.fileName, content: updated }])
+  return true
+}
+
 function sendTaskMessage(message: string) {
   const componentId = context.comId ?? context.component?.params?.id
   const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent
@@ -466,19 +625,19 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
   const transitions: Record<TaskStatus, TaskTransition[]> = {
     '处理中': [{
       target: '待验证',
-      label: '代码已完成，等待我验证',
+      label: taskPanelCopy.transitionReady(),
       instruction: '代码已完成，等待我验证',
       requiresReason: true,
     }],
     '待验证': [
       {
         target: '已完成',
-        label: '已验证完成',
+        label: taskPanelCopy.transitionVerified(),
         instruction: '已验证完成',
       },
       {
         target: '处理中',
-        label: '任务有问题，请重新修改',
+        label: taskPanelCopy.transitionNeedsFix(),
         instruction: '任务有问题，请重新修改',
         requiresReason: true,
       },
@@ -486,7 +645,7 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
     '待交接': [
       {
         target: '处理中',
-        label: '任务有问题，请重新修改',
+        label: taskPanelCopy.transitionNeedsFix(),
         instruction: '任务有问题，请重新修改',
         requiresReason: true,
       },
@@ -494,7 +653,7 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
     '已完成': [
       {
         target: '处理中',
-        label: '任务有问题，请重新修改',
+        label: taskPanelCopy.transitionNeedsFix(),
         instruction: '任务有问题，请重新修改',
         requiresReason: true,
       },
@@ -505,7 +664,7 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
     return [
       {
         target: '待交接',
-        label: '已验证完成',
+        label: taskPanelCopy.transitionVerified(),
         instruction: '已验证完成',
       },
       ...transitions['待验证'].filter(item => item.target !== '已完成'),
@@ -555,6 +714,7 @@ function TaskRow({
   const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
   const [actionHint, setActionHint] = useState<string | null>(null)
   const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
+  const displayTitle = task.id ? task.title.slice(task.id.length).replace(/^\s*[-:：]?\s*/, '') || task.title : task.title
   const hasDetail = !!task.detail
   const transitions = getTaskTransitions(task)
 
@@ -575,7 +735,7 @@ function TaskRow({
         meta: { chips: [chip] },
         animation: true,
       })
-      setActionHint('已添加到对话输入框')
+      setActionHint(taskPanelCopy.addedToChat())
       return
     }
     ;(context.plugins as any)?.showAIDialog?.()
@@ -583,10 +743,10 @@ function TaskRow({
 
   const handleRevert = () => {
     sendTaskMessage(`[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`)
-    setActionHint('已交给 AI 处理')
+    setActionHint(taskPanelCopy.handedToAI())
   }
 
-  const handleTransition = (transition: TaskTransition) => {
+  const handleTransition = async (transition: TaskTransition) => {
     const message = `任务「${task.title}」：${transition.instruction}`
 
     if (transition.requiresReason) {
@@ -601,19 +761,30 @@ function TaskRow({
       if (typeof appendToSender === 'function' && componentId) {
         ;(context.plugins as any)?.showAIDialog?.()
         appendToSender(componentId, requestPayload)
-        setActionHint('已添加到对话输入框，请补充原因后发送')
+        setActionHint(taskPanelCopy.addedToChatWithReason())
         return
       }
 
-      const reason = window.prompt('请填写原因')?.trim()
+      const reason = window.prompt(taskPanelCopy.reasonPrompt())?.trim()
       if (!reason) return
       sendTaskMessage(`${message}\n\n原因：${reason}`)
-      setActionHint('已交给 AI 处理')
+      setActionHint(taskPanelCopy.handedToAI())
+      return
+    }
+
+    try {
+      if (task.id && await commitTaskTransition(task.id, transition.target)) {
+        setActionHint(taskPanelCopy.statusUpdated())
+        return
+      }
+    } catch (error) {
+      console.error('Failed to update task status:', error)
+      setActionHint(taskPanelCopy.statusUpdateFailed())
       return
     }
 
     sendTaskMessage(message)
-    setActionHint('已交给 AI 处理')
+    setActionHint(taskPanelCopy.handedToAI())
   }
 
   return (
@@ -633,7 +804,7 @@ function TaskRow({
             <span
               className={`${css['task-checkbox']} ${!selectable ? css['task-checkbox-disabled'] : ''}`}
               onClick={(e) => { e.stopPropagation(); if (selectable) onToggleSelect?.() }}
-              title={selectable ? undefined : '只能同时选择相同状态的任务'}
+              title={selectable ? undefined : taskPanelCopy.sameStatusOnly()}
             >
               <CheckboxIcon checked={!!selected} />
             </span>
@@ -642,12 +813,12 @@ function TaskRow({
             className={css['task-status-badge']}
             style={{ background: style.badgeBg, color: style.badgeText }}
           >
-            {task.status}
+            {taskPanelCopy.status(task.status)}
           </span>
-          <span className={css['task-title']} title={task.title}>{task.title}</span>
+          <span className={css['task-title']} title={displayTitle}>{displayTitle}</span>
           {task.handoverTo && (
             <span className={css['task-handover-inline']}>
-              <span className={css['task-handover-label']}>交接给</span>
+              <span className={css['task-handover-label']}>{taskPanelCopy.handoverTo()}</span>
               <UserIcon />
               <span className={css['task-handover-name']}>{task.handoverTo}</span>
               {task.handoverReason && (
@@ -659,21 +830,21 @@ function TaskRow({
         <div className={css['task-card-actions']}>
           <span
             className={css['task-action-icon']}
-            data-mybricks-tip="添加到对话"
+            data-mybricks-tip={taskPanelCopy.addToChat()}
             onClick={handleAddToChat}
           >
             <AtIcon />
           </span>
           {allowDelete && (
             <Popconfirm
-              title="删除后任务和相关修改都会被删除，确认让 AI 删除此任务？"
+              title={taskPanelCopy.deleteConfirm()}
               visible={revertConfirmVisible}
               onVisible={setRevertConfirmVisible}
               onConfirm={handleRevert}
             >
               <span
                 className={css['task-action-icon']}
-                data-mybricks-tip="删除此任务"
+                data-mybricks-tip={taskPanelCopy.deleteTask()}
                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
                 <DeleteIcon />
@@ -682,7 +853,7 @@ function TaskRow({
           )}
           {transitions.length > 0 && (
             <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>调整</span>
+              <span className={css['task-status-selector-text']}>{taskPanelCopy.adjust()}</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
@@ -694,7 +865,7 @@ function TaskRow({
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <option value="" disabled>调整</option>
+                <option value="" disabled>{taskPanelCopy.adjust()}</option>
                 {transitions.map(transition => (
                   <option key={transition.target} value={transition.target}>{transition.label}</option>
                 ))}
@@ -716,8 +887,14 @@ function TaskRow({
         <div className={css['task-summary']}>{task.summary}</div>
       )}
 
-      {task.metadata.length > 0 && (
+      {(task.verificationCondition || task.metadata.length > 0) && (
         <div className={css['task-meta-list']}>
+          {task.verificationCondition && (
+            <div className={`${css['task-meta-item']} ${css['task-verification']} ${highlightProgress ? css['task-meta-item-highlight'] : ''}`}>
+              <span className={css['task-meta-label']}>{taskPanelCopy.verification()}</span>
+              <span className={css['task-meta-value']}>{task.verificationCondition}</span>
+            </div>
+          )}
           {task.metadata.map((item) => {
             const isProgress = item.label === '验证进展'
             const hl = isProgress && highlightProgress
@@ -726,7 +903,7 @@ function TaskRow({
                 key={item.label}
                 className={`${css['task-meta-item']} ${hl ? css['task-meta-item-highlight'] : ''}`}
               >
-                <span className={css['task-meta-label']}>{item.label}</span>
+                <span className={css['task-meta-label']}>{taskPanelCopy.metadataLabel(item.label)}</span>
                 <span className={css['task-meta-value']}>{item.value}</span>
               </div>
             )
@@ -737,7 +914,7 @@ function TaskRow({
       {hasDetail && (
         <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
           <ChevronIcon expanded={expanded} />
-          <span>{expanded ? '收起详情' : '展开详情'}</span>
+          <span>{expanded ? taskPanelCopy.collapseDetails() : taskPanelCopy.expandDetails()}</span>
         </div>
       )}
 
@@ -775,7 +952,7 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
   const tasks = content ? parseTasks(content) : []
   if (!tasks.length) return null
 
-  const selectedTasks = tasks.filter(t => selected.has(t.title))
+  const selectedTasks = tasks.filter(t => selected.has(t.id ?? t.title))
   const selectedStatus = selectedTasks[0]?.status ?? null
   // 批量操作只支持无需填写原因的目标状态，需要补充原因的场景仍走单任务交互
   const sharedTransitions = getSharedTransitions(selectedTasks).filter(t => !t.requiresReason)
@@ -796,11 +973,12 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
   const toggleSelect = (task: TaskItem) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(task.title)) {
-        next.delete(task.title)
+      const key = task.id ?? task.title
+      if (next.has(key)) {
+        next.delete(key)
         return next
       }
-      next.add(task.title)
+      next.add(key)
       return next
     })
   }
@@ -811,7 +989,7 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
       .map(task => `任务「${task.title}」：${transition.instruction}`)
       .join('\n')
     sendTaskMessage(message)
-    setActionHint('已交给 AI 处理')
+    setActionHint(taskPanelCopy.handedToAI())
     exitBatchMode()
   }
 
@@ -884,12 +1062,12 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
                   highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
                   batchMode={batchMode}
                   selectable={selectedStatus === null || task.status === selectedStatus}
-                  selected={selected.has(task.title)}
+                  selected={selected.has(task.id ?? task.title)}
                   allowDelete={allowDelete}
                   onToggleSelect={() => toggleSelect(task)}
                 />
               ))
-          : <div className={css['panel-filter-empty']}>无匹配结果</div>
+          : <div className={css['panel-filter-empty']}>{taskPanelCopy.noResults()}</div>
         }
       </div>
     </div>

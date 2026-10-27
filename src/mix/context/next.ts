@@ -917,6 +917,8 @@ export interface UserTaskInfo {
   id: string;
   title: string;
   desc: string;
+  /** TASKS.md 中的验证条件，用于任务引用 hover 卡片。 */
+  verification?: string;
   state: 0 | 1 | 2 | 3;
 }
 export class Version {

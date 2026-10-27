@@ -1,6 +1,7 @@
 import context, { type UserTaskInfo } from '../../../mix/context'
 import { parse as parseYaml } from 'yaml'
 import { parseTasksForNotify } from '../../../mix/tasks/notify'
+import { registerTaskReferResolver } from '../../../mix/tasks/refer'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
 import { transformLocalIframeFormatForNotifyChanged } from '../../../utils/ai-code/md/transformForNotifyChanged'
 import {
@@ -470,6 +471,7 @@ export function registerSandbox(comId: string) {
     // console.warn('[mix/sandbox] window._sandbox_.connectToAI not found, skipping sandbox registration');
     return;
   }
+  registerTaskReferResolver(sandboxAPI)
 
   // const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
   //   current: null,
