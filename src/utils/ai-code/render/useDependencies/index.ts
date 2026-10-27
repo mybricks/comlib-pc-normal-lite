@@ -7,6 +7,7 @@ import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
 import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 import createMyBricksReactNative from '../mybricks/react-native'
+import { useWindowProxy } from './windowProxyStore'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -73,6 +74,7 @@ const useDependencies = (params: Params) => {
     } else {
       mybricks = createMyBricks(createMyBricksProps);
     }
+    mybricks.useWindowProxy = useWindowProxy
 
     /**
      * 'mybricks/testing' 支持多实例：每个文件（setup.ts）require 时各自获得独立的 EnvRunner，

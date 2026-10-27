@@ -37,6 +37,7 @@ import { agentTurnLifecycle } from '../sandbox/agent-turn-lifecycle';
 // import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
 import type {Props} from './types';
 import prototype from '../../utils/ai-code/render/mybricks/prototype'
+import { parseInteractiveScripts } from '../../utils/ai-code/interactiveScripts'
 
 import {
   getClosestDomLoc,
@@ -509,6 +510,110 @@ export function buildHooks(props: Props) {
         },
         aiRole: "fast",
       })
+    },
+    '@getZoneStatus'(params) {
+      console.log("@getZoneStatus", params)
+      try {
+        const ele = params.focusArea.ele
+        const sourceEle = ele.closest('[data-loc]')
+        const loc = getClosestDomLoc(ele)
+        if (!sourceEle || !loc?.files?.jsx || !loc.codeLine) return []
+
+        const scriptFile = context.component!.params!.data.files.find(
+          (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
+        )
+        if (!scriptFile) return []
+
+        const { start, end } = loc.codeLine
+        const tag = sourceEle.tagName.toLowerCase()
+        const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
+        let closestMatch: (typeof locations)[number] | undefined
+        let closestSpan = Infinity
+        let closestTagMatch = false
+
+        for (const entry of locations) {
+          if (entry.fileName !== loc.files.jsx) continue
+          const match = entry.loc.match(/^([^:]+):(\d+)(?:-(\d+))?$/)
+          if (!match) continue
+
+          const entryStart = Number(match[2])
+          const entryEnd = Number(match[3] ?? match[2])
+          if (entryStart > start || entryEnd < end) continue
+
+          const span = entryEnd - entryStart
+          const tagMatch = match[1].toLowerCase() === tag
+          if (span < closestSpan || (span === closestSpan && tagMatch && !closestTagMatch)) {
+            closestMatch = entry
+            closestSpan = span
+            closestTagMatch = tagMatch
+          }
+        }
+
+        if (!closestMatch) {
+          return []
+        }
+
+        return closestMatch.scripts.map(({ title, script }) => {
+          return {
+            title,
+            switchTo: () => {
+              try {
+                eval(script)
+              } catch (e) {
+                console.error(e)
+              }
+            }
+          }
+        })
+      } catch (e) {
+        debugger
+        console.log('@getZoneStatus', e)
+      }
+    },
+    '@createZoneStatus'(params) {
+      console.log('@createZoneStatus', params)
+      const ele = params.focusArea.ele
+      const chipId = randomUUID()
+      const chip = {
+        id: chipId,
+        label: ele.tagName.toLowerCase(),
+        type: 'dom',
+        data: {
+          ele,
+        }
+      }
+
+      console.log('chip', chip)
+
+      window._sandbox_.helpers.sendToAgent(params.id, {
+        message: `分析元素 [[chip:${chip.id}]]，基于「交互脚本控制页面展示」，编写代码和脚本`,
+        meta: {
+          chips: [chip],
+        },
+        // aiRole: "fast",
+      })
+
+      //       sendToAgent(componentId, {
+      //           message,
+      //           meta: {
+      //             chips
+      //           },
+      //           aiRole: 'fast',
+      //           extra: {
+      //             from: '@commitUserActions'
+      //           }
+      //         })
+
+
+      // chip = {
+      //     id: randomUUID(),
+      //     label: getElementLabeForAiRequest(ele),
+      //     type: 'dom',
+      //     data: {
+      //       ele,
+      //       info: buildDomChipInfo(ele)
+      //     }
+      //   }
     },
     ...hooks
   };
