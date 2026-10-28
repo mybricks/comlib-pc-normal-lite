@@ -59,6 +59,9 @@ const loadModule = (params: LoadModuleParams): ModuleExports => {
     if (packageName === 'mybricks') {
       return {
         ...result,
+        appRef: (Component, params = {}) => {
+          return result.appRef(Component, { filename, ...params })
+        },
         popupRef: (Component, params = {}) => {
           return result.popupRef(Component, {
             filename,
