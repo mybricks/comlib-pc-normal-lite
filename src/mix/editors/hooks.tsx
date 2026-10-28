@@ -79,6 +79,45 @@ function getDefaultDebugEnv(data: any) {
   return debugEnvOptions[0]?.value ?? 'prod';
 }
 
+function getZoneStatus(ele: Element) {
+  try {
+    const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
+    if (!pagePath) return []
+
+    const scriptFile = context.component!.params!.data.files.find(
+      (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
+    )
+    if (!scriptFile) return []
+
+    const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
+      .filter((entry) => entry.page === pagePath)
+      .flatMap((entry) => entry.locations)
+    if (!locations.length) return []
+
+    return locations.map(({ title, scripts }) => ({
+      title,
+      items: [
+        { title: '原始状态', switchTo: resetWindowProxy },
+        ...scripts.map(({ title: scriptTitle, script }) => ({
+          title: scriptTitle,
+          switchTo: () => {
+            try {
+              // 每次执行前恢复原值，场景之间互斥。
+              resetWindowProxy()
+              eval(script)
+            } catch (e) {
+              console.error(e)
+            }
+          }
+        }))
+      ]
+    }))
+  } catch (e) {
+    console.log('@getZoneStatus', e)
+    return []
+  }
+}
+
 export function buildHooks(props: Props) {
   const frontendMode = config.getFrontendMode()
   const hooks = {}
@@ -517,100 +556,38 @@ export function buildHooks(props: Props) {
     },
     '@getZoneStatus'(ele) {
       console.log("@getZoneStatus", ele)
-      try {
-        // const ele = params.focusArea.ele
-        const sourceEle = ele.closest('[data-loc]')
-        const loc = getClosestDomLoc(ele)
-
-        if (!sourceEle || !loc?.files?.jsx || !loc.codeLine) return null
-
-        const scriptFile = context.component!.params!.data.files.find(
-          (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
-        )
-
-        if (!scriptFile) return null
-
-        const { start, end } = loc.codeLine
-        const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
-        const matchedLocations = locations.filter((entry) => {
-          if (entry.fileName !== loc.files.jsx) return false
-          const match = entry.loc.match(/^([^:]+):(\d+)(?:-(\d+))?$/)
-          if (!match) return false
-
-          const entryStart = Number(match[2])
-          const entryEnd = Number(match[3] ?? match[2])
-          return entryStart >= start && entryEnd <= end
-        })
-
-        if (!matchedLocations.length) {
-          return null
-        }
-
-        return [{
-          title: '原始状态',
-          switchTo: resetWindowProxy,
-        }, ...matchedLocations.flatMap(({ scripts }) => scripts.map(({ title, script }) => {
-          return {
-            title,
-            switchTo: () => {
-              try {
-                // 每次执行，都要先重置，每个操作都是互斥的
-                resetWindowProxy()
-                eval(script)
-              } catch (e) {
-                console.error(e)
-              }
-            }
-          }
-        }))]
-      } catch (e) {
-        console.log('@getZoneStatus', e)
-      }
+      return getZoneStatus(ele)
     },
-    '@createZoneStatus'(ele) {
+    async '@createZoneStatus'(ele) {
       console.log('@createZoneStatus', ele)
-      // const ele = params.focusArea.ele
+      const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
       const chipId = randomUUID()
       const chip = {
         id: chipId,
-        label: ele.tagName.toLowerCase(),
+        label: '页面',
         type: 'dom',
         data: {
           ele,
         }
       }
 
-      window._sandbox_.helpers.sendToAgent(context.component!.params.id, {
-        // message: `分析元素 [[chip:${chip.id}]]，基于「页面展示状态覆盖与交互脚本」，编写代码和脚本`,
-        message: `分析元素 [[chip:${chip.id}]] 的实际展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写代码和脚本`,
-        // message: `分析选中元素 [[chip:${chip.id}]] 的实际展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节。若存在有意义的覆盖场景，先为该元素接入 window._proxy_，再按修改后的 JSX 位置在 .agent/proxy-mock/interactive-scripts.yaml 中新增或更新一条交互脚本记录。`,
-        meta: {
-          chips: [chip],
-        },
-        // aiRole: "fast",
+      return new Promise((resolve) => {
+        const componentId = context.component!.params.id
+        agentTurnLifecycle.register(componentId, () => {
+          resolve(getZoneStatus(ele) ?? [])
+        })
+
+        window._sandbox_.helpers.sendToAgent(componentId, {
+          message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写代码并按页面维护 .agent/proxy-mock/interactive-scripts.yaml。`,
+          meta: {
+            chips: [chip],
+          },
+        })
       })
-
-      //       sendToAgent(componentId, {
-      //           message,
-      //           meta: {
-      //             chips
-      //           },
-      //           aiRole: 'fast',
-      //           extra: {
-      //             from: '@commitUserActions'
-      //           }
-      //         })
-
-
-      // chip = {
-      //     id: randomUUID(),
-      //     label: getElementLabeForAiRequest(ele),
-      //     type: 'dom',
-      //     data: {
-      //       ele,
-      //       info: buildDomChipInfo(ele)
-      //     }
-      //   }
+    },
+    '@ifHaveZoneStatus'(ele) {
+      console.log('@ifHaveZoneStatus', ele)
+      return true
     },
     ...hooks
   };
