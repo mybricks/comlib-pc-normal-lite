@@ -301,17 +301,20 @@ export function buildHooks(props: Props) {
         if (codeLine && files?.jsx) {
           const {start, end} = codeLine;
           lowcodeViewEvents.emit('viewCode', {fileName: files.jsx, codeLine: [start, end]});
+          return true
         } else {
           // console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
         }
 
-        return
+        return false
       }
 
       const filename = ele.dataset.zoneFilename
       if (filename) {
         lowcodeViewEvents.emit('viewCode', {fileName: filename});
+        return true
       }
+      return false
     },
 
     '@openDocs'() {

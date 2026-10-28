@@ -8,7 +8,7 @@ export default function (params) {
   const loc = getClosestDomLoc(params.focusArea.ele)
 
   if (!loc) {
-    return
+    return false
   }
 
   // window.location.assign(getUrl({
@@ -20,4 +20,6 @@ export default function (params) {
     editor: 'vscode',
     path: `${loc.files.jsx}:${loc.codeLine.start}`
   }), '_blank')
+
+  return false
 }
