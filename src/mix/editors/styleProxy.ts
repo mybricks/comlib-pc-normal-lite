@@ -2002,12 +2002,6 @@ export function genStyleValue(props) {
           ele,
         });
         applyInlineStyleToDOM(explicitClearPatch.writes, explicitClearPatch.deletions);
-        console.log('[style-proxy][style-clear-apply]', {
-          selector: rawSelector,
-          targetKind: 'inline',
-          writes: explicitClearPatch.writes,
-          deletions: explicitClearPatch.deletions,
-        });
         return;
       }
 
@@ -2296,14 +2290,6 @@ export function genStyleValue(props) {
           previous: previousLessSource,
           ele,
         });
-        if (explicitClearPatch) {
-          console.log('[style-proxy][style-clear-apply]', {
-            selector: rawSelector,
-            targetKind: 'selector',
-            writes: explicitClearPatch.writes,
-            deletions: explicitClearPatch.deletions,
-          });
-        }
         return;
       }
 
@@ -2444,14 +2430,6 @@ export function genStyleValue(props) {
         previous: previousLessSource,
         ele,
       });
-      if (explicitClearPatch) {
-        console.log('[style-proxy][style-clear-apply]', {
-          selector: rawSelector,
-          targetKind: 'selector',
-          writes: explicitClearPatch.writes,
-          deletions: explicitClearPatch.deletions,
-        });
-      }
     },
     previewBatch(params: any, value: any) {
       const deletions: string[] = ((window as any).__mybricks_style_deletions || []).slice();
