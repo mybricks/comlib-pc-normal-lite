@@ -533,41 +533,40 @@ export function buildHooks(props: Props) {
         const { start, end } = loc.codeLine
         const tag = sourceEle.tagName.toLowerCase()
         const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
-        /*
-        let closestMatch: (typeof locations)[number] | undefined
-        let closestSpan = Infinity
-        let closestTagMatch = false
-
-        for (const entry of locations) {
-          if (entry.fileName !== loc.files.jsx) continue
-          const match = entry.loc.match(/^([^:]+):(\d+)(?:-(\d+))?$/)
-          if (!match) continue
-
-          const entryStart = Number(match[2])
-          const entryEnd = Number(match[3] ?? match[2])
-          if (entryStart > start || entryEnd < end) continue
-
-          const span = entryEnd - entryStart
-          const tagMatch = match[1].toLowerCase() === tag
-          if (span < closestSpan || (span === closestSpan && tagMatch && !closestTagMatch)) {
-            closestMatch = entry
-            closestSpan = span
-            closestTagMatch = tagMatch
-          }
-        }
-        */
-
         const exactMatch = locations.find((entry) =>
           entry.fileName === loc.files.jsx &&
           (entry.loc === `${tag}:${start}-${end}` ||
             (start === end && entry.loc === `${tag}:${start}`))
         )
+        let closestMatch = exactMatch
+        let closestSpan = -1
+        let closestTagMatch = false
 
-        if (!exactMatch) {
+        if (!closestMatch) {
+          for (const entry of locations) {
+            if (entry.fileName !== loc.files.jsx) continue
+            const match = entry.loc.match(/^([^:]+):(\d+)(?:-(\d+))?$/)
+            if (!match) continue
+
+            const entryStart = Number(match[2])
+            const entryEnd = Number(match[3] ?? match[2])
+            if (entryStart < start || entryEnd > end) continue
+
+            const span = entryEnd - entryStart
+            const tagMatch = match[1].toLowerCase() === tag
+            if (span > closestSpan || (span === closestSpan && tagMatch && !closestTagMatch)) {
+              closestMatch = entry
+              closestSpan = span
+              closestTagMatch = tagMatch
+            }
+          }
+        }
+
+        if (!closestMatch) {
           return null
         }
 
-        return exactMatch.scripts.map(({ title, script }) => {
+        return closestMatch.scripts.map(({ title, script }) => {
           return {
             title,
             switchTo: () => {
