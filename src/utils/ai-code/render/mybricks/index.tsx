@@ -642,7 +642,7 @@ if (frontendMode === 'prototype') {
 
     useEffect(() => {
       if (defaultMount) {
-        onMount()
+        onMount?.()
       }
       return () => {
         lessRef.current?.off?.()
@@ -887,7 +887,7 @@ if (frontendMode === 'prototype') {
 
     return (
       <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
-        <Page path={rawPath}>
+        <Page path={rawPath} defaultMount={true}>
           <RouterContext.Provider value={contextValue}>
             <Component {...params}/>
           </RouterContext.Provider>
