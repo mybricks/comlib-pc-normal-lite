@@ -30,7 +30,7 @@ import * as versionListViewCssNS from '../../components/version-list/index.lazy.
 import taskPanelCss from '../../components/task-panel/index.lazy.less';
 import * as taskPanelCssNS from '../../components/task-panel/index.lazy.less';
 import { randomUUID } from '../utils/uuid'
-
+import commonLang from "../../helpers/i18n/common";
 
 import context, { config } from '../context';
 import { agentTurnLifecycle } from '../sandbox/agent-turn-lifecycle';
@@ -97,7 +97,7 @@ function getZoneStatus(ele: Element) {
     return locations.map(({ title, scripts }) => ({
       title,
       items: [
-        { title: '原始状态', switchTo: resetWindowProxy },
+        { title: commonLang.normal, switchTo: resetWindowProxy },
         ...scripts.map(({ title: scriptTitle, script }) => ({
           title: scriptTitle,
           switchTo: () => {
