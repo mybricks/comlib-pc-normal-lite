@@ -533,6 +533,7 @@ export function buildHooks(props: Props) {
         const { start, end } = loc.codeLine
         const tag = sourceEle.tagName.toLowerCase()
         const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
+        /*
         let closestMatch: (typeof locations)[number] | undefined
         let closestSpan = Infinity
         let closestTagMatch = false
@@ -554,12 +555,19 @@ export function buildHooks(props: Props) {
             closestTagMatch = tagMatch
           }
         }
+        */
 
-        if (!closestMatch) {
+        const exactMatch = locations.find((entry) =>
+          entry.fileName === loc.files.jsx &&
+          (entry.loc === `${tag}:${start}-${end}` ||
+            (start === end && entry.loc === `${tag}:${start}`))
+        )
+
+        if (!exactMatch) {
           return null
         }
 
-        return closestMatch.scripts.map(({ title, script }) => {
+        return exactMatch.scripts.map(({ title, script }) => {
           return {
             title,
             switchTo: () => {
