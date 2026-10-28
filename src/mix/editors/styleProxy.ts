@@ -10,7 +10,7 @@ import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
 import { createInlineStyleHistory } from './style/helpers/createInlineStyleHistory'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
-import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots } from './style/helpers/createSetStyleHandler'
+import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots, patchSingleElementInlineStyle } from './style/helpers/createSetStyleHandler'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -2563,10 +2563,61 @@ export function genImgSrcReplacer() {
         };
 
         if (jsxPath && jsxFile && STATIC_SRC_RE.test(snippet) && !hasRepeatedLoc) {
-          const srcMatch = snippet.match(STATIC_SRC_RE);
+          // 尺寸调整是附加处理；测量失败或加载超时都继续原来的地址替换。
+          const imageStyle: Record<string, string> = {};
+          let inlineUpdate: ReturnType<typeof patchSingleElementInlineStyle> = null;
+          try {
+            // 使用未受画布缩放影响的布局宽度；border-box 下按图片内容区计算比例。
+            const computedStyle = getComputedStyle(ele);
+            const width = parseFloat(computedStyle.width);
+            const horizontalBox = computedStyle.boxSizing === 'border-box'
+              ? ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
+                .reduce((sum, key) => sum + parseFloat(computedStyle[key]), 0)
+              : 0;
+            const verticalBox = computedStyle.boxSizing === 'border-box'
+              ? ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth']
+                .reduce((sum, key) => sum + parseFloat(computedStyle[key]), 0)
+              : 0;
+            if (Number.isFinite(width) && width > horizontalBox) {
+              const img = new Image();
+              let timeout: number | undefined;
+              let image: HTMLImageElement | null;
+              try {
+                image = await new Promise<HTMLImageElement | null>(resolve => {
+                  img.onload = () => resolve(img);
+                  img.onerror = () => resolve(null);
+                  timeout = window.setTimeout(() => resolve(null), 3000);
+                  img.src = newSrc;
+                });
+              } finally {
+                window.clearTimeout(timeout);
+                img.onload = null;
+                img.onerror = null;
+              }
+              if (image?.naturalWidth && image.naturalHeight) {
+                const height = (width - horizontalBox) * image.naturalHeight / image.naturalWidth + verticalBox;
+                if (Number.isFinite(height) && height > 0) {
+                  imageStyle.width = `${width}px`;
+                  imageStyle.height = `${height}px`;
+                  inlineUpdate = patchSingleElementInlineStyle(ele, imageStyle);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('[image-replacer] 无法更新新图片尺寸，继续替换图片', error);
+          }
+          const styleSnapshots = Object.entries(imageStyle).map(([key, value]) =>
+            getInitialInlineStyleSnapshot(ele, key, value),
+          );
+
+          // 尺寸补丁只在内存中生成，与地址合并后一次写入；没有补丁时沿用原源码。
+          const sourceWithStyle = inlineUpdate?.newCode ?? source;
+          const endWithStyle = end + sourceWithStyle.length - source.length;
+          const snippetWithStyle = sourceWithStyle.slice(start, endWithStyle);
+          const srcMatch = snippetWithStyle.match(STATIC_SRC_RE);
           const newSrcAttribute = `src="${newSrc}"`;
-          const newSnippet = snippet.replace(STATIC_SRC_RE, newSrcAttribute);
-          const newSource = source.slice(0, start) + newSnippet + source.slice(end);
+          const newSnippet = snippetWithStyle.replace(STATIC_SRC_RE, newSrcAttribute);
+          const newSource = sourceWithStyle.slice(0, start) + newSnippet + sourceWithStyle.slice(endWithStyle);
           const sourceReplacement: SourceReplacement | null =
             srcMatch && typeof srcMatch.index === 'number' && typeof start === 'number' && typeof end === 'number'
               ? {
@@ -2583,9 +2634,19 @@ export function genImgSrcReplacer() {
           undoRedoManager.executeBranch({
             execute() {
               context.updateFile({ fileName: jsxPath, content: newSource, type: undefined, noUpdateFileSystem: true });
+              // 定位按内存补丁的生成顺序同步：先尺寸，再地址。
+              if (inlineUpdate) {
+                inlineUpdate.sourceReplacements.forEach((replacement) => {
+                  shiftDOMSourceLocationsAfterReplacement(shadowRoot, jsxPath, replacement);
+                });
+                if (inlineUpdate.nextStyleInfo) {
+                  ele.dataset.styleInfo = JSON.stringify(inlineUpdate.nextStyleInfo);
+                }
+              }
               if (sourceReplacement) {
                 shiftDOMSourceLocationsAfterReplacement(shadowRoot, jsxPath, sourceReplacement);
               }
+              applyInlineStyleSnapshots(styleSnapshots, 'execute');
               applyPreview(newSrc);
               context.component?.actions.addUserAction({
                 id: actionId,
@@ -2599,6 +2660,7 @@ export function genImgSrcReplacer() {
               if (sourceLocationSnapshot) {
                 restoreDOMSourceLocationSnapshot(sourceLocationSnapshot);
               }
+              applyInlineStyleSnapshots(styleSnapshots, 'undo');
               applyPreview(previousSrc);
               context.component?.actions.removeUserAction(actionId);
             },

@@ -631,7 +631,7 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
 /**
  * multiple 为否时，样式只写当前 JSX 标签 inline style，避免修改共享 class 对应的 Less 规则。
  */
-const patchSingleElementInlineStyle = (
+export const patchSingleElementInlineStyle = (
   targetEle: HTMLElement,
   nextStyle: Record<string, StyleValue>,
   initialInlineCssText = '',
