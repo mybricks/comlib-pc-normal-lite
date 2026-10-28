@@ -3,6 +3,7 @@ import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
+import { getImageSizeAtElementWidth } from '../../helpers/image'
 import { randomUUID } from '../utils/uuid'
 import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
@@ -2563,45 +2564,15 @@ export function genImgSrcReplacer() {
         };
 
         if (jsxPath && jsxFile && STATIC_SRC_RE.test(snippet) && !hasRepeatedLoc) {
-          // 尺寸调整是附加处理；测量失败或加载超时都继续原来的地址替换。
+          // 尺寸调整是附加处理；本地图片读取或测量失败都继续原来的地址替换。
           const imageStyle: Record<string, string> = {};
           let inlineUpdate: ReturnType<typeof patchSingleElementInlineStyle> = null;
           try {
-            // 使用未受画布缩放影响的布局宽度；border-box 下按图片内容区计算比例。
-            const computedStyle = getComputedStyle(ele);
-            const width = parseFloat(computedStyle.width);
-            const horizontalBox = computedStyle.boxSizing === 'border-box'
-              ? ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
-                .reduce((sum, key) => sum + parseFloat(computedStyle[key]), 0)
-              : 0;
-            const verticalBox = computedStyle.boxSizing === 'border-box'
-              ? ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth']
-                .reduce((sum, key) => sum + parseFloat(computedStyle[key]), 0)
-              : 0;
-            if (Number.isFinite(width) && width > horizontalBox) {
-              const img = new Image();
-              let timeout: number | undefined;
-              let image: HTMLImageElement | null;
-              try {
-                image = await new Promise<HTMLImageElement | null>(resolve => {
-                  img.onload = () => resolve(img);
-                  img.onerror = () => resolve(null);
-                  timeout = window.setTimeout(() => resolve(null), 3000);
-                  img.src = newSrc;
-                });
-              } finally {
-                window.clearTimeout(timeout);
-                img.onload = null;
-                img.onerror = null;
-              }
-              if (image?.naturalWidth && image.naturalHeight) {
-                const height = (width - horizontalBox) * image.naturalHeight / image.naturalWidth + verticalBox;
-                if (Number.isFinite(height) && height > 0) {
-                  imageStyle.width = `${width}px`;
-                  imageStyle.height = `${height}px`;
-                  inlineUpdate = patchSingleElementInlineStyle(ele, imageStyle);
-                }
-              }
+            const imageSize = await getImageSizeAtElementWidth(ele, file);
+            if (imageSize) {
+              imageStyle.width = `${imageSize.width}px`;
+              imageStyle.height = `${imageSize.height}px`;
+              inlineUpdate = patchSingleElementInlineStyle(ele, imageStyle);
             }
           } catch (error) {
             console.warn('[image-replacer] 无法更新新图片尺寸，继续替换图片', error);
