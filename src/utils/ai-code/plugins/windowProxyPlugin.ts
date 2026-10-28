@@ -9,8 +9,7 @@ const PROXY_PROPERTY = '_proxy_'
 const COMPONENT_WRAPPERS = new Set(['appRef', 'comRef', 'pageRef', 'popupRef'])
 
 function isProxyMember(node: any, types: any): boolean {
-  return types.isMemberExpression(node) &&
-    types.isIdentifier(node.object, { name: 'window' }) &&
+  return !!node?.property &&
     ((types.isIdentifier(node.property, { name: PROXY_PROPERTY }) && !node.computed) ||
       (types.isStringLiteral(node.property, { value: PROXY_PROPERTY }) && node.computed))
 }
@@ -91,10 +90,12 @@ export default function windowProxyPlugin({ types }: { types: any }) {
         if (!isWrappedComponent && !isNamedComponent) return
 
         let readsProxy = false
+        const detectProxyMember = (member: any) => {
+          if (isProxyMember(member.node, types)) readsProxy = true
+        }
         functionPath.get('body').traverse({
-          MemberExpression(member: any) {
-            if (isProxyMember(member.node.object, types)) readsProxy = true
-          },
+          MemberExpression: detectProxyMember,
+          OptionalMemberExpression: detectProxyMember,
         })
         console.log('[windowProxyPlugin] component check', {
           name: name || '<anonymous>',
