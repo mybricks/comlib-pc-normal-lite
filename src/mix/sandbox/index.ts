@@ -28,6 +28,7 @@ import commonLang from '../../helpers/i18n/common';
 import { agentTurnLifecycle } from './agent-turn-lifecycle';
 import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
 import { registerTaskReferResolver } from '../tasks/refer';
+import { createTasksManager } from '../tasks/verify-block';
 
 const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
 
@@ -1142,7 +1143,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     { configDirName: (window as any)._sandbox_?.config?.configDirName },
   );
   const connectToAIRef = connectToAI(comId, {
-    designer: { ...designerFs, pageAnalysis },
+    designer: { ...designerFs, pageAnalysis, tasksManager: createTasksManager(comId) },
     hooks: {
       async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
@@ -1293,6 +1294,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     },
     chips: CHIPS
   }) ?? {};
+
 
   const { history, disabledHandler, isRemoteAgent, workspaceReady, remoteFs } = connectToAIRef
 

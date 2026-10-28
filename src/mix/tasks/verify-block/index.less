@@ -1,0 +1,255 @@
+// 视觉对齐 plugin-ai：6px 卡片圆角、4px 按钮圆角、11/12px 字号、主色实心主按钮、描边次按钮。
+
+.mb-tv {
+  padding: 8px var(--chat-sender-padding, 10px);
+  box-sizing: border-box;
+  color: var(--mybricks-text-color-main, #333);
+  font-size: var(--chat-font-size-sm, 12px);
+  line-height: 1.5;
+  animation: mb-tv-in .24s cubic-bezier(.2, .8, .2, 1);
+}
+.mb-tv * { box-sizing: border-box; }
+.mb-tv-related { padding: 0; }
+
+.mb-tv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+  margin-bottom: 6px;
+}
+.mb-tv-title { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.mb-tv-notice { overflow: hidden; color: #ff4d4f; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+
+.mb-tv-nav { display: flex; align-items: center; gap: 2px; flex-shrink: 0; color: var(--mybricks-text-color-secondary, #999); }
+.mb-tv-nav-count { min-width: 32px; text-align: center; font-size: var(--chat-caption-font-size, 11px); font-variant-numeric: tabular-nums; }
+
+.mb-tv-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+
+  &:hover:not(:disabled) { background: var(--mybricks-bg-color-active, #F0F0F0); color: var(--mybricks-text-color-main, #333); }
+  &:disabled { opacity: .35; cursor: default; }
+}
+
+// 指示器（在卡片下方）：主题色 = 还没处理，灰色 = 已处理，拉长的一格 = 当前卡片。
+.mb-tv-indicator { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 2px; }
+.mb-tv-pip {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: width .25s cubic-bezier(.2, .8, .2, 1), background .2s, opacity .2s;
+
+  &.is-todo { background: var(--mybricks-color-primary, #FA6400); opacity: .4; }
+  &.is-done { background: var(--mybricks-text-color-disabled, #C8C8C8); opacity: .6; }
+  &.is-current { width: 16px; opacity: 1; }
+  &:hover { opacity: .85; }
+}
+
+// 扇形区：多张卡片时两侧留出被压住的卡片露边；只有一张时铺满，不留白。
+.mb-tv-deck {
+  position: relative;
+  margin: 0 12px;
+  padding-bottom: 6px;
+  outline: none;
+  touch-action: pan-y;
+  user-select: none;
+
+  &.is-single { margin: 0; }
+}
+
+// 当前卡片在文档流里，高度跟随内容（有上限）；其余卡片叠在它后面，尺寸与之保持一致。
+.mb-tv-card {
+  position: absolute;
+  inset: 0 0 6px 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 12px;
+  border: 1px solid var(--mybricks-border-color-main, #E6E6E6);
+  border-radius: 6px;
+  background: var(--mybricks-bg-color-main, #fff);
+  color: var(--mybricks-text-color-main, #333);
+  font-size: var(--chat-font-size-sm, 12px);
+  font-weight: 400;
+  line-height: 1.5;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .08);
+  transform-origin: 50% 100%;
+  transition: transform .32s cubic-bezier(.2, .8, .2, 1), opacity .24s ease, box-shadow .24s ease;
+  will-change: transform;
+
+  &.is-front {
+    position: relative;
+    inset: auto;
+    min-height: 132px;
+    max-height: 300px;
+  }
+  &.is-behind { cursor: pointer; }
+  &.is-behind > * { visibility: hidden; }
+  &.is-handled { background: var(--mybricks-bg-color-secondary, #F5F5F5); }
+}
+
+.mb-tv-related .mb-tv-card.is-front { max-height: none; }
+
+.mb-tv-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+// 标签配色与任务面板的状态徽标一致（TASK_STATUS_STYLE）。
+.mb-tv-tag {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 2px;
+  font-size: var(--chat-caption-font-size, 11px);
+  font-weight: 500;
+  line-height: 16px;
+
+  &.status-doing { background: var(--mybricks-bg-color-active, #DFE1E6); color: var(--mybricks-text-color-disabled, #42526E); }
+  &.status-verify { background: #ff4d4f; color: #fff; }
+  &.status-handoff { background: #faad14; color: #fff; }
+  &.status-done { background: #52c41a; color: #fff; }
+}
+.mb-tv-card-title {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--chat-font-size, 13px);
+  font-weight: 600;
+  line-height: 18px;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+.mb-tv-desc {
+  display: -webkit-box;
+  margin-bottom: 6px;
+  overflow: hidden;
+  color: var(--mybricks-text-color-secondary, #999);
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.mb-tv-tooltip {
+  position: fixed;
+  inset: auto;
+  width: 260px;
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: none;
+  will-change: auto;
+}
+
+.mb-tv-tooltip-verification {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+// 验证条件：占满卡片剩余高度，内容超出时才滚动；滚动条做细、默认淡化。
+.mb-tv-verify {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-right: -6px;
+  padding-right: 6px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color .2s;
+
+  &:hover { scrollbar-color: color-mix(in srgb, var(--mybricks-text-color-main, #333) 25%, transparent) transparent; }
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { border-radius: 3px; background: transparent; }
+  &:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--mybricks-text-color-main, #333) 25%, transparent); }
+}
+.mb-tv-verify-label { display: block; margin-bottom: 2px; color: var(--mybricks-text-color-secondary, #999); font-size: var(--chat-caption-font-size, 11px); }
+.mb-tv-empty { color: var(--mybricks-text-color-secondary, #999); }
+
+.mb-tv-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--chat-block-gap, 6px); margin-top: 8px; }
+.mb-tv-hint { margin-left: auto; color: var(--mybricks-text-color-secondary, #999); font-size: var(--chat-caption-font-size, 11px); }
+.mb-tv-reason { flex: 1; min-width: 0; overflow: hidden; color: var(--mybricks-text-color-secondary, #999); text-overflow: ellipsis; white-space: nowrap; }
+
+// 与 ask_questions 的操作按钮一致：4px 圆角、min-width 56、11px；主按钮主色实心，次按钮描边。
+.mb-tv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: calc(var(--chat-action-height, 26px) - 2px);
+  padding: 0 8px;
+  border: 1px solid var(--mybricks-border-color-main, #E6E6E6);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mybricks-text-color-main, #333);
+  font-size: var(--chat-caption-font-size, 11px);
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity .2s;
+
+  &:hover:not(:disabled) { opacity: .8; }
+  &:disabled { cursor: not-allowed; opacity: .45; }
+
+  &.is-primary {
+    border-color: var(--mybricks-color-primary, #FA6400);
+    background: var(--mybricks-color-primary, #FA6400);
+    color: var(--mybricks-text-color-on-primary, #fff);
+  }
+}
+
+.mb-tv-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 72px;
+  margin-top: 4px;
+  padding: 5px 7px;
+  resize: none;
+  border: 1px solid var(--mybricks-border-color-main, #E6E6E6);
+  border-radius: 4px;
+  outline: none;
+  background: var(--mybricks-bg-color-main, #fff);
+  color: inherit;
+  font: inherit;
+
+  &:focus { border-color: var(--mybricks-color-primary, #FA6400); }
+}
+
+.mb-tv-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 5px 8px 5px 10px;
+  border: 1px solid var(--mybricks-border-color-main, #E6E6E6);
+  border-radius: 6px;
+  background: var(--mybricks-bg-color-secondary, #F5F5F5);
+  animation: mb-tv-in .2s ease;
+}
+.mb-tv-bar-actions { display: flex; align-items: center; gap: var(--chat-block-gap, 6px); }
+
+@keyframes mb-tv-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mb-tv, .mb-tv-bar { animation: none; }
+  .mb-tv-card { transition: opacity .15s; }
+}
