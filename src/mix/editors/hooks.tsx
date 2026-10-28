@@ -303,17 +303,20 @@ export function buildHooks(props: Props) {
         if (codeLine && files?.jsx) {
           const {start, end} = codeLine;
           lowcodeViewEvents.emit('viewCode', {fileName: files.jsx, codeLine: [start, end]});
+          return true
         } else {
           // console.error('[@viewCode] 请重新编译jsx，支持codeLine/files', params);
         }
 
-        return
+        return false
       }
 
       const filename = ele.dataset.zoneFilename
       if (filename) {
         lowcodeViewEvents.emit('viewCode', {fileName: filename});
+        return true
       }
+      return false
     },
 
     '@openDocs'() {
@@ -512,20 +515,19 @@ export function buildHooks(props: Props) {
         aiRole: "fast",
       })
     },
-    '@getZoneStatus'(params) {
-      console.log("@getZoneStatus", params)
+    '@getZoneStatus'(ele) {
+      console.log("@getZoneStatus", ele)
       try {
-        const ele = params.focusArea.ele
+        // const ele = params.focusArea.ele
         const sourceEle = ele.closest('[data-loc]')
         const loc = getClosestDomLoc(ele)
-        console.log(1, sourceEle)
-        console.log(2, loc)
+
         if (!sourceEle || !loc?.files?.jsx || !loc.codeLine) return null
 
         const scriptFile = context.component!.params!.data.files.find(
           (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
         )
-        console.log(3, scriptFile)
+
         if (!scriptFile) return null
 
         const { start, end } = loc.codeLine
@@ -576,9 +578,9 @@ export function buildHooks(props: Props) {
         console.log('@getZoneStatus', e)
       }
     },
-    '@createZoneStatus'(params) {
-      console.log('@createZoneStatus', params)
-      const ele = params.focusArea.ele
+    '@createZoneStatus'(ele) {
+      console.log('@createZoneStatus', ele)
+      // const ele = params.focusArea.ele
       const chipId = randomUUID()
       const chip = {
         id: chipId,
@@ -589,9 +591,7 @@ export function buildHooks(props: Props) {
         }
       }
 
-      console.log('chip', chip)
-
-      window._sandbox_.helpers.sendToAgent(params.id, {
+      window._sandbox_.helpers.sendToAgent(context.component!.params.id, {
         // message: `分析元素 [[chip:${chip.id}]]，基于「页面展示状态覆盖与交互脚本」，编写代码和脚本`,
         message: `分析元素 [[chip:${chip.id}]] 的实际展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写代码和脚本`,
         // message: `分析选中元素 [[chip:${chip.id}]] 的实际展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节。若存在有意义的覆盖场景，先为该元素接入 window._proxy_，再按修改后的 JSX 位置在 .agent/proxy-mock/interactive-scripts.yaml 中新增或更新一条交互脚本记录。`,

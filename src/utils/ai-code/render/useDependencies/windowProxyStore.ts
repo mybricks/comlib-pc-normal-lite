@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'reac
 // 为业务代码声明全局代理对象的字段类型。
 declare global {
   interface Window {
-    _proxy_: { text: number | string; [key: string]: any }
+    _proxy_: { [key: string]: any }
   }
 }
 
@@ -20,21 +20,28 @@ const subscribers = new Set<Subscriber>()
 let activeDependencies: Set<ProxyKey> | null = null
 const originalValues = new Map<ProxyKey, unknown>()
 let isResetting = false
+let isDesignMode = true
+
+export function setWindowProxyDesignMode(enabled: boolean): void {
+  isDesignMode = enabled
+}
 
 // 保留页面上已有的数据，避免加载 store 时覆盖业务代码先前设置的值。
 const existingProxy = typeof window !== 'undefined' ? window._proxy_ : undefined
 
 if (typeof window !== 'undefined') {
   window._proxy_ = new Proxy(
-    existingProxy ?? { text: Date.now() },
+    existingProxy ?? { },
     {
       // Hook 开始收集后，读取 window._proxy_.xxx 会把 xxx 记为当前组件的依赖。
       get(target, key, receiver) {
+        if (!isDesignMode) return undefined
         activeDependencies?.add(key)
         return Reflect.get(target, key, receiver)
       },
       // 只通知读取过该顶层属性的组件；重复赋相同值不触发更新。
       set(target, key, value) {
+        if (!isDesignMode && !isResetting) return true
         const previous = Reflect.get(target, key)
         const updated = Reflect.set(target, key, value)
         if (updated && !Object.is(previous, value)) {

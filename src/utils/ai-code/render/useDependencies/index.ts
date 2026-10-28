@@ -7,7 +7,7 @@ import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
 import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 import createMyBricksReactNative from '../mybricks/react-native'
-import { useWindowProxy } from './windowProxyStore'
+import { setWindowProxyDesignMode, useWindowProxy } from './windowProxyStore'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -34,6 +34,10 @@ const useDependencies = (params: Params) => {
   const reload = params.activeEnv + "_" + params.reload
 
   return useMemo(() => {
+    const { id, env, data, activeEnv, runtimeMode, logger } = params;
+    console.log('执行这里')
+
+    setWindowProxyDesignMode(!env.runtime)
     const frontEndDataSouce = config.getFrontEndDataSouce()
     const BaseDataSource = frontEndDataSouce || params.DataSource || EmptyDataSource;
     
@@ -60,7 +64,6 @@ const useDependencies = (params: Params) => {
       }
     }
 
-    const { id, env, data, activeEnv, runtimeMode, logger } = params;
     const frontendMode = config.getFrontendMode()
     const createMyBricksProps = { comId: id, runtimeMode, logger, env, data }
     let mybricks: any = {}
