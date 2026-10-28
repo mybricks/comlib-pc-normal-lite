@@ -531,56 +531,38 @@ export function buildHooks(props: Props) {
         if (!scriptFile) return null
 
         const { start, end } = loc.codeLine
-        const tag = sourceEle.tagName.toLowerCase()
         const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
-        const exactMatch = locations.find((entry) =>
-          entry.fileName === loc.files.jsx &&
-          (entry.loc === `${tag}:${start}-${end}` ||
-            (start === end && entry.loc === `${tag}:${start}`))
-        )
-        let closestMatch = exactMatch
-        let closestSpan = -1
-        let closestTagMatch = false
+        const matchedLocations = locations.filter((entry) => {
+          if (entry.fileName !== loc.files.jsx) return false
+          const match = entry.loc.match(/^([^:]+):(\d+)(?:-(\d+))?$/)
+          if (!match) return false
 
-        if (!closestMatch) {
-          for (const entry of locations) {
-            if (entry.fileName !== loc.files.jsx) continue
-            const match = entry.loc.match(/^([^:]+):(\d+)(?:-(\d+))?$/)
-            if (!match) continue
+          const entryStart = Number(match[2])
+          const entryEnd = Number(match[3] ?? match[2])
+          return entryStart >= start && entryEnd <= end
+        })
 
-            const entryStart = Number(match[2])
-            const entryEnd = Number(match[3] ?? match[2])
-            if (entryStart < start || entryEnd > end) continue
-
-            const span = entryEnd - entryStart
-            const tagMatch = match[1].toLowerCase() === tag
-            if (span > closestSpan || (span === closestSpan && tagMatch && !closestTagMatch)) {
-              closestMatch = entry
-              closestSpan = span
-              closestTagMatch = tagMatch
-            }
-          }
-        }
-
-        if (!closestMatch) {
+        if (!matchedLocations.length) {
           return null
         }
 
-        return closestMatch.scripts.map(({ title, script }) => {
+        return [{
+          title: '原始状态',
+          switchTo: resetWindowProxy,
+        }, ...matchedLocations.flatMap(({ scripts }) => scripts.map(({ title, script }) => {
           return {
             title,
             switchTo: () => {
               try {
+                // 每次执行，都要先重置，每个操作都是互斥的
+                resetWindowProxy()
                 eval(script)
               } catch (e) {
                 console.error(e)
               }
             }
           }
-        }).concat({
-          title: '重置',
-          switchTo: resetWindowProxy,
-        })
+        }))]
       } catch (e) {
         console.log('@getZoneStatus', e)
       }
