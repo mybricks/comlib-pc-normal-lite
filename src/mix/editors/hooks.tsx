@@ -38,6 +38,7 @@ import { agentTurnLifecycle } from '../sandbox/agent-turn-lifecycle';
 import type {Props} from './types';
 import prototype from '../../utils/ai-code/render/mybricks/prototype'
 import { parseInteractiveScripts } from '../../utils/ai-code/interactiveScripts'
+import { resetWindowProxy } from '../../utils/ai-code/render/useDependencies/windowProxyStore'
 
 import {
   getClosestDomLoc,
@@ -517,12 +518,15 @@ export function buildHooks(props: Props) {
         const ele = params.focusArea.ele
         const sourceEle = ele.closest('[data-loc]')
         const loc = getClosestDomLoc(ele)
-        if (!sourceEle || !loc?.files?.jsx || !loc.codeLine) return []
+        console.log(1, sourceEle)
+        console.log(2, loc)
+        if (!sourceEle || !loc?.files?.jsx || !loc.codeLine) return null
 
         const scriptFile = context.component!.params!.data.files.find(
           (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
         )
-        if (!scriptFile) return []
+        console.log(3, scriptFile)
+        if (!scriptFile) return null
 
         const { start, end } = loc.codeLine
         const tag = sourceEle.tagName.toLowerCase()
@@ -564,6 +568,9 @@ export function buildHooks(props: Props) {
               }
             }
           }
+        }).concat({
+          title: '重置',
+          switchTo: resetWindowProxy,
         })
       } catch (e) {
         console.log('@getZoneStatus', e)
@@ -585,7 +592,9 @@ export function buildHooks(props: Props) {
       console.log('chip', chip)
 
       window._sandbox_.helpers.sendToAgent(params.id, {
-        message: `分析元素 [[chip:${chip.id}]]，基于「交互脚本控制页面展示」，编写代码和脚本`,
+        // message: `分析元素 [[chip:${chip.id}]]，基于「页面展示状态覆盖与交互脚本」，编写代码和脚本`,
+        message: `分析元素 [[chip:${chip.id}]] 的实际展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写代码和脚本`,
+        // message: `分析选中元素 [[chip:${chip.id}]] 的实际展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节。若存在有意义的覆盖场景，先为该元素接入 window._proxy_，再按修改后的 JSX 位置在 .agent/proxy-mock/interactive-scripts.yaml 中新增或更新一条交互脚本记录。`,
         meta: {
           chips: [chip],
         },

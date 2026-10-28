@@ -18,6 +18,8 @@ type Subscriber = {
 // 所有组件共享订阅集合；activeDependencies 指向当前正在收集读取操作的组件。
 const subscribers = new Set<Subscriber>()
 let activeDependencies: Set<ProxyKey> | null = null
+const originalValues = new Map<ProxyKey, unknown>()
+let isResetting = false
 
 // 保留页面上已有的数据，避免加载 store 时覆盖业务代码先前设置的值。
 const existingProxy = typeof window !== 'undefined' ? window._proxy_ : undefined
@@ -36,6 +38,7 @@ if (typeof window !== 'undefined') {
         const previous = Reflect.get(target, key)
         const updated = Reflect.set(target, key, value)
         if (updated && !Object.is(previous, value)) {
+          if (!isResetting && !originalValues.has(key)) originalValues.set(key, previous)
           let notified = 0
           subscribers.forEach((subscriber) => {
             if (subscriber.dependencies.has(key)) {
@@ -52,6 +55,20 @@ if (typeof window !== 'undefined') {
       },
     },
   )
+}
+
+export function resetWindowProxy(): void {
+  if (typeof window === 'undefined') return
+  const values = [...originalValues]
+  originalValues.clear()
+  isResetting = true
+  try {
+    values.forEach(([key, value]) => {
+      Reflect.set(window._proxy_, key, value)
+    })
+  } finally {
+    isResetting = false
+  }
 }
 
 export function useWindowProxy(): void {
