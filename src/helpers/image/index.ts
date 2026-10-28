@@ -33,7 +33,9 @@ export async function getImageSizeAtElementWidth(
       URL.revokeObjectURL(objectUrl);
     }
     if (image?.naturalWidth && image.naturalHeight) {
-      const height = (width - horizontalBox) * image.naturalHeight / image.naturalWidth + verticalBox;
+      const height = Number(
+        ((width - horizontalBox) * image.naturalHeight / image.naturalWidth + verticalBox).toFixed(2),
+      );
       if (Number.isFinite(height) && height > 0) {
         return { width, height };
       }
