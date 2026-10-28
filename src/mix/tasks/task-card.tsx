@@ -1,6 +1,9 @@
 import React from 'react'
 import type { UserTaskInfo } from '../context'
-import css from './verify-block/index.less'
+import * as lazyCss from './verify-block/index.lazy.less'
+import { getLazyCss } from '../lowcodeView/utils/css'
+
+const css = getLazyCss(lazyCss)
 
 export function getTaskDisplayTitle(title: string): string {
   return title.replace(/^T-\d+\s*[-:：]?\s*/, '') || title

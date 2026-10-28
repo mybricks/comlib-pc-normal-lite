@@ -13,6 +13,7 @@ import imgEditorCss from './configs/ImgEditor/style.lazy.less';
 import iconEditorCss from './configs/IconEditor/style.lazy.less';
 import aiSvgIconCss from './icons/aiSvgIcon.lazy.less';
 import aiEditPanelCss from './components/AiEditPanel.lazy.less';
+import taskVerifyCss from '../tasks/verify-block/index.lazy.less';
 
 import * as lowcodeViewCssNS from '../lowcodeView/index.lazy.less';
 import * as consoleViewCssNS from '../lowcodeView/console/index.lazy.less';
@@ -25,6 +26,7 @@ import * as imgEditorCssNS from './configs/ImgEditor/style.lazy.less';
 import * as iconEditorCssNS from './configs/IconEditor/style.lazy.less';
 import * as aiSvgIconCssNS from './icons/aiSvgIcon.lazy.less';
 import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
+import * as taskVerifyCssNS from '../tasks/verify-block/index.lazy.less';
 import versionListViewCss from '../../components/version-list/index.lazy.less';
 import * as versionListViewCssNS from '../../components/version-list/index.lazy.less';
 import taskPanelCss from '../../components/task-panel/index.lazy.less';
@@ -228,6 +230,10 @@ export function buildHooks(props: Props) {
           {
             css: transform(aiEditPanelCssNS),
             use: genUse(aiEditPanelCss)
+          },
+          {
+            css: transform(taskVerifyCssNS),
+            use: genUse(taskVerifyCss)
           }
         ]
       },
