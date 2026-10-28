@@ -598,11 +598,13 @@ export function buildHooks(props: Props) {
       return new Promise((resolve) => {
         const componentId = context.component!.params.id
         agentTurnLifecycle.register(componentId, () => {
-          resolve(getZoneStatus(ele) ?? [])
+          const res = getZoneStatus(ele)
+          console.log('@createZoneStatus:res', res)
+          resolve(res ?? [])
         })
 
         window._sandbox_.helpers.sendToAgent(componentId, {
-          message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写代码并按页面维护 .agent/proxy-mock/interactive-scripts.yaml。`,
+          message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
           meta: {
             chips: [chip],
           },
