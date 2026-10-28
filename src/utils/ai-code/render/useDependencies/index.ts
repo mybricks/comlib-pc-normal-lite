@@ -35,7 +35,6 @@ const useDependencies = (params: Params) => {
 
   return useMemo(() => {
     const { id, env, data, activeEnv, runtimeMode, logger } = params;
-    console.log('执行这里')
 
     setWindowProxyDesignMode(!env.runtime)
     const frontEndDataSouce = config.getFrontEndDataSouce()

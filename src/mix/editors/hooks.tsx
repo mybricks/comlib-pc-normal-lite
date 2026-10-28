@@ -79,42 +79,66 @@ function getDefaultDebugEnv(data: any) {
   return debugEnvOptions[0]?.value ?? 'prod';
 }
 
+let activeZoneStatusKey: string | undefined
+
 function getZoneStatus(ele: Element) {
   try {
     const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
-    if (!pagePath) return []
+    if (!pagePath) return null
 
     const scriptFile = context.component!.params!.data.files.find(
       (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
     )
-    if (!scriptFile) return []
+    if (!scriptFile) {
+      return ele.querySelector('[data-zone-status]') ? [] : null
+    }
 
     const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
       .filter((entry) => entry.page === pagePath)
       .flatMap((entry) => entry.locations)
-    if (!locations.length) return []
+    if (!locations.length) {
+      return ele.querySelector('[data-zone-status]') ? [] : null
+    }
 
-    return locations.map(({ title, scripts }) => ({
-      title,
-      items: [
-        { title: commonLang.normal, switchTo: resetWindowProxy },
-        ...scripts.map(({ title: scriptTitle, script }) => ({
-          title: scriptTitle,
-          switchTo: () => {
-            try {
-              // 每次执行前恢复原值，场景之间互斥。
+    const res = locations.map(({ title, fileName, loc, scripts }) => {
+      const locationKey = [pagePath, fileName, loc]
+      const normalKey = JSON.stringify([...locationKey, 'normal'])
+      return {
+        title,
+        items: [
+          {
+            title: commonLang.normal,
+            activated: activeZoneStatusKey === normalKey,
+            switchTo: () => {
+              activeZoneStatusKey = normalKey
               resetWindowProxy()
-              eval(script)
-            } catch (e) {
-              console.error(e)
             }
-          }
-        }))
-      ]
-    }))
+          },
+          ...scripts.map(({ title: scriptTitle, script }, scriptIndex) => {
+            const scriptKey = JSON.stringify([...locationKey, 'script', scriptTitle, scriptIndex])
+            return {
+              title: scriptTitle,
+              activated: activeZoneStatusKey === scriptKey,
+              switchTo: () => {
+                activeZoneStatusKey = scriptKey
+                try {
+                  // 每次执行前恢复原值，场景之间互斥。
+                  resetWindowProxy()
+                  eval(script)
+                } catch (e) {
+                  console.error(e)
+                }
+              }
+            }
+          })
+        ]
+      }
+    })
+
+    return res
   } catch (e) {
     console.log('@getZoneStatus', e)
-    return []
+    return null
   }
 }
 
@@ -555,11 +579,11 @@ export function buildHooks(props: Props) {
       })
     },
     '@getZoneStatus'(ele) {
-      console.log("@getZoneStatus", ele)
+      // console.log("@getZoneStatus", ele)
       return getZoneStatus(ele)
     },
     async '@createZoneStatus'(ele) {
-      console.log('@createZoneStatus', ele)
+      // console.log('@createZoneStatus', ele)
       const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
       const chipId = randomUUID()
       const chip = {
@@ -584,10 +608,6 @@ export function buildHooks(props: Props) {
           },
         })
       })
-    },
-    '@ifHaveZoneStatus'(ele) {
-      console.log('@ifHaveZoneStatus', ele)
-      return true
     },
     ...hooks
   };
