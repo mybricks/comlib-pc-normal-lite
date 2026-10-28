@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import context, { type UserTaskInfo } from '../context'
 import commonLang from '../../helpers/i18n/common'
 import { parseTasksForNotify } from './notify'
+import { getTaskDisplayTitle, TaskCardHeading } from './task-card'
+import css from './verify-block/index.less'
 
 const TASK_STATE_LABEL: Record<UserTaskInfo['state'], string> = {
   0: '处理中',
@@ -11,15 +13,11 @@ const TASK_STATE_LABEL: Record<UserTaskInfo['state'], string> = {
   3: '已完成',
 }
 
-const TASK_STATE_STYLE: Record<UserTaskInfo['state'], { background: string; color: string }> = {
-  0: { background: 'var(--mybricks-bg-color-active, #DFE1E6)', color: 'var(--mybricks-text-color-disabled, #42526E)' },
-  1: { background: '#ff4d4f', color: '#fff' },
-  2: { background: '#faad14', color: '#fff' },
-  3: { background: '#52c41a', color: '#fff' },
-}
-
-function getTaskDisplayTitle(title: string): string {
-  return title.replace(/^T-\d+\s*[-:：]?\s*/, '') || title
+const TASK_STATE_CLASS: Record<UserTaskInfo['state'], string> = {
+  0: 'doing',
+  1: 'verify',
+  2: 'handoff',
+  3: 'done',
 }
 
 function TaskReferCard({ task }: { task: UserTaskInfo }) {
@@ -70,42 +68,25 @@ function TaskReferCard({ task }: { task: UserTaskInfo }) {
         <span>{commonLang.taskReferencePrefix}{getTaskDisplayTitle(currentTask?.title ?? task.title)}</span>
       </span>
       {hovered && currentTask && createPortal(
-        <span
+        <div
           role="tooltip"
+          className={[css['mb-tv-card'], css['mb-tv-tooltip']].join(' ')}
           style={{
             // Portal 到 body 后不受聊天气泡、问答卡片和滚动容器的 overflow 约束。
-            position: 'fixed',
             zIndex: 2147483647,
             top: position.top,
             left: position.left,
             transform: 'translateY(-100%)',
-            width: 260,
-            padding: '9px 10px',
-            border: '1px solid var(--mybricks-border-color-main, #d9d9d9)',
-            borderRadius: 6,
-            background: 'var(--mybricks-bg-color-main, #fff)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.14)',
-            color: 'var(--mybricks-text-color-main, #1f1f1f)',
-            fontSize: 12,
-            fontWeight: 400,
-            lineHeight: 1.5,
-            pointerEvents: 'none',
           }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: currentTask.desc || currentTask.verification ? 6 : 0 }}>
-            <span style={{ flexShrink: 0, fontSize: 11, padding: '1px 5px', borderRadius: 2, fontWeight: 500, lineHeight: '16px', ...(TASK_STATE_STYLE[currentTask.state] ?? TASK_STATE_STYLE[0]) }}>
-              {TASK_STATE_LABEL[currentTask.state] ?? '处理中'}
-            </span>
-            <strong style={{ minWidth: 0, fontSize: 13, fontWeight: 600, lineHeight: '18px', overflowWrap: 'anywhere' }}>{getTaskDisplayTitle(currentTask.title)}</strong>
-          </span>
-          {currentTask.desc ? <span style={{ display: 'block', marginBottom: currentTask.verification ? 6 : 0, color: 'var(--mybricks-text-color-disabled, #8c8c8c)', overflowWrap: 'anywhere' }}>{currentTask.desc}</span> : null}
+          <TaskCardHeading task={currentTask} statusLabel={TASK_STATE_LABEL[currentTask.state] ?? '处理中'} statusClass={TASK_STATE_CLASS[currentTask.state] ?? TASK_STATE_CLASS[0]} />
           {currentTask.verification ? (
             <span style={{ display: 'block' }}>
-              <b style={{ display: 'block', marginBottom: 2, fontWeight: 500 }}>验证条件：</b>
-              <span style={{ display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{currentTask.verification}</span>
+              <span className={css['mb-tv-verify-label']}>验证条件：</span>
+              <span className={css['mb-tv-tooltip-verification']}>{currentTask.verification}</span>
             </span>
           ) : null}
-        </span>
+        </div>
       , document.body)}
     </span>
   )

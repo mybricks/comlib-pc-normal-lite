@@ -555,7 +555,6 @@ if (frontendMode === 'prototype') {
   interface PageContextValue {
     container: HTMLElement
     onPageInfo: (params: { widgetName?: string | null, filename: string }) => void
-    defaultMount?: Boolean;
   }
   const PageContext = createContext<PageContextValue>({
     container: document.body,
@@ -623,8 +622,8 @@ if (frontendMode === 'prototype') {
     return variables
   }
 
-  const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void }>) => {
-    const { path = '/', onMount, children, defaultMount } = params;
+  const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void, defaultMount?: boolean, fallbackFilename?: string }>) => {
+    const { path = '/', onMount, children, defaultMount, fallbackFilename } = params;
     const theme = mixContext.resolveActiveTheme();
     const envCssVariables = useEnvCssVariables();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -642,7 +641,7 @@ if (frontendMode === 'prototype') {
 
     useEffect(() => {
       if (defaultMount) {
-        onMount()
+        onMount?.()
       }
       return () => {
         lessRef.current?.off?.()
@@ -651,6 +650,9 @@ if (frontendMode === 'prototype') {
 
     useLayoutEffect(() => {
       let exeCount = 0
+      if (fallbackFilename) {
+        containerRef.current?.setAttribute('data-zone-filename', fallbackFilename)
+      }
       setContainer({
         container: containerRef.current!.querySelector('[data-container]')!,
         onPageInfo: (params) => {
@@ -741,8 +743,7 @@ if (frontendMode === 'prototype') {
             // console.error(`[@动态解析]`, e)
           }
           onMount?.(params)
-        },
-        defaultMount
+        }
       })
     }, [])
 
@@ -858,8 +859,8 @@ if (frontendMode === 'prototype') {
     )
   }
 
-  const RuntimeRoute = (params: { _route: string, _Component: React.FC<any> }) => {
-    const { _route, _Component: Component } = params;
+  const RuntimeRoute = (params: { _route: string, _Component: React.FC<any>, _appFilename?: string }) => {
+    const { _route, _Component: Component, _appFilename } = params;
     const [{ stack, cursor }, dispatch] = useReducer(
       routerReducer,
       { stack: [{ path: _route, state: undefined }], cursor: 0 }
@@ -887,7 +888,7 @@ if (frontendMode === 'prototype') {
 
     return (
       <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
-        <Page path={rawPath}>
+        <Page path={rawPath} defaultMount={true} fallbackFilename={_appFilename}>
           <RouterContext.Provider value={contextValue}>
             <Component {...params}/>
           </RouterContext.Provider>
@@ -1064,7 +1065,7 @@ if (frontendMode === 'prototype') {
   //   ) : null
   // }
 
-  const appRef = (Component) => {
+  const appRef = (Component, params?: { filename?: string }) => {
     // const ObservedComponent = observer(Component);
     const ObservedComponent = Component;
     return (props) => {
@@ -1143,13 +1144,9 @@ if (frontendMode === 'prototype') {
                     path={'/'}
                     onMount={onMount}
                     defaultMount={true}
+                    fallbackFilename={params?.filename}
                   >
-                    <Route
-                      path='/'
-                      element={(
-                        <ObservedComponent {...props} _env={_env}/>
-                      )}
-                    />
+                    <ObservedComponent {...props} _env={_env}/>
                   </Page>
                 )}
               </>
@@ -1208,6 +1205,7 @@ if (frontendMode === 'prototype') {
           {...props}
           _env={_env}
           _route={env._debugTarget?.pageIndex}
+          _appFilename={params?.filename}
           _Component={ObservedComponent}
         />
       )
@@ -1221,11 +1219,11 @@ if (frontendMode === 'prototype') {
     return function comRef (props: any) {
       const pageContext = useContext(PageContext);
 
-      if (props['_mybricks_page'] || pageContext.defaultMount) {
-        useLayoutEffect(() => {
+      useLayoutEffect(() => {
+        if (props['_mybricks_page']) {
           pageContext.onPageInfo(params)
-        }, [])
-      }
+        }
+      }, [props['_mybricks_page'], pageContext])
 
       return (
         <ObservedComponent {...props} _env={_env} popupNode={pageContext.container}/>

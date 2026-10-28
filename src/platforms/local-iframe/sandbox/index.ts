@@ -2,6 +2,7 @@ import context, { type UserTaskInfo } from '../../../mix/context'
 import { parse as parseYaml } from 'yaml'
 import { parseTasksForNotify } from '../../../mix/tasks/notify'
 import { registerTaskReferResolver } from '../../../mix/tasks/refer'
+import { createTasksManager } from '../../../mix/tasks/verify-block'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
 import { transformLocalIframeFormatForNotifyChanged } from '../../../utils/ai-code/md/transformForNotifyChanged'
 import {
@@ -232,20 +233,6 @@ async function syncInitialAuditInfo(): Promise<void> {
   }
 }
 
-async function syncInitialTasksContent(): Promise<void> {
-  try {
-    const tasksPath = await getCurrentTasksPath()
-    const files = await readLocalFiles([tasksPath])
-    const content = files[0]?.content
-    if (content === undefined) throw new Error(`当前分支未生成任务文档：${tasksPath}`)
-    context.setTasksContent(content)
-    context.notifyUserTaskInfo(parseTasksForNotify(content))
-  } catch {
-    context.setTasksContent(null)
-    context.notifyUserTaskInfo([])
-  }
-}
-
 async function syncUpdatedAuditInfo(files: LocalFile[]): Promise<void> {
   const tasksPath = await getCurrentTasksPath()
   const tasksFile = files.find((file) => file.path === tasksPath)
@@ -317,6 +304,10 @@ export async function deleteLocalFiles(paths: string[]): Promise<void> {
     body: JSON.stringify({ paths }),
   })
   if (!response.ok) throw new Error(await getResponseError(response))
+  if (paths.includes(await getCurrentTasksPath())) {
+    context.setTasksContent(null)
+    context.notifyUserTaskInfo([])
+  }
   await refreshLocalGraph()
 }
 
@@ -506,6 +497,7 @@ export function registerSandbox(comId: string) {
   // 直接注册 AgentSandbox，避免通过 V1 getFiles() 全量加载文件内容。
   const { history, isRemoteAgent } = connectToAI(comId, {
     agentSandbox,
+    tasksManager: createTasksManager(comId),
     pageAnalysis: createHttpPageAnalysis(),
     mentions: [buildTaskMentionProvider()],
     hooks: {
@@ -767,11 +759,11 @@ export function registerSandbox(comId: string) {
     }
   }) ?? {};
 
+
   // 注册完成后主动扫描一次本地工程；getFiles 之外的首次生命周期也需要
   // 让已有的 .lingchuang/graph 文档尽早同步到设计器。
   void refreshLocalGraph().catch((error) => {
     console.error('[mybricks-graph][local-iframe] initial compile failed', error)
   })
   void syncInitialAuditInfo()
-  void syncInitialTasksContent()
 }

@@ -76,6 +76,7 @@ export function parseTasksForNotify(content: string): UserTaskInfo[] {
       title,
       desc: summaryMatch?.[1]?.trim() ?? '',
       verification: extractVerification(section),
+      handoverTo: extractTaskField(section, '交接给'),
       state: TASK_NOTIFY_STATE[rawState] ?? 0,
     })
   }

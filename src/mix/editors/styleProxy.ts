@@ -3,12 +3,15 @@ import { parseLess, stringifyLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
+import { getImageSizeAtElementWidth } from '../../helpers/image'
 import { randomUUID } from '../utils/uuid'
 import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpdateAiRequest, buildElementSvgUpdateAiRequest } from './setSegment/elementChip'
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
+import { createInlineStyleHistory } from './style/helpers/createInlineStyleHistory'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
+import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots, patchSingleElementInlineStyle } from './style/helpers/createSetStyleHandler'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -1641,7 +1644,7 @@ export function genStyleValue(props) {
       undoRedoManager.executeBranch({
         execute() {
           currentBranch.files.forEach(({ current }, fileName) => {
-            context.updateFile({ fileName, content: current, type: undefined });
+            context.updateFile({ fileName, content: current, type: undefined, noUpdateFileSystem: true });
           });
           // 首次执行与 redo 都在这里登记操作，保证面板不受 debounce 延迟影响。
           if (currentBranch.ele && !currentBranch.actionApplied) {
@@ -1675,11 +1678,18 @@ export function genStyleValue(props) {
       }
       branch.ele = ele;
       branch.title = ele ? getStyleActionTitle(ele) : branch.title;
-      context.updateFile({ fileName: path, content: current, type: undefined });
+      //noUpdateFileSystem: true 只写入项目源码，不触发画布重渲染
+      context.updateFile({ fileName: path, content: current, type: undefined, noUpdateFileSystem: true });
     }
 
     finalizeStyleFileBranch();
   };
+
+  const inlineStyleHistory = createInlineStyleHistory({
+    getShadowDoc,
+    getStyleActionTitle,
+    endStyleFileBranch: () => { pendingStyleFileBranch = null; },
+  });
 
   /** 三方内部 DOM 没有可安全落盘的 CSS 入口时，按 setSegment 的 chip 分支请求 AI。 */
   const updateAIStyleInBranch = (ele: HTMLElement, value: Record<string, any>, deletions: string[]) => {
@@ -1819,6 +1829,22 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
+      const useInlineStyleHistory = !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
+        (eleClassList.length === 0 || hasDragInsert);
+      if (!useInlineStyleHistory) inlineStyleHistory.clearPendingBranch();
+
+      const applyInlineStyleToDOM = (inlineStyle: Record<string, string>, inlineDeletions: string[] = []) => {
+        if (!ele) return;
+        // 源码写入成功后调用；先删除旧声明，再应用新值，保持简写拆分的顺序。
+        const snapshots = inlineDeletions.map((key) =>
+          getInitialInlineStyleSnapshot(ele as HTMLElement, key, ''),
+        );
+        snapshots.push(...Object.entries(inlineStyle).map(([key, value]) =>
+          getInitialInlineStyleSnapshot(ele as HTMLElement, key, value),
+        ));
+        applyInlineStyleSnapshots(snapshots, 'execute');
+      };
+
       if (rawSelector === 'inline' && (explicitClearPatch || rewritingInlineShorthand)) {
         const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
         const styleInfo: Record<string, StyleInfoEntry> | null = styleInfoRaw
@@ -1843,8 +1869,16 @@ export function genStyleValue(props) {
           const previousSource = decodeURIComponent(jsxFile.source);
           const result = rewriteInlineShorthandStyle(previousSource, styleInfo, value, deletions!);
           if (!result) return;
+          if (useInlineStyleHistory) {
+            inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPath, result.newSource, previousSource, () => {
+              applyInlineStyleToDOM(value, deletions!);
+              (ele as HTMLElement).dataset.styleInfo = JSON.stringify(result.newStyleInfo);
+            });
+            return;
+          }
           (ele as HTMLElement).dataset.styleInfo = JSON.stringify(result.newStyleInfo);
           updateStyleFileInBranch({ path: jsxPath, current: result.newSource, previous: previousSource, ele });
+          applyInlineStyleToDOM(value, deletions!);
           return;
         }
 
@@ -1918,6 +1952,23 @@ export function genStyleValue(props) {
           }
           nextSource = patchedSource;
 
+          if (useInlineStyleHistory) {
+            inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPath, nextSource, previousSource, () => {
+              (ele as HTMLElement).dataset.styleInfo = Object.keys(nextStyleInfo).length > 0
+                ? JSON.stringify(nextStyleInfo)
+                : '';
+              patchDataStyleInfo(
+                ele as HTMLElement,
+                writeEntries.map(({ val, valueStart, valueEnd }) => {
+                  const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                  return { valueStart, valueEnd, newLen: `'${escaped}'`.length };
+                }),
+              );
+              applyInlineStyleToDOM(explicitClearPatch.writes, explicitClearPatch.deletions);
+            });
+            return;
+          }
+
           // 复用现有偏移更新器，但只在所有源码 patch 都成功后才更新 DOM。
           (ele as HTMLElement).dataset.styleInfo = Object.keys(nextStyleInfo).length > 0
             ? JSON.stringify(nextStyleInfo)
@@ -1930,6 +1981,15 @@ export function genStyleValue(props) {
             }),
           );
         } else {
+          if (useInlineStyleHistory) {
+            inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPath, nextSource, previousSource, () => {
+              (ele as HTMLElement).dataset.styleInfo = Object.keys(nextStyleInfo).length > 0
+                ? JSON.stringify(nextStyleInfo)
+                : '';
+              applyInlineStyleToDOM(explicitClearPatch.writes, explicitClearPatch.deletions);
+            });
+            return;
+          }
           (ele as HTMLElement).dataset.styleInfo = Object.keys(nextStyleInfo).length > 0
             ? JSON.stringify(nextStyleInfo)
             : '';
@@ -1941,6 +2001,7 @@ export function genStyleValue(props) {
           previous: previousSource,
           ele,
         });
+        applyInlineStyleToDOM(explicitClearPatch.writes, explicitClearPatch.deletions);
         console.log('[style-proxy][style-clear-apply]', {
           selector: rawSelector,
           targetKind: 'inline',
@@ -1978,7 +2039,7 @@ export function genStyleValue(props) {
       // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
       type StyleKeyInfo = { kind: 'static' | 'dynamic'; valueStart?: number; valueEnd?: number };
       const styleInfoRaw = (ele as HTMLElement | null)?.dataset?.styleInfo;
-      const styleInfo: Record<string, StyleKeyInfo> | null = styleInfoRaw
+      let styleInfo: Record<string, StyleKeyInfo> | null = styleInfoRaw
         ? (() => { try { return JSON.parse(styleInfoRaw) } catch { return null } })()
         : null;
 
@@ -2019,18 +2080,31 @@ export function genStyleValue(props) {
               inlineEntries.map(({ val, valueStart, valueEnd }) => ({ val, valueStart, valueEnd, asString: true })),
             );
             if (jsxNewSource) {
-              updateStyleFileInBranch({
-                path: jsxPath,
-                current: jsxNewSource,
-                previous: jsxPrevSource,
-                ele,
-              });
-              // 同步更新 DOM 上的 data-style-info 偏移量，防止连续编辑时偏移量因字符长度变化而失效
-              if (ele) {
-                patchDataStyleInfo(ele as HTMLElement, inlineEntries.map(({ val, valueStart, valueEnd }) => {
-                  const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                  return { valueStart, valueEnd, newLen: `'${escaped}'`.length };
-                }));
+              if (useInlineStyleHistory) {
+                inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPath, jsxNewSource, jsxPrevSource, () => {
+                  applyInlineStyleToDOM(Object.fromEntries(inlineEntries.map(({ key, val }) => [key, val])));
+                  patchDataStyleInfo(ele as HTMLElement, inlineEntries.map(({ val, valueStart, valueEnd }) => {
+                    const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    return { valueStart, valueEnd, newLen: `'${escaped}'`.length };
+                  }));
+                });
+                // 同一次 set 可能接着追加或删除属性，必须使用刚更新的偏移。
+                styleInfo = JSON.parse((ele as HTMLElement).dataset.styleInfo!);
+              } else {
+                updateStyleFileInBranch({
+                  path: jsxPath,
+                  current: jsxNewSource,
+                  previous: jsxPrevSource,
+                  ele,
+                });
+                applyInlineStyleToDOM(Object.fromEntries(inlineEntries.map(({ key, val }) => [key, val])));
+                // 同步更新 DOM 上的 data-style-info 偏移量，防止连续编辑时偏移量因字符长度变化而失效
+                if (ele) {
+                  patchDataStyleInfo(ele as HTMLElement, inlineEntries.map(({ val, valueStart, valueEnd }) => {
+                    const escaped = val.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    return { valueStart, valueEnd, newLen: `'${escaped}'`.length };
+                  }));
+                }
               }
             } else {
               // patch 失败（偏移过期）→ 降级：把这些 key 回退到 Less 流程
@@ -2095,12 +2169,20 @@ export function genStyleValue(props) {
           );
           if (removeResult) {
             const { newSource: jsxNewSource, newStyleInfo } = removeResult;
+            if (useInlineStyleHistory) {
+              inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPathForInline, jsxNewSource, jsxPrevSource, () => {
+                applyInlineStyleToDOM({}, inlineDeletions);
+                (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
+              });
+              return;
+            }
             updateStyleFileInBranch({
               path: jsxPathForInline,
               current: jsxNewSource,
               previous: jsxPrevSource,
               ele,
             });
+            applyInlineStyleToDOM({}, inlineDeletions);
             if (ele) {
               // newStyleInfo 为 null 表示 style 属性已被完全移除
               (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
@@ -2124,12 +2206,20 @@ export function genStyleValue(props) {
           if (!injectResult) return;
 
           const { newSource: jsxNewSource, styleInfo: injectedStyleInfo } = injectResult;
+          if (useInlineStyleHistory) {
+            inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPathForInline, jsxNewSource, jsxPrevSource, () => {
+              applyInlineStyleToDOM(propsToWrite);
+              (ele as HTMLElement).dataset.styleInfo = JSON.stringify(injectedStyleInfo);
+            });
+            return;
+          }
           updateStyleFileInBranch({
             path: jsxPathForInline,
             current: jsxNewSource,
             previous: jsxPrevSource,
             ele,
           });
+          applyInlineStyleToDOM(propsToWrite);
           if (ele) {
             (ele as HTMLElement).dataset.styleInfo = JSON.stringify(injectedStyleInfo);
           }
@@ -2139,12 +2229,21 @@ export function genStyleValue(props) {
           if (!appendResult) return;
 
           const { newSource: jsxNewSource, styleInfoUpdates } = appendResult;
+          if (useInlineStyleHistory) {
+            const mergedStyleInfo = { ...styleInfo, ...styleInfoUpdates };
+            inlineStyleHistory.updateInlineStyleInBranch(ele, jsxPathForInline, jsxNewSource, jsxPrevSource, () => {
+              applyInlineStyleToDOM(propsToWrite);
+              (ele as HTMLElement).dataset.styleInfo = JSON.stringify(mergedStyleInfo);
+            });
+            return;
+          }
           updateStyleFileInBranch({
             path: jsxPathForInline,
             current: jsxNewSource,
             previous: jsxPrevSource,
             ele,
           });
+          applyInlineStyleToDOM(propsToWrite);
           // 把新属性的偏移合并进 DOM 上的 data-style-info
           if (ele) {
             const mergedStyleInfo = { ...styleInfo, ...styleInfoUpdates };
@@ -2245,6 +2344,7 @@ export function genStyleValue(props) {
                   previous: jsxPrevForDel,
                   ele,
                 });
+                applyInlineStyleToDOM({}, inlineDelsForClass);
                 if (ele) {
                   (ele as HTMLElement).dataset.styleInfo = newStyleInfo ? JSON.stringify(newStyleInfo) : '';
                 }
@@ -2386,6 +2486,8 @@ export function genStyleValue(props) {
 }
 
 let _imgAppliedCallback: ((src: string) => void) | null = null;
+// 记录画布上的每张图片目前在等哪一次换图完成，以便应用那次计算好的宽高。
+const pendingImageStyleUpdates = new WeakMap<HTMLElement, { load: () => void; error: () => void }>();
 
 /** ImgPreview 组件注册回调，替换成功后立即更新预览 */
 export function registerImgAppliedCallback(cb: ((src: string) => void) | null): void {
@@ -2464,10 +2566,79 @@ export function genImgSrcReplacer() {
         };
 
         if (jsxPath && jsxFile && STATIC_SRC_RE.test(snippet) && !hasRepeatedLoc) {
-          const srcMatch = snippet.match(STATIC_SRC_RE);
+          // 尺寸调整是附加处理；本地图片读取或测量失败都继续原来的地址替换。
+          const imageStyle: Record<string, string> = {};
+          let inlineUpdate: ReturnType<typeof patchSingleElementInlineStyle> = null;
+          try {
+            const imageSize = await getImageSizeAtElementWidth(ele, file);
+            if (imageSize) {
+              imageStyle.width = `${imageSize.width}px`;
+              imageStyle.height = `${imageSize.height}px`;
+              inlineUpdate = patchSingleElementInlineStyle(ele, imageStyle);
+            }
+          } catch (error) {
+            console.warn('[image-replacer] 无法更新新图片尺寸，继续替换图片', error);
+          }
+          const styleSnapshots = Object.entries(imageStyle).map(([key, value]) =>
+            getInitialInlineStyleSnapshot(ele, key, value),
+          );
+          const image = ele as HTMLImageElement;
+          // 例如 A 没加载完就换成 B，撤销 B 后还要继续等 A 加载，再应用 A 的宽高。
+          const previousImageStyleUpdate = pendingImageStyleUpdates.get(ele);
+          /**
+           * 解决换图时“宽高先变化，新图后显示”造成的拉伸和抖动。
+           * 本地文件的宽高已算好，但上传后的图片地址仍需浏览器加载；
+           * 因此加载期间保留原宽高，等新图加载成功后再应用新宽高。
+           *
+           * 传入 update：改为等待这次换图完成，之前那次不能再修改当前图片的宽高。
+           * 传入 undefined：不再等待宽高更新，例如已处理完成、加载失败或已撤销。
+           * 这里只安排何时应用宽高，不直接修改宽高或源码，也不替换组件原有的图片加载处理。
+           */
+          const setPendingImageStyleUpdate = (update: typeof previousImageStyleUpdate) => {
+            const current = pendingImageStyleUpdates.get(ele);
+            if (current) {
+              ele.removeEventListener('load', current.load);
+              ele.removeEventListener('error', current.error);
+              pendingImageStyleUpdates.delete(ele);
+            }
+            if (update) {
+              pendingImageStyleUpdates.set(ele, update);
+              ele.addEventListener('load', update.load);
+              ele.addEventListener('error', update.error);
+            }
+          };
+          // 本次换图的处理：成功后应用本次算好的宽高，失败则结束等待。
+          const imageStyleUpdate = {
+            load() {
+              // imageStyleUpdate 代表本次换图，例如换成 A。
+              // pendingImageStyleUpdates.get(ele) 记录这个位置当前在等的换图；如果后来换成 B，记录就变成 B。
+              // A 加载完成时发现记录已是 B，就跳过 A 的处理，避免把 A 的高度应用到 B 上。
+              // 已撤销或尺寸已应用时，等待记录会被清除，也不再处理。
+              if (pendingImageStyleUpdates.get(ele) !== imageStyleUpdate) return;
+              if (ele.getAttribute('src') !== newSrc) {
+                setPendingImageStyleUpdate(undefined);
+                return;
+              }
+              // src 设为新地址时，currentSrc 可能仍指向旧图；确认新图已加载成功才应用尺寸。
+              if (!image.complete || !image.naturalWidth || image.currentSrc !== image.src) return;
+              setPendingImageStyleUpdate(undefined);
+              applyInlineStyleSnapshots(styleSnapshots, 'execute');
+            },
+            error() {
+              if (pendingImageStyleUpdates.get(ele) === imageStyleUpdate) {
+                setPendingImageStyleUpdate(undefined);
+              }
+            },
+          };
+
+          // 尺寸补丁只在内存中生成，与地址合并后一次写入；没有补丁时沿用原源码。
+          const sourceWithStyle = inlineUpdate?.newCode ?? source;
+          const endWithStyle = end + sourceWithStyle.length - source.length;
+          const snippetWithStyle = sourceWithStyle.slice(start, endWithStyle);
+          const srcMatch = snippetWithStyle.match(STATIC_SRC_RE);
           const newSrcAttribute = `src="${newSrc}"`;
-          const newSnippet = snippet.replace(STATIC_SRC_RE, newSrcAttribute);
-          const newSource = source.slice(0, start) + newSnippet + source.slice(end);
+          const newSnippet = snippetWithStyle.replace(STATIC_SRC_RE, newSrcAttribute);
+          const newSource = sourceWithStyle.slice(0, start) + newSnippet + sourceWithStyle.slice(endWithStyle);
           const sourceReplacement: SourceReplacement | null =
             srcMatch && typeof srcMatch.index === 'number' && typeof start === 'number' && typeof end === 'number'
               ? {
@@ -2484,10 +2655,22 @@ export function genImgSrcReplacer() {
           undoRedoManager.executeBranch({
             execute() {
               context.updateFile({ fileName: jsxPath, content: newSource, type: undefined, noUpdateFileSystem: true });
+              // 源码已一次写入；下面按尺寸、地址的文本变更顺序更新 DOM 源码定位。
+              if (inlineUpdate) {
+                inlineUpdate.sourceReplacements.forEach((replacement) => {
+                  shiftDOMSourceLocationsAfterReplacement(shadowRoot, jsxPath, replacement);
+                });
+                if (inlineUpdate.nextStyleInfo) {
+                  ele.dataset.styleInfo = JSON.stringify(inlineUpdate.nextStyleInfo);
+                }
+              }
               if (sourceReplacement) {
                 shiftDOMSourceLocationsAfterReplacement(shadowRoot, jsxPath, sourceReplacement);
               }
+              // 先监听再换地址：加载期间保留原宽高，避免新图还没显示，旧图就先被拉伸。
+              setPendingImageStyleUpdate(styleSnapshots.length ? imageStyleUpdate : undefined);
               applyPreview(newSrc);
+              imageStyleUpdate.load(); // 兼容图片已缓存、无需等待 load 的情况。
               context.component?.actions.addUserAction({
                 id: actionId,
                 type: 'update-image',
@@ -2500,7 +2683,11 @@ export function genImgSrcReplacer() {
               if (sourceLocationSnapshot) {
                 restoreDOMSourceLocationSnapshot(sourceLocationSnapshot);
               }
+              applyInlineStyleSnapshots(styleSnapshots, 'undo');
+              // 移除本次监听；若上一次换图尚未完成，恢复它的监听，再恢复图片地址。
+              setPendingImageStyleUpdate(previousImageStyleUpdate);
               applyPreview(previousSrc);
+              previousImageStyleUpdate?.load();
               context.component?.actions.removeUserAction(actionId);
             },
           });

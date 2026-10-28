@@ -164,7 +164,7 @@ type StyleKeyRoute = {
   shorthandKey?: string;
 }
 
-const getInitialInlineStyleSnapshot = (
+export const getInitialInlineStyleSnapshot = (
   targetEle: HTMLElement,
   key: string,
   nextValue: string,
@@ -182,7 +182,7 @@ const getInitialInlineStyleSnapshot = (
   }
 }
 
-const applyInlineStyleSnapshots = (snapshots: InlineStyleSnapshot[], phase: 'execute' | 'undo') => {
+export const applyInlineStyleSnapshots = (snapshots: InlineStyleSnapshot[], phase: 'execute' | 'undo') => {
   snapshots.forEach((snapshot) => {
     if (phase === 'execute') {
       const nextValue = splitStyleValueAndPriority(snapshot.nextValue)
@@ -631,7 +631,7 @@ const patchLessStyles = (lessStyle: LessStyleMap, fallbackLessFile?: string): Fi
 /**
  * multiple 为否时，样式只写当前 JSX 标签 inline style，避免修改共享 class 对应的 Less 规则。
  */
-const patchSingleElementInlineStyle = (
+export const patchSingleElementInlineStyle = (
   targetEle: HTMLElement,
   nextStyle: Record<string, StyleValue>,
   initialInlineCssText = '',

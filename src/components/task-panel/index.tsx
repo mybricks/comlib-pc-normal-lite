@@ -4,6 +4,7 @@ import { randomUUID } from '../../mix/utils/uuid'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
 import i18n from '../../helpers/i18n'
 import { findTaskDocumentFile } from '../../mix/tasks/notify'
+import { applyTaskTransition } from '../../mix/tasks/transition'
 import { Popconfirm } from '../version-list'
 import * as lazyCss from './index.lazy.less'
 
@@ -552,30 +553,6 @@ interface TaskTransition {
   label: string
   instruction: string
   requiresReason?: boolean
-}
-
-function applyTaskTransition(content: string, taskId: string, targetStatus: TaskStatus): string {
-  const sections = content.split(/(?=^## )/m)
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
-
-  return sections.map(section => {
-    if (!/^## /.test(section)) return section
-    const titleLine = section.split('\n')[0]
-    const id = titleLine.replace(/^## /, '').trim().match(/^(T-\d+)\b/)?.[1]
-    if (id !== taskId) return section
-
-    let updated = section.replace(
-      /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*)(.+)$/m,
-      `$1${targetStatus}`
-    )
-    updated = updated.replace(
-      /^(\s*-\s*\*{1,2}\s*更新时间\s*\*{0,2}\s*[：:]\s*)(.+)$/m,
-      `$1${timestamp}`
-    )
-    return updated
-  }).join('')
 }
 
 async function commitTaskTransition(taskId: string, targetStatus: TaskStatus): Promise<boolean> {

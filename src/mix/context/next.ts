@@ -919,6 +919,8 @@ export interface UserTaskInfo {
   desc: string;
   /** TASKS.md 中的验证条件，用于任务引用 hover 卡片。 */
   verification?: string;
+  /** TASKS.md 中的「交接给」；存在时验证通过后流转到待交接而非已完成。 */
+  handoverTo?: string;
   state: 0 | 1 | 2 | 3;
 }
 export class Version {
