@@ -8,6 +8,22 @@ import {
   shiftDOMSourceLocationsAfterReplacement,
   type SourceReplacement,
 } from '../../setSegment/sourceLocation';
+import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots } from './createSetStyleHandler';
+import type { StyleInfoEntry } from './patchJsxInlineStyle';
+
+export type InlineStyleBatch = {
+  target: HTMLElement;
+  /** 已准备好的 JSX 和随批提交的样式文件补丁。 */
+  files: Map<string, { previous: string; current: string }>;
+  /** 按准备补丁时的顺序同步节点，保证源码偏移一致。 */
+  changes: Array<{
+    target: HTMLElement;
+    path: string;
+    style: Record<string, any>;
+    replacement: SourceReplacement;
+    styleInfo: Record<string, StyleInfoEntry>;
+  }>;
+};
 
 /** 每个样式代理独立维护 inline 合并窗口，避免不同代理共享 pending 状态。 */
 export function createInlineStyleHistory({
@@ -91,8 +107,51 @@ export function createInlineStyleHistory({
     finalizeInlineStyleBranch();
   };
 
+  // 多节点及随批样式文件作为一个独立操作，不参与普通 inline 的连续输入合并。
+  const updateInlineStyleBatchInBranch = ({ target, files, changes }: InlineStyleBatch) => {
+    const shadowRoot = getShadowDoc();
+    const locations = new Map<string, ReturnType<typeof createDOMSourceLocationSnapshot>>();
+    changes.forEach(({ path }) => {
+      if (!locations.has(path)) locations.set(path, createDOMSourceLocationSnapshot(shadowRoot, path));
+    });
+    const snapshots = changes.flatMap(({ target, style }) => Object.entries(style)
+      .map(([key, value]) => getInitialInlineStyleSnapshot(target, key, value == null ? '' : String(value))));
+    const actionId = randomUUID();
+    endStyleFileBranch();
+    pendingInlineStyleBranch = null;
+    undoRedoManager.executeBranch({
+      execute() {
+        // JSX 源码与 DOM 先同步；随批样式文件刷新时读取同一批已更新的父子源码。
+        files.forEach(({ current }, path) => {
+          if (locations.has(path)) context.updateFile({ fileName: path, content: current, type: undefined, noUpdateFileSystem: true });
+        });
+        changes.forEach(({ target, path, replacement, styleInfo }) => {
+          shiftDOMSourceLocationsAfterReplacement(shadowRoot, path, replacement);
+          target.dataset.styleInfo = JSON.stringify(styleInfo);
+        });
+        applyInlineStyleSnapshots(snapshots, 'execute');
+        files.forEach(({ current }, path) => {
+          if (!locations.has(path)) context.updateFile({ fileName: path, content: current, type: undefined });
+        });
+        context.component?.actions.addUserAction({ id: actionId, type: 'update-style', title: getStyleActionTitle(target), refElement: target });
+      },
+      undo() {
+        files.forEach(({ previous }, path) => {
+          if (locations.has(path)) context.updateFile({ fileName: path, content: previous, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' });
+        });
+        locations.forEach(snapshot => restoreDOMSourceLocationSnapshot(snapshot));
+        applyInlineStyleSnapshots(snapshots, 'undo');
+        files.forEach(({ previous }, path) => {
+          if (!locations.has(path)) context.updateFile({ fileName: path, content: previous, type: undefined, updateSource: 'undo' });
+        });
+        context.component?.actions.removeUserAction(actionId);
+      },
+    });
+  };
+
   return {
     updateInlineStyleInBranch,
+    updateInlineStyleBatchInBranch,
     clearPendingBranch() {
       pendingInlineStyleBranch = null;
     },
