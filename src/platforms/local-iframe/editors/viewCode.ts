@@ -11,8 +11,13 @@ export default function (params) {
     return
   }
 
-  window.location.assign(getUrl({
+  // window.location.assign(getUrl({
+  //   editor: 'vscode',
+  //   path: `${loc.files.jsx}:${loc.codeLine.start}`
+  // }))
+  // 客户端
+  window.open(getUrl({
     editor: 'vscode',
     path: `${loc.files.jsx}:${loc.codeLine.start}`
-  }))
+  }), '_blank')
 }

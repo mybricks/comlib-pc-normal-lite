@@ -18,6 +18,7 @@ import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
 import { createHttpPageAnalysis } from './page-analysis'
+import { undoRedoManager } from '../../../mix/editors/undoRedo'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -599,6 +600,13 @@ export function registerSandbox(comId: string) {
         //   }
         //   undoRedoManager.clearBranch()
         // }
+
+        try {
+          undoRedoManager.rollbackAIBranchCommands()
+          undoRedoManager.clearBranch()
+        } catch (e) {
+          console.log('报错', e)
+        }
 
         // turnLogs.setLog({
         //   message: isRemoteAgent
