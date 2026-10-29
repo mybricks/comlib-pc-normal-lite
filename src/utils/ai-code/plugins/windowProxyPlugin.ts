@@ -19,7 +19,6 @@ export default function windowProxyPlugin({ types }: { types: any }) {
     visitor: {
       Program: {
         enter(program: any, state: any) {
-          console.log('[windowProxyPlugin] scan', state.file?.opts?.filename || '<unknown>')
           const existingHookImport = program.get('body').find((path: any) =>
             path.isImportDeclaration() &&
             path.node.importKind !== 'type' &&
@@ -34,7 +33,6 @@ export default function windowProxyPlugin({ types }: { types: any }) {
         },
         exit(program: any, state: any) {
           if (!state.needsWindowProxyHook) {
-            console.log('[windowProxyPlugin] no proxy component found')
             return
           }
 
@@ -70,7 +68,6 @@ export default function windowProxyPlugin({ types }: { types: any }) {
               types.stringLiteral('mybricks'),
             ))
           }
-          console.log('[windowProxyPlugin] imported useWindowProxy from mybricks')
         },
       },
       Function(functionPath: any, state: any) {
@@ -97,11 +94,6 @@ export default function windowProxyPlugin({ types }: { types: any }) {
           MemberExpression: detectProxyMember,
           OptionalMemberExpression: detectProxyMember,
         })
-        console.log('[windowProxyPlugin] component check', {
-          name: name || '<anonymous>',
-          wrapper: wrapperName || null,
-          readsProxy,
-        })
         if (!readsProxy) return
 
         const subscribe = types.expressionStatement(
@@ -117,7 +109,6 @@ export default function windowProxyPlugin({ types }: { types: any }) {
           ]))
         }
         state.needsWindowProxyHook = true
-        console.log('[windowProxyPlugin] injected useWindowProxy()', name || '<anonymous>')
       },
     },
   }
