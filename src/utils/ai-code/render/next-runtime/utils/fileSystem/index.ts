@@ -305,6 +305,7 @@ class FileSystem {
   events = new Events<{
     init: boolean
     fileChange: { filename: string, type: 'update' | 'delete' | 'create' }
+    rendered: { filename: string }
   }>({})
 
   /** vibing状态 */
@@ -1063,6 +1064,7 @@ class FileSystem {
 
           const HotNamedComponent = createHotComponent({
             entry: pseudoEntry,
+            onRendered: () => this.events.emit('rendered', { filename }),
             LoadingView: this.params.LoadingView,
             ErrorView: this.params.ErrorView,
             getVibing: () => this.vibing,
@@ -1108,6 +1110,7 @@ class FileSystem {
   createHotComponent(params: { entry: FilesMap[string] }) {
     return createHotComponent({
       ...params,
+      onRendered: () => this.events.emit('rendered', { filename: params.entry.file.filename }),
       LoadingView: this.params.LoadingView,
       ErrorView: this.params.ErrorView,
       getVibing: () => {

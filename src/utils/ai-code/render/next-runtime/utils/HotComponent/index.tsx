@@ -11,13 +11,15 @@ interface HotComponentProps {
   ErrorView: ErrorView
   getVibing: () => boolean
   onRuntimeError: (error: Error) => void
+  onRendered: () => void
 }
 const genHotComponent = ({
   entry,
   LoadingView,
   ErrorView,
   getVibing,
-  onRuntimeError
+  onRuntimeError,
+  onRendered
 }: HotComponentProps) => {
   return memo((props) => {
     const [resetKey, forceUpdate] = useReducer((n: number) => n + 1, 0)
@@ -31,6 +33,11 @@ const genHotComponent = ({
     }, [])
 
     const Impl = entry.currentImpl
+
+    // DOM 已提交，调用方可在当前节点上接续预览更新。
+    useLayoutEffect(() => {
+      onRendered()
+    }, [resetKey, Impl])
 
     if (Impl[PROXY_MARKER]) {
       return <LoadingView tip='加载中...' withContainer={false}/>

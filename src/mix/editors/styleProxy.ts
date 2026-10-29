@@ -9,6 +9,8 @@ import { getElementLabel, buildElementStyleUpdateAiRequest, buildElementImageUpd
 import { patchJsxInlineStyle, patchDataStyleInfo, injectStyleAttrIntoJSX, appendToInlineStyleAttr, removeFromInlineStyleAttr, StyleInfoEntry,removeInlineStylePropertiesByRange, rewriteInlineShorthandStyle, isInlineShorthandProperty } from './style/helpers/patchJsxInlineStyle'
 import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
+import { createFreedomPlanWithInline } from './style/helpers/createFreedomPlanWithInline'
+import type { FreedomPlan } from './style/helpers/createFreedomPlanWithInline'
 import { createInlineStyleHistory } from './style/helpers/createInlineStyleHistory'
 import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots, patchSingleElementInlineStyle } from './style/helpers/createSetStyleHandler'
@@ -1755,9 +1757,6 @@ export function genStyleValue(props) {
     splitTopLevelCommaKeys, splitCommaMergedTopLevelRuleForWrite,
   });
 
-  type FreedomPlan = {
-    changes: Array<{ target: HTMLElement; selector: string; lessFile: string; style: Record<string, any> }>;
-  };
   const applyFreedomPlan = (plan: FreedomPlan) => {
     const files = context.component!.params.data.files;
     const drafts = new Map<string, { previous: string; cssObj: Record<string, any> }>();
@@ -1794,9 +1793,29 @@ export function genStyleValue(props) {
     }
   };
 
+  const applyFreedomPlanWithInline = createFreedomPlanWithInline({
+    updateInlineStyleBatchInBranch: inlineStyleHistory.updateInlineStyleBatchInBranch,
+    patchLessChange(cssObj, { target, selector, style }) {
+      const eleClassList = Array.from(target.classList);
+      const entries = Object.entries(style);
+      const rule = patchResolvedLessRule(cssObj, {
+        rawSelector: selector, fullSelector: selector, eleClassList,
+        nestedCandidate: resolveNestedRuleTarget(cssObj, selector, eleClassList),
+        lessValue: Object.fromEntries(entries.filter(([, value]) => value !== null)),
+        explicitClearPatch: getExplicitClearPatch(selector, style),
+      })!;
+      deleteLessProperties(rule.targetStyle, entries.filter(([, value]) => value === null).map(([key]) => key));
+      removeEmptyLessRule(rule);
+    },
+  });
+
+
   const proxy = {
     set(params: any, value: any) {
       if (params.freedomPlan) {
+        if (params.freedomPlan.changes.some((change: { selector: string }) => change.selector === 'inline')) {
+          return applyFreedomPlanWithInline(params.freedomPlan);
+        }
         return applyFreedomPlan(params.freedomPlan);
       }
       const locRaw = params.focusArea?.dataset?.loc;
