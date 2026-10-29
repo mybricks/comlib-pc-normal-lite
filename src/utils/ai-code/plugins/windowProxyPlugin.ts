@@ -1,11 +1,11 @@
 /**
- * 为读取 window._proxy_ 的 React 组件注入 useWindowProxy Hook。
+ * 为读取 window.__LINGSTYLE_DISPLAY_MOCK__ 的 React 组件注入 useWindowProxy Hook。
  *
  * windowProxyStore 负责维护代理对象和订阅状态；本插件只负责在编译期
  * 找到候选组件并添加 Hook 调用及对应的 import。
  */
 
-const PROXY_PROPERTY = '_proxy_'
+const PROXY_PROPERTY = '__LINGSTYLE_DISPLAY_MOCK__'
 const COMPONENT_WRAPPERS = new Set(['appRef', 'comRef', 'pageRef', 'popupRef'])
 
 function isProxyMember(node: any, types: any): boolean {

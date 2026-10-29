@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'reac
 // 为业务代码声明全局代理对象的字段类型。
 declare global {
   interface Window {
-    _proxy_: { [key: string]: any }
+    __LINGSTYLE_DISPLAY_MOCK__: { [key: string]: any }
   }
 }
 
@@ -27,13 +27,13 @@ export function setWindowProxyDesignMode(enabled: boolean): void {
 }
 
 // 保留页面上已有的数据，避免加载 store 时覆盖业务代码先前设置的值。
-const existingProxy = typeof window !== 'undefined' ? window._proxy_ : undefined
+const existingProxy = typeof window !== 'undefined' ? window.__LINGSTYLE_DISPLAY_MOCK__ : undefined
 
 if (typeof window !== 'undefined') {
-  window._proxy_ = new Proxy(
+  window.__LINGSTYLE_DISPLAY_MOCK__ = new Proxy(
     existingProxy ?? { },
     {
-      // Hook 开始收集后，读取 window._proxy_.xxx 会把 xxx 记为当前组件的依赖。
+      // Hook 开始收集后，读取 window.__LINGSTYLE_DISPLAY_MOCK__.xxx 会把 xxx 记为当前组件的依赖。
       get(target, key, receiver) {
         if (!isDesignMode) return undefined
         activeDependencies?.add(key)
@@ -71,7 +71,7 @@ export function resetWindowProxy(): void {
   isResetting = true
   try {
     values.forEach(([key, value]) => {
-      Reflect.set(window._proxy_, key, value)
+      Reflect.set(window.__LINGSTYLE_DISPLAY_MOCK__, key, value)
     })
   } finally {
     isResetting = false

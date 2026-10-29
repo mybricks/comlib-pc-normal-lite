@@ -1,6 +1,6 @@
 import YAML from 'yaml'
 
-/** 一个可在运行时执行的 window._proxy_ 展示场景。 */
+/** 一个可在运行时执行的 window.__LINGSTYLE_DISPLAY_MOCK__ 展示场景。 */
 export interface InteractiveScript {
   title: string
   script: string

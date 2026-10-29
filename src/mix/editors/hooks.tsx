@@ -584,39 +584,41 @@ export function buildHooks(props: Props) {
         aiRole: "fast",
       })
     },
-    '@getZoneStatus'(ele) {
-      // console.log("@getZoneStatus", ele)
-      return getZoneStatus(ele)
-    },
-    async '@createZoneStatus'(ele) {
-      // console.log('@createZoneStatus', ele)
-      const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
-      const chipId = randomUUID()
-      const chip = {
-        id: chipId,
-        label: '页面',
-        type: 'dom',
-        data: {
-          ele,
+    ...(['default', 'prototype'].includes(frontendMode) ? {
+      '@getZoneStatus'(ele) {
+        // console.log("@getZoneStatus", ele)
+        return getZoneStatus(ele)
+      },
+      async '@createZoneStatus'(ele) {
+        // console.log('@createZoneStatus', ele)
+        const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
+        const chipId = randomUUID()
+        const chip = {
+          id: chipId,
+          label: '页面',
+          type: 'dom',
+          data: {
+            ele,
+          }
         }
-      }
 
-      return new Promise((resolve) => {
-        const componentId = context.component!.params.id
-        agentTurnLifecycle.register(componentId, () => {
-          const res = getZoneStatus(ele)
-          console.log('@createZoneStatus:res', res)
-          resolve(res ?? [])
-        })
+        return new Promise((resolve) => {
+          const componentId = context.component!.params.id
+          agentTurnLifecycle.register(componentId, () => {
+            const res = getZoneStatus(ele)
+            console.log('@createZoneStatus:res', res)
+            resolve(res ?? [])
+          })
 
-        window._sandbox_.helpers.sendToAgent(componentId, {
-          message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
-          meta: {
-            chips: [chip],
-          },
+          window._sandbox_.helpers.sendToAgent(componentId, {
+            message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
+            meta: {
+              chips: [chip],
+            },
+          })
         })
-      })
-    },
+      },
+    } : {}),
     ...hooks
   };
 }
