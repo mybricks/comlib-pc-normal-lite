@@ -41,7 +41,7 @@ function isLocation(value: string): boolean {
 }
 
 /**
- * 解析 .agent/proxy-mock/interactive-scripts.yaml。
+ * 解析 .agent/display-mock/interactive-scripts.yaml。
  *
  * 文件顶层是页面数组，每页包含 JSX 展示位置及其可执行场景。解析时会
  * 丢弃结构不完整的条目，避免一条错误记录阻断其余交互脚本的使用。

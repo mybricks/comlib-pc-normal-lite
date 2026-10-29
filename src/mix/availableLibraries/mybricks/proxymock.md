@@ -6,10 +6,12 @@
 覆盖字段优先对应原有状态或数据源的完整值，不按 JSX 中读取的属性拆分。同一对象的多个展示属性来自同一个状态时，只接入一个对象覆盖字段，让这些展示位置共用该展示对象。例如某个对象状态 `object` 的多个属性用于展示时，先整体选择展示对象：
 
 ```tsx
+// 设计态展示覆盖开始：优先展示整个对象的模拟值，未设置时使用原对象。
 const displayedObject =
   window.__LINGSTYLE_DISPLAY_MOCK__?.object !== undefined
     ? window.__LINGSTYLE_DISPLAY_MOCK__?.object
     : object
+// 设计态展示覆盖结束
 ```
 
 场景脚本一次赋值 `window.__LINGSTYLE_DISPLAY_MOCK__.object = { title: '标题', description: '描述' };`，不要按属性分别创建 `objectTitle`、`objectDescription` 等字段。`object` 仅为示例占位名，实际覆盖字段应对应源码中的状态或数据源名称。仅当属性原本来自不同的独立状态或数据源时，才使用多个覆盖字段。
@@ -20,6 +22,8 @@ const displayedObject =
 
 以 `window.__LINGSTYLE_DISPLAY_MOCK__?.xxx !== undefined` 判断是否启用覆盖；`false`、`0`、`''`、`[]`、`null` 都可能是有效覆盖值。在组件渲染过程中直接读取属性，不解构、缓存或重新赋值 `window.__LINGSTYLE_DISPLAY_MOCK__`。覆盖值只用于展示，原有数据获取、事件处理和派生计算继续使用原值。
 
+在 TSX 中接入展示覆盖时，用符合代码上下文的注释标明覆盖代码的开始和结束，并在开始注释中概括这段代码覆盖的展示值及未设置时的回退值。同一组件内连续的多条 `__LINGSTYLE_DISPLAY_MOCK__` 覆盖声明只用一组注释：开始注释放在第一条覆盖声明之前，结束注释放在最后一条覆盖声明之后；即使覆盖不同字段，也不要给每条声明分别加一组注释。只有覆盖代码被原有业务代码隔开时，才分别包裹各段。下方统计组件的加载状态和总数覆盖共用一组注释。
+
 示例：子组件通过 props 展示统计数据，在父组件的来源处选择展示值；场景仍归入统计组件。
 
 ```tsx
@@ -29,6 +33,7 @@ const Stats = ({ loading, total }) => (
 
 const Dashboard = () => {
   const { loading: originalLoading, total } = useStats()
+  // 设计态展示覆盖开始：替换统计组件的加载状态和总数，未设置时使用 Hook 返回值。
   const loading =
     window.__LINGSTYLE_DISPLAY_MOCK__?.statsLoading !== undefined
       ? window.__LINGSTYLE_DISPLAY_MOCK__?.statsLoading
@@ -37,6 +42,7 @@ const Dashboard = () => {
     window.__LINGSTYLE_DISPLAY_MOCK__?.totalOrders !== undefined
       ? window.__LINGSTYLE_DISPLAY_MOCK__?.totalOrders
       : total
+  // 设计态展示覆盖结束
 
   return <Stats loading={loading} total={displayedTotal} />
 }
@@ -49,10 +55,12 @@ const filteredUsers = useMemo(
   () => users.filter(user => user.name.includes(keyword)),
   [users, keyword]
 )
+// 设计态展示覆盖开始：替换筛选后的展示列表，未设置时使用原筛选结果。
 const displayedUsers =
   window.__LINGSTYLE_DISPLAY_MOCK__?.users !== undefined
     ? window.__LINGSTYLE_DISPLAY_MOCK__?.users
     : filteredUsers
+// 设计态展示覆盖结束
 
 return displayedUsers.length === 0
   ? <div className={styles.empty}>暂无用户</div>
@@ -63,14 +71,24 @@ return displayedUsers.length === 0
 
 设计态交互脚本通过顶层属性赋值更新展示，例如 `window.__LINGSTYLE_DISPLAY_MOCK__.users = [{ id: '1', name: '张三' }];`。不要只修改数组或对象内部的数据。以上仅为写法示例，不表示所有页面都需要接入这些字段。
 
-需要接入覆盖时，先完成 TSX 修改，再查看最终代码，确认组件展示位置和行号，最后更新项目根目录下的 `.agent/proxy-mock/interactive-scripts.yaml`。文件顶层是页面数组；每项的 `page` 是当前页面路径，`locations` 按 React 组件定义分组。同一组件在该页面只建一个分组，组件内的多个状态、JSX 区域和条件渲染分支都放进这一项的 `scripts`；内部的 `div`、弹层或提示条若没有独立的 React 组件定义，不得另建分组。`loc` 取能代表该组件完整展示职责的 JSX 标签，而不是某个状态的局部标签。
+需要接入覆盖时，先完成 TSX 修改，再查看最终代码，确认组件展示位置和行号，最后更新项目根目录下的 `.agent/display-mock/interactive-scripts.yaml`。文件顶层是页面数组；每项的 `page` 是当前页面路径，`locations` 按 React 组件定义分组。同一组件在该页面只建一个分组，组件内的多个状态、JSX 区域和条件渲染分支都放进这一项的 `scripts`；内部的 `div`、弹层或提示条若没有独立的 React 组件定义，不得另建分组。`loc` 取能代表该组件完整展示职责的 JSX 标签，而不是某个状态的局部标签。
 
 更新前先读取 YAML，按当前页面路径精确匹配 `page`：已有则只更新需求涉及的组件，没有则新增页面项。禁止把其他页面项改名或作为模板覆盖；写入后核对所有非目标页面的路径、组件和场景均未改变。对目标页面，依据组件名、文件和展示 JSX 识别已有分组，合并场景并将 `loc` 更新为最终位置；不能仅因行号变化就新增重复分组。
 
-- `title`：根据组件名和完整职责生成中文分组标题，不直接使用源码组件名，也不以单个字段或状态命名；页面级组件的标题应概括其全部职责；
+- `title`：用简短、易懂的中文概括组件呈现的内容或功能，优先沿用页面或区域已有的名称；没有现成名称时，根据组件职责命名。标题无需罗列加载、空数据等具体场景，也应避免添加「状态」「展示」等不能帮助用户识别区域的泛称；场景细节由 `scripts` 的标题表达。
 - `fileName`：组件 JSX 所在的 TSX 文件路径，相对于项目根目录；
 - `loc`：该组件在页面中负责展示状态的真实 JSX 标签位置，格式为 `标签名:起始行-结束行`，例如 `section:42-48`。行号以最终代码为准，不写状态变量或覆盖变量的声明位置；
 - `scripts`：场景数组，每项含可见场景名称 `title` 和可独立执行的 JavaScript `script`；脚本通过顶层属性赋值设置一个或多个 `window.__LINGSTYLE_DISPLAY_MOCK__` 字段。以未设置覆盖值时的展示为基准，只记录呈现不同可见状态的场景。例如状态默认是 `false`，单独设为 `false` 不构成场景；组合场景可以包含该赋值，但整体须因其他覆盖值而呈现不同状态。设计态已有默认操作，不添加「默认」「初始」「原始」「正常」「恢复默认」等场景。
+
+若用户需求明确指定了需要哪些状态，只为这些状态生成场景脚本，不根据下方建议自行增加其他状态。未明确指定时，选择场景可以参考以下方向，并结合当前组件的展示数据和分支判断是否适用：
+
+- 文本：可用较长内容观察换行、截断和布局；
+- 数组：默认有内容时可用空数组检查空态，默认为空时可考虑有内容的列表；
+- 数字：可考虑 `0` 或较大值；
+- 布尔值、枚举值及加载、错误等状态：可选择与默认展示不同的有效取值。
+- 其它
+
+这些只是候选方向，无需为每种类型都生成脚本。优先考虑当前代码支持、与任务相关且能带来可见差异的场景；对象和数组的模拟值尽量沿用原有数据结构，避免为了补充场景而加入无关的覆盖字段或展示分支。
 
 示例：假设 `/dashboard` 的统计组件默认总数非零、未加载。统计数据在父组件接入覆盖，统计组件的加载和无数据状态仍属于同一个分组；「无数据」组合场景中的 `statsLoading = false` 用于明确该场景的状态，变化来自 `totalOrders = 0`：
 

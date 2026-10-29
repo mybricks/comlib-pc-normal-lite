@@ -89,7 +89,7 @@ function getZoneStatus(ele: Element) {
     if (!pagePath) return null
 
     const scriptFile = context.component!.params!.data.files.find(
-      (file) => file.fileName === '.agent/proxy-mock/interactive-scripts.yaml'
+      (file) => file.fileName === '.agent/display-mock/interactive-scripts.yaml'
     )
     if (!scriptFile) {
       return ele.querySelector('[data-zone-status]') ? [] : null
@@ -611,10 +611,12 @@ export function buildHooks(props: Props) {
           })
 
           window._sandbox_.helpers.sendToAgent(componentId, {
-            message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
-            meta: {
-              chips: [chip],
-            },
+            message: `参考 mybricks 使用指南「页面展示状态覆盖与交互脚本」，为路由「${pagePath ?? '待确认'}」对应的页面接入有意义的展示状态覆盖，并编写交互脚本。`,
+            // message: '分析路由「/」对应的页面，分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。'
+            // message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
+            // meta: {
+            //   chips: [chip],
+            // },
           })
         })
       },
