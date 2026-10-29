@@ -77,4 +77,8 @@ export default {
     zh: '任务',
     en: 'Tasks'
   }),
+  normal: i18n({
+    zh: '默认',
+    en: 'Normal'
+  }),
 }

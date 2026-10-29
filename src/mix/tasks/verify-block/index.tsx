@@ -4,7 +4,10 @@ import i18n from '../../../helpers/i18n'
 import { parseTasksForNotify } from '../notify'
 import { applyTaskTransition, type TaskStatus } from '../transition'
 import { TaskCardHeading } from '../task-card'
-import css from './index.less'
+import * as lazyCss from './index.lazy.less'
+import { getLazyCss } from '../../lowcodeView/utils/css'
+
+const css = getLazyCss(lazyCss)
 
 interface TaskSandbox {
   files: {

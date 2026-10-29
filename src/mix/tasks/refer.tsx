@@ -4,7 +4,10 @@ import context, { type UserTaskInfo } from '../context'
 import commonLang from '../../helpers/i18n/common'
 import { parseTasksForNotify } from './notify'
 import { getTaskDisplayTitle, TaskCardHeading } from './task-card'
-import css from './verify-block/index.less'
+import * as lazyCss from './verify-block/index.lazy.less'
+import { getLazyCss } from '../lowcodeView/utils/css'
+
+const css = getLazyCss(lazyCss)
 
 const TASK_STATE_LABEL: Record<UserTaskInfo['state'], string> = {
   0: '处理中',

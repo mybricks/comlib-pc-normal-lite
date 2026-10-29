@@ -6,11 +6,13 @@ import collectJsDocPlugin from './plugins/collectJsDocPlugin'
 import loggerPlugin from './plugins/loggerPlugin'
 import styleAnalysisPlugin from './plugins/styleAnalysisPlugin'
 import zoneIndexPlugin from './plugins/zoneIndexPlugin'
+import zoneStatusPlugin from './plugins/zoneStatusPlugin'
 import esmPreCheckPlugin from './plugins/esmPreCheckPlugin'
 import wrapThirdPartyPlugin from './plugins/wrapThirdPartyPlugin'
 import skillBoundaryPlugin from './render/mybricks/gui-card-next/skill-boundary-plugin'
 import eslintCheckPlugin from './plugins/eslintCheckPlugin'
 import appConfigCheckPlugin from './plugins/appConfigCheckPlugin'
+import windowProxyPlugin from './plugins/windowProxyPlugin'
 import config from '../../mix/context/config'
 import { generate as generateCss, parse as parseCss, walk as walkCss } from 'css-tree'
 import { normalizeContainerCondition } from './css'
@@ -49,6 +51,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
       plugins: [
         eslintCheckPlugin(code, config.getESLint(), onError),
         esmPreCheckPlugin(onError),
+        windowProxyPlugin,
         ['proposal-decorators', {legacy: true}],
         'proposal-class-properties',
         [
@@ -63,6 +66,7 @@ export function transformTsx(code, ctx: import('../../mix/availableLibraries/typ
         wrapThirdPartyPlugin({ reactNative }),
         styleAnalysisPlugin({ reactNative }),
         ...validatorPlugins,
+        zoneStatusPlugin({ reactNative }),
         functionPropsPlugin(),
         parentLocPlugin({ reactNative }),
         [collectJsDocPlugin, { result: jsDocMap, fileName }],

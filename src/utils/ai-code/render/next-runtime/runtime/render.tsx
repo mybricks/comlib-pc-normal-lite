@@ -37,7 +37,7 @@ interface RenderRef {
   fileSystem: FileSystem
 }
 
-const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
+const Render = ((props) => {
   const fileSystem = useRef(new FileSystem({
     dependencies: props.dependencies,
     css: props.css,
@@ -51,11 +51,11 @@ const Render = forwardRef<RenderRef, RenderProps>((props, ref) => {
   const [isInitialized, setIsInitialized] = useState(false)
   const [vibingEnded, setVibingEnded] = useState(false)
 
-	useImperativeHandle(ref, () => {
-    return {
-			fileSystem: fileSystem.current,
-    }
-  }, [])
+	// useImperativeHandle(ref, () => {
+  //   return {
+	// 		fileSystem: fileSystem.current,
+  //   }
+  // }, [])
 
   useLayoutEffect(() => {
     // 预加载入口文件

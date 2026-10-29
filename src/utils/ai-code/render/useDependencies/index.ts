@@ -7,6 +7,7 @@ import createMyBricksForGuiCardNext from '../mybricks/gui-card-next'
 import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 import createMyBricksReactNative from '../mybricks/react-native'
+import { setWindowProxyDesignMode, useWindowProxy } from './windowProxyStore'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -33,6 +34,9 @@ const useDependencies = (params: Params) => {
   const reload = params.activeEnv + "_" + params.reload
 
   return useMemo(() => {
+    const { id, env, data, activeEnv, runtimeMode, logger } = params;
+
+    setWindowProxyDesignMode(!env.runtime)
     const frontEndDataSouce = config.getFrontEndDataSouce()
     const BaseDataSource = frontEndDataSouce || params.DataSource || EmptyDataSource;
     
@@ -59,7 +63,6 @@ const useDependencies = (params: Params) => {
       }
     }
 
-    const { id, env, data, activeEnv, runtimeMode, logger } = params;
     const frontendMode = config.getFrontendMode()
     const createMyBricksProps = { comId: id, runtimeMode, logger, env, data }
     let mybricks: any = {}
@@ -73,6 +76,7 @@ const useDependencies = (params: Params) => {
     } else {
       mybricks = createMyBricks(createMyBricksProps);
     }
+    mybricks.useWindowProxy = useWindowProxy
 
     /**
      * 'mybricks/testing' 支持多实例：每个文件（setup.ts）require 时各自获得独立的 EnvRunner，
