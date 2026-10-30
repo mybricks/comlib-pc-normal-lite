@@ -12,6 +12,8 @@ import * as taskPanelCssNS from '../../../../components/task-panel/index.lazy.le
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
 import Xterm from '../../../../components/xterm'
+import taskVerifyCss from '../../../../mix/tasks/verify-block/index.lazy.less'
+import * as taskVerifyCssNS from '../../../../mix/tasks/verify-block/index.lazy.less';
 
 type TabKey = 'task' | 'review' | 'version' | 'terminal'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
@@ -339,6 +341,10 @@ export default {
       {
         css: transform(taskPanelCssNS),
         use: genUse(taskPanelCss)
+      },
+      {
+        css: transform(taskVerifyCssNS),
+        use: genUse(taskVerifyCss)
       }
     ]
   },
