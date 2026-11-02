@@ -180,7 +180,8 @@ const normalizeBasePath = (basePath: string) => {
 const buildIframeSrc = (itemSrc: string, runtimeUrl?: string) => {
 	const routerBasename = normalizeBasePath(window.__LINGCHUANG_CONFIG__?.router?.basename || '')
 	const origin = runtimeUrl ? new URL(runtimeUrl).origin : window.location.origin
-	return `${origin}${routerBasename}${itemSrc === '/' ? '' : itemSrc}`
+	const routePath = itemSrc && !itemSrc.startsWith('/') ? `/${itemSrc}` : itemSrc
+	return `${origin}${routerBasename}${routePath === '/' ? '' : routePath}`
 }
 
 type RuntimeIframeItem = {
