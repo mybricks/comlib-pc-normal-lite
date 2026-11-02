@@ -5,7 +5,7 @@ import lowcodeViewCss from './index.lazy.less'
 import * as lowcodeViewCssNS from './index.lazy.less'
 import myContext, { type VersionRecord } from '../../context'
 import VersionListView, { Popconfirm } from '../../../../components/version-list'
-import i18n from '../../../../helpers/i18n'
+import { i18n as lowcodeI18n } from './index.i18n'
 import TaskPanel, { hasTasks } from '../../../../components/task-panel'
 import taskPanelCss from '../../../../components/task-panel/index.lazy.less'
 import * as taskPanelCssNS from '../../../../components/task-panel/index.lazy.less'
@@ -19,10 +19,10 @@ type TabKey = 'task' | 'review' | 'version' | 'terminal'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
 
 const TAB_LABELS: Record<TabKey, string> = {
-  task: '任务',
-  version: '版本',
-  review: '影响',
-  terminal: i18n({ zh: '进程', en: 'Process' }),
+  task: lowcodeI18n.taskTab(),
+  version: lowcodeI18n.versionTab(),
+  review: lowcodeI18n.reviewTab(),
+  terminal: lowcodeI18n.processTab(),
 }
 
 
@@ -56,10 +56,10 @@ function VersionPanel() {
       if (success) return
 
       const messageHack = (window as any)['@m-ui/react']?.message
-      ;(messageHack || message).error('回滚失败，本地代码已发生变更')
+      ;(messageHack || message).error(lowcodeI18n.rollbackFailed())
     }).catch(() => {
       const messageHack = (window as any)['@m-ui/react']?.message
-      ;(messageHack || message).error('回滚失败，本地代码已发生变更')
+      ;(messageHack || message).error(lowcodeI18n.rollbackFailed())
     })
   }, [])
 
@@ -90,12 +90,12 @@ function ReviewMetaBar({
 }) {
   return (
     <div className={css['review-meta-bar']}>
-      <span className={css['review-meta-desc']}>评估当前代码潜在的风险和影响</span>
+      <span className={css['review-meta-desc']}>{lowcodeI18n.reviewDescription()}</span>
       <div className={css['review-meta-right']}>
         {generatedAt && (
           <span className={css['review-meta-time']}>{generatedAt}</span>
         )}
-        <span className={css['review-meta-reevaluate']} onClick={onReEvaluate}>重新评估</span>
+        <span className={css['review-meta-reevaluate']} onClick={onReEvaluate}>{lowcodeI18n.reevaluate()}</span>
       </div>
     </div>
   )
@@ -112,9 +112,9 @@ function ReviewPanel({ content }: { content: string | null }) {
     return (
       <div className={css['panel-empty']}>
         <div className={css['panel-empty-inner']}>
-          <span className={css['panel-empty-text']}>尚未评估变更影响</span>
+          <span className={css['panel-empty-text']}>{lowcodeI18n.reviewEmpty()}</span>
           <button className={css['review-btn']} onClick={handleReviewClick}>
-            评估变更影响
+            {lowcodeI18n.reviewAction()}
           </button>
         </div>
       </div>
@@ -199,18 +199,18 @@ function RuntimePanel() {
       await myContext.runtime[action]()
     } catch (error) {
       const messageHack = (window as any)['@m-ui/react']?.message
-      ;(messageHack || message).error(error instanceof Error ? error.message : i18n({ zh: '进程操作失败', en: 'Process action failed' }))
+      ;(messageHack || message).error(error instanceof Error ? error.message : lowcodeI18n.processActionFailed())
     } finally {
       setPendingAction(current => current === action ? null : current)
     }
   }, [])
 
   const stateLabels = {
-    starting: i18n({ zh: '启动中', en: 'Starting' }),
-    ready: i18n({ zh: '运行中', en: 'Running' }),
-    stopping: i18n({ zh: '停止中', en: 'Stopping' }),
-    stopped: i18n({ zh: '已停止', en: 'Stopped' }),
-    error: i18n({ zh: '异常', en: 'Error' }),
+    starting: lowcodeI18n.processStarting(),
+    ready: lowcodeI18n.processRunning(),
+    stopping: lowcodeI18n.processStopping(),
+    stopped: lowcodeI18n.processStopped(),
+    error: lowcodeI18n.processError(),
   }
 
   const state = snapshot.status?.state
@@ -224,28 +224,28 @@ function RuntimePanel() {
     <div ref={panelRef} className={css['terminal-panel']} data-zone-type="ai-request">
       <div className={css['terminal-status']}>
         <div className={css['terminal-details']}>
-          <span>{i18n({ zh: '状态', en: 'Status' })}：{state ? stateLabels[state] : i18n({ zh: '未启动', en: 'Not started' })}</span>
-          {state === 'ready' && snapshot.status?.url && <span title={snapshot.status.url}>{i18n({ zh: '地址', en: 'URL' })}：{snapshot.status.url}</span>}
+          <span>{lowcodeI18n.status()}：{state ? stateLabels[state] : lowcodeI18n.notStarted()}</span>
+          {state === 'ready' && snapshot.status?.url && <span title={snapshot.status.url}>{lowcodeI18n.address()}：{snapshot.status.url}</span>}
         </div>
         {snapshot.supportsControls && <div className={css['terminal-actions']}>
           {active ? <>
             <Popconfirm
-              title={i18n({ zh: '重启会停止当前项目进程并重新启动，确认重启？', en: 'Restart the project process? The current process will stop first.' })}
+              title={lowcodeI18n.restartConfirm()}
               visible={confirmAction === 'restart'}
               onVisible={visible => setConfirmAction(visible ? 'restart' : null)}
               onConfirm={() => void handleProcessAction('restart')}
             >
-              <button type="button" disabled={Boolean(pendingAction)}>{i18n({ zh: '重启', en: 'Restart' })}</button>
+              <button type="button" disabled={Boolean(pendingAction)}>{lowcodeI18n.restart()}</button>
             </Popconfirm>
             <Popconfirm
-              title={i18n({ zh: '停止后项目服务将不可用，确认停止？', en: 'Stop the project process? The project service will become unavailable.' })}
+              title={lowcodeI18n.stopConfirm()}
               visible={confirmAction === 'stop'}
               onVisible={visible => setConfirmAction(visible ? 'stop' : null)}
               onConfirm={() => void handleProcessAction('stop')}
             >
-              <button type="button" disabled={pendingAction === 'stop' || pendingAction === 'restart'}>{i18n({ zh: '停止', en: 'Stop' })}</button>
+              <button type="button" disabled={pendingAction === 'stop' || pendingAction === 'restart'}>{lowcodeI18n.stop()}</button>
             </Popconfirm>
-          </> : <button type="button" onClick={() => void handleProcessAction(state === 'error' ? 'restart' : 'start')} disabled={Boolean(pendingAction) || state === 'stopping'}>{i18n({ zh: '启动', en: 'Start' })}</button>}
+          </> : <button type="button" onClick={() => void handleProcessAction(state === 'error' ? 'restart' : 'start')} disabled={Boolean(pendingAction) || state === 'stopping'}>{lowcodeI18n.start()}</button>}
         </div>}
       </div>
       <div className={css['terminal-output']}>

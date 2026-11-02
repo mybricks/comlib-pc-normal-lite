@@ -1,0 +1,27 @@
+import getI18n from '../../../../helpers/i18n'
+
+export const i18n = {
+  taskTab: () => getI18n({ zh: '任务', en: 'Tasks' }),
+  versionTab: () => getI18n({ zh: '版本', en: 'Versions' }),
+  reviewTab: () => getI18n({ zh: '影响', en: 'Impact' }),
+  processTab: () => getI18n({ zh: '进程', en: 'Process' }),
+  rollbackFailed: () => getI18n({ zh: '回滚失败，本地代码已发生变更', en: 'Rollback failed because the local code has changed.' }),
+  reviewDescription: () => getI18n({ zh: '评估当前代码潜在的风险和影响', en: 'Review potential risks and impact in the current code.' }),
+  reevaluate: () => getI18n({ zh: '重新评估', en: 'Re-evaluate' }),
+  reviewEmpty: () => getI18n({ zh: '尚未评估变更影响', en: 'No impact review yet' }),
+  reviewAction: () => getI18n({ zh: '评估变更影响', en: 'Review impact' }),
+  processActionFailed: () => getI18n({ zh: '进程操作失败', en: 'Process action failed' }),
+  processStarting: () => getI18n({ zh: '启动中', en: 'Starting' }),
+  processRunning: () => getI18n({ zh: '运行中', en: 'Running' }),
+  processStopping: () => getI18n({ zh: '停止中', en: 'Stopping' }),
+  processStopped: () => getI18n({ zh: '已停止', en: 'Stopped' }),
+  processError: () => getI18n({ zh: '异常', en: 'Error' }),
+  status: () => getI18n({ zh: '状态', en: 'Status' }),
+  notStarted: () => getI18n({ zh: '未启动', en: 'Not started' }),
+  address: () => getI18n({ zh: '地址', en: 'URL' }),
+  restartConfirm: () => getI18n({ zh: '重启会停止当前项目进程并重新启动，确认重启？', en: 'Restart the project? The current process will stop first.' }),
+  restart: () => getI18n({ zh: '重启', en: 'Restart' }),
+  stopConfirm: () => getI18n({ zh: '停止后项目服务将不可用，确认停止？', en: 'Stop the project? Its service will become unavailable.' }),
+  stop: () => getI18n({ zh: '停止', en: 'Stop' }),
+  start: () => getI18n({ zh: '启动', en: 'Start' }),
+}

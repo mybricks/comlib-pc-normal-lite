@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import context from '../../mix/context'
 import { randomUUID } from '../../mix/utils/uuid'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
-import i18n from '../../helpers/i18n'
+import { i18n as taskPanelI18n } from './index.i18n'
 import { findTaskDocumentFile } from '../../mix/tasks/notify'
 import { applyTaskTransition } from '../../mix/tasks/transition'
 import { Popconfirm } from '../version-list'
@@ -44,7 +44,7 @@ function TaskActionHint({
       <button
         type="button"
         className={css['task-action-hint-close']}
-        aria-label={taskPanelCopy.closeHint()}
+        aria-label={taskPanelI18n.closeHint()}
         onClick={(e) => { e.stopPropagation(); onClose() }}
       >
         ×
@@ -80,61 +80,6 @@ interface FlowStep {
 }
 
 const TASK_FLOW_ORDER: TaskStatus[] = ['处理中', '待验证', '待交接', '已完成']
-
-// TASKS.md 的解析约定仍使用中文字段和值；这里只转换 Task Panel 可见的 UI 文案。
-const taskPanelCopy = {
-  closeHint: () => i18n({ zh: '关闭提示', en: 'Dismiss hint' }),
-  all: () => i18n({ zh: '全部', en: 'All' }),
-  noItems: () => i18n({ zh: '暂无', en: 'None' }),
-  selected: (count: number) => i18n({ zh: `已选 ${count} 项`, en: `${count} selected` }),
-  adjust: () => i18n({ zh: '调整', en: 'Update' }),
-  noSharedAction: () => i18n({ zh: '无共同可执行操作', en: 'No shared action' }),
-  clearSelection: () => i18n({ zh: '取消选择', en: 'Clear selection' }),
-  batchDisabled: () => i18n({ zh: '任务数量不足，无法批量调整', en: 'Select at least two tasks to batch update' }),
-  batchUpdate: () => i18n({ zh: '批量调整任务状态', en: 'Batch update task status' }),
-  batchUpdateShort: () => i18n({ zh: '批量调整', en: 'Batch update' }),
-  verification: () => i18n({ zh: '验证条件', en: 'Verification' }),
-  handoverTo: () => i18n({ zh: '交接给', en: 'Handover to' }),
-  addToChat: () => i18n({ zh: '添加到对话', en: 'Add to chat' }),
-  deleteTask: () => i18n({ zh: '删除此任务', en: 'Delete task' }),
-  deleteConfirm: () => i18n({ zh: '删除后任务和相关修改都会被删除，确认让 AI 删除此任务？', en: 'Delete this task and its related changes?' }),
-  sameStatusOnly: () => i18n({ zh: '只能同时选择相同状态的任务', en: 'Only tasks with the same status can be selected together' }),
-  collapseDetails: () => i18n({ zh: '收起详情', en: 'Hide details' }),
-  expandDetails: () => i18n({ zh: '展开详情', en: 'Show details' }),
-  noResults: () => i18n({ zh: '无匹配结果', en: 'No matching tasks' }),
-  addedToChat: () => i18n({ zh: '已添加到对话输入框', en: 'Added to chat input' }),
-  addedToChatWithReason: () => i18n({ zh: '已添加到对话输入框，请补充原因后发送', en: 'Added to chat input. Add a reason before sending.' }),
-  handedToAI: () => i18n({ zh: '已交给 AI 处理', en: 'Sent to AI' }),
-  statusUpdated: () => i18n({ zh: '已更新任务状态', en: 'Task status updated' }),
-  statusUpdateFailed: () => i18n({ zh: '任务状态更新失败，请重试', en: 'Failed to update task status. Please try again.' }),
-  reasonPrompt: () => i18n({ zh: '请填写原因', en: 'Please provide a reason' }),
-  transitionReady: () => i18n({ zh: '代码已完成，等待我验证', en: 'Code complete, ready for verification' }),
-  transitionVerified: () => i18n({ zh: '已验证完成', en: 'Verification passed' }),
-  transitionNeedsFix: () => i18n({ zh: '任务有问题，请重新修改', en: 'Needs revision' }),
-  attentionTitle: () => i18n({ zh: '点击查看待验证任务', en: 'View tasks awaiting verification' }),
-  attentionBefore: (count: number) => i18n({ zh: `有 ${count} 个任务已经改完了，需要您帮忙验证下结果，如果没问题可以`, en: `${count} task${count === 1 ? '' : 's'} need verification. If everything looks right,` }),
-  attentionLink: () => i18n({ zh: '告知我', en: 'tell me' }),
-  attentionAfter: () => i18n({ zh: '结果', en: ' the result.' }),
-  attentionLinkTitle: () => i18n({ zh: '打开对话，告知我结果', en: 'Open chat and tell me the result' }),
-  status: (status: TaskStatus) => {
-    const copy: Record<TaskStatus, { zh: string; en: string }> = {
-      '处理中': { zh: '处理中', en: 'In progress' },
-      '待验证': { zh: '待验证', en: 'Needs verification' },
-      '待交接': { zh: '待交接', en: 'Pending handover' },
-      '已完成': { zh: '已完成', en: 'Completed' },
-    }
-    return i18n(copy[status])
-  },
-  metadataLabel: (label: string) => {
-    const copy: Record<string, { zh: string; en: string }> = {
-      '更新时间': { zh: '更新时间', en: 'Updated' },
-      '交接给': { zh: '交接给', en: 'Handover to' },
-      '交接原因': { zh: '交接原因', en: 'Handover reason' },
-      '验证进展': { zh: '验证进展', en: 'Verification progress' },
-    }
-    return copy[label] ? i18n(copy[label]) : label
-  },
-}
 
 const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
   '处理中': {
@@ -355,9 +300,9 @@ function FlowFilterBar({
         <div
           className={`${css['flow-node']} ${css['flow-node-all']} ${!activeFilter ? css['flow-node-active'] : ''}`}
           onClick={() => onFilter(null)}
-          title={taskPanelCopy.all()}
+          title={taskPanelI18n.all()}
         >
-          <span className={css['flow-node-label']}>{taskPanelCopy.all()}</span>
+          <span className={css['flow-node-label']}>{taskPanelI18n.all()}</span>
           <span className={css['flow-node-count']}>{total}</span>
         </div>
         {steps.map(step => {
@@ -371,10 +316,10 @@ function FlowFilterBar({
                   step.disabled ? css['flow-node-disabled'] : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => onFilter(activeFilter === step.status ? null : step.status)}
-                title={step.disabled ? `${taskPanelCopy.status(step.status as TaskStatus)} (${taskPanelCopy.noItems()})` : taskPanelCopy.status(step.status as TaskStatus)}
+                title={step.disabled ? `${taskPanelI18n.status(step.status as TaskStatus)} (${taskPanelI18n.noItems()})` : taskPanelI18n.status(step.status as TaskStatus)}
               >
                 <span className={css['flow-node-dot']} style={{ background: step.dot }} />
-                <span className={css['flow-node-label']}>{taskPanelCopy.status(step.status as TaskStatus)}</span>
+                <span className={css['flow-node-label']}>{taskPanelI18n.status(step.status as TaskStatus)}</span>
                 <span className={css['flow-node-count']}>{step.count}</span>
               </div>
             </React.Fragment>
@@ -386,10 +331,10 @@ function FlowFilterBar({
       )}
       {batchMode ? (
         <div className={css['batch-toolbar']}>
-          <span className={css['batch-toolbar-count']}>{taskPanelCopy.selected(selectedCount)}</span>
+          <span className={css['batch-toolbar-count']}>{taskPanelI18n.selected(selectedCount)}</span>
           {batchTransitions.length > 0 ? (
             <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>{taskPanelCopy.adjust()}</span>
+              <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
@@ -400,16 +345,16 @@ function FlowFilterBar({
                   e.currentTarget.value = ''
                 }}
               >
-                <option value="" disabled>{taskPanelCopy.adjust()}</option>
+                <option value="" disabled>{taskPanelI18n.adjust()}</option>
                 {batchTransitions.map(transition => (
                   <option key={transition.target} value={transition.target}>{transition.label}</option>
                 ))}
               </select>
             </div>
           ) : (
-            <span className={css['batch-toolbar-empty']}>{taskPanelCopy.noSharedAction()}</span>
+            <span className={css['batch-toolbar-empty']}>{taskPanelI18n.noSharedAction()}</span>
           )}
-          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>{taskPanelCopy.clearSelection()}</span>
+          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>{taskPanelI18n.clearSelection()}</span>
         </div>
       ) : (
         <span
@@ -418,9 +363,9 @@ function FlowFilterBar({
             batchDisabled ? css['batch-toggle-btn-disabled'] : '',
           ].filter(Boolean).join(' ')}
           onClick={() => { if (!batchDisabled) onToggleBatchMode() }}
-          title={batchDisabled ? taskPanelCopy.batchDisabled() : taskPanelCopy.batchUpdate()}
+          title={batchDisabled ? taskPanelI18n.batchDisabled() : taskPanelI18n.batchUpdate()}
         >
-          {taskPanelCopy.batchUpdateShort()}
+          {taskPanelI18n.batchUpdateShort()}
         </span>
       )}
     </div>
@@ -461,15 +406,15 @@ function AttentionHint({
       onClick={onClick}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
-      title={taskPanelCopy.attentionTitle()}
+      title={taskPanelI18n.attentionTitle()}
     >
       <span className={css['attention-hint-text']}>
-        {taskPanelCopy.attentionBefore(count)}
+        {taskPanelI18n.attentionBefore(count)}
       </span>
-      <span className={css['attention-hint-link']} onClick={handleTellMe} title={taskPanelCopy.attentionLinkTitle()}>
-        {taskPanelCopy.attentionLink()}
+      <span className={css['attention-hint-link']} onClick={handleTellMe} title={taskPanelI18n.attentionLinkTitle()}>
+        {taskPanelI18n.attentionLink()}
       </span>
-      <span className={css['attention-hint-text']}>{taskPanelCopy.attentionAfter()}</span>
+      <span className={css['attention-hint-text']}>{taskPanelI18n.attentionAfter()}</span>
     </div>
   )
 }
@@ -602,36 +547,36 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
   const transitions: Record<TaskStatus, TaskTransition[]> = {
     '处理中': [{
       target: '待验证',
-      label: taskPanelCopy.transitionReady(),
-      instruction: '代码已完成，等待我验证',
+      label: taskPanelI18n.transitionReady(),
+      instruction: taskPanelI18n.transitionReady(),
       requiresReason: true,
     }],
     '待验证': [
       {
         target: '已完成',
-        label: taskPanelCopy.transitionVerified(),
-        instruction: '已验证完成',
+        label: taskPanelI18n.transitionVerified(),
+        instruction: taskPanelI18n.transitionVerified(),
       },
       {
         target: '处理中',
-        label: taskPanelCopy.transitionNeedsFix(),
-        instruction: '任务有问题，请重新修改',
+        label: taskPanelI18n.transitionNeedsFix(),
+        instruction: taskPanelI18n.transitionNeedsFix(),
         requiresReason: true,
       },
     ],
     '待交接': [
       {
         target: '处理中',
-        label: taskPanelCopy.transitionNeedsFix(),
-        instruction: '任务有问题，请重新修改',
+        label: taskPanelI18n.transitionNeedsFix(),
+        instruction: taskPanelI18n.transitionNeedsFix(),
         requiresReason: true,
       },
     ],
     '已完成': [
       {
         target: '处理中',
-        label: taskPanelCopy.transitionNeedsFix(),
-        instruction: '任务有问题，请重新修改',
+        label: taskPanelI18n.transitionNeedsFix(),
+        instruction: taskPanelI18n.transitionNeedsFix(),
         requiresReason: true,
       },
     ],
@@ -641,8 +586,8 @@ function getTaskTransitions(task: TaskItem): TaskTransition[] {
     return [
       {
         target: '待交接',
-        label: taskPanelCopy.transitionVerified(),
-        instruction: '已验证完成',
+        label: taskPanelI18n.transitionVerified(),
+        instruction: taskPanelI18n.transitionVerified(),
       },
       ...transitions['待验证'].filter(item => item.target !== '已完成'),
     ]
@@ -712,7 +657,7 @@ function TaskRow({
         meta: { chips: [chip] },
         animation: true,
       })
-      setActionHint(taskPanelCopy.addedToChat())
+      setActionHint(taskPanelI18n.addedToChat())
       return
     }
     ;(context.plugins as any)?.showAIDialog?.()
@@ -720,17 +665,17 @@ function TaskRow({
 
   const handleRevert = () => {
     sendTaskMessage(`[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`)
-    setActionHint(taskPanelCopy.handedToAI())
+    setActionHint(taskPanelI18n.handedToAI())
   }
 
   const handleTransition = async (transition: TaskTransition) => {
-    const message = `任务「${task.title}」：${transition.instruction}`
+    const message = `${taskPanelI18n.taskMessagePrefix(task.title)}${transition.instruction}`
 
     if (transition.requiresReason) {
       const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
       const componentId = context.comId ?? context.component?.params?.id
       const requestPayload = {
-        message: `${message}\n\n原因：`,
+        message: `${message}\n\n${taskPanelI18n.reasonLabel()}`,
         mentionFocus: true,
         attachments: [],
       }
@@ -738,30 +683,30 @@ function TaskRow({
       if (typeof appendToSender === 'function' && componentId) {
         ;(context.plugins as any)?.showAIDialog?.()
         appendToSender(componentId, requestPayload)
-        setActionHint(taskPanelCopy.addedToChatWithReason())
+        setActionHint(taskPanelI18n.addedToChatWithReason())
         return
       }
 
-      const reason = window.prompt(taskPanelCopy.reasonPrompt())?.trim()
+      const reason = window.prompt(taskPanelI18n.reasonPrompt())?.trim()
       if (!reason) return
-      sendTaskMessage(`${message}\n\n原因：${reason}`)
-      setActionHint(taskPanelCopy.handedToAI())
+      sendTaskMessage(`${message}\n\n${taskPanelI18n.reasonLabel()}${reason}`)
+      setActionHint(taskPanelI18n.handedToAI())
       return
     }
 
     try {
       if (task.id && await commitTaskTransition(task.id, transition.target)) {
-        setActionHint(taskPanelCopy.statusUpdated())
+        setActionHint(taskPanelI18n.statusUpdated())
         return
       }
     } catch (error) {
       console.error('Failed to update task status:', error)
-      setActionHint(taskPanelCopy.statusUpdateFailed())
+      setActionHint(taskPanelI18n.statusUpdateFailed())
       return
     }
 
     sendTaskMessage(message)
-    setActionHint(taskPanelCopy.handedToAI())
+    setActionHint(taskPanelI18n.handedToAI())
   }
 
   return (
@@ -781,7 +726,7 @@ function TaskRow({
             <span
               className={`${css['task-checkbox']} ${!selectable ? css['task-checkbox-disabled'] : ''}`}
               onClick={(e) => { e.stopPropagation(); if (selectable) onToggleSelect?.() }}
-              title={selectable ? undefined : taskPanelCopy.sameStatusOnly()}
+              title={selectable ? undefined : taskPanelI18n.sameStatusOnly()}
             >
               <CheckboxIcon checked={!!selected} />
             </span>
@@ -790,12 +735,12 @@ function TaskRow({
             className={css['task-status-badge']}
             style={{ background: style.badgeBg, color: style.badgeText }}
           >
-            {taskPanelCopy.status(task.status)}
+            {taskPanelI18n.status(task.status)}
           </span>
           <span className={css['task-title']} title={displayTitle}>{displayTitle}</span>
           {task.handoverTo && (
             <span className={css['task-handover-inline']}>
-              <span className={css['task-handover-label']}>{taskPanelCopy.handoverTo()}</span>
+              <span className={css['task-handover-label']}>{taskPanelI18n.handoverTo()}</span>
               <UserIcon />
               <span className={css['task-handover-name']}>{task.handoverTo}</span>
               {task.handoverReason && (
@@ -807,21 +752,21 @@ function TaskRow({
         <div className={css['task-card-actions']}>
           <span
             className={css['task-action-icon']}
-            data-mybricks-tip={taskPanelCopy.addToChat()}
+            data-mybricks-tip={taskPanelI18n.addToChat()}
             onClick={handleAddToChat}
           >
             <AtIcon />
           </span>
           {allowDelete && (
             <Popconfirm
-              title={taskPanelCopy.deleteConfirm()}
+              title={taskPanelI18n.deleteConfirm()}
               visible={revertConfirmVisible}
               onVisible={setRevertConfirmVisible}
               onConfirm={handleRevert}
             >
               <span
                 className={css['task-action-icon']}
-                data-mybricks-tip={taskPanelCopy.deleteTask()}
+                data-mybricks-tip={taskPanelI18n.deleteTask()}
                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
                 <DeleteIcon />
@@ -830,7 +775,7 @@ function TaskRow({
           )}
           {transitions.length > 0 && (
             <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>{taskPanelCopy.adjust()}</span>
+              <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
@@ -842,7 +787,7 @@ function TaskRow({
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <option value="" disabled>{taskPanelCopy.adjust()}</option>
+                <option value="" disabled>{taskPanelI18n.adjust()}</option>
                 {transitions.map(transition => (
                   <option key={transition.target} value={transition.target}>{transition.label}</option>
                 ))}
@@ -868,7 +813,7 @@ function TaskRow({
         <div className={css['task-meta-list']}>
           {task.verificationCondition && (
             <div className={`${css['task-meta-item']} ${css['task-verification']} ${highlightProgress ? css['task-meta-item-highlight'] : ''}`}>
-              <span className={css['task-meta-label']}>{taskPanelCopy.verification()}</span>
+              <span className={css['task-meta-label']}>{taskPanelI18n.verification()}</span>
               <span className={css['task-meta-value']}>{task.verificationCondition}</span>
             </div>
           )}
@@ -880,7 +825,7 @@ function TaskRow({
                 key={item.label}
                 className={`${css['task-meta-item']} ${hl ? css['task-meta-item-highlight'] : ''}`}
               >
-                <span className={css['task-meta-label']}>{taskPanelCopy.metadataLabel(item.label)}</span>
+                <span className={css['task-meta-label']}>{taskPanelI18n.metadataLabel(item.label)}</span>
                 <span className={css['task-meta-value']}>{item.value}</span>
               </div>
             )
@@ -891,7 +836,7 @@ function TaskRow({
       {hasDetail && (
         <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
           <ChevronIcon expanded={expanded} />
-          <span>{expanded ? taskPanelCopy.collapseDetails() : taskPanelCopy.expandDetails()}</span>
+          <span>{expanded ? taskPanelI18n.collapseDetails() : taskPanelI18n.expandDetails()}</span>
         </div>
       )}
 
@@ -963,10 +908,10 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
   const handleBatchAction = (transition: TaskTransition) => {
     if (!selectedTasks.length) return
     const message = selectedTasks
-      .map(task => `任务「${task.title}」：${transition.instruction}`)
+      .map(task => `${taskPanelI18n.taskMessagePrefix(task.title)}${transition.instruction}`)
       .join('\n')
     sendTaskMessage(message)
-    setActionHint(taskPanelCopy.handedToAI())
+    setActionHint(taskPanelI18n.handedToAI())
     exitBatchMode()
   }
 
@@ -1044,7 +989,7 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
                   onToggleSelect={() => toggleSelect(task)}
                 />
               ))
-          : <div className={css['panel-filter-empty']}>{taskPanelCopy.noResults()}</div>
+          : <div className={css['panel-filter-empty']}>{taskPanelI18n.noResults()}</div>
         }
       </div>
     </div>

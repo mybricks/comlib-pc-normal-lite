@@ -143,7 +143,8 @@ function VersionItem({
 
   const isActive = isHovered || popconfirmVisible;
 
-  const timeStr = new Date(version.createdAt).toLocaleString("zh-CN", {
+  const timeLocale = (window as any).__lang_type__ === 'en' ? 'en-US' : 'zh-CN'
+  const timeStr = new Date(version.createdAt).toLocaleString(timeLocale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
