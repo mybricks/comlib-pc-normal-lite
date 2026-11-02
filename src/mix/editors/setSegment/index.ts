@@ -11,6 +11,7 @@ import {
 } from '../visualEditCommit'
 import insert from './insert'
 import duplicate from './duplicate'
+import { appendVisualEditInstructions } from '../visualEditInstructions'
 
 export default function () {
   return {
@@ -62,7 +63,7 @@ export default function () {
         // afterTurn 会消费这份快照，并把整个可视化分支压入主栈。
         setPendingVisualAICommit(componentId, beforeFiles, styleOverlays)
         sendToAgent(componentId, {
-          message,
+          message: appendVisualEditInstructions(message),
           meta: {
             chips
           },

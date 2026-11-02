@@ -1,5 +1,6 @@
 import context from '../../../mix/context'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
+import { appendVisualEditInstructions } from '../../../mix/editors/visualEditInstructions'
 
 export default function (props) {
   // 提交用户操作
@@ -17,14 +18,11 @@ export default function (props) {
     const sendToAgent = window._sandbox_?.helpers?.sendToAgent
 
     window._sandbox_?.helpers?.sendToAgent(props.id, {
-      message,
+      message: appendVisualEditInstructions(message),
       meta: {
         chips
       },
       aiRole: 'fast',
-      // extra: {
-      //   from: '@commitUserActions'
-      // }
     })
   }
 
