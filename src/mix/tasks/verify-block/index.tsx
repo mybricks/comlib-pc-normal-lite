@@ -26,7 +26,7 @@ export function createTasksManager(comId: string) {
 const copy = {
   title: () => i18n({ zh: '请先完成以下任务的验证，再使用AI', en: 'Please verify the following tasks before using AI.' }),
   relatedTitle: () => i18n({ zh: '相关任务', en: 'Related tasks' }),
-  allHandled: () => i18n({ zh: '全部已处理', en: 'All handled' }),
+  allHandled: () => i18n({ zh: '全部已处理', en: 'All tasks reviewed' }),
   status: (status: TaskStatus) => {
     const labels: Record<TaskStatus, { zh: string; en: string }> = {
       '待处理': { zh: '待处理', en: 'To do' },
@@ -37,24 +37,24 @@ const copy = {
     }
     return i18n(labels[status])
   },
-  verification: () => i18n({ zh: '验证条件', en: 'Verification' }),
-  noVerification: () => i18n({ zh: '暂无验证条件，请自行确认效果', en: 'No verification steps. Please check the result yourself.' }),
-  pass: () => i18n({ zh: '符合预期', en: 'Looks good' }),
-  reject: () => i18n({ zh: '不符合预期', en: 'Not as expected' }),
+  verification: () => i18n({ zh: '验证条件', en: 'Verification criteria' }),
+  noVerification: () => i18n({ zh: '暂无验证条件，请自行确认效果', en: 'No verification criteria provided. Please check the result yourself.' }),
+  pass: () => i18n({ zh: '符合预期', en: 'OK' }),
+  reject: () => i18n({ zh: '不符合预期', en: 'Incorrect' }),
   undo: () => i18n({ zh: '撤销', en: 'Undo' }),
   cancel: () => i18n({ zh: '取消', en: 'Cancel' }),
   confirm: () => i18n({ zh: '确认', en: 'Confirm' }),
-  reasonPlaceholder: () => i18n({ zh: '哪里不符合预期？', en: 'What is off?' }),
+  reasonPlaceholder: () => i18n({ zh: '哪里不符合预期？', en: 'What needs to change?' }),
   noReason: () => i18n({ zh: '未填写原因', en: 'No reason given' }),
   passedHint: () => i18n({ zh: '已通过验证', en: 'Verified' }),
   submittedHint: () => i18n({ zh: '已提交给 AI', en: 'Sent to AI' }),
   barText: (count: number) => i18n({ zh: `${count} 个任务待提交`, en: `${count} task${count === 1 ? '' : 's'} ready to submit` }),
-  submit: () => i18n({ zh: '提交给 AI 修改', en: 'Send to AI' }),
+  submit: () => i18n({ zh: '提交给 AI 修改', en: 'Send to AI for revision' }),
   prev: () => i18n({ zh: '上一个', en: 'Previous' }),
   next: () => i18n({ zh: '下一个', en: 'Next' }),
   goTo: (index: number) => i18n({ zh: `查看第 ${index} 个任务`, en: `Go to task ${index}` }),
   failed: () => i18n({ zh: '任务状态更新失败，请重试', en: 'Failed to update task status. Please try again.' }),
-  outdated: () => i18n({ zh: '任务状态已变化，已为你刷新', en: 'Task status has changed and was refreshed' }),
+  outdated: () => i18n({ zh: '任务状态已变化，已为你刷新', en: 'The task status has changed. The list has been refreshed.' }),
   feedbackHeader: () => i18n({
     zh: '以下任务验证未通过，已改为待处理，请根据反馈继续修改，修改完成后再次提交验证：',
     en: 'The following tasks did not pass verification and were marked as to do. Please revise them based on the feedback and resubmit for verification:',
