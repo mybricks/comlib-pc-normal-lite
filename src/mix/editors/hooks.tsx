@@ -32,15 +32,13 @@ import * as versionListViewCssNS from '../../components/version-list/index.lazy.
 import taskPanelCss from '../../components/task-panel/index.lazy.less';
 import * as taskPanelCssNS from '../../components/task-panel/index.lazy.less';
 import { randomUUID } from '../utils/uuid'
-import commonLang from "../../helpers/i18n/common";
 
 import context, { config } from '../context';
 import { agentTurnLifecycle } from '../sandbox/agent-turn-lifecycle';
 // import { createAuditTransaction, failActiveAuditTransaction } from '../sandbox/auditTransaction';
 import type {Props} from './types';
 import prototype from '../../utils/ai-code/render/mybricks/prototype'
-import { parseInteractiveScripts } from '../../utils/ai-code/interactiveScripts'
-import { resetWindowProxy } from '../../utils/ai-code/render/useDependencies/windowProxyStore'
+import { notifyPageStatuses } from '../../utils/ai-code/render/mybricks/page-status'
 
 import {
   getClosestDomLoc,
@@ -79,69 +77,6 @@ function getDefaultDebugEnv(data: any) {
   }
 
   return debugEnvOptions[0]?.value ?? 'prod';
-}
-
-let activeZoneStatusKey: string | undefined
-
-function getZoneStatus(ele: Element) {
-  try {
-    const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
-    if (!pagePath) return null
-
-    const scriptFile = context.component!.params!.data.files.find(
-      (file) => file.fileName === '.agent/display-mock/interactive-scripts.yaml'
-    )
-    if (!scriptFile) {
-      return ele.querySelector('[data-zone-status]') ? [] : null
-    }
-
-    const locations = parseInteractiveScripts(decodeURIComponent(scriptFile.source))
-      .filter((entry) => entry.page === pagePath)
-      .flatMap((entry) => entry.locations)
-    if (!locations.length) {
-      return ele.querySelector('[data-zone-status]') ? [] : null
-    }
-
-    const res = locations.map(({ title, fileName, loc, scripts }) => {
-      const locationKey = [pagePath, fileName, loc]
-      const normalKey = JSON.stringify([...locationKey, 'normal'])
-      return {
-        title,
-        items: [
-          {
-            title: commonLang.normal,
-            activated: activeZoneStatusKey === normalKey,
-            switchTo: () => {
-              activeZoneStatusKey = normalKey
-              resetWindowProxy()
-            }
-          },
-          ...scripts.map(({ title: scriptTitle, script }, scriptIndex) => {
-            const scriptKey = JSON.stringify([...locationKey, 'script', scriptTitle, scriptIndex])
-            return {
-              title: scriptTitle,
-              activated: activeZoneStatusKey === scriptKey,
-              switchTo: () => {
-                activeZoneStatusKey = scriptKey
-                try {
-                  // 每次执行前恢复原值，场景之间互斥。
-                  resetWindowProxy()
-                  eval(script)
-                } catch (e) {
-                  console.error(e)
-                }
-              }
-            }
-          })
-        ]
-      }
-    })
-
-    return res
-  } catch (e) {
-    console.log('@getZoneStatus', e)
-    return null
-  }
 }
 
 export function buildHooks(props: Props) {
@@ -585,11 +520,7 @@ export function buildHooks(props: Props) {
       })
     },
     ...(['default', 'prototype'].includes(frontendMode) ? {
-      '@getZoneStatus'(ele) {
-        // console.log("@getZoneStatus", ele)
-        return getZoneStatus(ele)
-      },
-      async '@createZoneStatus'(ele) {
+      '@createZoneStatus'(ele) {
         // console.log('@createZoneStatus', ele)
         const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
         const chipId = randomUUID()
@@ -602,22 +533,18 @@ export function buildHooks(props: Props) {
           }
         }
 
-        return new Promise((resolve) => {
-          const componentId = context.component!.params.id
-          agentTurnLifecycle.register(componentId, () => {
-            const res = getZoneStatus(ele)
-            console.log('@createZoneStatus:res', res)
-            resolve(res ?? [])
-          })
+        const componentId = context.component!.params.id
+        agentTurnLifecycle.register(componentId, () => {
+          notifyPageStatuses([pagePath])
+        })
 
-          window._sandbox_.helpers.sendToAgent(componentId, {
-            message: `参考 mybricks 使用指南「页面展示状态覆盖与交互脚本」，为路由「${pagePath ?? '待确认'}」对应的页面接入有意义的展示状态覆盖，并编写交互脚本。`,
-            // message: '分析路由「/」对应的页面，分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。'
-            // message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
-            // meta: {
-            //   chips: [chip],
-            // },
-          })
+        window._sandbox_.helpers.sendToAgent(componentId, {
+          message: `参考 mybricks 使用指南「页面展示状态覆盖与交互脚本」，为路由「${pagePath ?? '待确认'}」对应的页面接入有意义的展示状态覆盖，并编写交互脚本。`,
+          // message: '分析路由「/」对应的页面，分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。'
+          // message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
+          // meta: {
+          //   chips: [chip],
+          // },
         })
       },
     } : {}),

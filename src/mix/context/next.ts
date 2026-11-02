@@ -105,6 +105,7 @@ class Context {
       lock: (id: string, focus: any) => () => void
       unlock: (id: string, focus: any) => void
       notifyChanged: (...params: any) => void
+      notifyPageStatus?: (path: string, status: any[] | null) => void
       notifyUserTaskInfo?: (tasks: UserTaskInfo[]) => void
 
       updatePages: (...params: any) => any

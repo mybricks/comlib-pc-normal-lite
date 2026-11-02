@@ -24,6 +24,7 @@ import { useElementResizeObserver } from '../../../../hooks/useElementResizeObse
 import prototype from './prototype';
 import EnvConfigPanel from './env-config-panel';
 import { getCompiledCssContent } from '../../css';
+import { notifyPageStatuses } from './page-status'
 
 const useBreakpoints = (path) => {
   const [breakpoint, setBreakpoint] = useState<any>(null)
@@ -1114,6 +1115,7 @@ if (frontendMode === 'prototype') {
           let totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
+            notifyPageStatuses(collectingRoutes.current.length > 0 ? collectingRoutes.current : ['/'])
           }
         }, [])
 
