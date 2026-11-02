@@ -81,8 +81,8 @@ export interface LogMessage {
 
 export interface ComDebugState {
   isDebugging: boolean;
-  bottomTab: 'task' | 'source' | 'console' | 'version';
-  bottomTabBeforeDebug: 'task' | 'source' | 'console' | 'version';
+  bottomTab: 'task' | 'source' | 'console' | 'version' | 'domain';
+  bottomTabBeforeDebug: 'task' | 'source' | 'console' | 'version' | 'domain';
   logs: LogMessage[];
   logIdCounter: number;
 }
@@ -863,7 +863,7 @@ class Context {
   }
 
   /** 设置底部lowcodeview展示面板 */
-  setComBottomTab(tab: 'task' | 'source' | 'console' | 'version') {
+  setComBottomTab(tab: 'task' | 'source' | 'console' | 'version' | 'domain') {
     const state = this.comDebugStateMap;
     state.bottomTab = tab;
     if (!(state.isDebugging && tab === 'console')) {

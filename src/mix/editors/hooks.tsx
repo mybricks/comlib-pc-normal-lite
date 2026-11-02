@@ -29,6 +29,8 @@ import * as aiEditPanelCssNS from './components/AiEditPanel.lazy.less';
 import * as taskVerifyCssNS from '../tasks/verify-block/index.lazy.less';
 import versionListViewCss from '../../components/version-list/index.lazy.less';
 import * as versionListViewCssNS from '../../components/version-list/index.lazy.less';
+import domainPanelCss from '../domain-audit/panel/index.lazy.less';
+import * as domainPanelCssNS from '../domain-audit/panel/index.lazy.less';
 import taskPanelCss from '../../components/task-panel/index.lazy.less';
 import * as taskPanelCssNS from '../../components/task-panel/index.lazy.less';
 import { randomUUID } from '../utils/uuid'
@@ -134,6 +136,7 @@ export function buildHooks(props: Props) {
             css: transform(taskPanelCssNS),
             use: genUse(taskPanelCss)
           },
+          { css: transform(domainPanelCssNS), use: genUse(domainPanelCss) },
           {
             css: transform(exportCodeCssNS),
             use: genUse(exportCodeCss)

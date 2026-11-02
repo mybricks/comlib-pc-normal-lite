@@ -13,6 +13,7 @@ import { debugLogs } from '../context/debugLogs';
 import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
 import { createBabelPageAnalysis } from '../agent/page-analysis';
+import { createDomainAuditImplementation } from '../domain-audit';
 import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
@@ -1143,7 +1144,14 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     { configDirName: (window as any)._sandbox_?.config?.configDirName },
   );
   const connectToAIRef = connectToAI(comId, {
-    designer: { ...designerFs, pageAnalysis, tasksManager: createTasksManager(comId) },
+    designer: { ...designerFs, pageAnalysis, tasksManager: createTasksManager(comId), domainAudit: createDomainAuditImplementation(comId, () => designerFs.getFiles(), () =>
+      Array.from(context.getCanvasList()).map((element: Element) => ({
+        file: element.getAttribute('data-zone-filename') || undefined,
+        name: element.getAttribute('data-widget-name') || undefined,
+        kind: element.getAttribute('data-zone-kind') || undefined,
+        canvasPath: element.getAttribute('data-desn-page') || undefined,
+      }))
+    ) },
     hooks: {
       async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();

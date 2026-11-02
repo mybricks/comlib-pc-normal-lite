@@ -3,6 +3,9 @@ import Editor, { HandlerType, Monaco, StandaloneCodeEditor } from "@mybricks/cod
 import context, { config } from "../context";
 import ConsoleLogPanel from "./console";
 import VersionPanel from "./version";
+import DomainPanel from '../domain-audit/panel';
+import { copy as domainCopy } from '../domain-audit/panel/index.i18n';
+import { getDomainPanel, subscribeDomainPanels } from '../domain-audit';
 import TaskPanel, { hasTasks } from "../../components/task-panel";
 import * as lazyCss from "./index.lazy.less";
 import { Events } from "../../utils";
@@ -225,6 +228,9 @@ function LowcodeView(params: Params) {
   const [hasBranchHistory, setHasBranchHistory] = useState(() => undoRedoManager.hasBranchHistory());
   const [isVibing, setIsVibing] = useState(false);
   const componentId = params.model?.runtime?.id;
+  const [, updateDomainPanel] = useState(0);
+  useEffect(() => subscribeDomainPanels(() => updateDomainPanel(value => value + 1)), []);
+  const domainPanel = componentId ? getDomainPanel(componentId) : undefined;
 
   // 兼容老版本数据：data.files 不存在时，从旧字段迁移
   const data = params.data;
@@ -316,9 +322,13 @@ function LowcodeView(params: Params) {
   const bottomTab = debugState?.bottomTab ?? 'version';
   const consoleLogs = debugState?.logs ?? [];
 
-  const setBottomTab = useCallback((tab: 'task' | 'source' | 'console' | 'version') => {
+  const setBottomTab = useCallback((tab: 'task' | 'source' | 'console' | 'version' | 'domain') => {
     if (componentId) context.setComBottomTab(tab);
   }, [componentId]);
+
+  useEffect(() => {
+    if (!domainPanel && bottomTab === 'domain') setBottomTab('version');
+  }, [domainPanel, bottomTab, setBottomTab]);
 
   useEffect(() => {
     if (!hasTaskPanel && bottomTab === 'task') setBottomTab('version');
@@ -999,6 +1009,11 @@ function LowcodeView(params: Params) {
                 {commonLang.tasks}
               </div>
             )}
+            {domainPanel && (
+              <div className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'domain' ? css['lowcode-view-toolbar-tab-active'] : ''}`} onClick={() => setBottomTab('domain')}>
+                {domainCopy.tab()}
+              </div>
+            )}
             <div
               className={`${css['lowcode-view-toolbar-tab']} ${bottomTab === 'version' ? css['lowcode-view-toolbar-tab-active'] : ''}`}
               onClick={() => setBottomTab('version')}
@@ -1107,6 +1122,11 @@ function LowcodeView(params: Params) {
       {hasTaskPanel && (
         <div className={css['lowcode-view']} style={{ display: bottomTab === 'task' ? 'flex' : 'none' }}>
           <TaskPanel content={taskContent} />
+        </div>
+      )}
+      {domainPanel && bottomTab === 'domain' && (
+        <div className={css['lowcode-view']}>
+          <DomainPanel content={safeDecodeSource(files.find(file => file.fileName.replace(/^\.\//, '') === domainPanel.documentPath)?.source)} />
         </div>
       )}
       {/* 版本面板 */}
