@@ -336,7 +336,7 @@ function getDomSummaryClassNames(node: Element): string {
     return loc.cn.filter(Boolean).slice(0, DOM_SUMMARY_CLASS_MAX).join(" ");
   }
 
-  return "";
+  return splitClassNames(node.className).slice(0, DOM_SUMMARY_CLASS_MAX).join(" ");
 }
 
 function shouldSkipDomSummaryChildren(node: Element): boolean {
