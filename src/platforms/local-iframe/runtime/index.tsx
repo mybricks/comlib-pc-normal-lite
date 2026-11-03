@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { registerSandbox } from '../sandbox'
+import { localFileEvents, registerSandbox } from '../sandbox'
 import context from '../../../mix/context'
 import myContext from '../context'
 import Xterm from '../../../components/xterm'
 import { useDarkMode } from '../../../utils/hooks'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
+import { notifyLocalPageStatuses, setLocalDebugTarget } from './page-status'
+import { getPagePathWithBase } from './page-path'
 
 type RouteParamDraft = {
   key: string
@@ -168,20 +170,9 @@ function buildItemPath(path: string, params: RouteParamDraft[] = []) {
   return `${path}?${query}`
 }
 
-const normalizeBasePath = (basePath: string) => {
-	const normalized = basePath.trim()
-	if (!normalized || normalized === '/') {
-		return ''
-	}
-	const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`
-	return withLeadingSlash.replace(/\/+$/, '')
-}
-
 const buildIframeSrc = (itemSrc: string, runtimeUrl?: string) => {
-	const routerBasename = normalizeBasePath(window.__LINGCHUANG_CONFIG__?.router?.basename || '')
 	const origin = runtimeUrl ? new URL(runtimeUrl).origin : window.location.origin
-	const routePath = itemSrc && !itemSrc.startsWith('/') ? `/${itemSrc}` : itemSrc
-	return `${origin}${routerBasename}${routePath === '/' ? '' : routePath}`
+	return `${origin}${getPagePathWithBase(itemSrc)}`
 }
 
 type RuntimeIframeItem = {
@@ -242,6 +233,8 @@ const RuntimeIframe = (props) => {
 				}
 			})
 		})
+
+		void notifyLocalPageStatuses(nextIframes)
 	}, [])
 
 	const refreshIframe = useCallback((itemSrc: string) => {
@@ -267,6 +260,9 @@ const RuntimeIframe = (props) => {
 
 	useEffect(() => {
 		registerSandbox(props.id)
+		const cancelInteractiveScriptsUpdated = localFileEvents.on('interactiveScriptsUpdated', () => {
+			void notifyLocalPageStatuses(currentIframesRef.current, true)
+		}, false)
 
 		const routesEvents = (window as any).__APP__?.routesEvents
 		const cancelRoutesEventsRoutes = routesEvents?.on?.('routes', (routes: RuntimeRouteEventItem[]) => {
@@ -283,6 +279,7 @@ const RuntimeIframe = (props) => {
 		const onEventsDebugTargetCancel = myContext.debug.events.on('debugTarget', (props) => {
 			const nextSrc = props.src || ''
 			const previousSrc = debugSrcRef.current
+			setLocalDebugTarget(nextSrc, currentIframesRef.current)
 			pendingRefreshSrcRef.current = nextSrc || previousSrc
 			debugSrcRef.current = nextSrc
 			setDebugSrc(nextSrc)
@@ -304,7 +301,10 @@ const RuntimeIframe = (props) => {
 		const onRuntimeUpdateCancel = myContext.runtime.events.on('runtimeUpdate', (update) => {
 			// 每次真实项目进程重新进入启动阶段，都先切回同一块 Xterm，持续展示
 			// ProjectRuntime 输出；ready 事件携带 URL 后再切回画布。
-			if (update.status.state === 'starting') setReady(false)
+			if (update.status.state === 'starting') {
+				myContext.iframes.clear()
+				setReady(false)
+			}
 		})
 
 		// 兼容逻辑
@@ -314,9 +314,11 @@ const RuntimeIframe = (props) => {
 		}
 
 		return () => {
+			cancelInteractiveScriptsUpdated()
 			prevIframesRef.current.forEach((item) => {
 				props.onIframeDestory?.(item.src)
 			})
+			myContext.iframes.clear()
 			cancelRoutesEventsRoutes()
 			onEventsDebugTargetCancel()
 			onEventsRefreshTargetCancel()
@@ -341,6 +343,7 @@ const RuntimeIframe = (props) => {
 			props.onIframeDestory?.(item.src)
 			delete iframeRefs.current[item.src]
 			loadedSrcsRef.current.delete(item.src)
+			myContext.iframes.delete(item.path, item.src)
 		})
 
 		prevIframesRef.current = iframes
@@ -371,6 +374,8 @@ const RuntimeIframe = (props) => {
 						data-zone-kind="iframe"
 						data-zone-title={item.src}
 						data-zone-filename={item.src}
+						data-iframe-path={item.path}
+						data-iframe-src={item.src}
 						>
 						<iframe
 							id={item.src}
@@ -385,12 +390,17 @@ const RuntimeIframe = (props) => {
 							}}
 							onLoad={(event) => {
 								loadedSrcsRef.current.add(item.src)
+								myContext.iframes.set(item.path, item.src, { doc: event.currentTarget.contentDocument })
 								props.onIframeLoad({
 									id: item.src,
 									doc: event.currentTarget.contentDocument,
 									routerPath: item.src
 								})
+								const previousSignature = lastLoadedSignatureRef.current
 								emitLoadedIfReady(currentIframesRef.current)
+								if (previousSignature && previousSignature === lastLoadedSignatureRef.current) {
+									void notifyLocalPageStatuses(currentIframesRef.current)
+								}
 							}}
 						/>
 					</div>

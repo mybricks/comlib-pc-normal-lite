@@ -19,6 +19,7 @@ import { randomUUID } from '../../../mix/utils/uuid'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
 import { createHttpPageAnalysis } from './page-analysis'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
+import { Events } from '../../../utils/events'
 
 (window as any)._local_iframe_notify_map_ = {} as any;
 
@@ -82,6 +83,13 @@ const LOCAL_FILES_READ_ENDPOINT = '/lingchuang/api/files/read'
 const LOCAL_FILES_UPDATE_ENDPOINT = '/lingchuang/api/update'
 const LOCAL_FILES_DELETE_ENDPOINT = '/lingchuang/api/delete-files'
 const LOCAL_COMMANDS_ENDPOINT = '/lingchuang/api/commands'
+const INTERACTIVE_SCRIPTS_PATH = '.lingchuang/display-mock/interactive-scripts.yaml'
+
+export const localFileEvents = new Events<{ interactiveScriptsUpdated: void }>()
+
+function isInteractiveScriptsPath(path: string): boolean {
+  return path === INTERACTIVE_SCRIPTS_PATH || path.endsWith(`/${INTERACTIVE_SCRIPTS_PATH}`)
+}
 
 type LocalFile = {
   path: string
@@ -291,6 +299,9 @@ export async function updateLocalFiles(files: Array<{ path: string; content: str
     body: JSON.stringify({ files }),
   })
   if (!response.ok) throw new Error(await getResponseError(response))
+  if (files.some((file) => isInteractiveScriptsPath(file.path))) {
+    localFileEvents.emit('interactiveScriptsUpdated', undefined)
+  }
   await Promise.all([
     refreshLocalGraph(),
     syncUpdatedAuditInfo(files),
@@ -304,6 +315,9 @@ export async function deleteLocalFiles(paths: string[]): Promise<void> {
     body: JSON.stringify({ paths }),
   })
   if (!response.ok) throw new Error(await getResponseError(response))
+  if (paths.some(isInteractiveScriptsPath)) {
+    localFileEvents.emit('interactiveScriptsUpdated', undefined)
+  }
   if (paths.includes(await getCurrentTasksPath())) {
     context.setTasksContent(null)
     context.notifyUserTaskInfo([])
@@ -560,6 +574,10 @@ export function registerSandbox(comId: string) {
         const versionList = myContext.version.getList()
 
         console.log('afterTurn:gitDiff', gitDiff)
+
+        if (gitDiff.includes(INTERACTIVE_SCRIPTS_PATH)) {
+          localFileEvents.emit('interactiveScriptsUpdated', undefined)
+        }
 
         if (gitDiff) {
           myContext.version.add({

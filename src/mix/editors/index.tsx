@@ -172,7 +172,7 @@ export default function (props: Props, actions: Actions) {
   }
 
   if (config.getFrontendMode() === 'local-iframe') {
-    return getLocalIframeEditors()
+    return getLocalIframeEditors(props)
   }
 
   return {

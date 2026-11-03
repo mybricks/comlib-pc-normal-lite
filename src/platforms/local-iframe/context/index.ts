@@ -5,6 +5,7 @@ import { Vibe } from './vibe'
 import { Debug } from './debug'
 import { Refresh } from './refresh'
 import { Runtime } from './runtime'
+import { Iframes } from './iframes'
 
 class Context {
   vibe = new Vibe()
@@ -14,6 +15,7 @@ class Context {
   debug = new Debug()
   refresh = new Refresh()
   runtime = new Runtime()
+  iframes = new Iframes()
 }
 
 let context: Context | null = null

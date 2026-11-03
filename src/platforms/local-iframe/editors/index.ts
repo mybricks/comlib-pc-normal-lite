@@ -14,8 +14,9 @@ import viewCode from './viewCode'
 import resizePage from './resizePage'
 import doc from './doc'
 import refresh from './refresh'
+import zoneStatus from './zoneStatus'
 
-export default function () {
+export default function (props) {
   return {
     '@lowcode': lowcode,
     '@debug': debug,
@@ -50,6 +51,7 @@ export default function () {
     },
     '@auditPage': auditPage,
     '@viewCode': viewCode,
-    ...doc()
+    ...doc(),
+    ...zoneStatus(props)
   }
 }
