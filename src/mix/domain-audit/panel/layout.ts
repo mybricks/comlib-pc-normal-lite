@@ -77,3 +77,57 @@ export function layoutLayeredOverview(nodes: Array<LayoutNode & { type: string }
   })
   return { positions, paths, bands, width, height }
 }
+
+/** Arrange a spanning forest around a central root; retain every original edge. */
+export function layoutMindMap(nodes: LayoutNode[], edges: LayoutEdge[]) {
+  const ids = new Set(nodes.map(node => node.id))
+  const outgoing = new Map(nodes.map(node => [node.id, [] as string[]]))
+  const incoming = new Set<string>()
+  edges.forEach(edge => {
+    if (ids.has(edge.from) && ids.has(edge.to) && edge.from !== edge.to) {
+      outgoing.get(edge.from)!.push(edge.to)
+      incoming.add(edge.to)
+    }
+  })
+  let root = '__domain_mindmap_root__'
+  while (ids.has(root)) root += '_'
+  const graph = new dagre.graphlib.Graph()
+  graph.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 100, marginx: MARGIN, marginy: MARGIN })
+  graph.setDefaultEdgeLabel(() => ({}))
+  graph.setNode(root, { width: NODE_WIDTH, height: NODE_HEIGHT })
+  nodes.forEach(node => graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT }))
+  const visited = new Set<string>()
+  const roots: string[] = []
+  const visit = (id: string) => {
+    visited.add(id)
+    for (const child of outgoing.get(id) || []) {
+      if (!visited.has(child)) { graph.setEdge(id, child); visit(child) }
+    }
+  }
+  const candidates = [...nodes.filter(node => !incoming.has(node.id)), ...nodes]
+  candidates.forEach(node => {
+    if (!visited.has(node.id)) { roots.push(node.id); graph.setEdge(root, node.id); visit(node.id) }
+  })
+  dagre.layout(graph)
+  const position = (id: string) => {
+    const point = graph.node(id)
+    return { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 }
+  }
+  const positions = new Map(nodes.map(node => [node.id, position(node.id)]))
+  const rootPosition = position(root)
+  const route = (from: Point, to: Point, self = false) => {
+    if (self) return { path: `M ${from.x + 190} ${from.y + 18} C ${from.x + 230} ${from.y - 20}, ${from.x + 230} ${from.y + 76}, ${from.x + 190} ${from.y + 40}`, label: { x: from.x + 222, y: from.y } }
+    const forward = to.x > from.x
+    const x1 = from.x + (forward ? NODE_WIDTH : 0); const x2 = to.x + (forward ? 0 : NODE_WIDTH)
+    const y1 = from.y + NODE_HEIGHT / 2; const y2 = to.y + NODE_HEIGHT / 2
+    const middle = (x1 + x2) / 2
+    return { path: `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`, label: { x: middle, y: (y1 + y2) / 2 } }
+  }
+  const paths = edges.map(edge => {
+    const from = positions.get(edge.from); const to = positions.get(edge.to)
+    return from && to ? route(from, to, edge.from === edge.to) : null
+  })
+  const rootPaths = roots.map(id => route(rootPosition, positions.get(id)!))
+  const size = graph.graph()
+  return { positions, paths, rootPosition, rootPaths, width: Math.max(260, size.width || 0), height: Math.max(200, size.height || 0) }
+}

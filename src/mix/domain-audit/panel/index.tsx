@@ -4,7 +4,7 @@ import context from '../../context'
 import { getLazyCss } from '../../lowcodeView/utils/css'
 import * as lazyCss from './index.lazy.less'
 import { copy } from './index.i18n'
-import { layoutDomainGraph, layoutLayeredOverview } from './layout'
+import { layoutDomainGraph, layoutLayeredOverview, layoutMindMap } from './layout'
 import { flowDefinition, pageViewData, pageAssociations, type DomainDocument, type DomainNode } from './model'
 
 const css = getLazyCss(lazyCss)
@@ -20,9 +20,9 @@ function parseDocument(content: string): DomainDocument {
 
 type GraphNode = { id: string; title: string; summary?: string; type: string }
 type GraphEdge = { from: string; to: string; type: string; title?: string; description?: string; condition?: string }
-function Graph({ nodes, edges, selected, selectedEdge, overview, onNode, onEdge }: { nodes: GraphNode[]; edges: GraphEdge[]; selected: string | null; selectedEdge: number | null; overview: boolean; onNode: (id: string) => void; onEdge: (index: number) => void }) {
-  const layout = useMemo(() => overview ? layoutLayeredOverview(nodes, edges) : { ...layoutDomainGraph(nodes, edges), bands: [] }, [nodes, edges, overview])
-  const { positions, paths, width, height, bands } = layout
+function Graph({ nodes, edges, selected, selectedEdge, overview, mindMap, rootTitle, onNode, onEdge }: { nodes: GraphNode[]; edges: GraphEdge[]; selected: string | null; selectedEdge: number | null; overview: boolean; mindMap: boolean; rootTitle: string; onNode: (id: string) => void; onEdge: (index: number) => void }) {
+  const layout = useMemo(() => overview && mindMap ? { ...layoutMindMap(nodes, edges), bands: [] } : overview ? { ...layoutLayeredOverview(nodes, edges), rootPosition: null, rootPaths: [] } : { ...layoutDomainGraph(nodes, edges), bands: [], rootPosition: null, rootPaths: [] }, [nodes, edges, overview, mindMap])
+  const { positions, paths, width, height, bands, rootPosition, rootPaths } = layout
   const categoryLabels: Record<string, string> = { domain: copy.domain(), module: copy.module(), page: copy.page(), flow: copy.flow(), other: copy.other() }
   const connected = useMemo(() => {
     if (!selected) return null
@@ -35,6 +35,8 @@ function Graph({ nodes, edges, selected, selectedEdge, overview, onNode, onEdge 
     <defs><marker id="domain-panel-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" className={css['domain-edge-arrow']} /></marker></defs>
     <g transform="translate(60 48)">
     {bands.map(band => <g key={band.type}><rect x="0" y={band.y} width={width} height="112" rx="10" className={css['domain-layer-band']} /><text x="20" y={band.y + 49} className={css['domain-layer-title']}>{categoryLabels[band.type]}</text><text x="20" y={band.y + 70} className={css['domain-layer-count']}>{band.count}</text></g>)}
+    {rootPaths.map((route, i) => <path key={i} d={route.path} fill="none" className={css['domain-mind-root-line']} />)}
+    {rootPosition && <g><rect x={rootPosition.x} y={rootPosition.y} width="190" height="56" rx="8" className={css['domain-mind-root']} /><text x={rootPosition.x + 95} y={rootPosition.y + 33} textAnchor="middle" className={css['domain-mind-root-title']}><title>{rootTitle}</title>{rootTitle.length > 13 ? `${rootTitle.slice(0, 13)}…` : rootTitle}</text></g>}
     {edges.map((edge, i) => {
       const route = paths[i]
       if (!route) return null
@@ -58,6 +60,7 @@ export default function DomainPanel({ content }: { content?: string }) {
   const [selectedEdge, setSelectedEdge] = useState<number | null>(null)
   const [flowId, setFlowId] = useState<string | null>(null)
   const [pageView, setPageView] = useState(false)
+  const [mindMap, setMindMap] = useState(false)
   const [state, setState] = useState<'loading' | 'empty' | 'ready' | 'error'>('loading')
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(false)
@@ -133,8 +136,9 @@ export default function DomainPanel({ content }: { content?: string }) {
       <div className={css['domain-view-heading']}>
         {flowId ? <><button type="button" onClick={returnFromFlow} className={css['domain-back']}>← {pageView ? copy.pagesView() : copy.overview()}</button><strong>{flowNode?.title ?? flowId}</strong><span>{flowNode?.summary}</span></> : <><div className={css['domain-view-tabs']}><button type="button" aria-pressed={!pageView} onClick={() => showOverview()}>{copy.overview()}</button><button type="button" aria-pressed={pageView} onClick={() => showPages()}>{copy.pagesView()}</button></div>{!pageView && doc.overview?.title && <strong>{doc.overview.title}</strong>}<span>{pageView ? (pageData.pages.length && !pageData.navigation.length ? copy.noNavigation() : '') : (doc.overview?.summary || '')}</span></>}
       </div>
+      {!flowId && !pageView && <div className={css['domain-layout-switch']} role="group" aria-label={copy.layout()}><button type="button" aria-pressed={!mindMap} onClick={() => setMindMap(false)}>{copy.layered()}</button><button type="button" aria-pressed={mindMap} onClick={() => setMindMap(true)}>{copy.mindMap()}</button></div>}
       <div className={css['domain-content']}>
-        {flowId && !graphNodes.length ? <div className={css['domain-graph-empty']}>{copy.noFlowSteps()}</div> : pageView && !flowId && !graphNodes.length ? <div className={css['domain-graph-empty']}>{copy.noPages()}</div> : <Graph nodes={graphNodes} edges={graphEdges} selected={graphSelection} selectedEdge={selectedEdge} overview={!flowId && !pageView} onNode={id => { setSelectedEdge(null); if (flowId) setSelectedStep(id); else if (nodes.find(node => node.id === id)?.type === 'flow') openFlow(id); else setSelected(id) }} onEdge={index => { setSelectedEdge(index); setSelected(null); setSelectedStep(null) }} />}
+        {flowId && !graphNodes.length ? <div className={css['domain-graph-empty']}>{copy.noFlowSteps()}</div> : pageView && !flowId && !graphNodes.length ? <div className={css['domain-graph-empty']}>{copy.noPages()}</div> : <Graph nodes={graphNodes} edges={graphEdges} selected={graphSelection} selectedEdge={selectedEdge} overview={!flowId && !pageView} mindMap={mindMap} rootTitle={doc.overview?.title || copy.overview()} onNode={id => { setSelectedEdge(null); if (flowId) setSelectedStep(id); else if (nodes.find(node => node.id === id)?.type === 'flow') openFlow(id); else setSelected(id) }} onEdge={index => { setSelectedEdge(index); setSelected(null); setSelectedStep(null) }} />}
         <aside className={css['domain-details']}><div className={css['domain-details-label']}>{activeEdge ? copy.edgeDetail() : copy.detail()}</div>
           {activeEdge ? <><h3>{activeEdge.title || activeEdge.type}</h3><p>{titleOf(activeEdge.from)} → {titleOf(activeEdge.to)}</p>{activeEdge.description && <p>{activeEdge.description}</p>}{activeEdge.condition && <p>{activeEdge.condition}</p>}</> : flowId ? step ? <><h3>{step.title}</h3>{step.description && <p>{step.description}</p>}{stepNode && <><h4>{copy.openNode()}</h4><button className={css['domain-action']} onClick={() => pageView && stepNode.type === 'page' ? showPages(stepNode.id) : showOverview(stepNode.id)}>{stepNode.title} →</button></>}</> : flowNode ? renderDetails(flowNode) : <p>{copy.select()}</p> : active ? pageView ? renderPageDetails(active) : renderDetails(active) : <p>{copy.select()}</p>}
           <details className={css['domain-diagnostics']}><summary>{copy.diagnostics()}</summary><pre>{JSON.stringify({ scope: doc.scope, diagnostics: doc.diagnostics }, null, 2)}</pre></details>
