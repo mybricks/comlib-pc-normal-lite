@@ -1,5 +1,9 @@
-import { randomUUID } from "../../utils/uuid"
 import buildDomChipInfo from '../../../helpers/dom/buildDomChipInfo'
+
+// 与 plugin-ai 的 createChatChipId 保持一致。
+function createChatChipId(): string {
+  return Math.random().toString(36).slice(2, 6)
+}
 
 const DOM_SUMMARY_SINGLE_TEXT_MAX = 20
 const DOM_SUMMARY_TOTAL_MAX = 300
@@ -544,7 +548,7 @@ function getElementLabeForAiRequest(ele: Element | Node) {
 
 export function buildElementDeleteAiRequest({ ele }: { ele: Element }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
@@ -562,7 +566,7 @@ export function buildElementDeleteAiRequest({ ele }: { ele: Element }) {
 
 export function buildElementTextUpdateAiRequest({ ele, content }: { ele: Element; content: string }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
@@ -580,7 +584,7 @@ export function buildElementTextUpdateAiRequest({ ele, content }: { ele: Element
 
 export function buildElementImageUpdateAiRequest({ ele, src }: { ele: Element; src: string }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
@@ -598,7 +602,7 @@ export function buildElementImageUpdateAiRequest({ ele, src }: { ele: Element; s
 
 export function buildElementSvgUpdateAiRequest({ ele, svg }: { ele: Element; svg: string }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
@@ -621,7 +625,7 @@ export function buildElementSvgUpdateAiRequest({ ele, svg }: { ele: Element; svg
 
 export function buildElementStyleUpdateAiRequest({ ele, styles }: { ele: Element; styles: Array<{ key: string; value: number | string | null | undefined }>; }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
@@ -660,7 +664,7 @@ function textNodeDesc(ele: Element | Node) {
 
 export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromEle: Element | Node; toEle: Element | Node; placement: 'before' | 'after' | 'child' }) {
   const chipFrom = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(fromEle),
     type: 'dom',
     data: {
@@ -669,7 +673,7 @@ export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromE
     }
   }
   const chipTo = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(toEle),
     type: 'dom',
     data: {
@@ -687,7 +691,7 @@ export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromE
 
 export function buildElementDuplicateAiRequest({ ele }: { ele: Element }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {
@@ -705,7 +709,7 @@ export function buildElementDuplicateAiRequest({ ele }: { ele: Element }) {
 
 export function buildElementInsertAiRequest({ ele, jsx, placement, importCode = '' }: { ele: Element | Node; jsx: string; placement: 'before' | 'after' | 'child'; importCode?: string }) {
   const chip = {
-    id: randomUUID(),
+    id: createChatChipId(),
     label: getElementLabeForAiRequest(ele),
     type: 'dom',
     data: {

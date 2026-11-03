@@ -403,16 +403,19 @@ export default function buildDomChipInfo(ele?: Element | Node): string {
 
   if (!element) {
     return [
-      " - 代码位置：未知",
-      " - 该区域到叶子节点的Dom结构摘要：未知",
+      "未知",
+      "  - 该节点到叶子节点的结构摘要：未知",
+      "  - 相关的渲染 JSX 代码：未知",
     ].join("\n");
   }
 
   const repeatContextLines = formatRepeatContexts(collectRepeatAncestorContexts(element));
+  const summary = extractDomSummary(element);
   return [
-    ` - 相关代码：${getDomCodeLocation(element)}`,
-    ...repeatContextLines,
-    " - 该区域到叶子节点的Dom结构摘要：",
-    indentText(extractDomSummary(element), "   "),
+    summary.split("\n")[0],
+    "  - 该节点到叶子节点的结构摘要：",
+    indentText(summary, "    "),
+    `  - 相关的渲染 JSX 代码：${getDomCodeLocation(element)}`,
+    ...repeatContextLines.map((line) => ` ${line}`),
   ].join("\n");
 }
