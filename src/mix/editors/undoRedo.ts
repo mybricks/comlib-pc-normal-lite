@@ -166,7 +166,9 @@ class UndoRedoManager {
     for (let index = this.branchUndoStack.length - 1; index >= 0; index -= 1) {
       const command = this.branchUndoStack[index]
       if (command.aiRequest) {
-        command.undo()
+        try {
+          command.undo()
+        } catch {}
       }
     }
   }

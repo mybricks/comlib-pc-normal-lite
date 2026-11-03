@@ -266,6 +266,7 @@ export function buildHooks(props: Props) {
         events.emit('debugTarget', {
           type: 'page',
           pageIndex,
+          filename: page.getAttribute('data-zone-filename'),
           showType: page.getAttribute('data-zone-show-type'),
           style: {
             transform: `scale(1) translate(${(pageBCR.left - rootBCR.left) / (rootBCR.width / layoutWidth) - borderLeft - paddingLeft}px, ${(pageBCR.top - rootBCR.top) / (rootBCR.width / layoutWidth) - borderTop - paddingTop}px)`,
@@ -523,7 +524,7 @@ export function buildHooks(props: Props) {
       })
     },
     ...(['default', 'prototype'].includes(frontendMode) ? {
-      '@createZoneStatus'(ele) {
+      async '@createZoneStatus'(ele) {
         // console.log('@createZoneStatus', ele)
         const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
         const chipId = randomUUID()

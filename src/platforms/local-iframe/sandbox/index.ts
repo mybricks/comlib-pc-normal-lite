@@ -17,6 +17,7 @@ import {
 import myContext from '../context'
 import { randomUUID } from '../../../mix/utils/uuid'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
+import { createDesignerLoading } from '../../../mix/sandbox'
 import { createHttpPageAnalysis } from './page-analysis'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import { Events } from '../../../utils/events'
@@ -479,9 +480,9 @@ export function registerSandbox(comId: string) {
   }
   registerTaskReferResolver(sandboxAPI)
 
-  // const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
-  //   current: null,
-  // };
+  const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
+    current: null,
+  };
 
   // const projectRef = getProjectRef(comId);
   // refreshProjectBaseline(comId, projectRef);
@@ -515,14 +516,14 @@ export function registerSandbox(comId: string) {
     pageAnalysis: createHttpPageAnalysis(),
     mentions: [buildTaskMentionProvider()],
     hooks: {
-      async beforeRequest(params,) {
-        console.log(10, 'hooks:beforeRequest', params)
+      async beforeRequest({ extra }) {
+        console.log(10, 'hooks:beforeRequest', { extra })
         // (window as any).__vibeCodingCallbacks__?.onStart?.();
         
-        // loadingRef.current?.setExtra(extra);
-        // loadingRef.current?.setLock('lock');
+        loadingRef.current?.setExtra(extra);
+        loadingRef.current?.setLock('lock');
 
-        // context.component?.events.emit('vibing', true);
+        context.component?.events.emit('vibing', true);
       },
       async beforeTurn(params) {
         agentTurnLifecycle.onStart(comId)
@@ -564,10 +565,18 @@ export function registerSandbox(comId: string) {
           //   diff: gitDiff,
           // })
         }
-        // const focusArea = (window as any)?._ai_focus_params_?.focusArea;
-        // const onProgress = (window as any)?._ai_focus_params_?.onProgress;
-        // loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
+        const focusArea = (window as any)?._ai_focus_params_?.focusArea;
+        const onProgress = (window as any)?._ai_focus_params_?.onProgress;
+        loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
         // refreshProjectBaseline(comId, projectRef);
+
+
+        try {
+          undoRedoManager.rollbackAIBranchCommands()
+          undoRedoManager.clearBranch()
+        } catch (e) {
+          console.log('报错', e)
+        }
       },
       async afterTurn(turn: any) {
         const gitDiff = await captureVersionGitDiff()
@@ -619,26 +628,10 @@ export function registerSandbox(comId: string) {
         //   undoRedoManager.clearBranch()
         // }
 
-        try {
-          undoRedoManager.rollbackAIBranchCommands()
-          undoRedoManager.clearBranch()
-        } catch (e) {
-          console.log('报错', e)
-        }
+        loadingRef.current?.dispose();
+        loadingRef.current = null;
 
-        // turnLogs.setLog({
-        //   message: isRemoteAgent
-        //     ? '[轮次/afterTurn] remote Agent 版本由服务端持久化 — 通知 UI 并销毁设计器 loading'
-        //     : '[轮次/afterTurn] 版本已持久化 — 通知 UI 并销毁设计器 loading',
-        //   dispose: typeof loadingRef.current?.dispose
-        // });
-
-        // (window as any).__vibeCodingCallbacks__?.onComplete?.(turn);
-
-        // loadingRef.current?.dispose();
-        // loadingRef.current = null;
-
-        // context.component?.events.emit('vibing', false);
+        context.component?.events.emit('vibing', false);
       },
       async afterTurnSummary(turn, summary: string) {
         console.log(13, 'hooks:afterTurnSummary', {

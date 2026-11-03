@@ -24,7 +24,13 @@ export default function (props) {
         chips
       },
       aiRole: 'fast',
+      extra: {
+        from: '@commitUserActions'
+      }
     })
+
+    undoRedoManager.completeBranch()
+    return true
   }
 
   // if (!beforeFiles) return true
