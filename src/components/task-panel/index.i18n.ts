@@ -40,10 +40,10 @@ export const i18n = {
   attentionLinkTitle: () => getI18n({ zh: '打开对话，告知我结果', en: 'Open chat and tell me the result' }),
   status: (status: TaskStatus) => {
     const labels: Record<TaskStatus, { zh: string; en: string }> = {
-      '处理中': { zh: '处理中', en: 'In progress' },
-      '待验证': { zh: '待验证', en: 'Needs verification' },
-      '待交接': { zh: '待交接', en: 'Pending handover' },
-      '已完成': { zh: '已完成', en: 'Completed' },
+      '处理中': { zh: '处理中', en: 'Progress' },
+      '待验证': { zh: '待验证', en: 'Verify' },
+      '待交接': { zh: '待交接', en: 'Handoff' },
+      '已完成': { zh: '已完成', en: 'Done' },
     }
     return getI18n(labels[status])
   },

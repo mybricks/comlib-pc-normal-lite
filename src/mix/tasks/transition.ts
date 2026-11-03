@@ -1,12 +1,16 @@
+import { parseTasksForNotify } from './notify'
+
 export type TaskStatus = '待处理' | '处理中' | '待验证' | '待交接' | '已完成'
 
 const STATUS_LINE = /^(\s*-\s*\*{1,2}\s*状态\s*\*{0,2}\s*[：:]\s*)(.+)$/m
 const UPDATED_AT_LINE = /^(\s*-\s*\*{1,2}\s*更新时间\s*\*{0,2}\s*[：:]\s*)(.+)$/m
 
-function getTaskSectionId(section: string): string | undefined {
-  if (!/^## /.test(section)) return undefined
-  const titleLine = section.split('\n')[0]
-  return titleLine.replace(/^## /, '').trim().match(/^(T-\d+)\b/)?.[1]
+function getTaskSections(content: string): Array<{ section: string; id: string }> {
+  const tasks = parseTasksForNotify(content)
+  const sections = content.split(/(?=^## )/m).filter((section) =>
+    section.startsWith('## ') && section.split('\n')[0].replace(/^#+\s*/, '').trim(),
+  )
+  return sections.map((section, index) => ({ section, id: tasks[index].id }))
 }
 
 function normalizeStatus(raw: string | undefined): string | undefined {
@@ -21,9 +25,9 @@ function formatNow(): string {
 
 /** 读取任务当前状态，找不到任务或状态行时返回 undefined。 */
 export function readTaskStatus(content: string, taskId: string): string | undefined {
-  const section = content.split(/(?=^## )/m).find((item) => getTaskSectionId(item) === taskId)
-  if (!section) return undefined
-  return normalizeStatus(section.match(STATUS_LINE)?.[2])
+  const entry = getTaskSections(content).find((item) => item.id === taskId)
+  if (!entry) return undefined
+  return normalizeStatus(entry.section.match(STATUS_LINE)?.[2])
 }
 
 /**
@@ -35,13 +39,17 @@ export function applyTaskTransition(
   content: string,
   taskId: string,
   targetStatus: TaskStatus,
-  options: { from?: TaskStatus } = {},
+  options: { from?: TaskStatus; expectedTitle?: string } = {},
 ): string {
   const timestamp = formatNow()
   let changed = false
+  const entries = getTaskSections(content)
+  let taskIndex = 0
 
   const result = content.split(/(?=^## )/m).map((section) => {
-    if (getTaskSectionId(section) !== taskId) return section
+    if (!section.startsWith('## ') || !section.split('\n')[0].replace(/^#+\s*/, '').trim()) return section
+    if (entries[taskIndex++]?.id !== taskId) return section
+    if (options.expectedTitle && section.split('\n')[0].replace(/^#+\s*/, '').trim() !== options.expectedTitle) return section
     if (!STATUS_LINE.test(section)) return section
     if (options.from && normalizeStatus(section.match(STATUS_LINE)?.[2]) !== options.from) return section
 

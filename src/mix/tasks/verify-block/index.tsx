@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import context, { type UserTaskInfo } from '../../context'
 import i18n from '../../../helpers/i18n'
-import { parseTasksForNotify } from '../notify'
+import { parseTasksForNotify, resolveTaskId } from '../notify'
 import { applyTaskTransition, type TaskStatus } from '../transition'
 import { TaskCardHeading } from '../task-card'
 import * as lazyCss from './index.lazy.less'
@@ -29,11 +29,11 @@ const copy = {
   allHandled: () => i18n({ zh: '全部已处理', en: 'All tasks reviewed' }),
   status: (status: TaskStatus) => {
     const labels: Record<TaskStatus, { zh: string; en: string }> = {
-      '待处理': { zh: '待处理', en: 'To do' },
-      '处理中': { zh: '处理中', en: 'In progress' },
-      '待验证': { zh: '待验证', en: 'Needs verification' },
-      '待交接': { zh: '待交接', en: 'Pending handoff' },
-      '已完成': { zh: '已完成', en: 'Completed' },
+      '待处理': { zh: '待处理', en: 'Todo' },
+      '处理中': { zh: '处理中', en: 'Progress' },
+      '待验证': { zh: '待验证', en: 'Verify' },
+      '待交接': { zh: '待交接', en: 'Handoff' },
+      '已完成': { zh: '已完成', en: 'Done' },
     }
     return i18n(labels[status])
   },
@@ -83,15 +83,15 @@ function useTasksContent(): string | null {
 async function commitTransitions(
   sandbox: TaskSandbox,
   taskPath: string,
-  transitions: Array<{ id: string; target: TaskStatus; from?: TaskStatus }>,
+  transitions: Array<{ id: string; title: string; target: TaskStatus; from?: TaskStatus }>,
 ): Promise<string[]> {
   const file = await sandbox.files.read(taskPath)
   if (!file) return []
 
   let content = file.content
   const applied: string[] = []
-  for (const { id, target, from = '待验证' } of transitions) {
-    const next = applyTaskTransition(content, id, target, { from })
+  for (const { id, title, target, from = '待验证' } of transitions) {
+    const next = applyTaskTransition(content, id, target, { from, expectedTitle: title })
     if (next !== content) {
       content = next
       applied.push(id)
@@ -235,7 +235,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
     if (busy) return
     setBusy(true)
     try {
-      const applied = await commitTransitions(sandbox, taskPath, [{ id: task.id, ...transition }])
+      const applied = await commitTransitions(sandbox, taskPath, [{ id: task.id, title: task.title, ...transition }])
       if (applied.length) onApplied()
       else setNotice(copy.outdated())
     } catch (error) {
@@ -286,7 +286,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
     try {
       const send = (window as any)._sandbox_?.helpers?.sendToAgent
       if (typeof send !== 'function') throw new Error('sendToAgent is unavailable')
-      const ids = new Set(await commitTransitions(sandbox, taskPath, feedback.map(({ task }) => ({ id: task.id, target: '待处理' as TaskStatus }))))
+      const ids = new Set(await commitTransitions(sandbox, taskPath, feedback.map(({ task }) => ({ id: task.id, title: task.title, target: '待处理' as TaskStatus }))))
       const submitted = feedback.filter(({ task }) => ids.has(task.id))
       if (submitted.length < feedback.length) setNotice(copy.outdated())
       if (!submitted.length) return
@@ -462,9 +462,12 @@ interface TurnLogEntry {
 function snapshotTasks(content: string | undefined): Map<string, string> {
   const result = new Map<string, string>()
   if (!content) return result
-  const sections = content.split(/(?=^## )/m).filter((section) => section.startsWith('## '))
-  for (const section of sections) {
-    const task = parseTasksForNotify(section)[0]
+  const tasks = parseTasksForNotify(content)
+  const sections = content.split(/(?=^## )/m).filter((section) =>
+    section.startsWith('## ') && section.split('\n')[0].replace(/^#+\s*/, '').trim(),
+  )
+  for (const [index, section] of sections.entries()) {
+    const task = tasks[index]
     if (task?.state === 1) result.set(task.id, section)
   }
   return result
@@ -487,6 +490,12 @@ export async function createTaskVerification({ comId, sandbox, taskPath }: { com
   }
   try {
     const content = (await sandbox.files.read(taskPath))?.content ?? null
+    if (content !== null) {
+      log = log.map((entry) => ({
+        ...entry,
+        taskIds: entry.taskIds.map((id) => resolveTaskId(content, id) ?? id),
+      }))
+    }
     context.setTasksContent(content)
     context.notifyUserTaskInfo(content === null ? [] : parseTasksForNotify(content))
   } catch (error) {

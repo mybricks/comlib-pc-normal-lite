@@ -60,16 +60,35 @@ function extractVerification(section: string): string | undefined {
   return content || undefined
 }
 
-export function parseTasksForNotify(content: string): UserTaskInfo[] {
+/** 无编号任务的 ID 使用完整标题，避免中文标题退化为列表位置。 */
+function hashTaskTitle(title: string): string {
+  let first = 0x811c9dc5
+  let second = 0x9e3779b9
+  for (let i = 0; i < title.length; i++) {
+    const code = title.charCodeAt(i)
+    first = Math.imul(first ^ code, 0x01000193)
+    second = Math.imul(second ^ code, 0x85ebca6b)
+  }
+  return `legacy-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`
+}
+
+function parseTasks(content: string, usePreviousIds: boolean): UserTaskInfo[] {
   const tasks: UserTaskInfo[] = []
+  const usedIds = new Set<string>()
   const sections = content.split(/(?=^## )/m).filter((section) => section.startsWith('## '))
   for (const section of sections) {
     const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
     if (!title) continue
     const summaryMatch = section.match(/^>\s*(.+)/m)
     const rawState = extractTaskField(section, '状态') ?? ''
-    const id = title.match(/^(T-\d+)\b/)?.[1]
-      ?? (title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || String(tasks.length))
+    const baseId = title.match(/^(T-\d+)\b/)?.[1]
+      ?? (usePreviousIds
+        ? (title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || String(tasks.length))
+        : hashTaskTitle(title))
+    let id = baseId
+    let suffix = 2
+    while (usedIds.has(id)) id = `${baseId}-${suffix++}`
+    usedIds.add(id)
 
     tasks.push({
       id,
@@ -81,6 +100,18 @@ export function parseTasksForNotify(content: string): UserTaskInfo[] {
     })
   }
   return tasks
+}
+
+export function parseTasksForNotify(content: string): UserTaskInfo[] {
+  return parseTasks(content, false)
+}
+
+/** 兼容历史对话和轮次记录中保存的旧任务 ID。 */
+export function resolveTaskId(content: string, id: string): string | undefined {
+  const tasks = parseTasksForNotify(content)
+  if (tasks.some((task) => task.id === id)) return id
+  const index = parseTasks(content, true).findIndex((task) => task.id === id)
+  return index < 0 ? undefined : tasks[index]?.id
 }
 
 function normalizeTaskPath(path: string): string {

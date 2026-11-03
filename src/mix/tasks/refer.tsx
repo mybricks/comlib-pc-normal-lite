@@ -2,7 +2,7 @@ import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import context, { type UserTaskInfo } from '../context'
 import commonLang from '../../helpers/i18n/common'
-import { parseTasksForNotify } from './notify'
+import { parseTasksForNotify, resolveTaskId } from './notify'
 import { getTaskDisplayTitle, TaskCardHeading } from './task-card'
 import * as lazyCss from './verify-block/index.lazy.less'
 import { getLazyCss } from '../lowcodeView/utils/css'
@@ -102,7 +102,9 @@ export function registerTaskReferResolver(sandboxAPI: any): void {
   sandboxAPI.registerRefer({
     scheme: 'task',
     resolve: async (id: string) => {
-      const task = parseTasksForNotify(context.tasksContent ?? '').find((item) => item.id === id)
+      const content = context.tasksContent ?? ''
+      const resolvedId = resolveTaskId(content, id)
+      const task = parseTasksForNotify(content).find((item) => item.id === resolvedId)
       return task ?? null
     },
     renderCard: (data: UserTaskInfo) => <TaskReferCard task={data} />,
