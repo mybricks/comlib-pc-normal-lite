@@ -53,13 +53,15 @@ function TaskReferCard({ task }: { task: UserTaskInfo }) {
   return (
     <span
       ref={triggerRef}
-      style={{ position: 'relative', display: 'inline-flex', verticalAlign: 'baseline' }}
+      style={{ position: 'relative', display: 'inline-flex', maxWidth: '100%', minWidth: 0, verticalAlign: 'baseline' }}
       onMouseEnter={() => { setTasksContent(context.tasksContent); setHovered(true) }}
       onMouseLeave={() => setHovered(false)}
     >
       <span
         style={{
           display: 'inline-flex',
+          maxWidth: '100%',
+          minWidth: 0,
           padding: '1px 6px',
           borderRadius: 4,
           background: 'var(--mybricks-bg-color-active, #e6f4ff)',
@@ -68,7 +70,7 @@ function TaskReferCard({ task }: { task: UserTaskInfo }) {
           fontWeight: 500,
         }}
       >
-        <span>{commonLang.taskReferencePrefix}{getTaskDisplayTitle(currentTask?.title ?? task.title)}</span>
+        <span style={{ minWidth: 0, overflowWrap: 'anywhere', whiteSpace: 'normal' }}>{commonLang.taskReferencePrefix}{getTaskDisplayTitle(currentTask?.title ?? task.title)}</span>
       </span>
       {hovered && currentTask && createPortal(
         <div

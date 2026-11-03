@@ -105,15 +105,17 @@
 
 .mb-tv-related .mb-tv-card.is-front { max-height: none; }
 
-.mb-tv-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.mb-tv-card-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; margin-bottom: 2px; }
 // 标签配色与任务面板的状态徽标一致（TASK_STATUS_STYLE）。
 .mb-tv-tag {
   flex-shrink: 0;
+  margin-top: 1px;
   padding: 0 5px;
   border-radius: 2px;
   font-size: var(--chat-caption-font-size, 11px);
   font-weight: 500;
   line-height: 16px;
+  white-space: nowrap;
 
   &.status-doing { background: var(--mybricks-bg-color-active, #DFE1E6); color: var(--mybricks-text-color-disabled, #42526E); }
   &.status-verify { background: #ff4d4f; color: #fff; }
@@ -122,11 +124,14 @@
 }
 .mb-tv-card-title {
   display: -webkit-box;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   font-size: var(--chat-font-size, 13px);
   font-weight: 600;
   line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: normal;
   word-break: break-word;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 5;
@@ -145,7 +150,7 @@
 .mb-tv-tooltip {
   position: fixed;
   inset: auto;
-  width: 260px;
+  width: min(260px, calc(100vw - 16px));
   box-sizing: border-box;
   pointer-events: none;
   transition: none;
