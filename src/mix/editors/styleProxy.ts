@@ -610,7 +610,7 @@ function resolveTargetKey(params: {
     ? fullSelector
     : undefined;
   // 原有精确匹配没找到，就找源码里带 :global(...) 的规则
-  // 比较时
+  // 比较时临时去掉:global()包装，和运行时完整路径比较
   if (!exactMatchKey) {
     const globalMatchKeys = Object.keys(cssObj).filter(key => {
       if (!key.includes(':global(')) return false;
