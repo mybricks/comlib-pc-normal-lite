@@ -524,11 +524,7 @@ export function registerSandbox(comId: string) {
         loadingRef.current?.setLock('lock');
 
         context.component?.events.emit('vibing', true);
-      },
-      async beforeTurn(params) {
-        agentTurnLifecycle.onStart(comId)
-        myContext.vibe.isVibing = true
-        console.log(11, 'hooks:beforeTurn', params)
+
         const gitDiff = await captureVersionGitDiff(true)
         const versionList = myContext.version.getList()
 
@@ -565,6 +561,11 @@ export function registerSandbox(comId: string) {
           //   diff: gitDiff,
           // })
         }
+      },
+      async beforeTurn(params) {
+        agentTurnLifecycle.onStart(comId)
+        myContext.vibe.isVibing = true
+        console.log(11, 'hooks:beforeTurn', params)
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
         loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
