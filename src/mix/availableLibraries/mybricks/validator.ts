@@ -26,7 +26,8 @@ const VALID_NAMES = new Set([
   'defineTool',
   'useExposeApi',
   'useCanvasAction',
-  'updateConfigJson'
+  'updateConfigJson',
+  'useWindowProxy'
 ])
 
 // ── 校验器实现 ────────────────────────────────────────────────────────────────

@@ -128,7 +128,6 @@ export interface InteractiveScriptCanvas {
 export function parseCanvasInteractiveScripts(content: string): InteractiveScriptCanvas[] {
   let raw: unknown
   try {
-    console.log('content', content)
     raw = YAML.parse(content)
   } catch (error) {
     console.error('YAML 解析失败', error)
