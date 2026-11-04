@@ -609,6 +609,16 @@ function resolveTargetKey(params: {
   const exactMatchKey = Object.prototype.hasOwnProperty.call(cssObj, fullSelector)
     ? fullSelector
     : undefined;
+  // 原有精确匹配没找到，就找源码里带 :global(...) 的规则
+  // 比较时
+  if (!exactMatchKey) {
+    const globalMatchKeys = Object.keys(cssObj).filter(key => {
+      if (!key.includes(':global(')) return false;
+      const runtimeSelector = key.replace(/:global\((\.[\w-]+)\)/g, '$1');
+      return runtimeSelector === fullSelector || fullSelector.endsWith(' ' + runtimeSelector);
+    });
+    if (globalMatchKeys.length === 1) return globalMatchKeys[0];
+  }
 
   // 后缀遍历匹配：取路径最长（最具体）的 key；完整匹配已单独处理。
   const suffixMatchKey = Object.keys(cssObj)
@@ -1837,7 +1847,7 @@ export function genStyleValue(props) {
         : legacyDeletions;
       const aiComParams = context.component?.params;
       // 子目录 tsx 未 import less 时：先看入口文件的 less import，再按文件名兜底
-      const lessPath = resolveLessFilePath(
+      let lessPath = resolveLessFilePath(
         cn.files?.less,
         aiComParams?.data?.files,
         config.getEntryFile(),
@@ -2039,13 +2049,41 @@ export function genStyleValue(props) {
         : undefined;
       const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
       // 固定本次 set 入口的源码；一次 set 可能同时写 JSX 和 Less，不能依赖跨文件回调维护的共享快照。
-      const previousLessSource = rawLess ? decodeURIComponent(rawLess) : '';
-      const cssObj = rawLess ? parseLess(previousLessSource) : {};
+      let previousLessSource = rawLess ? decodeURIComponent(rawLess) : '';
+      let cssObj = rawLess ? parseLess(previousLessSource) : {};
 
       // 样式面板可能传来 CSS Modules 运行时类名，先还原成源码类名再定位写入位置
       const fullSelector = typeof rawSelector === 'string'
         ? demangleHashedSelector(rawSelector)
         : rawSelector;
+      // antd 等组件生成的节点可能不知道自己对应哪个 Less 文件。
+      // 清除样式时，默认文件里找不到就查其他 Less 文件；只有完整选择器对应一条规则时才换文件，避免改错。
+      // 1. 只有清除请求缺少 Less 文件标记时才补找文件，其他情况保留原逻辑。
+      if (explicitClearPatch && !cn.files?.less) {
+        // 2. 比较时去掉 :global(...)，让源码规则能和页面选择器对上；源码写法不变。
+        const matchesRule = (key: string) => {
+          const selector = key.replace(/:global\((\.[\w-]+)\)/g, '$1');
+          return selector === fullSelector || fullSelector.endsWith(' ' + selector);
+        };
+        // 3. 默认文件已有对应规则时，继续用它；找不到才检查其他文件。
+        if (!Object.keys(cssObj).some(matchesRule)) {
+          const matches: Array<{ path: string; source: string; cssObj: Record<string, any> }> = [];
+          // 4. 只解析其他 Less 文件，记录匹配规则所在的文件和内容。
+          aiComParams.data.files?.forEach((file: { fileName: string; source: string }) => {
+            if (file.fileName === lessPath || !file.fileName.endsWith('.less')) return;
+            const source = decodeURIComponent(file.source);
+            const parsed = parseLess(source);
+            const matchingKeys = Object.keys(parsed).filter(matchesRule);
+            matchingKeys.forEach(() => matches.push({ path: file.fileName, source, cssObj: parsed }));
+          });
+          // 5. 只找到一条规则才换文件；路径、修改前的源码、解析对象一起换，避免写入内容与文件对不上。
+          if (matches.length === 1) {
+            lessPath = matches[0].path;
+            previousLessSource = matches[0].source;
+            cssObj = matches[0].cssObj;
+          }
+        }
+      }
       const isStateWrite = isStateStyleSelector(fullSelector);
 
       // ── 内联样式优先路径 ──────────────────────────────────────────
