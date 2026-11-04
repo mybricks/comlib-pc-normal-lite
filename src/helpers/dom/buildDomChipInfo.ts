@@ -16,6 +16,15 @@ interface RepeatAncestorContext {
 
 export const DOM_CHIP_TYPE = "dom";
 
+export type DomChipInfoExtension = (element: Element) => string | undefined;
+
+let domChipInfoExtension: DomChipInfoExtension | undefined;
+
+/** 注册额外的节点说明；传入 undefined 可清除已有扩展。 */
+export function registerDomChipInfoExtension(extension?: DomChipInfoExtension): void {
+  domChipInfoExtension = extension;
+}
+
 /** 单段文本在 DOM 摘要中的最大字符数 */
 const DOM_SUMMARY_SINGLE_TEXT_MAX = 20;
 /** 选区 DOM 摘要总最大字符数，超出时裁剪中间部分 */
@@ -411,11 +420,13 @@ export default function buildDomChipInfo(ele?: Element | Node): string {
 
   const repeatContextLines = formatRepeatContexts(collectRepeatAncestorContexts(element));
   const summary = extractDomSummary(element);
+  const extraInfo = domChipInfoExtension?.(element);
   return [
     summary.split("\n")[0],
     "  - 该节点到叶子节点的结构摘要：",
     indentText(summary, "    "),
     `  - 相关的渲染 JSX 代码：${getDomCodeLocation(element)}`,
     ...repeatContextLines.map((line) => ` ${line}`),
+    ...(extraInfo ? [extraInfo] : []),
   ].join("\n");
 }

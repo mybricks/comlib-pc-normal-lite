@@ -8,7 +8,7 @@
  * - Designer 方法通过 projectRef.current 访问当前 project 实例，运行模式和画布状态实时读取。
  */
 
-import context, { Version } from '../context';
+import context, { config, Version } from '../context';
 import { debugLogs } from '../context/debugLogs';
 import { createProject } from './codeBase';
 import { updateComponentFiles } from '../agent/vibeCoding/tools/utils/files';
@@ -30,6 +30,8 @@ import { agentTurnLifecycle } from './agent-turn-lifecycle';
 import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
 import { registerTaskReferResolver } from '../tasks/refer';
 import { createTasksManager } from '../tasks/verify-block';
+import buildDomChipInfo, { DOM_CHIP_TYPE, registerDomChipInfoExtension } from '../../helpers/dom/buildDomChipInfo';
+import { formatDomCanvasInfo } from './dom-chip-info';
 
 const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
 
@@ -650,6 +652,25 @@ async function diffVersions(history: SandboxHistory, ...versionIds: string[]): P
   };
 }
 
+function formatDomChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: { ele?: Element | Node } }> }): string {
+  let resolved = message;
+  const nodeLabels = new Map<Element | Node | undefined, string>();
+
+  for (const chip of chips) {
+    const ele = chip.data?.ele;
+    let label = nodeLabels.get(ele);
+    if (!label) {
+      label = `Dom节点${nodeLabels.size + 1}`;
+      nodeLabels.set(ele, label);
+    }
+    resolved = resolved.split(`[[chip:${chip.id}]]`).join(` @${label} `);
+  }
+
+  if (!nodeLabels.size) return resolved;
+  const info = Array.from(nodeLabels, ([ele, label]) => `${label}: ${buildDomChipInfo(ele)}`).join('\n');
+  return `${resolved}\n\n<referenced-dom-nodes note="上方 @Dom 节点的详情，供参考。">\n${info}\n</referenced-dom-nodes>`;
+}
+
 function formatParsedElementChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: any }> }): string {
   let resolved = message;
   const infoBlocks: string[] = [];
@@ -688,7 +709,14 @@ const CHIPS = [
     }
   }
   return pre
-}, {} as any)
+}, {
+  [DOM_CHIP_TYPE]: {
+    def: {
+      type: DOM_CHIP_TYPE,
+      format: formatDomChipMessage,
+    },
+  },
+} as any)
 
 // turn.id 到 version.id 的映射
 const TURNID_TO_RECORD = {}
@@ -984,6 +1012,9 @@ const REGISTER_COMIDS = new Map<string, Promise<void>>()
  * 在 editors/index.tsx 中 context.setAiCom 之后调用。
  */
 export function registerSandbox(comId: string): Promise<void> {
+  registerDomChipInfoExtension(
+    ['default', 'prototype'].includes(config.getFrontendMode()) ? formatDomCanvasInfo : undefined,
+  );
   const existing = REGISTER_COMIDS.get(comId)
   if (existing) {
     return existing

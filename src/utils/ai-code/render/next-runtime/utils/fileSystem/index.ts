@@ -845,6 +845,22 @@ class FileSystem {
           }
         }
       }
+    } else {
+      if (entry) {
+        entry.file = file
+      } else {
+        this.filesMap[filename] = {
+          file,
+          module: {default: ''},
+          dependencies: new Set(),
+          dependedBy: new Set(),
+          forceUpdateSet: new Set<() => void>(),
+          currentImpl: () => null,
+          errors: {
+            runtime: null
+          }
+        }
+      }
     }
 
     this.events.emit('fileChange', { filename, type: entry ? 'update' : 'create'})

@@ -401,12 +401,10 @@ export function buildHooks(props: Props) {
           .join('、');
       }
       const {
-        id,
         options = {},
         onComplete,
         onError,
       } = params as {
-        id: string;
         options?: AuditPageOptions;
         onComplete: () => void;
         onError: () => void;
@@ -415,9 +413,7 @@ export function buildHooks(props: Props) {
       const message = getAuditPageMessage(options);
       const detail = message ? `的${message}文档` : '文档';
       const ele = hookContext.focusArea.ele;
-      const agentMessage = config.getFrontendMode() === 'local-iframe'
-        ? `使用 audit-power 来更新页面「${id}」${detail}`
-        : `使用 audit-power 来更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
+      const agentMessage = `使用 audit-power 来更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
 
       agentTurnLifecycle.register(hookContext.id, (turn) => {
         if (turn?.status === 'success') {
@@ -525,30 +521,20 @@ export function buildHooks(props: Props) {
     },
     ...(['default', 'prototype'].includes(frontendMode) ? {
       async '@createZoneStatus'(ele) {
-        // console.log('@createZoneStatus', ele)
-        const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
-        const chipId = randomUUID()
-        const chip = {
-          id: chipId,
-          label: '页面',
-          type: 'dom',
-          data: {
-            ele,
-          }
-        }
+        console.log('@createZoneStatus:ele', ele)
+        // const pagePath = ele.getAttribute('data-desn-page') ?? ele.closest('[data-desn-page]')?.getAttribute('data-desn-page')
+        // const componentId = context.component!.params.id
+        // agentTurnLifecycle.register(componentId, () => {
+        //   notifyPageStatuses([pagePath])
+        // })
 
+        // window._sandbox_.helpers.sendToAgent(componentId, {
+        //   message: `参考 mybricks 使用指南「画布展示状态覆盖与交互脚本」，分析当前画布（画布标识：${pagePath ?? '待确认'}）内的组件，接入有意义的展示状态覆盖，并为当前画布编写交互脚本。处理范围仅限当前画布，不扩展到其他页面或独立渲染的浮层画布。`,
+        // })
+        const tag = ele.getAttribute('data-canvas-tag')
         const componentId = context.component!.params.id
-        agentTurnLifecycle.register(componentId, () => {
-          notifyPageStatuses([pagePath])
-        })
-
         window._sandbox_.helpers.sendToAgent(componentId, {
-          message: `参考 mybricks 使用指南「页面展示状态覆盖与交互脚本」，为路由「${pagePath ?? '待确认'}」对应的页面接入有意义的展示状态覆盖，并编写交互脚本。`,
-          // message: '分析路由「/」对应的页面，分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。'
-          // message: `[[chip:${chip.id}]] 是页面 DOM 容器，页面路径为 ${pagePath ?? '未知'}（对应 interactive-scripts.yaml 的 page 字段）。分析该页面内有意义的展示状态，参考 mybricks 使用指南中「页面展示状态覆盖与交互脚本」一节，编写对应代码。`,
-          // meta: {
-          //   chips: [chip],
-          // },
+          message: `参考 mybricks 使用指南「画布展示状态覆盖与交互脚本」，分析当前画布（画布标识：${tag}）内的组件，接入有意义的展示状态覆盖，并为当前画布编写交互脚本。处理范围仅限当前画布，不扩展到其他页面或独立渲染的浮层画布。`,
         })
       },
     } : {}),

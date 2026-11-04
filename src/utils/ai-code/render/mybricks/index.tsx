@@ -24,7 +24,7 @@ import { useElementResizeObserver } from '../../../../hooks/useElementResizeObse
 import prototype from './prototype';
 import EnvConfigPanel from './env-config-panel';
 import { getCompiledCssContent } from '../../css';
-import { notifyPageStatuses } from './page-status'
+import { notifyPageStatuses, notifyCanvasStatuses } from './page-status'
 
 const useBreakpoints = (path) => {
   const [breakpoint, setBreakpoint] = useState<any>(null)
@@ -1067,19 +1067,13 @@ if (frontendMode === 'prototype') {
               state: 'runtime'
             }
           })
-          // const unWatchYaml = mixContext.fileSystem!.fileWatcher.watch('.agent/display-mock/interactive-scripts.yaml', (event) => {
-          //   const { file } = event
-          //   try {
-          //     const source = decodeURIComponent(file.source)
-          //     console.log('source', source)
-          //   } catch (e) {
-          //     console.error('watchYaml:error', e)
-          //   }
-          // })
+          const unWatchYaml = mixContext.fileSystem!.fileWatcher.watch('.agent/display-mock/interactive-scripts.yaml', () => {
+            notifyCanvasStatuses()
+          })
 
-          // return () => {
-          //   unWatchYaml()
-          // }
+          return () => {
+            unWatchYaml()
+          }
         }, [])
 
         const onMount = useCallback((params) => {
@@ -1088,7 +1082,8 @@ if (frontendMode === 'prototype') {
           let totalMountCount = (collectingRoutes.current.length || 1) + dialogRootsCount
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
-            notifyPageStatuses(collectingRoutes.current.length > 0 ? collectingRoutes.current : ['/'])
+            // notifyPageStatuses(collectingRoutes.current.length > 0 ? collectingRoutes.current : ['/'])
+            notifyCanvasStatuses()
           }
         }, [])
 
@@ -1278,7 +1273,7 @@ if (frontendMode === 'prototype') {
           })
           try {
             if (containerRef.current && container) {
-              containerRef.current.setAttribute("data-canvas-tag", `page:${params.filename}:${params.widgetName}`);
+              containerRef.current.setAttribute("data-canvas-tag", `popup:${params.filename}:${params.widgetName}`);
               containerRef.current.setAttribute('data-zone-filename', params.filename)
               let widgetName = params?.widgetName
               if (!widgetName) {
@@ -1399,8 +1394,8 @@ if (frontendMode === 'prototype') {
                         {...props}
                         {...realProps}
                         _env={_env}
-                        popupNode={container}
-                        wrapper={container}
+                        popupNode={container.firstChild}
+                        wrapper={container.firstChild}
                       />
                     </ErrorView>
                   </PageContext.Provider>

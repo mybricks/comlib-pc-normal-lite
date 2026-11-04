@@ -996,18 +996,6 @@ export default function createSetStyleHandler(
           // 其他模式下：`${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           // const frontendMode = config.getFrontendMode()
           let styleID: string
-          // if (frontendMode === 'prototype') {
-          //   // 从 ele 向上查找最近的带 data-desn-page 属性的祖先，获取当前页面路径
-          //   const pageEle = (ele as HTMLElement | null)?.closest?.('[data-desn-page]') as HTMLElement | null
-          //   const pagePath = pageEle?.dataset?.desnPage ?? null
-          //   if (pagePath != null) {
-          //     styleID = `${componentID}_${pagePath}_${lessFile}`.replace(/[^0-9a-zA-Z]/g, '_')
-          //   } else {
-          //     styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
-          //   }
-          // } else {
-          //   styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
-          // }
           styleID = `${componentID}_${lessFile}`.replace(/\./g, '__').replace(/\//g, '_')
           const shadowRoot = getShadowRoot()
           const styleTag = shadowRoot.querySelector(`#${styleID}`) as HTMLStyleElement | null

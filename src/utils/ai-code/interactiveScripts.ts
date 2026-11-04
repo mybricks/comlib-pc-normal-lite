@@ -117,3 +117,85 @@ export function parseInteractiveScripts(content: string): InteractiveScriptPage[
 
   return pages
 }
+
+/** 独立页面或浮层画布内按 React 组件分组的展示场景。 */
+export interface InteractiveScriptCanvas {
+  canvas: string
+  components: InteractiveScriptLocation[]
+}
+
+/** 解析画布脚本，兼容旧 page / locations 字段，统一输出新结构。 */
+export function parseCanvasInteractiveScripts(content: string): InteractiveScriptCanvas[] {
+  let raw: unknown
+  try {
+    console.log('content', content)
+    raw = YAML.parse(content)
+  } catch (error) {
+    console.error('YAML 解析失败', error)
+    const message = error instanceof Error ? error.message : String(error)
+    warnInteractiveScriptIssue('顶层', `YAML 解析失败：${message}`)
+    return []
+  }
+
+  if (!Array.isArray(raw)) {
+    warnInteractiveScriptIssue('顶层', '必须是数组')
+    return []
+  }
+
+  const canvases: InteractiveScriptCanvas[] = []
+  raw.forEach((value, index) => {
+    const path = `[${index}]`
+    if (!isRecord(value)) {
+      warnInteractiveScriptIssue(path, '必须是对象')
+      return
+    }
+
+    const canvas = requiredString(value.canvas !== undefined ? value.canvas : value.page, `${path}.canvas`)
+    if (!canvas) return
+    const rawComponents = value.components !== undefined ? value.components : value.locations
+    if (!Array.isArray(rawComponents)) {
+      warnInteractiveScriptIssue(`${path}.components`, '必须是数组')
+      return
+    }
+
+    const components: InteractiveScriptLocation[] = []
+    rawComponents.forEach((componentValue, componentIndex) => {
+      const componentPath = `${path}.components[${componentIndex}]`
+      if (!isRecord(componentValue)) {
+        warnInteractiveScriptIssue(componentPath, '必须是对象')
+        return
+      }
+
+      const title = requiredString(componentValue.title, `${componentPath}.title`)
+      const fileName = requiredString(componentValue.fileName, `${componentPath}.fileName`)
+      const loc = requiredString(componentValue.loc, `${componentPath}.loc`)
+      if (!title || !fileName || !loc) return
+      if (!isLocation(loc)) {
+        warnInteractiveScriptIssue(`${componentPath}.loc`, '必须使用“标签名:起始行-结束行”格式，且结束行不能小于起始行')
+        return
+      }
+      if (!Array.isArray(componentValue.scripts)) {
+        warnInteractiveScriptIssue(`${componentPath}.scripts`, '必须是数组')
+        return
+      }
+
+      const scripts: InteractiveScript[] = []
+      componentValue.scripts.forEach((scriptValue, scriptIndex) => {
+        const scriptPath = `${componentPath}.scripts[${scriptIndex}]`
+        if (!isRecord(scriptValue)) {
+          warnInteractiveScriptIssue(scriptPath, '必须是对象')
+          return
+        }
+        const title = requiredString(scriptValue.title, `${scriptPath}.title`)
+        const script = requiredString(scriptValue.script, `${scriptPath}.script`)
+        if (title && script) scripts.push({ title, script })
+      })
+
+      if (scripts.length) components.push({ title, fileName, loc, scripts })
+    })
+
+    if (components.length) canvases.push({ canvas, components })
+  })
+
+  return canvases
+}

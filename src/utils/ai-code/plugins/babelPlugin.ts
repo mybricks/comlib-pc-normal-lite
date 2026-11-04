@@ -14,6 +14,7 @@ import {
   hasEditableTextContent,
   isComRefCall,
   isPopupRefCall,
+  isAppRefCall,
   extractRefFromVariableDeclarator,
   extractRefFromExportDefault,
 } from "./utils";
@@ -389,7 +390,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
             if (
               types.isIdentifier(id) &&
               types.isCallExpression(init) &&
-              (isComRefCall(init.callee) || isPopupRefCall(init.callee)) &&
+              (isComRefCall(init.callee) || isPopupRefCall(init.callee) || isAppRefCall(init.callee)) &&
               init.arguments.length === 1
             ) {
               const widgetName = (id as any).name as string;
@@ -414,7 +415,7 @@ export default function ({ fileName, sourceOffset = 0, lineOffset = 0, onJSXElem
             if (
               declaration &&
               declaration.type === 'CallExpression' &&
-              (isComRefCall(declaration.callee) || isPopupRefCall(declaration.callee)) &&
+              (isComRefCall(declaration.callee) || isPopupRefCall(declaration.callee) || isAppRefCall(declaration.callee)) &&
               declaration.arguments.length === 1
             ) {
               declaration.arguments.push({
