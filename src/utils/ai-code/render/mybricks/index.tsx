@@ -117,6 +117,14 @@ const useBreakpoints = (path) => {
   return breakpoint
 }
 
+// A popup is not addressable by a route. Use its source file and exported
+// widget name to give it a stable, collision-free canvas key instead.
+const getPopupCanvasPath = (params: { filename?: string, widgetName?: string } = {}) => {
+  const filename = params.filename || 'unknown'
+  const widgetName = params.widgetName || 'default'
+  return `popup:${filename}:${widgetName}`
+}
+
 // ─── 轻量级响应式系统（替换 MobX）────────────────────────────────────────────
 // 设计原理与 MobX 相同：基于"拉取"模式的依赖追踪。
 // 组件渲染时自动收集读取了哪些 observable 属性，属性变更时只通知订阅了该属性的组件重渲染。
@@ -623,8 +631,8 @@ if (frontendMode === 'prototype') {
     return variables
   }
 
-  const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void, defaultMount?: boolean, fallbackFilename?: string }>) => {
-    const { path = '/', onMount, children, defaultMount, fallbackFilename } = params;
+  const Page = (params: React.PropsWithChildren<{ path?: string, onMount?: (params: any) => void, defaultMount?: boolean, fallbackParams?: any }>) => {
+    const { path = '/', onMount, children, defaultMount, fallbackParams } = params;
     const theme = mixContext.resolveActiveTheme();
     const envCssVariables = useEnvCssVariables();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -651,8 +659,9 @@ if (frontendMode === 'prototype') {
 
     useLayoutEffect(() => {
       let exeCount = 0
-      if (fallbackFilename) {
-        containerRef.current?.setAttribute('data-zone-filename', fallbackFilename)
+      if (fallbackParams) {
+        containerRef.current?.setAttribute("data-canvas-tag", `page:${fallbackParams.filename}:${fallbackParams.widgetName}`);
+        containerRef.current?.setAttribute('data-zone-filename', fallbackParams.filename)
       }
       setContainer({
         container: containerRef.current!.querySelector('[data-container]')!,
@@ -663,6 +672,7 @@ if (frontendMode === 'prototype') {
           exeCount = 1
           try {
             if (containerRef.current) {
+              containerRef.current.setAttribute("data-canvas-tag", `page:${params.filename}:${params.widgetName}`);
               containerRef.current.setAttribute('data-zone-filename', params.filename)
               let widgetName = params?.widgetName
               if (!widgetName) {
@@ -750,56 +760,6 @@ if (frontendMode === 'prototype') {
 
     const breakpoint = useBreakpoints(path)
 
-    // useLayoutEffect(() => {
-    //   if (frontendMode === 'prototype' && isDesign()) {
-    //     if (cssCleanupRef.current) {
-    //       return
-    //     }
-
-    //     const fileSystem = mixContext.fileSystem
-    //     if (!fileSystem) {
-    //       return
-    //     }
-
-    //     const cssFileNames = new Set<string>()
-    //     const STYLE_REPLACE_ID = '__mybricks_ai_module_id__';
-    //     const setLessCss = (filename: string) => {
-    //       const entry = fileSystem?.filesMap?.[filename]
-    //       if (!entry || !entry.file.filename.endsWith('.less')) {
-    //         return
-    //       }
-
-    //       const { file, module } = entry
-    //       const cssText = getCompiledCssContent(module)
-
-    //       const myContent = cssText
-    //         .replaceAll(`.${STYLE_REPLACE_ID} *`, `.${STYLE_REPLACE_ID}*`)
-    //         .replaceAll(`.${STYLE_REPLACE_ID} ::before`, `.${STYLE_REPLACE_ID}::before`)
-    //         .replaceAll(`.${STYLE_REPLACE_ID} ::after`, `.${STYLE_REPLACE_ID}::after`)
-    //         .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${comId} [data-desn-page='${path}'])`)
-    //         .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
-    //       // 组件id + 文件路径，保证唯一性
-    //       const cssId = `${comId}_${path}_${file.filename}`.replace(/[^0-9a-zA-Z]/g, '_')
-    //       cssFileNames.add(cssId)
-    //       ;(env as any).canvas.css.set(cssId, myContent)
-    //     }
-
-    //     Object.entries(fileSystem?.filesMap ?? {}).forEach(([filename]) => setLessCss(filename))
-
-    //     const unwatch = fileSystem?.events.on('fileChange', ({ filename, type }) => {
-    //       if (['create', 'update'].includes(type)) {
-    //         setLessCss(filename)
-    //       }
-    //     })
-
-    //     cssCleanupRef.current = () => {
-    //       unwatch?.()
-    //       cssFileNames.forEach(id => (env as any).canvas.css.remove(id))
-    //       cssCleanupRef.current = null
-    //     }
-    //   }
-    // }, [breakpoint])
-
     useLayoutEffect(() => {
       return () => {
         cssCleanupRef.current?.()
@@ -860,8 +820,8 @@ if (frontendMode === 'prototype') {
     )
   }
 
-  const RuntimeRoute = (params: { _route: string, _Component: React.FC<any>, _appFilename?: string }) => {
-    const { _route, _Component: Component, _appFilename } = params;
+  const RuntimeRoute = (params: { _route: string, _Component: React.FC<any>, _appParams?: any }) => {
+    const { _route, _Component: Component, _appParams } = params;
     const [{ stack, cursor }, dispatch] = useReducer(
       routerReducer,
       { stack: [{ path: _route, state: undefined }], cursor: 0 }
@@ -889,7 +849,7 @@ if (frontendMode === 'prototype') {
 
     return (
       <div className={css.routesRuntime} style={{...debugTarget?.rootStyle}}>
-        <Page path={rawPath} defaultMount={true} fallbackFilename={_appFilename}>
+        <Page path={rawPath} defaultMount={true} fallbackParams={_appParams}>
           <RouterContext.Provider value={contextValue}>
             <Component {...params}/>
           </RouterContext.Provider>
@@ -1107,6 +1067,19 @@ if (frontendMode === 'prototype') {
               state: 'runtime'
             }
           })
+          // const unWatchYaml = mixContext.fileSystem!.fileWatcher.watch('.agent/display-mock/interactive-scripts.yaml', (event) => {
+          //   const { file } = event
+          //   try {
+          //     const source = decodeURIComponent(file.source)
+          //     console.log('source', source)
+          //   } catch (e) {
+          //     console.error('watchYaml:error', e)
+          //   }
+          // })
+
+          // return () => {
+          //   unWatchYaml()
+          // }
         }, [])
 
         const onMount = useCallback((params) => {
@@ -1146,7 +1119,7 @@ if (frontendMode === 'prototype') {
                     path={'/'}
                     onMount={onMount}
                     defaultMount={true}
-                    fallbackFilename={params?.filename}
+                    fallbackParams={params}
                   >
                     <ObservedComponent {...props} _env={_env}/>
                   </Page>
@@ -1157,7 +1130,7 @@ if (frontendMode === 'prototype') {
               Object.entries(popupRefRegistry).map(([filename, DialogRoots]) => {
                 return DialogRoots.map((DialogRoot) => {
                   // @ts-ignore
-                  return <DialogRoot key={filename} onMount={onMount} __mybricks_show/>
+                  return <DialogRoot key={(DialogRoot as any).__popupCanvasPath || filename} onMount={onMount} __mybricks_show/>
                 })
               })
             )}
@@ -1207,7 +1180,7 @@ if (frontendMode === 'prototype') {
           {...props}
           _env={_env}
           _route={env._debugTarget?.pageIndex}
-          _appFilename={params?.filename}
+          _appParams={params}
           _Component={ObservedComponent}
         />
       )
@@ -1240,6 +1213,7 @@ if (frontendMode === 'prototype') {
     // const ObservedComponent = observer(Component);
     const ObservedComponent = Component;
     const { ErrorView } = params;
+    const popupCanvasPath = getPopupCanvasPath(params)
     let realProps = {}
     let designParentElement: any = null
     const DialogRoot = (props) => {
@@ -1259,6 +1233,7 @@ if (frontendMode === 'prototype') {
       const theme = mixContext.resolveActiveTheme();
       const envCssVariables = useEnvCssVariables();
       const [popupStyle, setPopupStyle] = useState({})
+      const breakpoint = useBreakpoints(popupCanvasPath)
 
       if (isDesign()) {
         const containerRef = useRef<HTMLDivElement>(null);
@@ -1266,8 +1241,8 @@ if (frontendMode === 'prototype') {
         const [container, setContainer] = useState<HTMLDivElement | null>(null);
         const [style, setStyle] = useState<React.CSSProperties>({
           width: canvasWidth,
-          minWidth: canvasWidth,
-          maxWidth: canvasWidth,
+          // minWidth: canvasWidth,
+          // maxWidth: canvasWidth,
           height: canvasHeight
         });
         const lessRef = useRef<{ filename: string, off: () => void }>({
@@ -1276,25 +1251,6 @@ if (frontendMode === 'prototype') {
         });
 
         useLayoutEffect(() => {
-          const getPopupWidth = (appConfig) => {
-            const viewports = Array.isArray(appConfig?.viewports) ? appConfig.viewports : []
-            const maxBreakpoint = viewports.reduce((max, item) => {
-              const maxWidth = Number(max?.width ?? -Infinity)
-              const itemWidth = Number(item?.width ?? -Infinity)
-              return itemWidth > maxWidth ? item : max
-            }, null)
-            return maxBreakpoint ? Number(maxBreakpoint.width) : canvasWidth
-          }
-          const off = prototype.events.on('appConfig', (appConfig) => {
-            const width = getPopupWidth(appConfig)
-            setStyle((prev) => ({
-              ...prev,
-              minWidth: width,
-              maxWidth: width,
-              
-              width
-            }))
-          })
           setContainer(containerRef.current!)
 
           const fileSystem = mixContext.fileSystem!
@@ -1309,7 +1265,6 @@ if (frontendMode === 'prototype') {
           return () => {
             offFileWatcher()
             lessRef.current?.off?.()
-            off()
           }
         }, [])
 
@@ -1323,6 +1278,7 @@ if (frontendMode === 'prototype') {
           })
           try {
             if (containerRef.current && container) {
+              containerRef.current.setAttribute("data-canvas-tag", `page:${params.filename}:${params.widgetName}`);
               containerRef.current.setAttribute('data-zone-filename', params.filename)
               let widgetName = params?.widgetName
               if (!widgetName) {
@@ -1403,12 +1359,29 @@ if (frontendMode === 'prototype') {
             ref={containerRef}
             data-zone-type="page"
             data-zone-kind="popup"
-            data-desn-page={"/"}
+            data-desn-page={popupCanvasPath}
             data-zone-title='弹窗'
             data-widget-name={params.widgetName}
             className={css.popupContainer}
+            {...(breakpoint ? {
+              ['data-zone-show-type']: breakpoint.id,
+            } : {})}
             style={{
               ...style,
+              ...(breakpoint ? {
+                ...(breakpoint.width != null ? { width: breakpoint.width } : {}),
+                ...(breakpoint.height != null ? { height: breakpoint.height } : {}),
+                // minWidth: breakpoint.width,
+                // maxWidth: breakpoint.width,
+              } : {}),
+              // ...(breakpoint ? {
+              //   ...(breakpoint.width != null ? { width: breakpoint.width } : {}),
+              //   ...(breakpoint.width != null ? {
+              //     minWidth: breakpoint.width,
+              //     maxWidth: breakpoint.width,
+              //   } : {}),
+              //   ...(breakpoint.height != null ? { height: breakpoint.height } : {}),
+              // } : {}),
               display: 'inline-block',
               transform: 'scale(1)',
               ...theme?.vars?.reduce((pre, cur) => {
@@ -1449,6 +1422,7 @@ if (frontendMode === 'prototype') {
       }
     };
     if (isDesign()) {
+      ;(DialogRoot as any).__popupCanvasPath = popupCanvasPath
       if (!popupRefRegistry[params.filename]) {
         popupRefRegistry[params.filename] = []
       }
