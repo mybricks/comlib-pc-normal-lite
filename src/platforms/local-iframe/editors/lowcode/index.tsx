@@ -12,6 +12,8 @@ import * as taskPanelCssNS from '../../../../components/task-panel/index.lazy.le
 import versionListViewCss from '../../../../components/version-list/index.lazy.less'
 import * as versionListViewCssNS from '../../../../components/version-list/index.lazy.less'
 import Xterm from '../../../../components/xterm'
+import understandCss from '../../../../mix/understand-any/index.lazy.less'
+import * as understandCssNS from '../../../../mix/understand-any/index.lazy.less'
 import taskVerifyCss from '../../../../mix/tasks/verify-block/index.lazy.less'
 import * as taskVerifyCssNS from '../../../../mix/tasks/verify-block/index.lazy.less';
 
@@ -341,6 +343,10 @@ export default {
       {
         css: transform(taskPanelCssNS),
         use: genUse(taskPanelCss)
+      },
+      {
+        css: transform(understandCssNS),
+        use: genUse(understandCss)
       },
       {
         css: transform(taskVerifyCssNS),

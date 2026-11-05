@@ -1,0 +1,292 @@
+/*! plugin-ai-comp-view-anchor */
+
+.bizai-root {
+  position: relative !important;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100%;
+  min-width: 300px;
+  box-sizing: border-box;
+  background: var(--mybricks-bg-color-main, #fff);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mybricks-text-color-main, #273044);
+}
+
+.bizai-root[data-empty="true"] {
+  height: 100%;
+  min-height: 168px;
+}
+
+.bizai-switch {
+  flex: none;
+  max-width: 55%;
+  height: 20px;
+  margin: 0;
+  padding: 0 16px 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 2.5L4 5.5L7 2.5' fill='none' stroke='%238a909d' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 4px center;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mybricks-text-color-main, #273044);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.bizai-switch:hover {
+  border-color: var(--mybricks-border-color-main, #e5e7eb);
+  background-color: var(--mybricks-bg-color-main, #fff);
+}
+
+.bizai-switch:focus-visible {
+  border-color: var(--mybricks-color-primary, #fa6400);
+  background-color: var(--mybricks-bg-color-main, #fff);
+}
+
+.bizai-description {
+  position: relative !important;
+  z-index: 1;
+  flex: none;
+  max-height: 140px;
+  overflow: auto;
+  padding: 4px 4px 0;
+  color: var(--mybricks-text-color-secondary, #697386);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.bizai-summary {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.bizai-meta-title {
+  margin: 0 0 4px;
+  color: var(--mybricks-text-color-main, #333);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.bizai-details {
+  margin-top: 4px;
+}
+
+.bizai-details summary {
+  width: fit-content;
+  color: var(--mybricks-text-color-secondary, #697386);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bizai-details summary:hover {
+  color: var(--mybricks-color-primary, #fa6400);
+}
+
+.bizai-details summary:focus-visible {
+  outline: 2px solid var(--mybricks-color-primary, #fa6400);
+  outline-offset: 2px;
+}
+
+.bizai-prose {
+  margin-top: 6px;
+}
+
+.bizai-prose:first-child {
+  margin-top: 0;
+}
+
+.bizai-prose p,
+.bizai-prose ul,
+.bizai-prose ol,
+.bizai-prose h1,
+.bizai-prose h2,
+.bizai-prose h3,
+.bizai-prose h4,
+.bizai-prose pre {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: inherit;
+}
+
+.bizai-prose h1,
+.bizai-prose h2,
+.bizai-prose h3,
+.bizai-prose h4 {
+  font-weight: 600;
+}
+
+.bizai-prose :last-child {
+  margin-bottom: 0;
+}
+
+.bizai-prose ul,
+.bizai-prose ol {
+  padding-left: 20px;
+}
+
+.bizai-card {
+  position: relative !important;
+  flex: 1;
+  min-height: 400px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.bizai-root[data-empty="true"] .bizai-card {
+  flex: 1;
+  min-height: 168px;
+  overflow: visible;
+}
+
+.bizai-expand {
+  position: absolute !important;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--mybricks-text-color-secondary, #888);
+  background: var(--mybricks-bg-color-main, #fff);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.bizai-card:hover .bizai-expand,
+.bizai-expand:focus-visible {
+  opacity: 0.85;
+}
+
+@media (hover: none) {
+  .bizai-expand {
+    opacity: 0.85;
+  }
+}
+
+.bizai-modal-diagram {
+  position: relative !important;
+  width: 100%;
+  height: min(70vh, 560px);
+}
+
+.bizai-empty {
+  position: absolute !important;
+  inset: 0;
+  box-sizing: border-box;
+}
+
+.bizai-error {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  max-width: calc(100% - 16px);
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--mybricks-color-danger, #bf3333);
+  background: var(--mybricks-bg-color-main, #fff);
+}
+
+.bizai-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px dashed var(--mybricks-border-color-main, #e5e7eb);
+  border-radius: 2px;
+  background: var(--mybricks-bg-color-secondary, transparent);
+}
+
+.bizai-placeholder-text {
+  margin-top: 8px;
+  color: var(--mybricks-text-color-secondary, #8a909d);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.bizai-placeholder-action {
+  color: var(--mybricks-color-primary, #fa6400) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px;
+  cursor: pointer !important;
+}
+
+.bizai-placeholder-action:hover {
+  opacity: 0.8;
+}
+
+.bizai-placeholder-action:focus-visible {
+  outline: 2px solid var(--mybricks-color-primary, #fa6400);
+  outline-offset: 2px;
+}
+
+.bizai-placeholder-figure {
+  width: 100%;
+  max-width: 260px;
+  height: 72px;
+}
+
+.bizai-placeholder-figure svg {
+  width: 100%;
+  height: 100%;
+}
+
+.bizai-sender {
+  position: absolute !important;
+  top: 80%;
+  left: 50%;
+  z-index: 2;
+  width: min(420px, calc(100% - 24px));
+}
+
+.bizai-diagram,
+.bizai-document {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow: auto;
+}
+
+.bizai-document {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--mybricks-text-color-main, #273044);
+}
+
+.bizai-diagram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bizai-diagram svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+

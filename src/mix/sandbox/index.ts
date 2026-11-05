@@ -1,3 +1,5 @@
+import { createUnderstandAnyUI } from '../understand-any';
+import { understandChipDef } from '../understand-any/chip';
 /**
  * mix sandbox adapter
  *
@@ -710,6 +712,7 @@ const CHIPS = [
   }
   return pre
 }, {
+  understand: { def: understandChipDef },
   [DOM_CHIP_TYPE]: {
     def: {
       type: DOM_CHIP_TYPE,
@@ -1175,6 +1178,7 @@ async function registerSandboxInternal(comId: string): Promise<void> {
     { configDirName: (window as any)._sandbox_?.config?.configDirName },
   );
   const connectToAIRef = connectToAI(comId, {
+    understandAnyUI: createUnderstandAnyUI(comId, designerFs),
     designer: { ...designerFs, pageAnalysis, tasksManager: createTasksManager(comId), domainAudit: createDomainAuditImplementation(comId, () => designerFs.getFiles(), () =>
       Array.from(context.getCanvasList()).map((element: Element) => ({
         file: element.getAttribute('data-zone-filename') || undefined,

@@ -1,3 +1,5 @@
+import { createUnderstandAnyUI } from '../../../mix/understand-any';
+import { understandChipDef } from '../../../mix/understand-any/chip';
 import context, { type UserTaskInfo } from '../../../mix/context'
 import { parse as parseYaml } from 'yaml'
 import { parseTasksForNotify } from '../../../mix/tasks/notify'
@@ -86,7 +88,7 @@ const LOCAL_FILES_DELETE_ENDPOINT = '/lingchuang/api/delete-files'
 const LOCAL_COMMANDS_ENDPOINT = '/lingchuang/api/commands'
 const INTERACTIVE_SCRIPTS_PATH = '.lingchuang/display-mock/interactive-scripts.yaml'
 
-export const localFileEvents = new Events<{ interactiveScriptsUpdated: void }>()
+export const localFileEvents = new Events<{ interactiveScriptsUpdated: void; filesChanged: void }>()
 
 function isInteractiveScriptsPath(path: string): boolean {
   return path === INTERACTIVE_SCRIPTS_PATH || path.endsWith(`/${INTERACTIVE_SCRIPTS_PATH}`)
@@ -300,6 +302,7 @@ export async function updateLocalFiles(files: Array<{ path: string; content: str
     body: JSON.stringify({ files }),
   })
   if (!response.ok) throw new Error(await getResponseError(response))
+  localFileEvents.emit('filesChanged', undefined)
   if (files.some((file) => isInteractiveScriptsPath(file.path))) {
     localFileEvents.emit('interactiveScriptsUpdated', undefined)
   }
@@ -316,6 +319,7 @@ export async function deleteLocalFiles(paths: string[]): Promise<void> {
     body: JSON.stringify({ paths }),
   })
   if (!response.ok) throw new Error(await getResponseError(response))
+  localFileEvents.emit('filesChanged', undefined)
   if (paths.some(isInteractiveScriptsPath)) {
     localFileEvents.emit('interactiveScriptsUpdated', undefined)
   }
@@ -512,6 +516,7 @@ export function registerSandbox(comId: string) {
   // 直接注册 AgentSandbox，避免通过 V1 getFiles() 全量加载文件内容。
   const { history, isRemoteAgent } = connectToAI(comId, {
     agentSandbox,
+    understandAnyUI: createUnderstandAnyUI(comId, agentSandbox, refresh => localFileEvents.on('filesChanged', refresh)),
     tasksManager: createTasksManager(comId),
     pageAnalysis: createHttpPageAnalysis(),
     mentions: [buildTaskMentionProvider()],
@@ -696,6 +701,7 @@ export function registerSandbox(comId: string) {
       },
     },
     chips: {
+      understand: { def: understandChipDef },
       ['element-move']: {
         def: {
           type: 'element-move',

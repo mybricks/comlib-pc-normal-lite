@@ -14,6 +14,8 @@ import iconEditorCss from './configs/IconEditor/style.lazy.less';
 import aiSvgIconCss from './icons/aiSvgIcon.lazy.less';
 import aiEditPanelCss from './components/AiEditPanel.lazy.less';
 import taskVerifyCss from '../tasks/verify-block/index.lazy.less';
+import understandCss from '../understand-any/index.lazy.less';
+import * as understandCssNS from '../understand-any/index.lazy.less';
 
 import * as lowcodeViewCssNS from '../lowcodeView/index.lazy.less';
 import * as consoleViewCssNS from '../lowcodeView/console/index.lazy.less';
@@ -169,6 +171,7 @@ export function buildHooks(props: Props) {
             css: transform(aiEditPanelCssNS),
             use: genUse(aiEditPanelCss)
           },
+          { css: transform(understandCssNS), use: genUse(understandCss) },
           {
             css: transform(taskVerifyCssNS),
             use: genUse(taskVerifyCss)
