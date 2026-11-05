@@ -43,7 +43,7 @@ function isFlexContainer(ele: HTMLElement) {
   if (!view) return false
 
   const display = view.getComputedStyle(ele).display
-  return display === 'flex' || display === 'inline-flex'
+  return display === 'flex' || display === 'inline-flex' || display === 'grid'
 }
 
 // gap 先尝试写到父级 flex 容器；不支持时，落到当前元素的 margin 兜底。
@@ -63,13 +63,21 @@ function resolvePendingStyleEntries(ele: HTMLElement, key: string, value: any): 
     }]
   }
 
-  const parentEle = ele.parentElement
-  if (parentEle && isFlexContainer(parentEle)) {
+  // const parentEle = ele.parentElement
+  // if (parentEle && isFlexContainer(parentEle)) {
+  //   return [{
+  //     key,
+  //     value: nextValue,
+  //     target: resolveStyleTarget(parentEle, property),
+  //     targetEle: parentEle,
+  //   }]
+  // }
+  if (isFlexContainer(ele)) {
     return [{
       key,
       value: nextValue,
-      target: resolveStyleTarget(parentEle, property),
-      targetEle: parentEle,
+      target: resolveStyleTarget(ele, property),
+      targetEle: ele,
     }]
   }
 
