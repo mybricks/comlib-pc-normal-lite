@@ -1,6 +1,8 @@
 import proxymock from './proxymock.md'
+import { config } from '../../context'
 
 export function getMybricksUsage() {
+  const frontendMode = config.getFrontendMode()
   return `# mybricks
 - 内置的核心类库，对于页面、浮层（弹窗/抽屉等）、APP声明、数据源、接口以及页面路由相关功能必须使用此库
 
@@ -240,6 +242,6 @@ import { logger } from 'mybricks';
 logger.info('这是一条日志');
 \`\`\`
 
-${proxymock}
+${['default', 'prototype'].includes(frontendMode) ? proxymock : ''}
 `
 }

@@ -1067,12 +1067,16 @@ if (frontendMode === 'prototype') {
               state: 'runtime'
             }
           })
-          const unWatchYaml = mixContext.fileSystem!.fileWatcher.watch('.agent/display-mock/interactive-scripts.yaml', () => {
-            notifyCanvasStatuses()
-          })
+
+          let unWatchYaml;
+          if (['default', 'prototype'].includes(frontendMode)) {
+            unWatchYaml = mixContext.fileSystem!.fileWatcher.watch('.agent/display-mock/interactive-scripts.yaml', () => {
+              notifyCanvasStatuses()
+            })
+          }
 
           return () => {
-            unWatchYaml()
+            unWatchYaml?.()
           }
         }, [])
 
@@ -1083,7 +1087,9 @@ if (frontendMode === 'prototype') {
           if (mountRef.current >= totalMountCount) {
             mixContext.component?.actions.loaded?.()
             // notifyPageStatuses(collectingRoutes.current.length > 0 ? collectingRoutes.current : ['/'])
-            notifyCanvasStatuses()
+            if (['default', 'prototype'].includes(frontendMode)) {
+              notifyCanvasStatuses()
+            }
           }
         }, [])
 
