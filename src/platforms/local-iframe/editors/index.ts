@@ -15,6 +15,7 @@ import resizePage from './resizePage'
 import doc from './doc'
 import refresh from './refresh'
 import zoneStatus from './zoneStatus'
+import { buildPagePanel } from '../../../mix/editors/configs/pagePanel'
 
 export default function (props) {
   return {
@@ -52,6 +53,7 @@ export default function (props) {
     '@auditPage': auditPage,
     '@viewCode': viewCode,
     ...doc(),
-    ...zoneStatus(props)
+    ...zoneStatus(props),
+    '[data-zone-type=page]': buildPagePanel(props),
   }
 }
