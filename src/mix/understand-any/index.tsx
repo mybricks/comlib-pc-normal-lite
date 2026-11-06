@@ -15,7 +15,12 @@ const SHOW_SUMMARY = false
 type Files = { getFiles?: () => Promise<DiagramFile[]>; files?: any }
 
 export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFiles?: (refresh: () => void) => () => void) {
-  return function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void }) {
+  async function loadDocuments(bindingTo?: string) {
+    const dir = (window as any).__LINGCHUANG_CONFIG__?.configDirName ?? (window as any)._sandbox_?.config?.configDirName ?? '.agent'
+    return selectDocuments(await readDocuments(sandbox, dir), bindingTo)
+  }
+
+  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void }) {
     useEffect(() => attachShadowStyles(document), [])
     const [files, setFiles] = useState<DiagramFile[]>([])
     const [selected, setSelected] = useState('')
@@ -28,8 +33,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
         if (loading) { queued = true; return }
         loading = true
         try {
-          const dir = (window as any).__LINGCHUANG_CONFIG__?.configDirName ?? (window as any)._sandbox_?.config?.configDirName ?? '.agent'
-          const next = selectDocuments(await readDocuments(sandbox, dir), bindingTo)
+          const next = await loadDocuments(bindingTo)
           if (active) { setFiles(previous => reconcileDocuments(previous, next)); setError('') }
         } catch (err: any) {
           if (active && (err?.code === 'ENOENT' || err?.code === 'NOT_FOUND')) { setFiles([]); setError('') }
@@ -75,4 +79,18 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       </Modal>}
     </div>
   }
+
+  UnderstandAny.getInfo = async ({ id }: { id?: string }) => {
+    try {
+      const file = (await loadDocuments(id))[0]
+      if (!file) return undefined
+      const meta = parseMeta(file.content)
+      return { title: meta.title || copy.title(), description: meta.summary }
+    } catch (err: any) {
+      if (err?.code === 'ENOENT' || err?.code === 'NOT_FOUND') return undefined
+      throw err
+    }
+  }
+
+  return UnderstandAny
 }
