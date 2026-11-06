@@ -136,26 +136,56 @@ class DiagramErrorBoundary extends React.Component<{ content: string; children: 
 
 function DiagramContent({ content, interactive = false }: { content: string; interactive?: boolean }) {
   const container = useRef<HTMLDivElement>(null)
-  const graph = useMemo(() => {
+  const [direction, setDirection] = useState<'LR' | 'TB'>('LR')
+  const graphs = useMemo(() => {
     try {
       const diagram = parseDiagram(content)
-      const layout = createFlowLayout(diagram)
-      const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, direction: diagram.direction }, draggable: false }))
-      const edges: RoutedEdge[] = layout.edges.map((edge, index) => ({
-        id: `edge-${index}`, source: edge.source, target: edge.target, type: 'routed', label: edge.label,
-        data: { points: edge.points, labelPosition: edge.labelPosition },
-        style: { stroke: 'var(--mybricks-text-color-secondary, #8a909d)', strokeWidth: 1.5, ...(edge.dashed ? { strokeDasharray: '5 4' } : {}) },
-        ...(edge.arrow ? { markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--mybricks-text-color-secondary, #8a909d)' } } : {}),
-      }))
-      return { nodes, edges }
+      const build = (direction: ParsedDiagram['direction']) => {
+        const layout = createFlowLayout({ ...diagram, direction })
+        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, direction }, draggable: false }))
+        const edges: RoutedEdge[] = layout.edges.map((edge, index) => ({
+          id: `edge-${index}`, source: edge.source, target: edge.target, type: 'routed', label: edge.label,
+          data: { points: edge.points, labelPosition: edge.labelPosition },
+          style: { stroke: 'var(--mybricks-text-color-secondary, #8a909d)', strokeWidth: 1.5, ...(edge.dashed ? { strokeDasharray: '5 4' } : {}) },
+          ...(edge.arrow ? { markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--mybricks-text-color-secondary, #8a909d)' } } : {}),
+        }))
+        const width = Math.max(...layout.nodes.map(node => node.position.x + node.width)) - Math.min(...layout.nodes.map(node => node.position.x))
+        const height = Math.max(...layout.nodes.map(node => node.position.y + node.height)) - Math.min(...layout.nodes.map(node => node.position.y))
+        return { nodes, edges, width, height }
+      }
+      const primary = build(diagram.direction)
+      return { primary, vertical: diagram.kind === 'mindmap' ? build('TB') : null }
     } catch {
       return null
     }
   }, [content])
 
-  if (!graph) return <MermaidFallback key={content} content={content} />
+  useLayoutEffect(() => {
+    const element = container.current
+    if (!element || !graphs?.vertical) return
+    const horizontal = graphs.primary
+    const vertical = graphs.vertical
+    const update = () => {
+      const width = element.clientWidth, height = element.clientHeight
+      if (!width || !height) return
+      const horizontalScale = Math.min(width / horizontal.width, height / horizontal.height, 1)
+      const verticalScale = Math.min(width / vertical.width, height / vertical.height, 1)
+      setDirection(current => {
+        const currentScale = current === 'LR' ? horizontalScale : verticalScale
+        const otherScale = current === 'LR' ? verticalScale : horizontalScale
+        return otherScale > currentScale * 1.1 ? (current === 'LR' ? 'TB' : 'LR') : current
+      })
+    }
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(element)
+    return () => observer?.disconnect()
+  }, [graphs])
+
+  if (!graphs) return <MermaidFallback key={content} content={content} />
+  const graph = direction === 'TB' && graphs.vertical ? graphs.vertical : graphs.primary
   return <div ref={container} className={css['bizai-flow']} data-interactive={interactive}>
-    <ReactFlow key={content} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={interactive} panOnScroll={false} zoomOnScroll={interactive} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
+    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={interactive} panOnScroll={false} zoomOnScroll={interactive} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
       <Background />
       {!interactive && <FitOnResize container={container} />}
       {interactive && <Controls showInteractive={false} aria-label={copy.diagramControls()} />}

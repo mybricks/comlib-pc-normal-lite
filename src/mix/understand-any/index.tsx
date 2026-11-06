@@ -5,7 +5,7 @@ import * as lazyCss from './index.lazy.less'
 import { attachShadowStyles } from './shadow-styles'
 import { copy } from './index.i18n'
 import { createUnderstandChip } from './chip'
-import { PlaceholderDiagram } from './placeholder'
+import { PlaceholderDiagram, SHOW_EMPTY_DIAGRAM } from './placeholder'
 import { fileLabel, parseMeta, readDocuments, reconcileDocuments, selectDocuments, type DiagramFile } from './document'
 import { Diagram } from './diagram'
 
@@ -54,7 +54,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } })
       setWaiting(true)
     }
-    return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'}>
+    return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
       {(meta.title || meta.summary || description) && <div className={css['bizai-description']}>{meta.title && <p className={css['bizai-meta-title']}>{meta.title}</p>}{meta.summary && <p className={css['bizai-summary']}>{meta.summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
       <div className={css['bizai-card']}>
         {file ? <><Diagram content={file.content} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}

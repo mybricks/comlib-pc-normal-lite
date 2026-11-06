@@ -20,6 +20,19 @@
   min-height: 300px;
 }
 
+.bizai-root[data-compact="true"] {
+  height: auto;
+  min-height: 0;
+}
+
+.bizai-root[data-compact="true"] .bizai-empty {
+  position: static !important;
+}
+
+.bizai-root[data-compact="true"] .bizai-placeholder {
+  display: none;
+}
+
 .bizai-switch {
   flex: none;
   max-width: 55%;
@@ -249,6 +262,11 @@
   flex: 1;
   min-height: 168px;
   overflow: visible;
+}
+
+.bizai-root[data-compact="true"] .bizai-card {
+  flex: none;
+  min-height: 0;
 }
 
 .bizai-tools {

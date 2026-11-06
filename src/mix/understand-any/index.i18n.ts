@@ -6,8 +6,8 @@ export const copy = {
     i18n({ zh: "让 AI 绘制业务图", en: "Ask AI to draw a business diagram" }),
   placeholder: () =>
     i18n({
-      zh: "描述要可视化的业务流程",
-      en: "Describe the business flow to visualize",
+      zh: "请描述下想要可视化展示什么内容",
+      en: "Describe what you would like to visualize",
     }),
   placeholderHint: () =>
     i18n({

@@ -37,6 +37,7 @@ const LINKS: Link[] = [
 ];
 
 const DURATION = "4.4s";
+export const SHOW_EMPTY_DIAGRAM = false;
 const KEY_TIMES = "0;0.15;0.5;0.65;1";
 const KEY_SPLINES = "0 0 1 1;0.42 0 0.2 1;0 0 1 1;0.42 0 0.2 1";
 
@@ -163,7 +164,7 @@ export function PlaceholderDiagram({ loading }: { loading?: boolean }) {
       role={loading ? "status" : undefined}
       aria-label={loading ? copy.generating() : undefined}
     >
-      <div className={css["bizai-placeholder-figure"]}>
+      {(loading || SHOW_EMPTY_DIAGRAM) && <div className={css["bizai-placeholder-figure"]}>
         <svg viewBox="0 0 320 150" fill="none" aria-hidden="true">
           {LINKS.map((link, index) => (
             <LinkPath
@@ -184,10 +185,10 @@ export function PlaceholderDiagram({ loading }: { loading?: boolean }) {
             />
           ))}
         </svg>
-      </div>
-      <span className={css["bizai-placeholder-text"]} role={loading ? "status" : undefined}>
+      </div>}
+      {(loading || SHOW_EMPTY_DIAGRAM) && <span className={css["bizai-placeholder-text"]} role={loading ? "status" : undefined}>
         {loading ? copy.generating() : copy.placeholderHint()}
-      </span>
+      </span>}
     </div>
   );
 }

@@ -224,10 +224,15 @@ export function createFlowLayout(diagram: ParsedDiagram): {
     const source = nodes.find(node => node.id === edge.source);
     const target = nodes.find(node => node.id === edge.target);
     const mindmapPoints = diagram.kind === "mindmap" && source && target
-      ? [
-          { x: source.position.x + source.width, y: source.position.y + source.height / 2 },
-          { x: target.position.x, y: target.position.y + target.height / 2 },
-        ]
+      ? vertical
+        ? [
+            { x: source.position.x + source.width / 2, y: source.position.y + source.height },
+            { x: target.position.x + target.width / 2, y: target.position.y },
+          ]
+        : [
+            { x: source.position.x + source.width, y: source.position.y + source.height / 2 },
+            { x: target.position.x, y: target.position.y + target.height / 2 },
+          ]
       : undefined;
     const routePoints = route?.points?.map(point => ({ ...point })) ?? [];
     const reverse = diagram.direction === 'BT' || diagram.direction === 'RL';
