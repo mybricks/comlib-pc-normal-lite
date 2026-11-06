@@ -964,7 +964,9 @@ export default function createSetStyleHandler(
         initialInlineCssText = ele.style?.cssText ?? ''
         initialInlineStyleValues = {}
       } else if (state === 'ing' || state === 'moving') { // [引擎兼容处理] state传参未统一
-        style = getStyle(ctx, params)!
+        const nextStyle = getStyle(ctx, params)
+        if (!nextStyle) return
+        style = nextStyle
 
         // console.log('@setStyle:style', style)
 
@@ -1210,7 +1212,14 @@ export default function createSetStyleHandler(
           setRulePreviewStyle(route, key, cssValue, ele)
         })
       } else if (state === 'finish') {
+        // [引擎兼容处理] 单次调用直接 finish：未经历 start/ing，ele、styleKeyRoutes、
+        // 初始值快照与 lessFile 均未收集。先补一次 ing 完成初始化与预览
+        // （含 needsImportant 检测），再由下方流程还原预览并写回源码。
+        if (!isStart) {
+          handler(ctx, { ...params, state: 'ing', __implicitState: true })
+        }
         isStart = false
+        if (!ele) return
         style = getStyle(ctx, params) || style
         // 拖拽预览只改 CSSOM；源码写回前先还原，最终样式由重新编译的 Less 接管。
         clearPreviewStyles()
