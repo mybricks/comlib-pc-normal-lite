@@ -11,7 +11,6 @@ import {
 } from '../visualEditCommit'
 import insert from './insert'
 import duplicate from './duplicate'
-import { visualEditInstructions } from '../visualEditInstructions'
 
 export default function () {
   return {
@@ -64,7 +63,6 @@ export default function () {
         setPendingVisualAICommit(componentId, beforeFiles, styleOverlays)
         sendToAgent(componentId, {
           message,
-          modelReminder: visualEditInstructions,
           meta: {
             chips
           },

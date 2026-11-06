@@ -1,6 +1,5 @@
 import context from '../../../mix/context'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
-import { visualEditInstructions } from '../../../mix/editors/visualEditInstructions'
 
 export default function (props) {
   // 提交用户操作
@@ -19,7 +18,6 @@ export default function (props) {
 
     window._sandbox_?.helpers?.sendToAgent(props.id, {
       message,
-      modelReminder: visualEditInstructions,
       meta: {
         chips
       },
