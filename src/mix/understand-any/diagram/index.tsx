@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Background, BaseEdge, Controls, Handle, MarkerType, Position, ReactFlow, useNodesInitialized, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { getLazyCss } from '../../lowcodeView/utils/css'
@@ -15,13 +15,53 @@ type BusinessNode = Node<BusinessNodeData, 'business'>
 type RoutedEdge = Edge<RoutedEdgeData>
 
 function DiagramNode({ data, selected }: NodeProps<BusinessNodeData>) {
+  const nodeRef = useRef<HTMLDivElement>(null)
+  const labelRef = useRef<HTMLSpanElement>(null)
+  const [fontSize, setFontSize] = useState(15)
+
+  useLayoutEffect(() => {
+    const node = nodeRef.current
+    const label = labelRef.current
+    if (!node || !label) return
+
+    const measure = node.ownerDocument.createElement('span')
+    const resize = () => {
+      const width = label.clientWidth
+      if (!width) return
+      const nodeStyle = getComputedStyle(node)
+      const labelStyle = getComputedStyle(label)
+      const height = node.clientHeight - parseFloat(nodeStyle.paddingTop) - parseFloat(nodeStyle.paddingBottom)
+      Object.assign(measure.style, {
+        position: 'absolute', visibility: 'hidden', pointerEvents: 'none',
+        display: 'block', width: `${width}px`, maxWidth: 'none', height: 'auto',
+        overflow: 'visible', whiteSpace: 'normal', overflowWrap: 'anywhere',
+        fontFamily: labelStyle.fontFamily, fontWeight: labelStyle.fontWeight,
+        letterSpacing: labelStyle.letterSpacing, lineHeight: '1.25',
+      })
+      measure.textContent = data.label
+      node.appendChild(measure)
+      let size = 15
+      while (size > 10) {
+        measure.style.fontSize = `${size}px`
+        if (measure.scrollHeight <= Math.min(height, size * 1.25 * 2) + 1) break
+        size--
+      }
+      measure.remove()
+      setFontSize(size)
+    }
+    resize()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
+    observer?.observe(node)
+    return () => { observer?.disconnect(); measure.remove() }
+  }, [data.label, data.shape])
+
   const vertical = data.direction === 'TB' || data.direction === 'BT'
   const reverse = data.direction === 'BT' || data.direction === 'RL'
   const source = vertical ? (reverse ? Position.Top : Position.Bottom) : (reverse ? Position.Left : Position.Right)
   const target = vertical ? (reverse ? Position.Bottom : Position.Top) : (reverse ? Position.Right : Position.Left)
-  return <div className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected']].filter(Boolean).join(' ')}>
+  return <div ref={nodeRef} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected']].filter(Boolean).join(' ')}>
     <Handle type="target" position={target} />
-    <span title={data.label}>{data.label}</span>
+    <span ref={labelRef} style={{ fontSize }} title={data.label}>{data.label}</span>
     <Handle type="source" position={source} />
   </div>
 }

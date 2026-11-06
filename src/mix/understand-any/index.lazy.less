@@ -178,15 +178,17 @@
   width: 168px;
   height: 56px;
   padding: 8px 12px;
-  border: 1px solid var(--mybricks-border-color-main, #cbd0dc);
+  border: 1px solid var(--mybricks-diagram-node-border, #969eaa);
   border-radius: 8px;
   background: var(--mybricks-bg-color-main, #fff);
   color: var(--mybricks-text-color-main, #333);
-  font-size: 13px;
+  font-size: 15px;
   text-align: center;
 }
 
 .bizgraph-node span {
+  width: 100%;
+  line-height: 1.25;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -216,7 +218,7 @@
 
 .bizgraph-decision::before {
   inset: 0;
-  background: var(--mybricks-border-color-main, #cbd0dc);
+  background: var(--mybricks-diagram-node-border, #969eaa);
 }
 
 .bizgraph-decision::after {
