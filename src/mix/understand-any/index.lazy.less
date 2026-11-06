@@ -20,12 +20,15 @@
   min-height: 300px;
 }
 
-.bizai-root[data-compact="true"] {
-  height: auto;
+.bizai-root[data-compact="true"],
+.bizai-root[data-loading="true"] {
+  height: 100%;
   min-height: 0;
+  justify-content: center;
 }
 
-.bizai-root[data-compact="true"] .bizai-empty {
+.bizai-root[data-compact="true"] .bizai-empty,
+.bizai-root[data-loading="true"] .bizai-empty {
   position: static !important;
 }
 
@@ -45,6 +48,7 @@
     url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1 2.5L4 5.5L7 2.5' fill='none' stroke='%238a909d' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
     no-repeat right 4px center;
   font: inherit;
+  font-size: 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--mybricks-text-color-main, #273044);
@@ -264,7 +268,8 @@
   overflow: visible;
 }
 
-.bizai-root[data-compact="true"] .bizai-card {
+.bizai-root[data-compact="true"] .bizai-card,
+.bizai-root[data-loading="true"] .bizai-card {
   flex: none;
   min-height: 0;
 }
@@ -321,7 +326,7 @@
 .bizai-modal-diagram {
   position: relative !important;
   width: 100%;
-  height: min(70vh, 560px);
+  height: 75vh;
 }
 
 .bizai-empty {

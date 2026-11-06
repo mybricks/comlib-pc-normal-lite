@@ -10,11 +10,12 @@ import { fileLabel, parseMeta, readDocuments, reconcileDocuments, selectDocument
 import { Diagram } from './diagram'
 
 const css = getLazyCss(lazyCss)
+const SHOW_SUMMARY = false
 
 type Files = { getFiles?: () => Promise<DiagramFile[]>; files?: any }
 
 export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFiles?: (refresh: () => void) => () => void) {
-  return function UnderstandAny({ bindingTo, disabled, Sender, Modal }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }> }) {
+  return function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void }) {
     useEffect(() => attachShadowStyles(document), [])
     const [files, setFiles] = useState<DiagramFile[]>([])
     const [selected, setSelected] = useState('')
@@ -44,6 +45,9 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     }, [bindingTo])
     const file = files.find(item => item.path === selected) ?? files[0]
     const meta = file ? parseMeta(file.content) : {}
+    const title = meta.title
+    useEffect(() => { setTitle?.(title || copy.title()) }, [setTitle, title])
+    const summary = SHOW_SUMMARY ? meta.summary : undefined
     const description = file?.content.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').replace(/```mermaid[^\n]*\n[\s\S]*?```/gi, '').trim()
     const send = ({ message, attachments, chips }: { message: string; attachments?: any; chips?: any[] }) => {
       if (!message.trim() || waiting || disabled) return
@@ -54,14 +58,14 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } })
       setWaiting(true)
     }
-    return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
-      {(meta.title || meta.summary || description) && <div className={css['bizai-description']}>{meta.title && <p className={css['bizai-meta-title']}>{meta.title}</p>}{meta.summary && <p className={css['bizai-summary']}>{meta.summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
+    return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-loading={!file && waiting ? 'true' : undefined} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
+      {((!setTitle && title) || summary || description) && <div className={css['bizai-description']}>{!setTitle && title && <p className={css['bizai-meta-title']}>{title}</p>}{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
       <div className={css['bizai-card']}>
         {file ? <><Diagram content={file.content} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
         {error && <div className={css['bizai-error']} role="alert">{error}</div>}
       </div>
-      {file && Modal && <Modal open={expanded} onClose={() => setExpanded(false)} title={!bindingTo && files.length > 1 ? <select className={css['bizai-switch']} aria-label={copy.choose()} value={file.path} onChange={event => setSelected(event.target.value)}>{files.map(item => <option key={item.path} value={item.path}>{fileLabel(item)}</option>)}</select> : fileLabel(file)} width="min(80vw, 900px)">
-        {(meta.summary || description) && <div className={`${css['bizai-description']} ${css['bizai-modal-description']}`}>{meta.summary && <p className={css['bizai-summary']}>{meta.summary}</p>}{description && <details className={css['bizai-details']}><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
+      {file && Modal && <Modal open={expanded} onClose={() => setExpanded(false)} title={!bindingTo && files.length > 1 ? <select className={css['bizai-switch']} aria-label={copy.choose()} value={file.path} onChange={event => setSelected(event.target.value)}>{files.map(item => <option key={item.path} value={item.path}>{fileLabel(item)}</option>)}</select> : <span style={{ fontSize: 12 }}>{fileLabel(file)}</span>} width="90vw">
+        {(summary || description) && <div className={`${css['bizai-description']} ${css['bizai-modal-description']}`}>{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details className={css['bizai-details']}><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
         <div className={css['bizai-modal-diagram']}><Diagram content={file.content} interactive /></div>
       </Modal>}
     </div>
