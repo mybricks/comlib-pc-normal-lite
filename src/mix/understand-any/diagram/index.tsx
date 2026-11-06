@@ -9,7 +9,7 @@ import { createFlowLayout, roundedPath } from './layout'
 import { parseDiagram, type ParsedDiagram } from './parse'
 
 const css = getLazyCss(lazyCss)
-const RESIZE_THROTTLE_MS = 120
+const RESIZE_THROTTLE_MS = 30
 
 type BusinessNodeData = { label: string; shape: string; depth: number; direction: ParsedDiagram['direction'] }
 type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number } }
