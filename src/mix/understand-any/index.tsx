@@ -60,7 +60,12 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     }
     return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-loading={!file && waiting ? 'true' : undefined} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
       {((!setTitle && title) || summary || description) && <div className={css['bizai-description']}>{!setTitle && title && <p className={css['bizai-meta-title']}>{title}</p>}{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
-      <div className={css['bizai-card']}>
+      <div className={css['bizai-card']} onDoubleClickCapture={event => {
+        const target = event.target as Element
+        if (!file || !Modal || target.closest?.(`.${css['bizai-tools']}, .${css['bizai-error']}`)) return
+        event.preventDefault()
+        setExpanded(true)
+      }}>
         {file ? <><Diagram content={file.content} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
         {error && <div className={css['bizai-error']} role="alert">{error}</div>}
       </div>
