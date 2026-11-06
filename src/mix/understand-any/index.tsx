@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useState } from 'react'
 import context from '../context'
 import { getLazyCss } from '../lowcodeView/utils/css'
 import * as lazyCss from './index.lazy.less'
@@ -21,7 +21,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
   }
 
   function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void }) {
-    useEffect(() => attachShadowStyles(document), [])
+    useLayoutEffect(() => attachShadowStyles(document), [])
     const [files, setFiles] = useState<DiagramFile[]>([])
     const [selected, setSelected] = useState('')
     const [expanded, setExpanded] = useState(false)
