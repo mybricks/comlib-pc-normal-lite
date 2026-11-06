@@ -3,9 +3,11 @@ import type { DiagramEdge, DiagramNode, ParsedDiagram } from "./parse";
 
 export const NODE_WIDTH = 168;
 export const NODE_HEIGHT = 56;
+export const DECISION_WIDTH = 144;
+export const DECISION_HEIGHT = 88;
 
 type Point = { x: number; y: number };
-export type LayoutNode = DiagramNode & { position: Point };
+export type LayoutNode = DiagramNode & { position: Point; width: number; height: number };
 export type LayoutEdge = DiagramEdge & {
   points: Point[];
   labelPosition?: Point;
@@ -38,17 +40,17 @@ function intersectsNode(a: Point, b: Point, node: LayoutNode): boolean {
   if (Math.abs(a.x - b.x) < epsilon) {
     return (
       a.x > x + epsilon &&
-      a.x < x + NODE_WIDTH - epsilon &&
+      a.x < x + node.width - epsilon &&
       Math.max(a.y, b.y) > y + epsilon &&
-      Math.min(a.y, b.y) < y + NODE_HEIGHT - epsilon
+      Math.min(a.y, b.y) < y + node.height - epsilon
     );
   }
   if (Math.abs(a.y - b.y) < epsilon) {
     return (
       a.y > y + epsilon &&
-      a.y < y + NODE_HEIGHT - epsilon &&
+      a.y < y + node.height - epsilon &&
       Math.max(a.x, b.x) > x + epsilon &&
-      Math.min(a.x, b.x) < x + NODE_WIDTH - epsilon
+      Math.min(a.x, b.x) < x + node.width - epsilon
     );
   }
   return true;
@@ -188,7 +190,10 @@ export function createFlowLayout(diagram: ParsedDiagram): {
   });
   graph.setDefaultEdgeLabel(() => ({}));
   diagram.nodes.forEach((node) =>
-    graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT }),
+    graph.setNode(node.id, {
+      width: node.shape === 'decision' ? DECISION_WIDTH : NODE_WIDTH,
+      height: node.shape === 'decision' ? DECISION_HEIGHT : NODE_HEIGHT,
+    }),
   );
   diagram.edges.forEach((edge, index) =>
     graph.setEdge(
@@ -208,7 +213,9 @@ export function createFlowLayout(diagram: ParsedDiagram): {
     const point = graph.node(node.id);
     return {
       ...node,
-      position: { x: point.x - NODE_WIDTH / 2, y: point.y - NODE_HEIGHT / 2 },
+      width: point.width,
+      height: point.height,
+      position: { x: point.x - point.width / 2, y: point.y - point.height / 2 },
     };
   });
   const edges = diagram.edges.map((edge, index) => {
@@ -218,12 +225,24 @@ export function createFlowLayout(diagram: ParsedDiagram): {
     const target = nodes.find(node => node.id === edge.target);
     const mindmapPoints = diagram.kind === "mindmap" && source && target
       ? [
-          { x: source.position.x + NODE_WIDTH, y: source.position.y + NODE_HEIGHT / 2 },
-          { x: target.position.x, y: target.position.y + NODE_HEIGHT / 2 },
+          { x: source.position.x + source.width, y: source.position.y + source.height / 2 },
+          { x: target.position.x, y: target.position.y + target.height / 2 },
         ]
       : undefined;
+    const routePoints = route?.points?.map(point => ({ ...point })) ?? [];
+    const reverse = diagram.direction === 'BT' || diagram.direction === 'RL';
+    if (routePoints.length && source?.shape === 'decision') {
+      routePoints[0] = vertical
+        ? { x: source.position.x + source.width / 2, y: source.position.y + (reverse ? 0 : source.height) }
+        : { x: source.position.x + (reverse ? 0 : source.width), y: source.position.y + source.height / 2 };
+    }
+    if (routePoints.length && target?.shape === 'decision') {
+      routePoints[routePoints.length - 1] = vertical
+        ? { x: target.position.x + target.width / 2, y: target.position.y + (reverse ? target.height : 0) }
+        : { x: target.position.x + (reverse ? target.width : 0), y: target.position.y + target.height / 2 };
+    }
     const points = simplifyRoute(
-      orthogonalPoints(mindmapPoints ?? route?.points ?? [], vertical),
+      orthogonalPoints(mindmapPoints ?? routePoints, vertical),
       nodes,
       vertical,
     );

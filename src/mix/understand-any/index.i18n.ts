@@ -25,9 +25,15 @@ export const copy = {
       zh: "暂不支持此图的语法，已展示原文。",
       en: "This diagram syntax is not supported yet. Showing the source.",
     }),
+  diagramRenderError: () =>
+    i18n({
+      zh: "图表暂时无法显示，已展示原文。",
+      en: "The diagram could not be displayed. Showing the source.",
+    }),
   choose: () => i18n({ zh: "选择业务图", en: "Choose diagram" }),
   details: () => i18n({ zh: "查看说明", en: "View details" }),
   expand: () => i18n({ zh: "放大查看", en: "Expand diagram" }),
+  diagramControls: () => i18n({ zh: "图表缩放工具", en: "Diagram zoom controls" }),
   empty: () =>
     i18n({
       zh: "描述业务或目录，让 AI 生成业务图",

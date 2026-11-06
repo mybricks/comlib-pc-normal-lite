@@ -5,8 +5,9 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 100%;
-  min-width: 300px;
+  height: 100%;
+  min-height: 300px;
+  min-width: 230px;
   box-sizing: border-box;
   background: var(--mybricks-bg-color-main, #fff);
   font-size: 12px;
@@ -16,7 +17,7 @@
 
 .bizai-root[data-empty="true"] {
   height: 100%;
-  min-height: 168px;
+  min-height: 300px;
 }
 
 .bizai-switch {
@@ -61,6 +62,19 @@
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+.bizai-modal-description {
+  padding: 16px 20px 12px;
+  line-height: 1.7;
+}
+
+.bizai-modal-description .bizai-details {
+  margin-top: 8px;
+}
+
+.bizai-modal-description .bizai-details p {
+  margin: 8px 0 0;
 }
 
 .bizai-summary {
@@ -137,10 +151,96 @@
 
 .bizai-card {
   position: relative !important;
-  flex: 1;
-  min-height: 400px;
+  flex: 1 1 168px;
+  min-height: 168px;
   box-sizing: border-box;
   overflow: hidden;
+}
+
+.bizai-flow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.bizai-flow[data-interactive='false'] :global(.react-flow__pane),
+.bizai-flow :global(.react-flow__node) {
+  cursor: default;
+}
+
+.bizgraph-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 168px;
+  height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--mybricks-border-color-main, #cbd0dc);
+  border-radius: 8px;
+  background: var(--mybricks-bg-color-main, #fff);
+  color: var(--mybricks-text-color-main, #333);
+  font-size: 13px;
+  text-align: center;
+}
+
+.bizgraph-node span {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.bizgraph-round,
+.bizgraph-root {
+  border-radius: 28px;
+}
+
+.bizgraph-decision {
+  width: 144px;
+  height: 88px;
+  border: 0;
+  background: transparent;
+}
+
+.bizgraph-decision::before,
+.bizgraph-decision::after {
+  position: absolute;
+  content: '';
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  pointer-events: none;
+}
+
+.bizgraph-decision::before {
+  inset: 0;
+  background: var(--mybricks-border-color-main, #cbd0dc);
+}
+
+.bizgraph-decision::after {
+  inset: 1px;
+  background: var(--mybricks-bg-color-main, #fff);
+}
+
+.bizgraph-decision span {
+  position: relative;
+  z-index: 1;
+  max-width: 65%;
+}
+
+.bizgraph-selected {
+  border-color: var(--mybricks-color-primary, #fa6400);
+}
+
+.bizgraph-decision.bizgraph-selected::before {
+  background: var(--mybricks-color-primary, #fa6400);
+}
+
+.bizgraph-node :global(.react-flow__handle) {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .bizai-root[data-empty="true"] .bizai-card {

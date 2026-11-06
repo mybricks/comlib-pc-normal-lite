@@ -4,7 +4,7 @@ export function attachShadowStyles(doc: Document): () => void {
   if (!root) return () => {}
 
   const copies = Array.from(doc.querySelectorAll('style'))
-    .filter(style => /\.bizai-root(?:[-_{.:\s]|$)/.test(style.textContent ?? ''))
+    .filter(style => /\.(?:bizai-root(?:[-_{.:\s]|$)|react-flow(?:__|[\s.{:#]))/.test(style.textContent ?? ''))
     .map(style => {
       const copy = style.cloneNode(true) as HTMLStyleElement
       copy.setAttribute('data-understand-shadow-style', '')

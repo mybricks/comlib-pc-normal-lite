@@ -1,0 +1,113 @@
+import React, { useEffect, useMemo, useRef } from 'react'
+import { Background, BaseEdge, Controls, Handle, MarkerType, Position, ReactFlow, useNodesInitialized, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from 'reactflow'
+import 'reactflow/dist/style.css'
+import { getLazyCss } from '../../lowcodeView/utils/css'
+import * as lazyCss from '../index.lazy.less'
+import { copy } from '../index.i18n'
+import { createFlowLayout, roundedPath } from './layout'
+import { parseDiagram, type ParsedDiagram } from './parse'
+
+const css = getLazyCss(lazyCss)
+
+type BusinessNodeData = { label: string; shape: string; depth: number; direction: ParsedDiagram['direction'] }
+type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number } }
+type BusinessNode = Node<BusinessNodeData, 'business'>
+type RoutedEdge = Edge<RoutedEdgeData>
+
+function DiagramNode({ data, selected }: NodeProps<BusinessNodeData>) {
+  const vertical = data.direction === 'TB' || data.direction === 'BT'
+  const reverse = data.direction === 'BT' || data.direction === 'RL'
+  const source = vertical ? (reverse ? Position.Top : Position.Bottom) : (reverse ? Position.Left : Position.Right)
+  const target = vertical ? (reverse ? Position.Bottom : Position.Top) : (reverse ? Position.Right : Position.Left)
+  return <div className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected']].filter(Boolean).join(' ')}>
+    <Handle type="target" position={target} />
+    <span title={data.label}>{data.label}</span>
+    <Handle type="source" position={source} />
+  </div>
+}
+
+function DiagramEdge({ id, data, label, style, markerEnd }: EdgeProps<RoutedEdgeData>) {
+  if (!data?.points.length) return null
+  return <BaseEdge id={id} path={roundedPath(data.points)} style={style} markerEnd={markerEnd} label={label} labelX={data.labelPosition?.x} labelY={data.labelPosition?.y} labelStyle={{ fill: 'var(--mybricks-text-color-secondary, #697386)', fontSize: 12 }} labelShowBg labelBgPadding={[4, 2]} />
+}
+
+const nodeTypes = { business: DiagramNode }
+const edgeTypes = { routed: DiagramEdge }
+
+function FitOnResize({ container }: { container: React.RefObject<HTMLDivElement> }) {
+  const { fitView } = useReactFlow()
+  const initialized = useNodesInitialized()
+
+  useEffect(() => {
+    const element = container.current
+    if (!element || !initialized) return
+    let frame = 0
+    const fit = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        if (element.clientWidth > 0 && element.clientHeight > 0) {
+          void fitView({ padding: 0.15, maxZoom: 1 })
+        }
+      })
+    }
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit)
+    observer?.observe(element)
+    fit()
+    return () => { observer?.disconnect(); cancelAnimationFrame(frame) }
+  }, [container, fitView, initialized])
+  return null
+}
+
+function DiagramFallback({ content, renderError = false }: { content: string; renderError?: boolean }) {
+  const source = content.match(/```mermaid[^\n]*\n([\s\S]*?)```/i)?.[1] ?? content
+  return <pre className={css['bizai-document']} role="status">{renderError ? copy.diagramRenderError() : copy.diagramFallback()}{'\n'}{source}</pre>
+}
+
+class DiagramErrorBoundary extends React.Component<{ content: string; children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[understand-any] Diagram render failed', error, info)
+  }
+
+  render() {
+    return this.state.failed ? <DiagramFallback content={this.props.content} renderError /> : this.props.children
+  }
+}
+
+function DiagramContent({ content, interactive = false }: { content: string; interactive?: boolean }) {
+  const container = useRef<HTMLDivElement>(null)
+  const graph = useMemo(() => {
+    try {
+      const diagram = parseDiagram(content)
+      const layout = createFlowLayout(diagram)
+      const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, direction: diagram.direction }, draggable: false }))
+      const edges: RoutedEdge[] = layout.edges.map((edge, index) => ({
+        id: `edge-${index}`, source: edge.source, target: edge.target, type: 'routed', label: edge.label,
+        data: { points: edge.points, labelPosition: edge.labelPosition },
+        style: { stroke: 'var(--mybricks-text-color-secondary, #8a909d)', strokeWidth: 1.5, ...(edge.dashed ? { strokeDasharray: '5 4' } : {}) },
+        ...(edge.arrow ? { markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--mybricks-text-color-secondary, #8a909d)' } } : {}),
+      }))
+      return { nodes, edges }
+    } catch {
+      return null
+    }
+  }, [content])
+
+  if (!graph) return <DiagramFallback content={content} />
+  return <div ref={container} className={css['bizai-flow']} data-interactive={interactive}>
+    <ReactFlow key={content} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={interactive} panOnScroll={false} zoomOnScroll={interactive} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
+      <Background />
+      {!interactive && <FitOnResize container={container} />}
+      {interactive && <Controls showInteractive={false} aria-label={copy.diagramControls()} />}
+    </ReactFlow>
+  </div>
+}
+
+export function Diagram({ content, interactive = false }: { content: string; interactive?: boolean }) {
+  return <DiagramErrorBoundary key={content} content={content}><DiagramContent content={content} interactive={interactive} /></DiagramErrorBoundary>
+}
