@@ -153,19 +153,13 @@ function LinkPath({
   );
 }
 
-export function PlaceholderDiagram({
-  loading,
-  onGenerate,
-}: {
-  loading?: boolean;
-  onGenerate: () => void;
-}) {
+export function PlaceholderDiagram({ loading }: { loading?: boolean }) {
   const reduced = useReducedMotion();
   const animate = Boolean(loading) && !reduced;
   const stroke = "var(--mybricks-text-color-secondary, #8a909d)";
   return (
     <div
-      className={`${css["bizai-placeholder"]} ${loading ? css["bizai-placeholder-loading"] : ""}`}
+      className={css["bizai-placeholder"]}
       role={loading ? "status" : undefined}
       aria-label={loading ? copy.generating() : undefined}
     >
@@ -191,25 +185,9 @@ export function PlaceholderDiagram({
           ))}
         </svg>
       </div>
-      {!loading && (
-        <span className={css["bizai-placeholder-text"]}>
-          <span
-            role="button"
-            tabIndex={0}
-            className={css["bizai-placeholder-action"]}
-            onClick={onGenerate}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onGenerate();
-              }
-            }}
-          >
-            {copy.placeholderAction()}
-          </span>
-          {copy.placeholderSubject()}
-        </span>
-      )}
+      <span className={css["bizai-placeholder-text"]} role={loading ? "status" : undefined}>
+        {loading ? copy.generating() : copy.placeholderHint()}
+      </span>
     </div>
   );
 }

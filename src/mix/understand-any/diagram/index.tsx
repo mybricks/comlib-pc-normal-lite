@@ -100,7 +100,22 @@ function FitOnResize({ container }: { container: React.RefObject<HTMLDivElement>
 
 function DiagramFallback({ content, renderError = false }: { content: string; renderError?: boolean }) {
   const source = content.match(/```mermaid[^\n]*\n([\s\S]*?)```/i)?.[1] ?? content
-  return <pre className={css['bizai-document']} role="status">{renderError ? copy.diagramRenderError() : copy.diagramFallback()}{'\n'}{source}</pre>
+  return <pre className={css['bizai-document']} role="status">{renderError && <>{copy.diagramRenderError()}{'\n'}</>}{source}</pre>
+}
+
+function MermaidFallback({ content }: { content: string }) {
+  const [svg, setSvg] = useState('')
+  const source = content.match(/```mermaid[^\n]*\n([\s\S]*?)```/i)?.[1] ?? content
+  useEffect(() => {
+    let active = true
+    const mermaid = (window as any).mermaid
+    if (mermaid) {
+      const id = `understand-mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      void Promise.resolve().then(() => mermaid.render(id, source)).then((result: { svg: string }) => { if (active) setSvg(result.svg) }).catch(() => {})
+    }
+    return () => { active = false }
+  }, [source])
+  return svg ? <div className={css['bizai-diagram']} dangerouslySetInnerHTML={{ __html: svg }} /> : <DiagramFallback content={content} />
 }
 
 class DiagramErrorBoundary extends React.Component<{ content: string; children: React.ReactNode }, { failed: boolean }> {
@@ -138,7 +153,7 @@ function DiagramContent({ content, interactive = false }: { content: string; int
     }
   }, [content])
 
-  if (!graph) return <DiagramFallback content={content} />
+  if (!graph) return <MermaidFallback key={content} content={content} />
   return <div ref={container} className={css['bizai-flow']} data-interactive={interactive}>
     <ReactFlow key={content} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={interactive} panOnScroll={false} zoomOnScroll={interactive} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
       <Background />

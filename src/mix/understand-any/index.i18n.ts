@@ -6,13 +6,15 @@ export const copy = {
     i18n({ zh: "让 AI 绘制业务图", en: "Ask AI to draw a business diagram" }),
   placeholder: () =>
     i18n({
-      zh: "描述要可视化的业务内容和逻辑",
-      en: "Describe the business content and logic to visualize",
+      zh: "描述要可视化的业务流程",
+      en: "Describe the business flow to visualize",
     }),
-  placeholderAction: () => i18n({ zh: "点击生成", en: "Click to generate" }),
-  placeholderSubject: () =>
-    i18n({ zh: "可视化业务逻辑", en: " visual business logic" }),
-  generating: () => i18n({ zh: "业务图生成中", en: "Generating diagram" }),
+  placeholderHint: () =>
+    i18n({
+      zh: "用可视化的方式展示业务流程",
+      en: "Visualize your business flow",
+    }),
+  generating: () => i18n({ zh: "正在生成中...", en: "Generating..." }),
   unavailable: () =>
     i18n({
       zh: "请先打开项目并连接 AI",
@@ -20,11 +22,6 @@ export const copy = {
     }),
   readError: () =>
     i18n({ zh: "读取业务图失败", en: "Could not read business diagrams" }),
-  diagramFallback: () =>
-    i18n({
-      zh: "暂不支持此图的语法，已展示原文。",
-      en: "This diagram syntax is not supported yet. Showing the source.",
-    }),
   diagramRenderError: () =>
     i18n({
       zh: "图表暂时无法显示，已展示原文。",
