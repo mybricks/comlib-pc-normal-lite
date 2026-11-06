@@ -19,12 +19,12 @@ export default function (hookContext, params) {
       .join('、');
   }
   const {
-    id,
+    // id,
     options = {},
     onComplete,
     onError,
   } = params as {
-    id: string;
+    // id: string;
     options?: AuditPageOptions;
     onComplete: () => void;
     onError: () => void;
@@ -33,7 +33,8 @@ export default function (hookContext, params) {
   const message = getAuditPageMessage(options);
   const detail = message ? `的${message}文档` : '文档';
   const ele = hookContext.focusArea.ele;
-  const agentMessage = `使用 audit-power 来更新页面「${id}」${detail}`;
+  const iframePath = ele.dataset.iframePath
+  const agentMessage = `使用 audit-power 来更新页面「${iframePath}」${detail}`;
 
   agentTurnLifecycle.register(hookContext.id, (turn) => {
     if (turn?.status === 'success') {

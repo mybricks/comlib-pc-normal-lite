@@ -21,4 +21,5 @@ interface Window {
       basename?: string;
     }
   }
+  _sandbox_: any
 }
