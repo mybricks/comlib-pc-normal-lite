@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Background, BaseEdge, Controls, Handle, MarkerType, Position, ReactFlow, useNodesInitialized, useReactFlow, type Edge, type EdgeProps, type Node, type NodeProps } from 'reactflow'
+import { throttle } from 'throttle-debounce'
 import 'reactflow/dist/style.css'
 import { getLazyCss } from '../../lowcodeView/utils/css'
 import * as lazyCss from '../index.lazy.less'
@@ -8,6 +9,7 @@ import { createFlowLayout, roundedPath } from './layout'
 import { parseDiagram, type ParsedDiagram } from './parse'
 
 const css = getLazyCss(lazyCss)
+const RESIZE_THROTTLE_MS = 120
 
 type BusinessNodeData = { label: string; shape: string; depth: number; direction: ParsedDiagram['direction'] }
 type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number } }
@@ -90,10 +92,11 @@ function FitOnResize({ container }: { container: React.RefObject<HTMLDivElement>
         }
       })
     }
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit)
+    const onResize = throttle(RESIZE_THROTTLE_MS, fit)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize)
     observer?.observe(element)
     fit()
-    return () => { observer?.disconnect(); cancelAnimationFrame(frame) }
+    return () => { observer?.disconnect(); onResize.cancel(); cancelAnimationFrame(frame) }
   }, [container, fitView, initialized])
   return null
 }
@@ -136,7 +139,7 @@ class DiagramErrorBoundary extends React.Component<{ content: string; children: 
 
 function DiagramContent({ content, interactive = false }: { content: string; interactive?: boolean }) {
   const container = useRef<HTMLDivElement>(null)
-  const [direction, setDirection] = useState<'LR' | 'TB'>('LR')
+  const [direction, setDirection] = useState<'LR' | 'TB'>('TB')
   const graphs = useMemo(() => {
     try {
       const diagram = parseDiagram(content)
@@ -171,15 +174,15 @@ function DiagramContent({ content, interactive = false }: { content: string; int
       const horizontalScale = Math.min(width / horizontal.width, height / horizontal.height, 1)
       const verticalScale = Math.min(width / vertical.width, height / vertical.height, 1)
       setDirection(current => {
-        const currentScale = current === 'LR' ? horizontalScale : verticalScale
-        const otherScale = current === 'LR' ? verticalScale : horizontalScale
-        return otherScale > currentScale * 1.1 ? (current === 'LR' ? 'TB' : 'LR') : current
+        if (current === 'TB') return horizontalScale > verticalScale * 1.2 ? 'LR' : 'TB'
+        return horizontalScale <= verticalScale * 1.1 ? 'TB' : 'LR'
       })
     }
     update()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    const onResize = throttle(RESIZE_THROTTLE_MS, update)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize)
     observer?.observe(element)
-    return () => observer?.disconnect()
+    return () => { observer?.disconnect(); onResize.cancel() }
   }, [graphs])
 
   if (!graphs) return <MermaidFallback key={content} content={content} />
