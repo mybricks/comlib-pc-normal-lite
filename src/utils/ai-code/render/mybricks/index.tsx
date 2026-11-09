@@ -1170,6 +1170,10 @@ if (frontendMode === 'prototype') {
       // }, [])
 
       if (props._standalone) {
+        useEffect(() => {
+          mixContext.component?.actions.loaded?.()
+        }, [])
+
         /**
          * 独立渲染，不使用默认的react-router-dom
          */

@@ -13,7 +13,6 @@ export type EffectiveLibrary = { name: string; version: string; usage: string }
  * 第一层：基础库，无论何时都需要加载。
  */
 const BASE_LIBS: import('./types').LibraryMeta[] = [
-  dayjs,
   mybricks,
 ]
 
@@ -21,6 +20,7 @@ const BASE_LIBS: import('./types').LibraryMeta[] = [
  * 第二层预设：当没有注入依赖时，使用的默认附加库。
  */
 const PRESET_ADDON_LIBS: import('./types').LibraryMeta[] = [
+  dayjs,
   echarts,
   antd,
   antDesignIcons,
@@ -34,9 +34,6 @@ const BUILTIN_LIBS: import('./types').LibraryMeta[] = [
   ...BASE_LIBS,
   ...PRESET_ADDON_LIBS,
 ]
-
-/** 内置库名称列表，从注册表派生 */
-export const BUILTIN_LIBRARY_NAMES = BUILTIN_LIBS.map((lib) => lib.name)
 
 /**
  * 获取当前生效的校验器列表（延迟计算，每次调用时按分层逻辑动态构建）：
