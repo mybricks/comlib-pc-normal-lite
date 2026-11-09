@@ -18,8 +18,10 @@ export function TaskCardHeading({ task, statusLabel, statusClass }: {
   return (
     <>
       <div className={css['mb-tv-card-head']}>
-        <span className={[css['mb-tv-tag'], css[`status-${statusClass}`]].join(' ')}>{statusLabel}</span>
-        <span className={css['mb-tv-card-title']} title={task.title}>{getTaskDisplayTitle(task.title)}</span>
+        <span className={css['mb-tv-card-title']} title={task.title}>
+          <span className={[css['mb-tv-tag'], css[`status-${statusClass}`]].join(' ')}>{statusLabel}</span>
+          {getTaskDisplayTitle(task.title)}
+        </span>
       </div>
       {task.desc ? <div className={css['mb-tv-desc']} title={task.desc}>{task.desc}</div> : null}
     </>

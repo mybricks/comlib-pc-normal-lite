@@ -1,8 +1,17 @@
 import getI18n from '../../helpers/i18n'
 
-type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
+export type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
 
 export const i18n = {
+  listView: () => getI18n({ zh: '任务列表', en: 'Task list' }),
+  overviewView: () => getI18n({ zh: '模块总览', en: 'Module overview' }),
+  overviewEmpty: () => getI18n({ zh: '暂无模块总览，生成任务时会逐步建立关联', en: 'No module overview yet. It will be built as tasks are created.' }),
+  overviewInvalid: () => getI18n({ zh: '模块总览文件格式有误，请检查 overview.yaml', en: 'The module overview is invalid. Check overview.yaml.' }),
+  overviewPage: () => getI18n({ zh: '页面', en: 'Page' }),
+  overviewGlobal: () => getI18n({ zh: '全局入口', en: 'Global entry' }),
+  overviewComponent: () => getI18n({ zh: '组件', en: 'Component' }),
+  overviewNoImpact: () => getI18n({ zh: '图中暂无关联节点', en: 'No linked nodes in this diagram' }),
+  overviewClear: () => getI18n({ zh: '清除关联高亮', en: 'Clear highlights' }),
   closeHint: () => getI18n({ zh: '关闭提示', en: 'Dismiss hint' }),
   all: () => getI18n({ zh: '全部', en: 'All' }),
   noItems: () => getI18n({ zh: '暂无', en: 'None' }),

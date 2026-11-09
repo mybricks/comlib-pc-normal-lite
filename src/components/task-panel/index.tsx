@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import context from '../../mix/context'
 import { randomUUID } from '../../mix/utils/uuid'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
-import { i18n as taskPanelI18n } from './index.i18n'
+import { i18n as taskPanelI18n, type TaskStatus } from './index.i18n'
 import { findTaskDocumentFile } from '../../mix/tasks/notify'
 import { applyTaskTransition } from '../../mix/tasks/transition'
 import { Popconfirm } from '../version-list'
 import * as lazyCss from './index.lazy.less'
+import TaskOverview, { readOverview, type OverviewSelection } from './overview'
+import { TaskStatusBadge, TaskStatusDot } from './status-badge'
 
 const css = getLazyCss(lazyCss)
 
@@ -53,7 +55,6 @@ function TaskActionHint({
   )
 }
 
-type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
 interface TaskMetadata {
   label: string
   value: string
@@ -73,36 +74,16 @@ interface TaskItem {
 }
 
 interface FlowStep {
-  status: string
-  dot: string
+  status: TaskStatus
   count: number
   disabled: boolean
 }
 
-const TASK_FLOW_ORDER: TaskStatus[] = ['处理中', '待验证', '待交接', '已完成']
-
-const TASK_STATUS_STYLE: Record<string, { dot: string; badgeBg: string; badgeText: string }> = {
-  '处理中': {
-    dot: 'var(--mybricks-text-color-disabled, #ccc)',
-    badgeBg: 'var(--mybricks-bg-color-active, #DFE1E6)',
-    badgeText: 'var(--mybricks-text-color-disabled, #42526E)',
-  },
-  '待验证': {
-    dot: '#ff4d4f',
-    badgeBg: '#ff4d4f',
-    badgeText: '#fff',
-  },
-  '待交接': {
-    dot: '#faad14',
-    badgeBg: '#faad14',
-    badgeText: '#fff',
-  },
-  '已完成': {
-    dot: '#52c41a',
-    badgeBg: '#52c41a',
-    badgeText: '#fff',
-  },
+function getTaskDisplayTitle(task: TaskItem) {
+  return task.id ? task.title.slice(task.id.length).replace(/^\s*[-:：]?\s*/, '') || task.title : task.title
 }
+
+const TASK_FLOW_ORDER: TaskStatus[] = ['处理中', '待验证', '待交接', '已完成']
 
 function extractMetaField(section: string, fieldName: string): string | undefined {
   return extractMetadata(section).find((item) => item.label === fieldName)?.value
@@ -273,26 +254,14 @@ function FlowFilterBar({
   activeFilter,
   onFilter,
   updatedAt,
-  batchMode,
-  batchDisabled,
-  onToggleBatchMode,
-  selectedCount,
-  batchTransitions,
-  onBatchAction,
-  onClearSelection,
+  children,
 }: {
   steps: FlowStep[]
   total: number
   activeFilter: string | null
   onFilter: (s: string | null) => void
   updatedAt: string | null
-  batchMode: boolean
-  batchDisabled: boolean
-  onToggleBatchMode: () => void
-  selectedCount: number
-  batchTransitions: TaskTransition[]
-  onBatchAction: (transition: TaskTransition) => void
-  onClearSelection: () => void
+  children?: React.ReactNode
 }) {
   return (
     <div className={css['summary-bar']}>
@@ -316,10 +285,10 @@ function FlowFilterBar({
                   step.disabled ? css['flow-node-disabled'] : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => onFilter(activeFilter === step.status ? null : step.status)}
-                title={step.disabled ? `${taskPanelI18n.status(step.status as TaskStatus)} (${taskPanelI18n.noItems()})` : taskPanelI18n.status(step.status as TaskStatus)}
+                title={step.disabled ? `${taskPanelI18n.status(step.status)} (${taskPanelI18n.noItems()})` : taskPanelI18n.status(step.status)}
               >
-                <span className={css['flow-node-dot']} style={{ background: step.dot }} />
-                <span className={css['flow-node-label']}>{taskPanelI18n.status(step.status as TaskStatus)}</span>
+                <TaskStatusDot status={step.status} />
+                <span className={css['flow-node-label']}>{taskPanelI18n.status(step.status)}</span>
                 <span className={css['flow-node-count']}>{step.count}</span>
               </div>
             </React.Fragment>
@@ -329,46 +298,66 @@ function FlowFilterBar({
       {updatedAt && (
         <span className={css['summary-updated-at']}>{updatedAt}</span>
       )}
-      {batchMode ? (
-        <div className={css['batch-toolbar']}>
-          <span className={css['batch-toolbar-count']}>{taskPanelI18n.selected(selectedCount)}</span>
-          {batchTransitions.length > 0 ? (
-            <div className={css['task-status-selector']}>
-              <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
-              <DownChevronIcon />
-              <select
-                className={css['task-status-select-overlay']}
-                value=""
-                onChange={(e) => {
-                  const transition = batchTransitions.find(item => item.target === e.target.value)
-                  if (transition) onBatchAction(transition)
-                  e.currentTarget.value = ''
-                }}
-              >
-                <option value="" disabled>{taskPanelI18n.adjust()}</option>
-                {batchTransitions.map(transition => (
-                  <option key={transition.target} value={transition.target}>{transition.label}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <span className={css['batch-toolbar-empty']}>{taskPanelI18n.noSharedAction()}</span>
-          )}
-          <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>{taskPanelI18n.clearSelection()}</span>
+      {children}
+    </div>
+  )
+}
+
+function BatchTaskControls({
+  batchMode,
+  batchDisabled,
+  onToggleBatchMode,
+  selectedCount,
+  batchTransitions,
+  onBatchAction,
+  onClearSelection,
+}: {
+  batchMode: boolean
+  batchDisabled: boolean
+  onToggleBatchMode: () => void
+  selectedCount: number
+  batchTransitions: TaskTransition[]
+  onBatchAction: (transition: TaskTransition) => void
+  onClearSelection: () => void
+}) {
+  return batchMode ? (
+    <div className={css['batch-toolbar']}>
+      <span className={css['batch-toolbar-count']}>{taskPanelI18n.selected(selectedCount)}</span>
+      {batchTransitions.length > 0 ? (
+        <div className={css['task-status-selector']}>
+          <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
+          <DownChevronIcon />
+          <select
+            className={css['task-status-select-overlay']}
+            value=""
+            onChange={(e) => {
+              const transition = batchTransitions.find(item => item.target === e.target.value)
+              if (transition) onBatchAction(transition)
+              e.currentTarget.value = ''
+            }}
+          >
+            <option value="" disabled>{taskPanelI18n.adjust()}</option>
+            {batchTransitions.map(transition => (
+              <option key={transition.target} value={transition.target}>{transition.label}</option>
+            ))}
+          </select>
         </div>
       ) : (
-        <span
-          className={[
-            css['batch-toggle-btn'],
-            batchDisabled ? css['batch-toggle-btn-disabled'] : '',
-          ].filter(Boolean).join(' ')}
-          onClick={() => { if (!batchDisabled) onToggleBatchMode() }}
-          title={batchDisabled ? taskPanelI18n.batchDisabled() : taskPanelI18n.batchUpdate()}
-        >
-          {taskPanelI18n.batchUpdateShort()}
-        </span>
+        <span className={css['batch-toolbar-empty']}>{taskPanelI18n.noSharedAction()}</span>
       )}
+      <span className={css['batch-toolbar-clear']} onClick={onClearSelection}>{taskPanelI18n.clearSelection()}</span>
     </div>
+  ) : (
+    <span
+      className={[
+        css['batch-toggle-btn'],
+        batchDisabled ? css['batch-toggle-btn-disabled'] : '',
+      ].filter(Boolean).join(' ')}
+      onClick={() => { if (!batchDisabled) onToggleBatchMode() }}
+      title={batchDisabled ? taskPanelI18n.batchDisabled() : taskPanelI18n.batchUpdate()}
+    >
+      {taskPanelI18n.batchUpdateShort()}
+    </span>
   )
 }
 
@@ -623,6 +612,8 @@ function TaskRow({
   selected,
   allowDelete,
   onToggleSelect,
+  linked,
+  onOverviewSelect,
 }: {
   task: TaskItem
   highlightProgress?: boolean
@@ -631,12 +622,13 @@ function TaskRow({
   selected?: boolean
   allowDelete?: boolean
   onToggleSelect?: () => void
+  linked?: boolean
+  onOverviewSelect?: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
   const [actionHint, setActionHint] = useState<string | null>(null)
-  const style = TASK_STATUS_STYLE[task.status] ?? TASK_STATUS_STYLE['处理中']
-  const displayTitle = task.id ? task.title.slice(task.id.length).replace(/^\s*[-:：]?\s*/, '') || task.title : task.title
+  const displayTitle = getTaskDisplayTitle(task)
   const hasDetail = !!task.detail
   const transitions = getTaskTransitions(task)
 
@@ -717,8 +709,17 @@ function TaskRow({
         batchMode ? css['task-card-batch-mode'] : '',
         batchMode && !selectable ? css['task-card-batch-disabled'] : '',
         actionHint ? css['task-card-has-hint'] : '',
+        linked ? css['task-card-linked'] : '',
+        onOverviewSelect ? css['task-card-linkable'] : '',
       ].filter(Boolean).join(' ')}
-      onClick={() => { if (batchMode && selectable) onToggleSelect?.() }}
+      data-overview-linked={linked || undefined}
+      onClick={() => {
+        if (batchMode) {
+          if (selectable) onToggleSelect?.()
+        } else {
+          onOverviewSelect?.()
+        }
+      }}
     >
       <div className={css['task-card-header']}>
         <div className={css['task-card-header-main']}>
@@ -731,13 +732,13 @@ function TaskRow({
               <CheckboxIcon checked={!!selected} />
             </span>
           )}
-          <span
-            className={css['task-status-badge']}
-            style={{ background: style.badgeBg, color: style.badgeText }}
-          >
-            {taskPanelI18n.status(task.status)}
-          </span>
-          <span className={css['task-title']} title={displayTitle}>{displayTitle}</span>
+          <TaskStatusBadge status={task.status} />
+          {onOverviewSelect ? (
+            <button type="button" className={`${css['task-title']} ${css['task-link-title']}`} title={displayTitle}
+              onClick={(event) => { event.stopPropagation(); onOverviewSelect() }}>
+              {displayTitle}
+            </button>
+          ) : <span className={css['task-title']} title={displayTitle}>{displayTitle}</span>}
           {task.handoverTo && (
             <span className={css['task-handover-inline']}>
               <span className={css['task-handover-label']}>{taskPanelI18n.handoverTo()}</span>
@@ -858,8 +859,10 @@ function getSharedTransitions(tasks: TaskItem[]): TaskTransition[] {
   )
 }
 
-function TaskPanel({ content, allowDelete = false }: { content: string | null, allowDelete?: boolean }) {
+function TaskPanel({ content, overviewContent = null, allowDelete = false }: { content: string | null, overviewContent?: string | null, allowDelete?: boolean }) {
   const [filter, setFilter] = useState<string | null>(null)
+  const [overviewSelection, setOverviewSelection] = useState<OverviewSelection>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [hintHovering, setHintHovering] = useState(false)
   const [batchMode, setBatchMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -871,8 +874,31 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
     setSelected(new Set())
   }, [content])
 
-  const tasks = content ? parseTasks(content) : []
-  if (!tasks.length) return null
+  const tasks = useMemo(() => content ? parseTasks(content) : [], [content])
+  const hasOverview = overviewContent !== null
+  const overview = useMemo(() => readOverview(overviewContent), [overviewContent])
+  const hasGraph = overview.doc !== null
+  const overviewTasks = useMemo(() => tasks.flatMap(task => task.id ? [{ id: task.id, title: getTaskDisplayTitle(task), status: task.status }] : []), [tasks])
+  const linkedTaskIds = overviewSelection?.kind === 'task' ? [overviewSelection.id] :
+    overviewSelection?.kind === 'node' ? overview.nodes.get(overviewSelection.id)?.tasks ?? [] : []
+
+  useEffect(() => {
+    setOverviewSelection(null)
+  }, [hasGraph])
+
+  useEffect(() => {
+    if (!overviewSelection?.revealTask) return
+    const list = listRef.current
+    const row = list?.querySelector('[data-overview-linked]')
+    if (!list || !row) return
+    const rowBounds = row.getBoundingClientRect()
+    const listBounds = list.getBoundingClientRect()
+    if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom) {
+      list.scrollTop += rowBounds.top - listBounds.top
+    }
+  }, [overviewSelection])
+
+  if (!tasks.length && !hasOverview) return null
 
   const selectedTasks = tasks.filter(t => selected.has(t.id ?? t.title))
   const selectedStatus = selectedTasks[0]?.status ?? null
@@ -920,18 +946,36 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
 
   const steps: FlowStep[] = TASK_FLOW_ORDER.map(status => ({
     status,
-    dot: (TASK_STATUS_STYLE[status] ?? TASK_STATUS_STYLE['处理中']).dot,
     count: countByStatus[status] ?? 0,
     disabled: !countByStatus[status],
   }))
 
-  const filtered = filter ? tasks.filter(t => t.status === filter) : tasks
+  const filtered = filter ? tasks.filter(task => task.status === filter) : tasks
   const statusOrder: Record<string, number> = {
     '处理中': 1,
     '待验证': 2,
     '待交接': 3,
     '已完成': 4,
   }
+
+  const batchControls = (
+    <BatchTaskControls
+      batchMode={batchMode}
+      batchDisabled={tasks.length < 2}
+      onToggleBatchMode={toggleBatchMode}
+      selectedCount={selectedTasks.length}
+      batchTransitions={sharedTransitions}
+      onBatchAction={handleBatchAction}
+      onClearSelection={exitBatchMode}
+    />
+  )
+  const batchHint = actionHint && (
+    <TaskActionHint
+      message={actionHint}
+      className={css['task-action-hint']}
+      onClose={() => setActionHint(null)}
+    />
+  )
 
   return (
     <div className={css['panel-container']}>
@@ -941,56 +985,66 @@ function TaskPanel({ content, allowDelete = false }: { content: string | null, a
         activeFilter={filter}
         onFilter={setFilter}
         updatedAt={null}
-        batchMode={batchMode}
-        batchDisabled={tasks.length < 2}
-        onToggleBatchMode={toggleBatchMode}
-        selectedCount={selectedTasks.length}
-        batchTransitions={sharedTransitions}
-        onBatchAction={handleBatchAction}
-        onClearSelection={exitBatchMode}
-      />
-      {actionHint && (
-        <TaskActionHint
-          message={actionHint}
-          className={css['task-action-hint']}
-          onClose={() => setActionHint(null)}
-        />
-      )}
-      {/* <AttentionHint
-        steps={steps}
-        onClick={() => setFilter(ATTENTION_STATUS)}
-        onHoverChange={setHintHovering}
-      /> */}
-      <div className={css['panel-list']}>
-        {filtered.length > 0
-          ? filtered
-              .map((task, index) => ({ task, index }))
-              .sort((a, b) => {
-                const aUpdatedAt = a.task.updatedAtTimestamp
-                const bUpdatedAt = b.task.updatedAtTimestamp
-                if (aUpdatedAt !== undefined && bUpdatedAt !== undefined && aUpdatedAt !== bUpdatedAt) {
-                  return bUpdatedAt - aUpdatedAt
-                }
-                if (aUpdatedAt !== undefined) return -1
-                if (bUpdatedAt !== undefined) return 1
+      >
+        {!hasOverview && batchControls}
+      </FlowFilterBar>
+      {!hasOverview && batchHint}
+      <div className={`${css['task-panel-body']}${hasOverview ? ` ${css['task-panel-split']}` : ''}`}>
+        <section className={css['task-list-pane']} aria-label={taskPanelI18n.listView()}>
+          {hasOverview && (
+            <div className={css['task-list-toolbar']}>
+              {batchControls}
+              {batchHint}
+            </div>
+          )}
+          {/* <AttentionHint
+            steps={steps}
+            onClick={() => setFilter(ATTENTION_STATUS)}
+            onHoverChange={setHintHovering}
+          /> */}
+          <div ref={listRef} className={css['panel-list']}>
+            {filtered.length > 0
+              ? filtered
+                  .map((task, index) => ({ task, index }))
+                  .sort((a, b) => {
+                    const aUpdatedAt = a.task.updatedAtTimestamp
+                    const bUpdatedAt = b.task.updatedAtTimestamp
+                    if (aUpdatedAt !== undefined && bUpdatedAt !== undefined && aUpdatedAt !== bUpdatedAt) {
+                      return bUpdatedAt - aUpdatedAt
+                    }
+                    if (aUpdatedAt !== undefined) return -1
+                    if (bUpdatedAt !== undefined) return 1
 
-                const statusDiff = (statusOrder[a.task.status] ?? 99) - (statusOrder[b.task.status] ?? 99)
-                return statusDiff || a.index - b.index
-              })
-              .map(({ task, index }) => (
-                <TaskRow
-                  key={index}
-                  task={task}
-                  highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
-                  batchMode={batchMode}
-                  selectable={selectedStatus === null || task.status === selectedStatus}
-                  selected={selected.has(task.id ?? task.title)}
-                  allowDelete={allowDelete}
-                  onToggleSelect={() => toggleSelect(task)}
-                />
-              ))
-          : <div className={css['panel-filter-empty']}>{taskPanelI18n.noResults()}</div>
-        }
+                    const statusDiff = (statusOrder[a.task.status] ?? 99) - (statusOrder[b.task.status] ?? 99)
+                    return statusDiff || a.index - b.index
+                  })
+                  .map(({ task, index }) => (
+                    <TaskRow
+                      key={task.id ?? index}
+                      task={task}
+                      highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
+                      batchMode={batchMode}
+                      selectable={selectedStatus === null || task.status === selectedStatus}
+                      selected={selected.has(task.id ?? task.title)}
+                      allowDelete={allowDelete}
+                      onToggleSelect={() => toggleSelect(task)}
+                      linked={Boolean(task.id && linkedTaskIds.includes(task.id))}
+                      onOverviewSelect={hasGraph && !batchMode && task.id ? () => {
+                        const id = task.id!
+                        setOverviewSelection({ kind: 'task', id })
+                      } : undefined}
+                    />
+                  ))
+              : <div className={css['panel-filter-empty']}>{tasks.length ? taskPanelI18n.noResults() : taskPanelI18n.noItems()}</div>
+            }
+          </div>
+        </section>
+        {hasOverview && (
+          <TaskOverview overview={overview} tasks={overviewTasks} selection={overviewSelection} onSelect={next => {
+            if (next) setFilter(null)
+            setOverviewSelection(next ? { ...next, revealTask: true } : null)
+          }} />
+        )}
       </div>
     </div>
   )

@@ -16,6 +16,7 @@ import understandCss from '../../../../mix/understand-any/index.lazy.less'
 import * as understandCssNS from '../../../../mix/understand-any/index.lazy.less'
 import taskVerifyCss from '../../../../mix/tasks/verify-block/index.lazy.less'
 import * as taskVerifyCssNS from '../../../../mix/tasks/verify-block/index.lazy.less';
+import { getCurrentTasksPath, localFileEvents, readLocalFiles } from '../../sandbox'
 
 type TabKey = 'task' | 'review' | 'version' | 'terminal'
 const css = (lowcodeViewCss as any).locals || lowcodeViewCss
@@ -260,8 +261,27 @@ function RuntimePanel() {
 function LowcodeViewShell() {
   const [activeTab, setActiveTab] = useState<TabKey>('task')
   const [tasksContent, setTasksContent] = useState<string | null>(null)
+  const [overviewContent, setOverviewContent] = useState<string | null>(null)
   const [tasksLoaded, setTasksLoaded] = useState(false)
   const [reviewContent, setReviewContent] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    let revision = 0
+    const refresh = async () => {
+      const current = ++revision
+      try {
+        const taskPath = await getCurrentTasksPath()
+        const files = await readLocalFiles([taskPath.replace(/TASKS\.md$/, 'overview.yaml')])
+        if (active && current === revision) setOverviewContent(files[0]?.content ?? null)
+      } catch {
+        if (active && current === revision) setOverviewContent(null)
+      }
+    }
+    const off = localFileEvents.on('filesChanged', refresh)
+    void refresh()
+    return () => { active = false; off() }
+  }, [])
 
   useEffect(() => {
     const unsubTasks = context.tasksEvents.on('change', (content) => {
@@ -275,7 +295,7 @@ function LowcodeViewShell() {
     }
   }, [])
 
-  const hasTaskPanel = hasTasks(tasksContent)
+  const hasTaskPanel = overviewContent !== null || hasTasks(tasksContent)
 
   useEffect(() => {
     if (tasksLoaded && !hasTaskPanel && activeTab === 'task') setActiveTab('version')
@@ -301,7 +321,7 @@ function LowcodeViewShell() {
         </div>
       </div>
       <div className={css['lowcode-view']}>
-        {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} allowDelete />}
+        {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} overviewContent={overviewContent} allowDelete />}
         {activeTab === 'version' && <VersionPanel />}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
         {activeTab === 'terminal' && <RuntimePanel />}

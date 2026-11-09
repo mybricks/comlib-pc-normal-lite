@@ -105,11 +105,11 @@
 
 .mb-tv-related .mb-tv-card.is-front { max-height: none; }
 
-.mb-tv-card-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; margin-bottom: 2px; }
+.mb-tv-card-head { min-width: 0; margin-bottom: 2px; }
 // 标签配色与任务面板的状态徽标一致（TASK_STATUS_STYLE）。
 .mb-tv-tag {
-  flex-shrink: 0;
-  margin-top: 1px;
+  display: inline-block;
+  margin-right: 8px;
   padding: 0 5px;
   border-radius: 2px;
   font-size: var(--chat-caption-font-size, 11px);
@@ -124,7 +124,6 @@
 }
 .mb-tv-card-title {
   display: -webkit-box;
-  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   font-size: var(--chat-font-size, 13px);
@@ -134,7 +133,7 @@
   white-space: normal;
   word-break: break-word;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 3;
 }
 .mb-tv-desc {
   display: -webkit-box;

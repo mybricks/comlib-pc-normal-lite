@@ -20,7 +20,7 @@ import { isVSCodeEnv } from "../vscode/isVSCodeEnv";
 import { VSCODE_CODEEDITOR_ESLINT, VSCODE_CODEEDITOR_LOADER_CONFIG } from "../vscode/constants";
 import JSZip from "jszip";
 import commonLang from "../../helpers/i18n/common";
-import { findTaskDocumentContent } from '../tasks/notify';
+import { findTaskDocumentContent, findTaskDocumentFile } from '../tasks/notify';
 
 const css = getLazyCss(lazyCss)
 
@@ -276,7 +276,15 @@ function LowcodeView(params: Params) {
   // 用稳定的 key 字符串表示 files 快照，用于监听变化
   const filesKey = files.map((f) => `${f.fileName}:${f.source}`).join('|');
   const taskContent = useMemo(() => getTaskDocumentContent(files), [filesKey]);
-  const hasTaskPanel = useMemo(() => hasTasks(taskContent), [taskContent]);
+  const overviewContent = useMemo(() => {
+    const configured = (window as any).__LINGCHUANG_CONFIG__?.configDirName ?? (window as any)._sandbox_?.config?.configDirName;
+    const taskFile = findTaskDocumentFile(files, { configDirName: configured, fallbackRoot: '.lingchuang' });
+    if (!taskFile?.fileName) return null;
+    const overviewPath = taskFile.fileName.replace(/TASKS\.md$/, 'overview.yaml').replace(/^\.\//, '');
+    const overview = files.find(file => file.fileName.replace(/^\.\//, '') === overviewPath);
+    return overview ? safeDecodeSource(overview.source) : null;
+  }, [filesKey]);
+  const hasTaskPanel = overviewContent !== null || hasTasks(taskContent);
   useEffect(() => context.setTasksContent(taskContent), [taskContent]);
   const hasAutoSelectedTaskRef = useRef(false);
   useEffect(() => {
@@ -1121,7 +1129,7 @@ function LowcodeView(params: Params) {
       )}
       {hasTaskPanel && (
         <div className={css['lowcode-view']} style={{ display: bottomTab === 'task' ? 'flex' : 'none' }}>
-          <TaskPanel content={taskContent} />
+          <TaskPanel content={taskContent} overviewContent={overviewContent} />
         </div>
       )}
       {domainPanel && bottomTab === 'domain' && (
