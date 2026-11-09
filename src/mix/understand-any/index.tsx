@@ -49,15 +49,15 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     }, [bindingTo])
     const file = files.find(item => item.path === selected) ?? files[0]
     const meta = file ? parseMeta(file.content) : {}
-    const title = meta.title
-    useEffect(() => { setTitle?.(title || copy.title()) }, [setTitle, title])
+    const title = file ? fileLabel(file) : copy.document()
+    useEffect(() => { setTitle?.(title) }, [setTitle, title])
     const summary = SHOW_SUMMARY ? meta.summary : undefined
     const description = file?.content.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').replace(/```mermaid[^\n]*\n[\s\S]*?```/gi, '').trim()
     const send = ({ message, attachments, chips }: { message: string; attachments?: any; chips?: any[] }) => {
       if (!message.trim() || waiting || disabled) return
       const sendToAgent = (window as any)._sandbox_?.helpers?.sendToAgent
       if (!sendToAgent) { setError(copy.unavailable()); return }
-      const understandChip = bindingTo ? createUnderstandChip(bindingTo) : undefined
+      const understandChip = bindingTo ? createUnderstandChip(bindingTo, title, !file) : undefined
       const requestChips = [...(understandChip ? [understandChip] : []), ...(chips ?? [])]
       sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } })
       setWaiting(true)
@@ -85,7 +85,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       const file = (await loadDocuments(id))[0]
       if (!file) return undefined
       const meta = parseMeta(file.content)
-      return { title: meta.title || copy.title(), description: meta.summary }
+      return { title: fileLabel(file), description: meta.summary }
     } catch (err: any) {
       if (err?.code === 'ENOENT' || err?.code === 'NOT_FOUND') return undefined
       throw err
