@@ -259,34 +259,20 @@ function RuntimePanel() {
 }
 
 function LowcodeViewShell() {
+  const pluginNames: string[] = (window as any)._sandbox_?.config?.pluginNames ?? []
+  const taskPanelEnabled = pluginNames.includes('task-first') || pluginNames.includes('task-overview')
   const [activeTab, setActiveTab] = useState<TabKey>('task')
   const [tasksContent, setTasksContent] = useState<string | null>(null)
   const [overviewContent, setOverviewContent] = useState<string | null>(null)
   const [tasksLoaded, setTasksLoaded] = useState(false)
   const [reviewContent, setReviewContent] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    let revision = 0
-    const refresh = async () => {
-      const current = ++revision
-      try {
-        const taskPath = await getCurrentTasksPath()
-        const files = await readLocalFiles([taskPath.replace(/TASKS\.md$/, 'overview.yaml')])
-        if (active && current === revision) setOverviewContent(files[0]?.content ?? null)
-      } catch {
-        if (active && current === revision) setOverviewContent(null)
-      }
-    }
-    const off = localFileEvents.on('filesChanged', refresh)
-    void refresh()
-    return () => { active = false; off() }
-  }, [])
+  const taskRevisionRef = useRef(0)
+  const hasAutoSelectedTaskRef = useRef(false)
 
   useEffect(() => {
     const unsubTasks = context.tasksEvents.on('change', (content) => {
+      taskRevisionRef.current += 1
       setTasksContent(content)
-      setTasksLoaded(true)
     }, true)
     const unsubReview = context.reviewEvents.on('change', setReviewContent, true)
     return () => {
@@ -295,11 +281,48 @@ function LowcodeViewShell() {
     }
   }, [])
 
-  const hasTaskPanel = overviewContent !== null || hasTasks(tasksContent)
+  useEffect(() => {
+    if (!taskPanelEnabled) return
+    let active = true
+    let revision = 0
+    const refresh = async () => {
+      const current = ++revision
+      const taskRevision = taskRevisionRef.current
+      try {
+        const taskPath = await getCurrentTasksPath()
+        const overviewPath = taskPath.replace(/TASKS\.md$/, 'overview.yaml')
+        const files = await readLocalFiles([taskPath, overviewPath])
+        if (active && current === revision) {
+          setOverviewContent(files.find(file => file.path === overviewPath)?.content ?? null)
+          if (taskRevision === taskRevisionRef.current) {
+            setTasksContent(files.find(file => file.path === taskPath)?.content ?? null)
+          }
+          setTasksLoaded(true)
+        }
+      } catch {
+        if (active && current === revision) {
+          setOverviewContent(null)
+          if (taskRevision === taskRevisionRef.current) setTasksContent(null)
+          setTasksLoaded(true)
+        }
+      }
+    }
+    const off = localFileEvents.on('filesChanged', refresh)
+    void refresh()
+    return () => { active = false; off() }
+  }, [taskPanelEnabled])
+
+  const hasTaskPanel = taskPanelEnabled && (overviewContent !== null || hasTasks(tasksContent))
 
   useEffect(() => {
     if (tasksLoaded && !hasTaskPanel && activeTab === 'task') setActiveTab('version')
   }, [activeTab, hasTaskPanel, tasksLoaded])
+
+  useEffect(() => {
+    if (!hasTaskPanel || hasAutoSelectedTaskRef.current) return
+    hasAutoSelectedTaskRef.current = true
+    if (activeTab === 'version') setActiveTab('task')
+  }, [activeTab, hasTaskPanel])
 
   return (
     <div className={css['lowcode-view-container']}>

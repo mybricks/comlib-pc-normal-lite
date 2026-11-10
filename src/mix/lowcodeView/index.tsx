@@ -284,7 +284,9 @@ function LowcodeView(params: Params) {
     const overview = files.find(file => file.fileName.replace(/^\.\//, '') === overviewPath);
     return overview ? safeDecodeSource(overview.source) : null;
   }, [filesKey]);
-  const hasTaskPanel = overviewContent !== null || hasTasks(taskContent);
+  const pluginNames: string[] = (window as any)._sandbox_?.config?.pluginNames ?? [];
+  const hasTaskPanel = (pluginNames.includes('task-first') || pluginNames.includes('task-overview'))
+    && (overviewContent !== null || hasTasks(taskContent));
   useEffect(() => context.setTasksContent(taskContent), [taskContent]);
   const hasAutoSelectedTaskRef = useRef(false);
   useEffect(() => {
