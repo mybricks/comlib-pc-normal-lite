@@ -361,8 +361,6 @@ const transformNewFormatForNotifyChanged = (
     }
   })
 
-  console.log('events', events)
-
   return {
     events,
     services,
