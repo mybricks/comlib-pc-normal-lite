@@ -40,6 +40,7 @@ const copy = {
   verification: () => i18n({ zh: '验证条件', en: 'Verification criteria' }),
   noVerification: () => i18n({ zh: '暂无验证条件，请自行确认效果', en: 'No verification criteria provided. Please check the result yourself.' }),
   pass: () => i18n({ zh: '符合预期', en: 'OK' }),
+  saving: () => i18n({ zh: '保存中', en: 'Saving' }),
   reject: () => i18n({ zh: '不符合预期', en: 'Incorrect' }),
   undo: () => i18n({ zh: '撤销', en: 'Undo' }),
   cancel: () => i18n({ zh: '取消', en: 'Cancel' }),
@@ -85,10 +86,25 @@ async function commitTransitions(
   taskPath: string,
   transitions: Array<{ id: string; title: string; target: TaskStatus; from?: TaskStatus }>,
 ): Promise<string[]> {
-  const file = await sandbox.files.read(taskPath)
-  if (!file) return []
+  let content: string | null
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const file = await Promise.race([
+      sandbox.files.read(taskPath),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Task document read timed out')), 1000)
+      }),
+    ])
+    content = file?.content ?? null
+  } catch (error) {
+    console.warn('[mybricks][task-verify] task document read failed, using current content', error)
+    content = context.tasksContent
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+  if (content === null) return []
 
-  let content = file.content
+  const originalContent = content
   const applied: string[] = []
   for (const { id, title, target, from = '待验证' } of transitions) {
     const next = applyTaskTransition(content, id, target, { from, expectedTitle: title })
@@ -97,7 +113,7 @@ async function commitTransitions(
       applied.push(id)
     }
   }
-  if (content !== file.content) await sandbox.files.write({ path: taskPath, content })
+  if (content !== originalContent) await sandbox.files.write({ path: taskPath, content })
   return applied
 }
 
@@ -172,12 +188,12 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pendingPass, setPendingPass] = useState<UserTaskInfo | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const pointerStartX = useRef<number | null>(null)
   const orderRef = useRef<string[]>([])
 
-  // 展示列表 = 仍待验证的任务 + 本次已处理或暂存反馈的任务。
-  // 已处理的卡片留在原位置，指示器据此区分「还没做」和「已经做了」；新出现的待验证任务排到最前。
+  // 展示待验证任务和暂存反馈；通过验证的任务从待办区移除。
   const items = useMemo(() => {
     const live = new Map(livePending.map((task) => [task.id, task]))
     // 任务重新回到待验证（AI 修复后再次提交验证）时，旧的处理结果作废。
@@ -185,17 +201,37 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
       const outcome = outcomes[id]
       return live.has(id) && outcome?.submitted ? undefined : outcome
     }
+    const isPassed = (id: string) => {
+      const status = outcomes[id]?.status
+      return !related && (status === '已完成' || status === '待交接')
+    }
     const other = new Map(relatedTasks.filter((task) => task.state !== 1).map((task) => [task.id, task]))
-    const kept = orderRef.current.filter((id) => live.has(id) || other.has(id) || effective(id))
-    const fresh = (related ? relatedTasks : livePending).map((task) => task.id).filter((id) => !kept.includes(id))
+    const kept = orderRef.current.filter((id) => !isPassed(id) && (live.has(id) || other.has(id) || effective(id) || pendingPass?.id === id))
+    const fresh = (related ? relatedTasks : livePending).map((task) => task.id).filter((id) => !isPassed(id) && !kept.includes(id))
     const order = [...fresh, ...kept]
     orderRef.current = order
     return order.map((id) => {
       const otherTask = other.get(id)
       const status: TaskStatus = otherTask?.state === 2 ? '待交接' : otherTask?.state === 3 ? '已完成' : '处理中'
-      return { task: live.get(id) ?? otherTask ?? outcomes[id].task, outcome: effective(id) ?? (otherTask ? { task: otherTask, status, submitted: true } : undefined) }
+      return { task: live.get(id) ?? otherTask ?? outcomes[id]?.task ?? pendingPass!, outcome: effective(id) ?? (otherTask ? { task: otherTask, status, submitted: true } : undefined) }
     })
-  }, [livePending, outcomes, related, relatedTasks])
+  }, [livePending, outcomes, pendingPass, related, relatedTasks])
+
+  // 文档已反映通过结果后清除临时记录，任务重新进入待验证时可再次显示。
+  useEffect(() => {
+    const acknowledged = Object.entries(outcomes)
+      .filter(([id, outcome]) =>
+        (outcome.status === '已完成' || outcome.status === '待交接')
+        && !tasks.some((task) => task.id === id && task.state === 1),
+      )
+      .map(([id]) => id)
+    if (!acknowledged.length) return
+    setOutcomes((current) => {
+      const next = { ...current }
+      acknowledged.forEach((id) => delete next[id])
+      return next
+    })
+  }, [outcomes, tasks])
 
   const remaining = items.filter((item) => !item.outcome).length
   const unsubmitted = items.filter((item) => item.outcome?.status === '待处理' && !item.outcome.submitted)
@@ -234,6 +270,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
   ) => {
     if (busy) return
     setBusy(true)
+    setPendingPass(task)
     try {
       const applied = await commitTransitions(sandbox, taskPath, [{ id: task.id, title: task.title, ...transition }])
       if (applied.length) onApplied()
@@ -242,6 +279,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
       console.error('[mybricks][task-verify] transition failed', error)
       setNotice(copy.failed())
     } finally {
+      setPendingPass(null)
       setBusy(false)
     }
   }
@@ -249,9 +287,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
   const handlePass = (task: UserTaskInfo) => {
     const status: TaskStatus = task.handoverTo ? '待交接' : '已完成'
     void runTransition(task, { target: status }, () => {
-      setOutcomes((current) => ({ ...current, [task.id]: { task, status } }))
-      const next = nextUnhandled(index, task.id)
-      if (next >= 0) setActive(next)
+      setOutcomes((current) => ({ ...current, [task.id]: { task, status, submitted: true } }))
     })
   }
 
@@ -357,6 +393,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
           const offset = i - index
           const isFront = offset === 0
           const isEditing = editingId === task.id
+          const isSaving = pendingPass?.id === task.id
           const status: TaskStatus = outcome?.status === '待处理' && !outcome.submitted ? '待验证' : outcome?.status ?? '待验证'
           return (
             <div
@@ -366,7 +403,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
               aria-hidden={!isFront}
               onClick={isFront ? undefined : () => go(i)}
             >
-              <TaskCardHeading task={task} statusLabel={copy.status(status)} statusClass={STATUS_CLASS[status]} />
+              <TaskCardHeading task={task} statusLabel={isSaving ? copy.saving() : copy.status(status)} statusClass={STATUS_CLASS[status]} />
 
               {isEditing ? (
                 <textarea
@@ -387,7 +424,12 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
               )}
 
               <div className={css['mb-tv-actions']}>
-                {isEditing ? (
+                {isSaving ? (
+                  <button type="button" className={[css['mb-tv-btn'], css['is-primary'], css['is-loading']].join(' ')} disabled aria-busy="true">
+                    <span className={css['mb-tv-spinner']} aria-hidden="true" />
+                    {copy.saving()}
+                  </button>
+                ) : isEditing ? (
                   <>
                     <button type="button" className={css['mb-tv-btn']} disabled={busy} onClick={() => setEditingId(null)}>{copy.cancel()}</button>
                     <button type="button" className={[css['mb-tv-btn'], css['is-primary']].join(' ')} disabled={busy || !draft.trim()} onClick={() => confirmReject(task)}>{copy.confirm()}</button>

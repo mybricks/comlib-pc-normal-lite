@@ -216,6 +216,21 @@
     background: var(--mybricks-color-primary, #FA6400);
     color: var(--mybricks-text-color-on-primary, #fff);
   }
+
+  &.is-loading:disabled {
+    cursor: progress;
+    opacity: 1;
+    gap: 5px;
+  }
+}
+
+.mb-tv-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mb-tv-spin .7s linear infinite;
 }
 
 .mb-tv-input {
@@ -253,7 +268,11 @@
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes mb-tv-spin {
+  to { transform: rotate(360deg); }
+}
 @media (prefers-reduced-motion: reduce) {
   .mb-tv, .mb-tv-bar { animation: none; }
+  .mb-tv-spinner { animation: none; }
   .mb-tv-card { transition: opacity .15s; }
 }

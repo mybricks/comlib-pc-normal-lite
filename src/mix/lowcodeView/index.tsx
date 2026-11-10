@@ -747,14 +747,12 @@ function LowcodeView(params: Params) {
     // 快照当前所有未保存内容，避免异步过程中被覆盖
     const snapshot = { ...modifiedContent };
 
-    setModifiedContent((prev) => {
-      const next = { ...prev };
-      dirtyFileNames.forEach(name => delete next[name]);
-      return next;
-    });
+    const currentFiles: Array<{ fileName: string; content: string }> = []
+    const previousFiles: Array<{ fileName: string; content: string }> = []
 
-    const currentFiles: any = []
-    const previousFiles: any = []
+    if (dirtyFileNames.some((fileName) => !filesMap[fileName])) {
+      return
+    }
 
     dirtyFileNames.forEach((fileName) => {
       currentFiles.push({
@@ -764,24 +762,43 @@ function LowcodeView(params: Params) {
 
       previousFiles.push({
         fileName,
-        content: decodeURIComponent(filesMap[fileName].source)
+        content: safeDecodeSource(filesMap[fileName].source)
       })
     });
 
-    undoRedoManager.execute({
-      execute() {
-        currentFiles.forEach(({ fileName, content }) => {
-          context.updateFile({ fileName, content, type: "update" });
+    const save = async (next: typeof currentFiles) => {
+      const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
+      if (typeof getSandbox !== 'function') throw new Error('Agent sandbox is unavailable')
+      const sandbox = await getSandbox(comId)
+      await sandbox.files.writeFiles(next.map((file) => ({
+        path: file.fileName,
+        content: file.content,
+      })))
+      context.saveVisualEditVersion(next.map((file) => file.fileName), 'manual')
+    }
+    const onError = (error: unknown) => {
+      console.error('[source-view] file operation failed', error)
+    }
+    try {
+      await save(currentFiles)
+      undoRedoManager.record({
+        execute() {
+          void save(currentFiles).catch(onError)
+        },
+        undo() {
+          void save(previousFiles).catch(onError)
+        },
+      })
+      setModifiedContent((prev) => {
+        const next = { ...prev }
+        dirtyFileNames.forEach((name) => {
+          if (next[name] === snapshot[name]) delete next[name]
         })
-        context.saveManualVersion(currentFiles.map((f) => f.fileName));
-      },
-      undo() {
-        previousFiles.forEach(({ fileName, content }) => {
-          context.updateFile({ fileName, content, type: "update", updateSource: 'undo' });
-        })
-        context.saveManualVersion(previousFiles.map((f) => f.fileName));
-      },
-    });
+        return next
+      })
+    } catch (error) {
+      onError(error)
+    }
   }, [modifiedContent, params.model, files]);
 
   // 当存在任意未保存文件时，保存按钮可用

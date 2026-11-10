@@ -33,6 +33,7 @@ import { findTaskDocumentContent, parseTasksForNotify } from '../tasks/notify';
 import { registerTaskReferResolver } from '../tasks/refer';
 import { createTasksManager } from '../tasks/verify-block';
 import buildDomChipInfo, { DOM_CHIP_TYPE, registerDomChipInfoExtension } from '../../helpers/dom/buildDomChipInfo';
+import { createDesignerSandbox } from './create-designer-sandbox';
 import { formatDomCanvasInfo } from './dom-chip-info';
 
 const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
@@ -1050,19 +1051,41 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   const projectRef = getProjectRef(comId);
   refreshProjectBaseline(comId, projectRef);
 
-  const designerFs = {
-      // ── 文件系统 ──────────────────────────────────────────────────────────
-
-      async getFiles() {
-        const aiComParams = context.component?.params;
-        const files: any[] = aiComParams?.data?.files ?? [];
-        return files
-          .filter((f) => f.source)
-          .map((f) => ({
-            path: f.fileName,
-            content: decodeURIComponent(f.source),
-          }));
-      },
+  const getFiles = async () => {
+    const aiComParams = context.component?.params;
+    const files: any[] = aiComParams?.data?.files ?? [];
+    return files
+      .filter((file) => typeof file.source === 'string')
+      .map((file) => ({
+        path: file.fileName,
+        content: decodeURIComponent(file.source),
+      }));
+  };
+  const updateFiles = async (files: Array<{ path: string; content: string }>) => {
+    await updateComponentFiles(
+      files.map(({ path: fileName, content }) => ({
+        fileName,
+        content,
+        language: 'write',
+      })),
+      comId,
+      context,
+    );
+    refreshTaskNotification();
+  };
+  const deleteFiles = async (paths: string[]) => {
+    await updateComponentFiles(
+      paths.map((fileName) => ({
+        fileName,
+        content: '',
+        language: 'delete',
+      })),
+      comId,
+      context,
+    );
+    refreshTaskNotification();
+  };
+  const designer = {
 
       async verify() {
         const aiComParams = context.component?.params;
@@ -1100,32 +1123,6 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         messages.push(...await eslintVerify(files, VERIFY_CONFIG))
 
         return messages;
-      },
-
-      async updateFiles(files: Array<{ path: string; content: string }>) {
-        await updateComponentFiles(
-          files.map(({ path: fileName, content }) => ({
-            fileName,
-            content,
-            language: 'write',
-          })),
-          comId,
-          context
-        );
-        refreshTaskNotification();
-      },
-
-      async deleteFiles(paths: string[]) {
-        await updateComponentFiles(
-          paths.map((fileName) => ({
-            fileName,
-            content: '',
-            language: 'delete',
-          })),
-          comId,
-          context
-        );
-        refreshTaskNotification();
       },
 
       async exportResourceCode(): Promise<string> {
@@ -1174,19 +1171,25 @@ async function registerSandboxInternal(comId: string): Promise<void> {
 
   // connectToAI 注册 Designer；同时把写文件能力挂到 _sandbox_.helpers 供 SPA 调用
   const pageAnalysis = createBabelPageAnalysis(
-    () => designerFs.getFiles(),
+    getFiles,
     { configDirName: (window as any)._sandbox_?.config?.configDirName },
   );
+  const tasksManager = createTasksManager(comId);
+  const agentSandbox = createDesignerSandbox(
+    { getFiles, updateFiles, deleteFiles },
+    sandboxAPI.helpers.createFileCommands,
+  );
   const connectToAIRef = connectToAI(comId, {
-    understandAnyUI: createUnderstandAnyUI(comId, designerFs),
-    designer: { ...designerFs, pageAnalysis, tasksManager: createTasksManager(comId), domainAudit: createDomainAuditImplementation(comId, () => designerFs.getFiles(), () =>
+    understandAnyUI: createUnderstandAnyUI(comId, agentSandbox),
+    agentSandbox, tasksManager, pageAnalysis, designer,
+    domainAudit: createDomainAuditImplementation(comId, getFiles, () =>
       Array.from(context.getCanvasList()).map((element: Element) => ({
         file: element.getAttribute('data-zone-filename') || undefined,
         name: element.getAttribute('data-widget-name') || undefined,
         kind: element.getAttribute('data-zone-kind') || undefined,
         canvasPath: element.getAttribute('data-desn-page') || undefined,
       }))
-    ) },
+    ),
     hooks: {
       async beforeRequest({ meta, extra }) {
         (window as any).__vibeCodingCallbacks__?.onStart?.();
@@ -1444,11 +1447,10 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   // 注意：必须在 context.version 初始化之后再挂 updateFiles，避免还原与版本初始化竞态
   const sandboxHelpers = (window as any)._sandbox_?.helpers;
   if (sandboxHelpers && typeof sandboxHelpers.updateFiles !== 'function') {
-    sandboxHelpers.getDesigner = () => designerFs;
-    sandboxHelpers.updateFiles = (files: Array<{ path: string; content: string }>) =>
-      designerFs.updateFiles(files);
-    sandboxHelpers.getFiles = () => designerFs.getFiles();
-    sandboxHelpers.deleteFiles = (paths: string[]) => designerFs.deleteFiles(paths);
+    sandboxHelpers.getDesigner = () => designer;
+    sandboxHelpers.updateFiles = agentSandbox.files.writeFiles;
+    sandboxHelpers.getFiles = getFiles;
+    sandboxHelpers.deleteFiles = agentSandbox.files.removeFiles;
   }
   // 与 context.diff 同源，供页面工具栏等宿主侧调用
   if (sandboxHelpers && history) {

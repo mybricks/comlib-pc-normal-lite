@@ -490,20 +490,29 @@ interface TaskTransition {
 }
 
 async function commitTaskTransition(taskId: string, targetStatus: TaskStatus): Promise<boolean> {
-  const sandboxHelpers = (window as any)._sandbox_?.helpers
-  if (typeof sandboxHelpers?.updateFiles !== 'function') return false
-
+  const componentId = context.comId ?? context.component?.params?.id
+  const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
+  if (!componentId || typeof getSandbox !== 'function') return false
+  const sandbox = await getSandbox(componentId)
   const files = (context.component?.params?.data?.files) ?? []
   const configured = (window as any).__LINGCHUANG_CONFIG__?.configDirName
     ?? (window as any)._sandbox_?.config?.configDirName
-  const file = findTaskDocumentFile(files, { configDirName: configured, fallbackRoot: '.agent' })
-  if (!file?.fileName || !file.source) return false
+  let file = findTaskDocumentFile(files, { configDirName: configured, fallbackRoot: '.agent' })
+  if (!file?.fileName) {
+    const entries = await sandbox.files.list('', { recursive: true })
+    file = findTaskDocumentFile(
+      entries.filter((entry: { type?: string }) => entry.type !== 'directory')
+        .map((entry: { path: string }) => ({ fileName: entry.path })),
+      { configDirName: configured, fallbackRoot: '.agent' },
+    )
+  }
+  if (!file?.fileName) return false
 
   let content: string
   try {
-    content = decodeURIComponent(file.source)
+    content = file.source ? decodeURIComponent(file.source) : context.tasksContent ?? ''
   } catch {
-    content = file.source
+    content = file.source ?? ''
   }
   // Do not update a different or stale document than the one shown in the panel.
   if (content !== context.tasksContent) return false
@@ -511,7 +520,7 @@ async function commitTaskTransition(taskId: string, targetStatus: TaskStatus): P
   const updated = applyTaskTransition(content, taskId, targetStatus)
   if (updated === content) return false
 
-  await sandboxHelpers.updateFiles([{ path: file.fileName, content: updated }])
+  await sandbox.files.write({ path: file.fileName, content: updated })
   return true
 }
 
