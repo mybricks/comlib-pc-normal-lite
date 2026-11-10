@@ -63,7 +63,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       setWaiting(true)
     }
     return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-loading={!file && waiting ? 'true' : undefined} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
-      {((!setTitle && title) || summary || description) && <div className={css['bizai-description']}>{!setTitle && title && <p className={css['bizai-meta-title']}>{title}</p>}{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
+      {(summary || description) && <div className={css['bizai-description']}>{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
       <div className={css['bizai-card']} onDoubleClickCapture={event => {
         const target = event.target as Element
         if (!file || !Modal || target.closest?.(`.${css['bizai-tools']}, .${css['bizai-error']}`)) return
