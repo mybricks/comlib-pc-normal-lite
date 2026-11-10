@@ -35,6 +35,7 @@ import { createTasksManager } from '../tasks/verify-block';
 import buildDomChipInfo, { DOM_CHIP_TYPE, registerDomChipInfoExtension } from '../../helpers/dom/buildDomChipInfo';
 import { createDesignerSandbox } from './create-designer-sandbox';
 import { formatDomCanvasInfo } from './dom-chip-info';
+import { getTaskFileContent } from './task'
 
 const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
 
@@ -46,14 +47,14 @@ const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
 const projectRefMap = new Map<string, { current: ReturnType<typeof createProject> | undefined }>();
 const requestSourceSnapshotMap = new WeakMap<object, Map<string, string>>();
 
+function persistTaskVersionIds(data: { taskVersionIds?: Record<string, string> }, taskIds: string[], versionId: string) {
+  if (!taskIds.length) return;
+  data.taskVersionIds = { ...data.taskVersionIds, ...Object.fromEntries(taskIds.map(id => [id, versionId])) };
+  (window as any)._mybricksOnEdit_?.({ autoSave: true });
+}
+
 function refreshTaskNotification(): void {
-  const files = context.component?.params?.data?.files ?? [];
-  const configured = (window as any).__LINGCHUANG_CONFIG__?.configDirName
-    ?? (window as any)._sandbox_?.config?.configDirName;
-  const content = findTaskDocumentContent(files, {
-    configDirName: configured,
-    fallbackRoot: '.agent',
-  });
+  const content = getTaskFileContent()
   context.setTasksContent(content);
   context.notifyUserTaskInfo(content ? parseTasksForNotify(content) : []);
 }
@@ -1047,6 +1048,8 @@ async function registerSandboxInternal(comId: string): Promise<void> {
   const loadingRef: { current: ReturnType<typeof createDesignerLoading> | null } = {
     current: null,
   };
+  let taskIdsBeforeTurn = new Set<string>();
+  let latestVersionIdBeforeTurn: string | undefined;
 
   const projectRef = getProjectRef(comId);
   refreshProjectBaseline(comId, projectRef);
@@ -1200,11 +1203,17 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         context.component?.events.emit('vibing', true);
       },
       async beforeTurn() {
+        taskIdsBeforeTurn = new Set(parseTasksForNotify(getTaskFileContent() ?? '').map(task => task.id));
         agentTurnLifecycle.onStart(comId);
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
         loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
         refreshProjectBaseline(comId, projectRef);
+        latestVersionIdBeforeTurn = undefined;
+        if (history) {
+          const { list } = await history.listVersions({ pageSize: 1, pageNum: 1 });
+          latestVersionIdBeforeTurn = list[0]?.id;
+        }
       },
       async afterTurn(turn: { id?: string }) {
         (window as any)._sendToAgent_source_ = null
@@ -1213,6 +1222,12 @@ async function registerSandboxInternal(comId: string): Promise<void> {
           message: '[轮次/afterTurn] 本轮结束 — 开始执行轮后处理',
         })
         const data = context.component?.params?.data;
+        const newTaskIds = parseTasksForNotify(getTaskFileContent() ?? '')
+          .map(task => task.id).filter(id => !taskIdsBeforeTurn.has(id));
+        if (data && newTaskIds.length && latestVersionIdBeforeTurn) {
+          // 关联本轮开始前缓存的最新版本，供任务删除时回退。
+          persistTaskVersionIds(data, newTaskIds, latestVersionIdBeforeTurn);
+        }
 
         Array.from(context.chipPromiseIds).forEach((id) => {
           context.chipPromiseIds.delete(id)

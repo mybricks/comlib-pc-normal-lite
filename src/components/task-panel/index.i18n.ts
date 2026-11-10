@@ -27,6 +27,7 @@ export const i18n = {
   addToChat: () => getI18n({ zh: '添加到对话', en: 'Add to chat' }),
   deleteTask: () => getI18n({ zh: '删除此任务', en: 'Delete task' }),
   deleteConfirm: () => getI18n({ zh: '删除后任务和相关修改都会被删除，确认让 AI 删除此任务？', en: 'Delete this task and its related changes?' }),
+  revertConfirm: () => getI18n({ zh: '删除此任务会把代码回滚到此任务开始前的状态，之后生成的任务也会被一并删除。确认删除？', en: 'Delete this task? The code will roll back to before it, and tasks created after it will also be deleted.' }),
   sameStatusOnly: () => getI18n({ zh: '只能同时选择相同状态的任务', en: 'Only tasks with the same status can be selected together' }),
   collapseDetails: () => getI18n({ zh: '收起详情', en: 'Hide details' }),
   expandDetails: () => getI18n({ zh: '展开详情', en: 'Show details' }),

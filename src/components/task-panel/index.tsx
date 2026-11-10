@@ -324,12 +324,13 @@ function BatchTaskControls({
     <div className={css['batch-toolbar']}>
       <span className={css['batch-toolbar-count']}>{taskPanelI18n.selected(selectedCount)}</span>
       {batchTransitions.length > 0 ? (
-        <div className={css['task-status-selector']}>
+        <div className={`${css['task-status-selector']} ${batchDisabled ? css['task-action-disabled'] : ''}`}>
           <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
           <DownChevronIcon />
           <select
             className={css['task-status-select-overlay']}
             value=""
+            disabled={batchDisabled}
             onChange={(e) => {
               const transition = batchTransitions.find(item => item.target === e.target.value)
               if (transition) onBatchAction(transition)
@@ -489,7 +490,9 @@ interface TaskTransition {
   requiresReason?: boolean
 }
 
-async function commitTaskTransition(taskId: string, targetStatus: TaskStatus): Promise<boolean> {
+type UpdateFiles = (file: { path: string; content: string }, previousFile: { path: string; content: string }) => Promise<void>
+
+async function commitTaskTransition(taskId: string, targetStatus: TaskStatus, updateFiles?: UpdateFiles): Promise<boolean> {
   const componentId = context.comId ?? context.component?.params?.id
   const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
   if (!componentId || typeof getSandbox !== 'function') return false
@@ -520,7 +523,11 @@ async function commitTaskTransition(taskId: string, targetStatus: TaskStatus): P
   const updated = applyTaskTransition(content, taskId, targetStatus)
   if (updated === content) return false
 
-  await sandbox.files.write({ path: file.fileName, content: updated })
+  if (updateFiles) {
+    await updateFiles({ path: file.fileName, content: updated }, { path: file.fileName, content })
+  } else {
+    await sandbox.files.write({ path: file.fileName, content: updated })
+  }
   return true
 }
 
@@ -613,6 +620,9 @@ function CheckboxIcon({ checked }: { checked: boolean }) {
   )
 }
 
+type OnRevert = (task: TaskItem) => boolean | void | Promise<boolean | void>
+type CanRevert = (task: TaskItem) => boolean
+
 function TaskRow({
   task,
   highlightProgress,
@@ -620,6 +630,10 @@ function TaskRow({
   selectable,
   selected,
   allowDelete,
+  updateFiles,
+  isVibing = false,
+  onRevert,
+  canRevert,
   onToggleSelect,
   linked,
   onOverviewSelect,
@@ -630,6 +644,10 @@ function TaskRow({
   selectable?: boolean
   selected?: boolean
   allowDelete?: boolean
+  updateFiles?: UpdateFiles
+  isVibing?: boolean
+  onRevert?: OnRevert
+  canRevert?: CanRevert
   onToggleSelect?: () => void
   linked?: boolean
   onOverviewSelect?: () => void
@@ -643,6 +661,7 @@ function TaskRow({
 
   const handleAddToChat = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (isVibing) return
     const appendToSender = (window as any)._sandbox_?.helpers?.appendToSender
     const componentId = context.comId ?? context.component?.params?.id
     if (typeof appendToSender === 'function' && componentId) {
@@ -664,12 +683,15 @@ function TaskRow({
     ;(context.plugins as any)?.showAIDialog?.()
   }
 
-  const handleRevert = () => {
+  const handleRevert = async () => {
+    if (isVibing) return
+    if (onRevert && await onRevert(task) === true) return
     sendTaskMessage(`[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`)
     setActionHint(taskPanelI18n.handedToAI())
   }
 
   const handleTransition = async (transition: TaskTransition) => {
+    if (isVibing) return
     const message = `${taskPanelI18n.taskMessagePrefix(task.title)}${transition.instruction}`
 
     if (transition.requiresReason) {
@@ -696,7 +718,7 @@ function TaskRow({
     }
 
     try {
-      if (task.id && await commitTaskTransition(task.id, transition.target)) {
+      if (task.id && await commitTaskTransition(task.id, transition.target, updateFiles)) {
         setActionHint(taskPanelI18n.statusUpdated())
         return
       }
@@ -761,7 +783,8 @@ function TaskRow({
         </div>
         <div className={css['task-card-actions']}>
           <span
-            className={css['task-action-icon']}
+            className={`${css['task-action-icon']} ${isVibing ? css['task-action-disabled'] : ''}`}
+            aria-disabled={isVibing}
             data-mybricks-tip={taskPanelI18n.addToChat()}
             onClick={handleAddToChat}
           >
@@ -769,13 +792,14 @@ function TaskRow({
           </span>
           {allowDelete && (
             <Popconfirm
-              title={taskPanelI18n.deleteConfirm()}
-              visible={revertConfirmVisible}
-              onVisible={setRevertConfirmVisible}
+              title={onRevert && canRevert?.(task) ? taskPanelI18n.revertConfirm() : taskPanelI18n.deleteConfirm()}
+              visible={!isVibing && revertConfirmVisible}
+              onVisible={(visible) => setRevertConfirmVisible(!isVibing && visible)}
               onConfirm={handleRevert}
             >
               <span
-                className={css['task-action-icon']}
+                className={`${css['task-action-icon']} ${isVibing ? css['task-action-disabled'] : ''}`}
+                aria-disabled={isVibing}
                 data-mybricks-tip={taskPanelI18n.deleteTask()}
                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
@@ -784,12 +808,13 @@ function TaskRow({
             </Popconfirm>
           )}
           {transitions.length > 0 && (
-            <div className={css['task-status-selector']}>
+            <div className={`${css['task-status-selector']} ${isVibing ? css['task-action-disabled'] : ''}`}>
               <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
               <DownChevronIcon />
               <select
                 className={css['task-status-select-overlay']}
                 value=""
+                disabled={isVibing}
                 onChange={(e) => {
                   const transition = transitions.find(item => item.target === e.target.value)
                   if (transition) handleTransition(transition)
@@ -868,7 +893,15 @@ function getSharedTransitions(tasks: TaskItem[]): TaskTransition[] {
   )
 }
 
-function TaskPanel({ content, overviewContent = null, allowDelete = false }: { content: string | null, overviewContent?: string | null, allowDelete?: boolean }) {
+function TaskPanel({ content, overviewContent = null, allowDelete = false, updateFiles, isVibing = false, onRevert, canRevert }: {
+  content: string | null
+  overviewContent?: string | null
+  allowDelete?: boolean
+  updateFiles?: UpdateFiles
+  isVibing?: boolean
+  onRevert?: OnRevert
+  canRevert?: CanRevert
+}) {
   const [filter, setFilter] = useState<string | null>(null)
   const [overviewSelection, setOverviewSelection] = useState<OverviewSelection>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -920,6 +953,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false }: { c
   }
 
   const toggleBatchMode = () => {
+    if (isVibing) return
     if (batchMode) {
       exitBatchMode()
       return
@@ -928,6 +962,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false }: { c
   }
 
   const toggleSelect = (task: TaskItem) => {
+    if (isVibing) return
     setSelected(prev => {
       const next = new Set(prev)
       const key = task.id ?? task.title
@@ -941,7 +976,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false }: { c
   }
 
   const handleBatchAction = (transition: TaskTransition) => {
-    if (!selectedTasks.length) return
+    if (isVibing || !selectedTasks.length) return
     const message = selectedTasks
       .map(task => `${taskPanelI18n.taskMessagePrefix(task.title)}${transition.instruction}`)
       .join('\n')
@@ -970,7 +1005,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false }: { c
   const batchControls = (
     <BatchTaskControls
       batchMode={batchMode}
-      batchDisabled={tasks.length < 2}
+      batchDisabled={isVibing || tasks.length < 2}
       onToggleBatchMode={toggleBatchMode}
       selectedCount={selectedTasks.length}
       batchTransitions={sharedTransitions}
@@ -1033,9 +1068,13 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false }: { c
                       task={task}
                       highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
                       batchMode={batchMode}
-                      selectable={selectedStatus === null || task.status === selectedStatus}
+                      selectable={!isVibing && (selectedStatus === null || task.status === selectedStatus)}
                       selected={selected.has(task.id ?? task.title)}
                       allowDelete={allowDelete}
+                      updateFiles={updateFiles}
+                      isVibing={isVibing}
+                      onRevert={onRevert}
+                      canRevert={canRevert}
                       onToggleSelect={() => toggleSelect(task)}
                       linked={Boolean(task.id && linkedTaskIds.includes(task.id))}
                       onOverviewSelect={hasGraph && !batchMode && task.id ? () => {

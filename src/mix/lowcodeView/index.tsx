@@ -1146,7 +1146,52 @@ function LowcodeView(params: Params) {
       )}
       {hasTaskPanel && (
         <div className={css['lowcode-view']} style={{ display: bottomTab === 'task' ? 'flex' : 'none' }}>
-          <TaskPanel content={taskContent} overviewContent={overviewContent} />
+          {/* 开启任务操作入口，由任务面板按是否存在版本映射选择回退或 AI 删除。 */}
+          <TaskPanel
+            content={taskContent}
+            overviewContent={overviewContent}
+            isVibing={hasBranchHistory || isVibing}
+            allowDelete
+            canRevert={(task) => Boolean(
+              task.id && data.taskVersionIds?.[task.id]
+            )}
+            onRevert={(task) => {
+              const latestVersion = context.version?.list[0];
+              if (undoRedoManager.hasBranchHistory() || isVibing || !latestVersion) return true;
+
+              const versionId = task.id ? data.taskVersionIds?.[task.id] : undefined;
+              if (!versionId) return false;
+
+              const rollback = context.rollback;
+              if (!rollback) return false;
+
+              undoRedoManager.execute({
+                execute() {
+                  rollback(versionId);
+                },
+                async undo() {
+                  rollback(latestVersion.id);
+                },
+              });
+              return true;
+            }}
+            updateFiles={async (file, previousFile) => {
+              const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
+              if (!componentId || typeof getSandbox !== 'function') return
+              const sandbox = await getSandbox(componentId)
+
+              undoRedoManager.execute({
+                execute() {
+                  sandbox.files.write(file)
+                  context.saveManualVersion([file.path]);
+                },
+                undo() {
+                  sandbox.files.write(previousFile)
+                  context.saveManualVersion([previousFile.path]);
+                },
+              });
+            }}
+          />
         </div>
       )}
       {domainPanel && bottomTab === 'domain' && (
