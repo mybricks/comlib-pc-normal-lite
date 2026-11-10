@@ -255,7 +255,7 @@ function addNotifyBinding<T extends Record<string, any>>(
     bindingResult.refSelector = ['data-loc', 'data-parent-loc']
       .map(attribute =>
         `[${attribute}*='${escapeCssAttributeValue(fileName)}']` +
-        `[${attribute}*='${escapeCssAttributeValue(codeLine)}']`,
+        `[${attribute}*='${escapeCssAttributeValue(codeLine)}']:not([data-wrap-container])`,
       )
       .join(', ')
   }
@@ -360,6 +360,8 @@ const transformNewFormatForNotifyChanged = (
       })
     }
   })
+
+  console.log('events', events)
 
   return {
     events,
