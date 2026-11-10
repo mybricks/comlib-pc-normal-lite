@@ -258,6 +258,17 @@ export default function (props: Props, actions: Actions) {
         genSvgResizer(),
       ],
     },
+    // 为带有[data-zone-icon]的三方图标的svg节点增加样式面板
+    '[data-zone-type="page"] [data-zone-icon] svg:not([class],[data-zone-noselector],[data-zone-selector])': {
+      items: [
+        {
+          title: '样式',
+          type: '_style',
+          autoOptions: true,
+          valueProxy: genStyleValue(props),
+        },
+      ]
+    },
     '[class]': {
       items: [
         {
