@@ -2066,6 +2066,8 @@ export function genStyleValue(props) {
         // 2. 比较时去掉 :global(...)，让源码规则能和页面选择器对上；源码写法不变。
         const matchesRule = (key: string) => {
           const selector = key.replace(/:global\((\.[\w-]+)\)/g, '$1');
+          // 清除 .parent:hover .child 时，文件里只有 .child 不算找到目标，继续找完整规则所在的文件。
+          // 普通样式仍允许按原来的短地址匹配。
           return selector === fullSelector || (!isAncestorStateWrite && fullSelector.endsWith(' ' + selector));
         };
         // 3. 默认文件已有对应规则时，继续用它；找不到才检查其他文件。
@@ -2312,20 +2314,25 @@ export function genStyleValue(props) {
       // 否则 `.parent .child` 会被错误地按 `.child` 与自身规则比较。
       const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
 
-      // 写入变体联动样式至对应完整selector
+      // 修改父级 Hover 下的子级样式，只处理传入的完整规则，不改子级普通样式。
       if (isAncestorStateWrite) {
-        // 祖先条件不能缩成子级类名；复用精确定位，只修改本次地址的声明。
+        // 编辑器已拼好并传入 .parent:hover .child，这里不再拼 selector，只找 Less 中对应的规则。
+        // 第一次填写联动样式时，Less 里还没有这条规则，就按传入地址创建，再写入用户填写的属性。
+        // 已有规则就直接修改；不能退回修改 .child，否则父级 Hover 条件会丢失。
         const linkedRule = patchResolvedLessRule(cssObj, {
           rawSelector, fullSelector, eleClassList, nestedCandidate,
           lessValue: {}, explicitClearPatch,
         });
         if (!linkedRule) return;
+        // 更新用户本次填写的属性；原值带 !important 时，改值后继续保留。
         Object.entries(lessValue).forEach(([key, value]) => {
           linkedRule.targetStyle[key] = preserveExistingImportant(linkedRule.targetStyle[key], value);
         });
+        // 只删除这条规则里指定的属性；删完没有内容就移除规则，再更新 Less 文件。
         deleteLessProperties(linkedRule.targetStyle, deletions || []);
         removeEmptyLessRule(linkedRule);
         updateStyleFileInBranch({ path: lessPath, current: stringifyLess(cssObj), previous: previousLessSource, ele });
+        // 本次修改已完成，不再走下面可能改到短规则或基础 inline 的普通流程。
         return;
       }
 
