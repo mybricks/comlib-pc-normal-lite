@@ -1836,6 +1836,10 @@ export function genStyleValue(props) {
       const rawSelector: string = typeof explicitSelector === 'string' && explicitSelector.trim()
         ? explicitSelector
         : params.selector;
+
+      // 读取window上的联动变体selector，并和当前selector对比
+      const isAncestorStateLinkWrite = (window as unknown as { __mybricks_style_ancestor_state_link_selector?: string })
+        .__mybricks_style_ancestor_state_link_selector === rawSelector;
       const legacyDeletions: string[] | null = (window as any).__mybricks_style_deletions;
       // 全部写入值为 unset 时，仍先执行简写重写，保留同批的简写删除。
       const rewritingInlineShorthand = rawSelector === 'inline' &&
@@ -1858,7 +1862,7 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
-      const useInlineStyleHistory = !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
+      const useInlineStyleHistory = !isAncestorStateLinkWrite && !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
         (eleClassList.length === 0 || hasDragInsert);
       if (!useInlineStyleHistory) inlineStyleHistory.clearPendingBranch();
 
@@ -2063,7 +2067,7 @@ export function genStyleValue(props) {
         // 2. 比较时去掉 :global(...)，让源码规则能和页面选择器对上；源码写法不变。
         const matchesRule = (key: string) => {
           const selector = key.replace(/:global\((\.[\w-]+)\)/g, '$1');
-          return selector === fullSelector || fullSelector.endsWith(' ' + selector);
+          return selector === fullSelector || (!isAncestorStateLinkWrite && fullSelector.endsWith(' ' + selector));
         };
         // 3. 默认文件已有对应规则时，继续用它；找不到才检查其他文件。
         if (!Object.keys(cssObj).some(matchesRule)) {
@@ -2084,7 +2088,7 @@ export function genStyleValue(props) {
           }
         }
       }
-      const isStateWrite = isStateStyleSelector(fullSelector);
+      const isStateWrite = isAncestorStateLinkWrite || isStateStyleSelector(fullSelector);
 
       // ── 内联样式优先路径 ──────────────────────────────────────────
       // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
@@ -2178,7 +2182,7 @@ export function genStyleValue(props) {
 
       // 无 className 的元素（选择器末尾为 HTML 标签名，如 span / h2），或拖入画布的独立节点：
       // 不写 Less（避免全局标签规则或污染共享 class），改为向 JSX 源码注入/追加/删除内联 style。
-      if (eleClassList.length === 0 || hasDragInsert) {
+      if (!isAncestorStateLinkWrite && (eleClassList.length === 0 || hasDragInsert)) {
         // 仅处理选择器末尾是纯 HTML 标签名（如 ".parent span"）的情况
         const selectorEndsWithTag = fullSelector && /\s[a-z][a-zA-Z0-9]*$/.test(fullSelector);
         if (!hasDragInsert && !selectorEndsWithTag) return;
@@ -2308,6 +2312,25 @@ export function genStyleValue(props) {
       // 先定位嵌套规则，竞争扫描需要使用 Less 展开后的完整选择器，
       // 否则 `.parent .child` 会被错误地按 `.child` 与自身规则比较。
       const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
+
+      // 写入变体联动样式至对应完整selector
+      if (isAncestorStateLinkWrite) {
+        // 联动只写固定的完整条件，不沿短后缀回退，也不清其他状态或基础内联。
+        const exactNested = nestedCandidate && nestedCandidate.selector === fullSelector
+          ? nestedCandidate : undefined;
+        const linkedRule = patchResolvedLessRule(cssObj, {
+          rawSelector, fullSelector, eleClassList, nestedCandidate: exactNested,
+          lessValue: {}, explicitClearPatch,
+        });
+        if (!linkedRule) return;
+        Object.entries(lessValue).forEach(([key, value]) => {
+          linkedRule.targetStyle[key] = preserveExistingImportant(linkedRule.targetStyle[key], value);
+        });
+        deleteLessProperties(linkedRule.targetStyle, deletions || []);
+        removeEmptyLessRule(linkedRule);
+        updateStyleFileInBranch({ path: lessPath, current: stringifyLess(cssObj), previous: previousLessSource, ele });
+        return;
+      }
 
       // 嵌套伪类写入前：检测是否存在更高特指度的外部规则（如 antd hover），
       // 若有竞争则给 lessValue 中对应属性追加 !important，确保写入值能生效。
@@ -2489,6 +2512,9 @@ export function genStyleValue(props) {
       });
     },
     previewBatch(params: any, value: any) {
+      const linkedSelector = (window as unknown as { __mybricks_style_ancestor_state_link_selector?: string })
+        .__mybricks_style_ancestor_state_link_selector;
+      if (linkedSelector) return this.set({ ...params, selector: linkedSelector }, value);
       const deletions: string[] = ((window as any).__mybricks_style_deletions || []).slice();
       const hasDataZoneSelector = !!(params.focusArea?.ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = !!params.focusArea?.ele && !hasDataZoneSelector;
