@@ -160,14 +160,22 @@ function buildItemPath(path: string, params: RouteParamDraft[] = []) {
   const filteredParams = params.filter((param) => param.key)
   if (!path) return ''
   if (!filteredParams.length) return path
+  const pathParamKeys = new Set<string>()
+  const resolvedPath = path.replace(/(^|\/):([A-Za-z0-9_]+)/g, (placeholder, prefix, key) => {
+    const param = filteredParams.find((param) => param.key === key)
+    if (!param) return placeholder
+    pathParamKeys.add(key)
+    return `${prefix}${encodeURIComponent(param.value)}`
+  })
   const query = filteredParams
+    .filter((param) => !pathParamKeys.has(param.key))
     .map((param) => {
       const key = encodeURIComponent(param.key)
       const value = encodeURIComponent(param.value)
       return `${key}=${value}`
     })
     .join('&')
-  return `${path}?${query}`
+  return query ? `${resolvedPath}?${query}` : resolvedPath
 }
 
 const buildIframeSrc = (itemSrc: string, runtimeUrl?: string) => {
