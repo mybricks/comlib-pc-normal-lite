@@ -74,6 +74,42 @@ interface AtRule extends Rule {
 
 type CSSObj = Record<string, any>;
 
+// 与填充编辑器的 transition-adapter 约定一致，用户变量继续走原逻辑。
+export const MOTION_FILL_PREFIX = '--mybricks-motion-fill-';
+
+export function registerMotionFillProperties(cssObj: CSSObj, names: string[]) {
+  names.forEach(name => {
+    const registration = `@property ${name}`;
+    if (!cssObj[registration]) cssObj[registration] = {
+      syntax: '"<color>"', inherits: 'false', initialValue: 'transparent',
+    };
+  });
+}
+
+/** 取消填充动效后，回收不再被其他状态过渡使用的变量及注册。 */
+export function removeUnusedMotionFillProperties(cssObj: CSSObj, names: string[]) {
+  const rules: CSSObj[] = [];
+  const collect = (obj: CSSObj) => Object.entries(obj).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && !key.startsWith('@property ')) {
+      rules.push(value);
+      collect(value);
+    }
+  });
+  collect(cssObj);
+  const active = new Set(rules.flatMap(rule =>
+    `${rule.transition || ''}, ${rule.transitionProperty || ''}`.match(/--mybricks-motion-fill-[\w-]+/g) || []));
+  const unused = names.filter(name => !active.has(name));
+  rules.forEach(rule => unused.forEach(name => {
+    if (rule[name] == null) return;
+    const color = String(rule[name]).replace(/\s*!important\s*$/i, '');
+    Object.keys(rule).forEach(key => {
+      if (typeof rule[key] === 'string') rule[key] = rule[key].split(`var(${name})`).join(color);
+    });
+    delete rule[name];
+  }));
+  unused.forEach(name => { delete cssObj[`@property ${name}`]; });
+}
+
 /**
  * 深度合并两个 CSSObj，当相同 key 的值都是对象时递归合并，否则后者覆盖前者。
  * 用于处理同一选择器在 Less 源码中出现多次（如两个 .formSelect {}）的情况。
@@ -387,8 +423,8 @@ class Parse {
     }
 
     return {
-      // Less 变量定义（@xxx: value）不做驼峰转换，保留原始名称
-      key: key.startsWith('@') ? key : convertHyphenToCamel(key),
+      // Less 变量定义和内部动画变量保留原名，避免数字片段丢失连字符。
+      key: key.startsWith('@') || key.startsWith(MOTION_FILL_PREFIX) ? key : convertHyphenToCamel(key),
       value: rawValue + (declaration.important || ""),
     }
   }
@@ -521,8 +557,8 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
         `${formatCSSString(value, indent + "  ")}` +
         `\n${indent}}`;
     } else {
-      // Less 变量定义（@xxx: value）不做 kebab 转换，保留原始名称
-      const outputKey = key.startsWith('@') ? key : convertCamelToHyphen(key);
+      // 与解析端一致，内部动画变量不能经过普通属性名转换。
+      const outputKey = key.startsWith('@') || key.startsWith(MOTION_FILL_PREFIX) ? key : convertCamelToHyphen(key);
       code += `${indent}${outputKey}: ${value};${index === lastIndex ? "" : "\n"}`;
     }
   });

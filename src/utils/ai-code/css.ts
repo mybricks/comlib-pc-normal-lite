@@ -4,6 +4,29 @@ export type LegacyCssMediaQuery = {
   placeholder: string
 }
 
+/** Shadow DOM 内的 @property 不参与注册；只把本功能生成的注册规则同步到文档。 */
+export function syncMotionFillRegistrations(componentId: string, fileId: string, css: string): void {
+  const styleId = `mybricks-motion-properties-${fileId}`
+  const existing = document.getElementById(styleId)
+  const registrations = css.match(/@property\s+--mybricks-motion-fill-[\w-]+\s*\{[^{}]*\}/g)
+  if (!registrations) {
+    existing?.remove()
+    return
+  }
+  const style = existing || document.createElement('style')
+  style.id = styleId
+  style.setAttribute('data-mybricks-motion-component', componentId)
+  const content = registrations.join('\n')
+  if (style.textContent !== content) style.textContent = content
+  if (!style.parentNode) document.head.appendChild(style)
+}
+
+export function removeMotionFillRegistrations(componentId: string): void {
+  document.querySelectorAll('style[data-mybricks-motion-component]').forEach(style => {
+    if (style.getAttribute('data-mybricks-motion-component') === componentId) style.remove()
+  })
+}
+
 export function normalizeContainerCondition(conditionText: string): string {
   return conditionText
     .replace(/^\s*(?:(?:not\s+)?(?:only\s+)?(?:all|screen|print)\s+and\s+)/i, '')

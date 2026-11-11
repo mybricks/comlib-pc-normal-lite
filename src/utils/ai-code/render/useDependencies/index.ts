@@ -8,6 +8,7 @@ import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 import createMyBricksReactNative from '../mybricks/react-native'
 import { setWindowProxyDesignMode, useWindowProxy } from './windowProxyStore'
+import { syncMotionFillRegistrations, removeMotionFillRegistrations } from '../../css'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -122,9 +123,14 @@ const useDependencies = (params: Params) => {
             .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
             .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
           // 组件id + 文件路径，保证唯一性
+          // 同步实际 CSS 中的注册规则，覆盖初次加载、改色重编译和撤销；不注册普通用户变量。
+          if (css.includes('--mybricks-motion-fill-') || document.getElementById(`mybricks-motion-properties-${id}_${filename}`)) {
+            syncMotionFillRegistrations(id, `${id}_${filename}`, myContent)
+          }
           env.canvas.css.set(`${id}_${filename}`.replace(/\./g, '__').replace(/\//g, '_'), myContent)
         },
         remove() {
+          removeMotionFillRegistrations(id)
           env.canvas.css.remove(id)
         }
       }

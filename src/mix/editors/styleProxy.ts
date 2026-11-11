@@ -1,5 +1,5 @@
 import context, { config } from '../context';
-import { parseLess, stringifyLess } from '../utils/transform/less';
+import { parseLess, stringifyLess, MOTION_FILL_PREFIX, registerMotionFillProperties, removeUnusedMotionFillProperties } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
@@ -2314,6 +2314,17 @@ export function genStyleValue(props) {
       // 否则 `.parent .child` 会被错误地按 `.child` 与自身规则比较。
       const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
 
+      // 填充动画的颜色变量必须随源码注册；普通属性和用户变量不进入此分支。
+      const motionColors = Object.keys(lessValue).filter(key => key.startsWith(MOTION_FILL_PREFIX) && lessValue[key] != null);
+      if (motionColors.length) registerMotionFillProperties(cssObj, motionColors);
+      const removedMotionColors = (deletions || []).filter(key => key.startsWith(MOTION_FILL_PREFIX));
+      const transitionWrite = Object.keys(lessValue).some(key => key === 'transition' || key === 'transitionProperty');
+      const motionCleanupNames = transitionWrite
+        ? Object.keys(cssObj)
+          .filter(key => key.startsWith('@property ' + MOTION_FILL_PREFIX))
+          .map(key => key.slice('@property '.length))
+        : removedMotionColors;
+
       // 修改父级 Hover 下的子级样式，只处理传入的完整规则，不改子级普通样式。
       if (isAncestorStateWrite) {
         // 编辑器已拼好并传入 .parent:hover .child，这里不再拼 selector，只找 Less 中对应的规则。
@@ -2331,6 +2342,7 @@ export function genStyleValue(props) {
         // 只删除这条规则里指定的属性；删完没有内容就移除规则，再更新 Less 文件。
         deleteLessProperties(linkedRule.targetStyle, deletions || []);
         removeEmptyLessRule(linkedRule);
+        if (motionCleanupNames.length) removeUnusedMotionFillProperties(cssObj, motionCleanupNames);
         updateStyleFileInBranch({ path: lessPath, current: stringifyLess(cssObj), previous: previousLessSource, ele });
         // 本次修改已完成，不再走下面可能改到短规则或基础 inline 的普通流程。
         return;
@@ -2367,6 +2379,7 @@ export function genStyleValue(props) {
 
       // 嵌套伪类快速路径：直接写入 &:disabled 等嵌套位置，保留 Less 原有结构
       if (tryWriteNestedPseudo(cssObj, fullSelector, lessValue, deletions)) {
+        if (motionCleanupNames.length) removeUnusedMotionFillProperties(cssObj, motionCleanupNames);
         const cssStr = stringifyLess(cssObj);
         updateStyleFileInBranch({
           path: lessPath,
@@ -2507,6 +2520,7 @@ export function genStyleValue(props) {
 
       removeEmptyLessRule(rule);
 
+      if (motionCleanupNames.length) removeUnusedMotionFillProperties(cssObj, motionCleanupNames);
       const cssStr = stringifyLess(cssObj);
       updateStyleFileInBranch({
         path: lessPath,
