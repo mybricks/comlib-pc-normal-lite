@@ -31,3 +31,32 @@ export function isStateStyleSelector(selector: unknown): boolean {
   }
   return state;
 }
+
+/** 识别 .A:hover .B 等单个祖先状态，不改变原主体状态判断。 */
+export function isAncestorStateStyleSelector(selector: unknown): boolean {
+  if (typeof selector !== 'string' || isStateStyleSelector(selector)) return false;
+  const text = selector.trim();
+  let depth = 0;
+  let quote = '';
+  let stateEnd = -1;
+  let hasDescendant = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\') { i++; continue; }
+    if (quote) { if (ch === quote) quote = ''; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '(' || ch === '[') { depth++; continue; }
+    if (ch === ')' || ch === ']') { depth--; continue; }
+    if (depth) continue;
+    if (ch === ',') return false;
+    if (stateEnd >= 0 && (ch === '+' || ch === '~')) return false;
+    if (stateEnd >= 0 && i >= stateEnd && /[\s>]/.test(ch)) hasDescendant = true;
+    if (ch !== ':') continue;
+    const token = text.slice(i).match(/^:(hover|focus|active|disabled)(?![\w-(])/);
+    if (!token) continue;
+    if (stateEnd >= 0) return false;
+    stateEnd = i + token[0].length;
+    i = stateEnd - 1;
+  }
+  return stateEnd >= 0 && hasDescendant;
+}
