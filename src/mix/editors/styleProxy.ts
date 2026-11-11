@@ -1828,6 +1828,11 @@ export function genStyleValue(props) {
         }
         return applyFreedomPlan(params.freedomPlan);
       }
+      // AI 样式请求复用原有预览、操作记录和撤销；普通样式继续走下方源码写入。
+      if (value?.type === 'ai-style-update') {
+        updateAIStyleInBranch(params.focusArea.ele, value.styles, []);
+        return;
+      }
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
       // 源码更新触发 DOM 重编译后，宿主可能仍基于已断开的旧焦点回退 selector。
