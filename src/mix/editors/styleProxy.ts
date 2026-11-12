@@ -12,7 +12,7 @@ import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLes
 import { createFreedomPlanWithInline } from './style/helpers/createFreedomPlanWithInline'
 import type { FreedomPlan } from './style/helpers/createFreedomPlanWithInline'
 import { createInlineStyleHistory } from './style/helpers/createInlineStyleHistory'
-import { isStateStyleSelector } from './style/helpers/stateStyleSelector'
+import { isAncestorStateStyleSelector, isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots, patchSingleElementInlineStyle } from './style/helpers/createSetStyleHandler'
 import {
   createDOMSourceLocationSnapshot,
@@ -1828,6 +1828,11 @@ export function genStyleValue(props) {
         }
         return applyFreedomPlan(params.freedomPlan);
       }
+      // AI 样式请求复用原有预览、操作记录和撤销；普通样式继续走下方源码写入。
+      if (value?.type === 'ai-style-update') {
+        updateAIStyleInBranch(params.focusArea.ele, value.styles, []);
+        return;
+      }
       const locRaw = params.focusArea?.dataset?.loc;
       const cn = tryParseJSON<any>(locRaw, {});
       // 源码更新触发 DOM 重编译后，宿主可能仍基于已断开的旧焦点回退 selector。
@@ -1836,6 +1841,9 @@ export function genStyleValue(props) {
       const rawSelector: string = typeof explicitSelector === 'string' && explicitSelector.trim()
         ? explicitSelector
         : params.selector;
+
+      // .A:hover .B 的状态在父级，直接从本次实际地址识别。
+      const isAncestorStateWrite = isAncestorStateStyleSelector(rawSelector);
       const legacyDeletions: string[] | null = (window as any).__mybricks_style_deletions;
       // 全部写入值为 unset 时，仍先执行简写重写，保留同批的简写删除。
       const rewritingInlineShorthand = rawSelector === 'inline' &&
@@ -1858,7 +1866,7 @@ export function genStyleValue(props) {
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
-      const useInlineStyleHistory = !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
+      const useInlineStyleHistory = !isAncestorStateWrite && !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
         (eleClassList.length === 0 || hasDragInsert);
       if (!useInlineStyleHistory) inlineStyleHistory.clearPendingBranch();
 
@@ -2063,7 +2071,9 @@ export function genStyleValue(props) {
         // 2. 比较时去掉 :global(...)，让源码规则能和页面选择器对上；源码写法不变。
         const matchesRule = (key: string) => {
           const selector = key.replace(/:global\((\.[\w-]+)\)/g, '$1');
-          return selector === fullSelector || fullSelector.endsWith(' ' + selector);
+          // 清除 .parent:hover .child 时，文件里只有 .child 不算找到目标，继续找完整规则所在的文件。
+          // 普通样式仍允许按原来的短地址匹配。
+          return selector === fullSelector || (!isAncestorStateWrite && fullSelector.endsWith(' ' + selector));
         };
         // 3. 默认文件已有对应规则时，继续用它；找不到才检查其他文件。
         if (!Object.keys(cssObj).some(matchesRule)) {
@@ -2084,7 +2094,7 @@ export function genStyleValue(props) {
           }
         }
       }
-      const isStateWrite = isStateStyleSelector(fullSelector);
+      const isStateWrite = isAncestorStateWrite || isStateStyleSelector(fullSelector);
 
       // ── 内联样式优先路径 ──────────────────────────────────────────
       // 读取 Babel 插件注入的 data-style-info，判断哪些 key 是静态内联 style
@@ -2178,7 +2188,7 @@ export function genStyleValue(props) {
 
       // 无 className 的元素（选择器末尾为 HTML 标签名，如 span / h2），或拖入画布的独立节点：
       // 不写 Less（避免全局标签规则或污染共享 class），改为向 JSX 源码注入/追加/删除内联 style。
-      if (eleClassList.length === 0 || hasDragInsert) {
+      if (!isAncestorStateWrite && (eleClassList.length === 0 || hasDragInsert)) {
         // 仅处理选择器末尾是纯 HTML 标签名（如 ".parent span"）的情况
         const selectorEndsWithTag = fullSelector && /\s[a-z][a-zA-Z0-9]*$/.test(fullSelector);
         if (!hasDragInsert && !selectorEndsWithTag) return;
@@ -2308,6 +2318,28 @@ export function genStyleValue(props) {
       // 先定位嵌套规则，竞争扫描需要使用 Less 展开后的完整选择器，
       // 否则 `.parent .child` 会被错误地按 `.child` 与自身规则比较。
       const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
+
+      // 修改父级 Hover 下的子级样式，只处理传入的完整规则，不改子级普通样式。
+      if (isAncestorStateWrite) {
+        // 编辑器已拼好并传入 .parent:hover .child，这里不再拼 selector，只找 Less 中对应的规则。
+        // 第一次填写联动样式时，Less 里还没有这条规则，就按传入地址创建，再写入用户填写的属性。
+        // 已有规则就直接修改；不能退回修改 .child，否则父级 Hover 条件会丢失。
+        const linkedRule = patchResolvedLessRule(cssObj, {
+          rawSelector, fullSelector, eleClassList, nestedCandidate,
+          lessValue: {}, explicitClearPatch,
+        });
+        if (!linkedRule) return;
+        // 更新用户本次填写的属性；原值带 !important 时，改值后继续保留。
+        Object.entries(lessValue).forEach(([key, value]) => {
+          linkedRule.targetStyle[key] = preserveExistingImportant(linkedRule.targetStyle[key], value);
+        });
+        // 只删除这条规则里指定的属性；删完没有内容就移除规则，再更新 Less 文件。
+        deleteLessProperties(linkedRule.targetStyle, deletions || []);
+        removeEmptyLessRule(linkedRule);
+        updateStyleFileInBranch({ path: lessPath, current: stringifyLess(cssObj), previous: previousLessSource, ele });
+        // 本次修改已完成，不再走下面可能改到短规则或基础 inline 的普通流程。
+        return;
+      }
 
       // 嵌套伪类写入前：检测是否存在更高特指度的外部规则（如 antd hover），
       // 若有竞争则给 lessValue 中对应属性追加 !important，确保写入值能生效。
@@ -2489,6 +2521,9 @@ export function genStyleValue(props) {
       });
     },
     previewBatch(params: any, value: any) {
+      const selector = (window as any).__mybricks_style_explicit_selector ?? params.selector;
+      // AI 批量预览只处理元素值，祖先条件必须按完整 CSS 规则提交。
+      if (isAncestorStateStyleSelector(selector)) return this.set(params, value);
       const deletions: string[] = ((window as any).__mybricks_style_deletions || []).slice();
       const hasDataZoneSelector = !!(params.focusArea?.ele as HTMLElement | null)?.dataset?.zoneSelector;
       const isAIOnlyNode = !!params.focusArea?.ele && !hasDataZoneSelector;
