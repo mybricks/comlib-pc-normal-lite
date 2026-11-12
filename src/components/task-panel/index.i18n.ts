@@ -39,6 +39,7 @@ export const i18n = {
   statusUpdateFailed: () => getI18n({ zh: '任务状态更新失败，请重试', en: 'Failed to update task status. Please try again.' }),
   reasonPrompt: () => getI18n({ zh: '请填写原因', en: 'Please provide a reason' }),
   reasonLabel: () => getI18n({ zh: '原因：', en: 'Reason: ' }),
+  revokeTask: (title: string) => getI18n({ zh: `[$mbs-template:revoke-task] 删除任务「${title}」及其相关修改`, en: `[$mbs-template:revoke-task] Delete task "${title}" and its related changes` }),
   taskMessagePrefix: (title: string) => getI18n({ zh: `任务「${title}」：`, en: `Task "${title}": ` }),
   transitionReady: () => getI18n({ zh: '代码已完成，等待我验证', en: 'Code is complete and ready for verification' }),
   transitionVerified: () => getI18n({ zh: '已验证完成', en: 'Verification passed' }),

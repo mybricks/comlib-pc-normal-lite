@@ -686,7 +686,7 @@ function TaskRow({
   const handleRevert = async () => {
     if (isVibing) return
     if (onRevert && await onRevert(task) === true) return
-    sendTaskMessage(`[$mbs-template:revoke-task] 删除任务「${task.title}」及其相关修改`)
+    sendTaskMessage(taskPanelI18n.revokeTask(task.title))
     setActionHint(taskPanelI18n.handedToAI())
   }
 

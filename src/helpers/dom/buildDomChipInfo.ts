@@ -1,3 +1,4 @@
+import { domInfoI18n as copy } from "./dom-info.i18n";
 import { safeParseJson } from '../normal'
 import type { DomLoc } from './'
 
@@ -94,7 +95,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (locText) {
     const signature = {
       key: `loc:${locText}`,
-      reason: `兄弟节点拥有相同 JSX 位置 ${locText}`,
+      reason: copy.sameLocation(locText),
     };
     cache.set(el, signature);
     return signature;
@@ -106,7 +107,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (comName && zoneSelector) {
     const signature = {
       key: `com+selector:${comName}:${zoneSelector}`,
-      reason: `兄弟节点拥有相同组件名「${comName}」和选择器「${zoneSelector}」`,
+      reason: copy.sameComponentSelector(comName, zoneSelector),
     };
     cache.set(el, signature);
     return signature;
@@ -115,7 +116,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (zoneSelector) {
     const signature = {
       key: `selector:${zoneSelector}`,
-      reason: `兄弟节点拥有相同选择器「${zoneSelector}」`,
+      reason: copy.sameSelector(zoneSelector),
     };
     cache.set(el, signature);
     return signature;
@@ -124,7 +125,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (comName) {
     const signature = {
       key: `com:${comName}`,
-      reason: `兄弟节点拥有相同组件名「${comName}」`,
+      reason: copy.sameComponent(comName),
     };
     cache.set(el, signature);
     return signature;
@@ -251,23 +252,23 @@ function formatRepeatContexts(contexts: RepeatAncestorContext[], indent = " - ")
   const lines: string[] = [];
 
   contexts.forEach((context, index) => {
-    const loopLabel = contexts.length === 1 ? "循环 JSX" : `第 ${index + 1} 层循环 JSX`;
+    const loopLabel = copy.loop(index + 1, contexts.length);
     const signature = context.signature;
-    const reason = signature ? `，依据：${signature.reason}` : "";
+    const reason = signature ? copy.reason(signature.reason) : "";
 
     if (context.skipped) {
-      lines.push(`${indent}节点疑似位于${loopLabel}中，父级兄弟节点共 ${context.total} 个，超过扫描上限 ${REPEAT_CONTEXT_MAX_SIBLINGS}，已跳过逐项重复推断${reason}。`);
+      lines.push(`${indent}${copy.skipped(loopLabel, context.total, REPEAT_CONTEXT_MAX_SIBLINGS, reason)}`);
       return;
     }
 
     if (context.index) {
-      lines.push(`${indent}节点疑似位于${loopLabel}中，当前是 JSX 中的第 ${context.index} 项 / 共 ${context.total} 项${reason}。`);
+      lines.push(`${indent}${copy.item(loopLabel, context.index, context.total, reason)}`);
     } else {
-      lines.push(`${indent}节点疑似位于${loopLabel}中${reason}。`);
+      lines.push(`${indent}${copy.possibleLoop(loopLabel, reason)}`);
     }
   });
 
-  lines.push(`${indent}注意：需要结合用户需求判断是仅修改当前项，还是修改循环 JSX 中的全部同类项；必要时向用户咨询确认。`);
+  lines.push(`${indent}${copy.loopCaution()}`);
   return lines;
 }
 
@@ -288,7 +289,7 @@ function getDomCodeLocation(el: Element): string {
   const startLine = loc?.codeLine?.start;
   const endLine = loc?.codeLine?.end;
 
-  if (!jsxFile && !lessFile && !startLine && !endLine) return "未知";
+  if (!jsxFile && !lessFile && !startLine && !endLine) return copy.unknown();
 
   const codeLine =
     startLine && endLine
@@ -299,9 +300,9 @@ function getDomCodeLocation(el: Element): string {
       ? `L${startLine}`
       : endLine
       ? `L${endLine}`
-      : "未知行";
-  const jsxText = jsxFile ? `位于${jsxFile}的${codeLine}` : `位于未知文件的${codeLine}`;
-  const lessText = lessFile ? `，相关的less文件为${lessFile}` : "";
+      : copy.unknownLine();
+  const jsxText = copy.location(jsxFile, codeLine);
+  const lessText = lessFile ? copy.less(lessFile) : "";
 
   return `${jsxText}${lessText}`;
 }
@@ -363,7 +364,7 @@ function extractDomSummary(
   el: Element,
   options?: { singleTextMax?: number; totalMax?: number }
 ): string {
-  if (shouldSkipDomSummaryNode(el)) return "无页面代码摘要";
+  if (shouldSkipDomSummaryNode(el)) return copy.noSummary();
 
   const singleTextMax = options?.singleTextMax ?? DOM_SUMMARY_SINGLE_TEXT_MAX;
   const totalMax = options?.totalMax ?? DOM_SUMMARY_TOTAL_MAX;
@@ -383,8 +384,8 @@ function extractDomSummary(
     const comName = node.getAttribute("data-com-name") || "";
     const parts: string[] = [tag];
     if (cls) parts.push(` class: ${cls}`);
-    if (comName) parts.push(` 组件: ${comName}`);
-    if (text) parts.push(`文本: "${text}"`);
+    if (comName) parts.push(copy.component(comName));
+    if (text) parts.push(copy.text(text));
     const desc = parts.join("");
     lines.push("  ".repeat(indent) + desc);
     if (indent < 3 && !shouldSkipDomSummaryChildren(node)) {
@@ -403,7 +404,7 @@ function extractDomSummary(
   if (result.length <= totalMax) return result;
   const half = Math.floor((totalMax - 30) / 2);
   result =
-    result.slice(0, half) + "\n... [中间内容已省略] ...\n" + result.slice(result.length - half);
+    result.slice(0, half) + `\n... [${copy.omitted()}] ...\n` + result.slice(result.length - half);
   return result;
 }
 
@@ -414,9 +415,9 @@ export default function buildDomChipInfo(ele?: Element | Node): string {
 
   if (!element) {
     return [
-      "未知",
-      "  - 该节点到叶子节点的结构摘要：未知",
-      "  - 相关的渲染 JSX 代码：未知",
+      copy.unknown(),
+      `  - ${copy.summaryTitle()}${copy.unknown()}`,
+      `  - ${copy.codeTitle()}${copy.unknown()}`,
     ].join("\n");
   }
 
@@ -425,9 +426,9 @@ export default function buildDomChipInfo(ele?: Element | Node): string {
   const extraInfo = domChipInfoExtension?.(element);
   return [
     summary.split("\n")[0],
-    "  - 该节点到叶子节点的结构摘要：",
+    `  - ${copy.summaryTitle()}`,
     indentText(summary, "    "),
-    `  - 相关的渲染 JSX 代码：${getDomCodeLocation(element)}`,
+    `  - ${copy.codeTitle()}${getDomCodeLocation(element)}`,
     ...repeatContextLines.map((line) => ` ${line}`),
     ...(extraInfo ? [extraInfo] : []),
   ].join("\n");

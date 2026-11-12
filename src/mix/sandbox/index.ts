@@ -1,3 +1,4 @@
+import { domInfoI18n as domCopy } from "../../helpers/dom/dom-info.i18n";
 import { createUnderstandAnyUI } from '../understand-any';
 import { understandChipDef } from '../understand-any/chip';
 /**
@@ -664,7 +665,7 @@ function formatDomChipMessage({ message, chips }: { message: string; chips: Arra
     const ele = chip.data?.ele;
     let label = nodeLabels.get(ele);
     if (!label) {
-      label = `Dom节点${nodeLabels.size + 1}`;
+      label = domCopy.node(nodeLabels.size + 1);
       nodeLabels.set(ele, label);
     }
     resolved = resolved.split(`[[chip:${chip.id}]]`).join(` @${label} `);
@@ -672,7 +673,7 @@ function formatDomChipMessage({ message, chips }: { message: string; chips: Arra
 
   if (!nodeLabels.size) return resolved;
   const info = Array.from(nodeLabels, ([ele, label]) => `${label}: ${buildDomChipInfo(ele)}`).join('\n');
-  return `${resolved}\n\n<referenced-dom-nodes note="上方 @Dom 节点的详情，供参考。">\n${info}\n</referenced-dom-nodes>`;
+  return `${resolved}\n\n<referenced-dom-nodes note="${domCopy.note()}">\n${info}\n</referenced-dom-nodes>`;
 }
 
 function formatParsedElementChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: any }> }): string {

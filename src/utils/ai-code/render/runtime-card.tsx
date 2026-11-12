@@ -1,3 +1,4 @@
+import { runtimeCardI18n as copy } from './runtime-card.i18n'
 import React, {FunctionComponent, ReactElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react'
 import { debugLogs } from '../../../mix/context/debugLogs'
 import ReactDom from 'react-dom';
@@ -32,23 +33,23 @@ export const ErrorView = ({ error, comId }) => {
 }
 
 /** 统一错误面板基础交互组件：编译失败、generate.error、eval 失败等共用同一套样式 */
-export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [], comId, source = '', error }: { title?: string; desc?: string; errors?: any[]; comId?: string; source?: string; error?: Error }) => {
+export const RuntimeCardErrorView = ({ title = copy.error(), desc = '', errors = [], comId, source = '', error }: { title?: string; desc?: string; errors?: any[]; comId?: string; source?: string; error?: Error }) => {
   const onRetry = useCallback(() => {
     let message = '';
 
     if (source === "@error" && error) {
-      message = `当前组件运行时出错：${error.message}，以下是错误堆栈信息：\n` + error.stack?.split("\n").slice(0, 2).join("\n")
+      message = copy.runtimeError(error.message) + error.stack?.split("\n").slice(0, 2).join("\n")
     } else {
       // 如果有多条错误，组合所有错误信息
       if (errors && errors.length > 0) {
-        message = '当前组件出现了以下错误：\n';
+        message = copy.errors();
         errors.forEach((err, idx) => {
-          const fileLabel = err.file ? `[${err.file}] ` : '[运行时] ';
+          const fileLabel = err.file ? `[${err.file}] ` : `[${copy.runtime()}] `;
           message += `${idx + 1}. ${fileLabel}${err.message}\n`;
         });
       } else {
         // 没有 errors 数组，使用传入的 title 和 desc
-        message = `当前组件出错了，${desc || title || '未知错误'}`;
+        message = copy.errorDetail(desc || title || copy.unknown());
       } 
     }
     (window as any)._sandbox_?.helpers?.sendToAgent?.(comId, { message });
@@ -59,13 +60,13 @@ export const RuntimeCardErrorView = ({ title = '错误', desc = '', errors = [],
       <div className={css.runtimeCardError} data-zone-type='ai-fixed'>
         <span className={css.runtimeCardErrorIcon}>!</span>
         <div className={css.runtimeCardErrorTitle}>{title}</div>
-        <pre className={css.runtimeCardErrorDesc}>{desc || '未知错误'}</pre>
+        <pre className={css.runtimeCardErrorDesc}>{desc || copy.unknown()}</pre>
         {errors && errors.length > 1 && (
           <details className={css.errorDetails}>
             <summary>{commonLang.viewAllErrors} ({errors.length})</summary>
             {errors.map((err, idx) => (
               <div key={idx} className={css.errorItem}>
-                <strong>{err.file || '运行时'}</strong>: {err.message}
+                <strong>{err.file || copy.runtime()}</strong>: {err.message}
               </div>
             ))}
           </details>
@@ -93,7 +94,7 @@ const GenerateLoadingView = ({
   comId,
 }: { fileName?: string; content?: string; error?: boolean; errorMessage?: string; comId?: string }) => {
   const onRetry = useCallback(() => {
-    const message = errorMessage || '未知错误';
+    const message = errorMessage || copy.unknown();
     (window as any)._sandbox_?.helpers?.sendToAgent?.(comId, { message });
   }, [comId, errorMessage]);
 
@@ -103,8 +104,8 @@ const GenerateLoadingView = ({
         {error ? (
           <div className={css.generateError}>
             <span className={css.generateErrorIcon}>!</span>
-            <div className={css.generateErrorTitle}>生成失败</div>
-            <pre className={css.generateErrorDesc}>{errorMessage || '未知错误'}</pre>
+            <div className={css.generateErrorTitle}>{copy.generateFailed()}</div>
+            <pre className={css.generateErrorDesc}>{errorMessage || copy.unknown()}</pre>
             <button data-zone-type='ai-fixed' className={css.runtimeCardErrorRetry} onClick={onRetry}>{commonLang.aiFix}</button>
           </div>
         ) : (
