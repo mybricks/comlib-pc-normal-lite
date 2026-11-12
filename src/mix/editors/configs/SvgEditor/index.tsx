@@ -11,10 +11,15 @@ const css = getLazyCss(styles);
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeSvgSize(svgHtml: string, size = 48): string {
-  return svgHtml
-    .replace(/(<svg\b[^>]*?)\s+width="[^"]*"/i, '$1')
-    .replace(/(<svg\b[^>]*?)\s+height="[^"]*"/i, '$1')
-    .replace(/(<svg\b)/i, `$1 width="${size}" height="${size}"`);
+  const svg = new DOMParser().parseFromString(svgHtml, 'text/html').querySelector('svg');
+  if (!svg) return svgHtml;
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  // 画布预览会写入内联 !important，需在副本上覆盖定位和尺寸。
+  svg.style.setProperty('position', 'static', 'important');
+  svg.style.setProperty('width', `${size}px`, 'important');
+  svg.style.setProperty('height', `${size}px`, 'important');
+  return svg.outerHTML;
 }
 
 function getSvgComputedColor(el: Element | null): string | undefined {
