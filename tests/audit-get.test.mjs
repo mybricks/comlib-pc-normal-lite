@@ -39,6 +39,8 @@ test('canvas returns only requested categories for the selected TSX', () => {
   assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['events', 'store'] }),
     { events: value.events, store: state })
   assert.deepEqual(audit.get({ tsx: 'missing', type: 'canvas', valueKeys: ['events'] }), { events: [] })
+  assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['jsDocs'] }),
+    { jsDocs: value.docs })
 })
 
 test('DOM matches both file and exact line range, with state/store aliases', () => {
@@ -54,6 +56,8 @@ test('DOM matches both file and exact line range, with state/store aliases', () 
 
 test('selector-only bindings match elements found by parsed data-loc', () => {
   const { audit } = setup()
+  const binding = { title: 'onClick', refSelector: '.widget' }
+  audit.set({ tsx: query.tsx, value: { ...value, events: [binding] } })
   const previous = globalThis.document
   globalThis.document = { querySelector: () => ({ shadowRoot: { querySelectorAll: () => [
     { getAttribute: () => '{' },
@@ -61,7 +65,38 @@ test('selector-only bindings match elements found by parsed data-loc', () => {
     { getAttribute: () => JSON.stringify({ ...loc, files: { jsx: 'Other.tsx' } }), matches: () => true },
   ] } }) }
   try {
-    assert.deepEqual(audit.get({ ...query, valueKeys: ['docs'] }), { docs: value.docs })
+    assert.deepEqual(audit.get({ ...query, valueKeys: ['events'] }), { events: [binding] })
+  } finally {
+    if (previous === undefined) delete globalThis.document
+    else globalThis.document = previous
+  }
+})
+
+test('DOM jsDocs reads legacy docs for the nearest component only', () => {
+  const { audit } = setup()
+  const parentDoc = { title: 'Parent', refSelector: '.parent' }
+  audit.set({ tsx: query.tsx, value: { ...value, docs: [parentDoc, ...value.docs] } })
+  const previous = globalThis.document
+  let component = { matches: selector => selector === '.widget' }
+  globalThis.document = { querySelector: () => ({ shadowRoot: { querySelectorAll: () => [
+    {
+      getAttribute: () => JSON.stringify(loc),
+      closest: selector => {
+        assert.equal(selector, '[data-widget-name]:not([data-wrap-container])')
+        return component
+      },
+    },
+  ] } }) }
+  try {
+    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: value.docs })
+    component = { matches: () => false }
+    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: [] })
+    component = null
+    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: [] })
+    assert.deepEqual(audit.get({ ...query, loc: '{', valueKeys: ['jsDocs'] }), { jsDocs: [] })
+    audit.set({ tsx: query.tsx, value: { ...value, docs: [{ refSelector: '[' }] } })
+    component = { matches: () => { throw new SyntaxError('Invalid selector') } }
+    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: [] })
   } finally {
     if (previous === undefined) delete globalThis.document
     else globalThis.document = previous

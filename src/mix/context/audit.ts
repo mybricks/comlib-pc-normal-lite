@@ -4,7 +4,7 @@ import type { DomLoc } from "../../helpers/dom"
 
 type AuditValue = ReturnType<typeof transformNewFormatForNotifyChanged>
 type AiDoc = { createTime: number; content: string }
-type AuditResult = Partial<AuditValue & { aiDoc: AiDoc }>
+type AuditResult = Partial<Omit<AuditValue, 'docs'> & { jsDocs: AuditValue['docs']; aiDoc: AiDoc }>
 
 export default class Audit {
 
@@ -25,7 +25,7 @@ export default class Audit {
     tsx: string,
     loc?: string | DomLoc,
     type: 'canvas' | 'dom',
-    valueKeys: string[] // events services state store docs aiDoc
+    valueKeys: string[] // events services state store jsDocs aiDoc
   }): AuditResult {
     const value = this.tsxToValueMap.get(params.tsx)
     const result: AuditResult = {}
@@ -41,16 +41,7 @@ export default class Audit {
       && Number.isInteger(loc?.codeLine?.end)
     let elements: Element[] | undefined
 
-    const matches = (item: { location?: { fileName: string; startLine: number; endLine: number }; refSelector?: string }) => {
-      if (!hasLocation) return false
-      if (item.location) {
-        return item.location.fileName === loc!.files.jsx
-          && item.location.startLine === loc!.codeLine.start
-          && item.location.endLine === loc!.codeLine.end
-      }
-      if (!item.refSelector) return false
-
-      // 兼容只有 selector 的绑定；从设计器中找到 loc 对应的元素再匹配。
+    const getElements = () => {
       if (!elements) {
         const root = typeof document === 'undefined'
           ? undefined
@@ -66,14 +57,42 @@ export default class Audit {
           }
         })
       }
+      return elements
+    }
+
+    const matches = (item: { location?: { fileName: string; startLine: number; endLine: number }; refSelector?: string }) => {
+      if (!hasLocation) return false
+      if (item.location) {
+        return item.location.fileName === loc!.files.jsx
+          && item.location.startLine === loc!.codeLine.start
+          && item.location.endLine === loc!.codeLine.end
+      }
+      if (!item.refSelector) return false
+
+      // 兼容只有 selector 的绑定；从设计器中找到 loc 对应的元素再匹配。
       try {
-        return elements.some(element => element.matches(item.refSelector!))
+        return getElements().some(element => element.matches(item.refSelector!))
       } catch {
         return false
       }
     }
 
     for (const key of params.valueKeys) {
+      if (key === 'jsDocs') {
+        const docs = value?.docs ?? []
+        result.jsDocs = params.type === 'dom'
+          ? hasLocation ? docs.filter(doc => {
+            try {
+              return getElements().some(element => element
+                .closest('[data-widget-name]:not([data-wrap-container])')
+                ?.matches(doc.refSelector))
+            } catch {
+              return false
+            }
+          }) : []
+          : docs
+        continue
+      }
       if (key === 'aiDoc') {
         if (params.type === 'dom') {
           const emptyDoc = () => ({ createTime: Date.now(), content: '' })
@@ -95,7 +114,7 @@ export default class Audit {
         }
         continue
       }
-      if (key !== 'events' && key !== 'services' && key !== 'state' && key !== 'store' && key !== 'docs') continue
+      if (key !== 'events' && key !== 'services' && key !== 'state' && key !== 'store') continue
       const items = value?.[key] ?? []
       Object.assign(result, { [key]: params.type === 'dom' ? items.filter(matches) : items })
     }
