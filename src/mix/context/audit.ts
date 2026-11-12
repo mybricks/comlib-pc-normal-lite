@@ -4,7 +4,7 @@ import type { DomLoc } from "../../helpers/dom"
 
 type AuditValue = ReturnType<typeof transformNewFormatForNotifyChanged>
 type AiDoc = { createTime: number; content: string }
-type AuditResult = Partial<Omit<AuditValue, 'docs'> & { jsDocs: AuditValue['docs']; aiDoc: AiDoc }>
+type AuditResult = Partial<Omit<AuditValue, 'docs'> & { jsDoc: AuditValue['docs'][number]; aiDoc: AiDoc }>
 
 export default class Audit {
 
@@ -27,7 +27,7 @@ export default class Audit {
     parentLoc?: string | DomLoc | null,
     widgetName?: string | null,
     type: 'canvas' | 'dom',
-    valueKeys: string[] // events services state store jsDocs aiDoc
+    valueKeys: string[] // events services state store jsDoc aiDoc
   }): AuditResult {
     const value = this.tsxToValueMap.get(params.tsx)
     const result: AuditResult = {}
@@ -56,14 +56,14 @@ export default class Audit {
       return false
     }
 
-    for (const key of params.valueKeys.concat('jsDocs')) {
-      if (key === 'jsDocs') {
+    for (const key of params.valueKeys) {
+      if (key === 'jsDoc') {
         const docs = value?.docs ?? []
-        result.jsDocs = params.type === 'dom'
+        result.jsDoc = params.type === 'dom'
           ? params.widgetName
-            ? docs.filter(doc => doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
-            : []
-          : docs
+            ? docs.find(doc => doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
+            : undefined
+          : docs[0]
         continue
       }
       if (key === 'aiDoc') {
