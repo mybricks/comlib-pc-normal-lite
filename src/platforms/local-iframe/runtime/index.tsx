@@ -1,3 +1,4 @@
+import { isCliLaunch } from '../context/launch-mode'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { localFileEvents, registerSandbox } from '../sandbox'
 import context from '../../../mix/context'
@@ -197,6 +198,7 @@ type RuntimeRouteEventItem = {
 }
 
 const RuntimeIframe = (props) => {
+	const cliLaunch = isCliLaunch()
 	const [iframes, setIframes] = useState<RuntimeIframeItem[]>([])
 	const [debugSrc, setDebugSrc] = useState('')
 	const [runtimeUrl, setRuntimeUrl] = useState('')
@@ -209,7 +211,7 @@ const RuntimeIframe = (props) => {
 	const currentIframesRef = useRef<RuntimeIframeItem[]>([])
 	const lastLoadedSignatureRef = useRef('')
 	currentIframesRef.current = iframes
-	const [ready, setReady] = useState(false)
+	const [ready, setReady] = useState(cliLaunch)
 
 	const emitLoadedIfReady = useCallback((nextIframes: RuntimeIframeItem[]) => {
 		if (!nextIframes.every((item) => loadedSrcsRef.current.has(item.src))) {
@@ -300,13 +302,13 @@ const RuntimeIframe = (props) => {
 			refreshIframe(refreshSrc)
 		})
 
-		const onRuntimeUrlCancel = myContext.runtime.events.on('runtimeUrl', ({ url }) => {
+		const onRuntimeUrlCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUrl', ({ url }) => {
 			runtimeUrlRef.current = url
 			setRuntimeUrl(url)
 			setReady(true)
 		})
 
-		const onRuntimeUpdateCancel = myContext.runtime.events.on('runtimeUpdate', (update) => {
+		const onRuntimeUpdateCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUpdate', (update) => {
 			// 每次真实项目进程重新进入启动阶段，都先切回同一块 Xterm，持续展示
 			// ProjectRuntime 输出；ready 事件携带 URL 后再切回画布。
 			if (update.status.state === 'starting') {
