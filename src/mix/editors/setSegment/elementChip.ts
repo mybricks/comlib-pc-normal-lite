@@ -1,3 +1,5 @@
+import { domInfoI18n as domCopy } from '../../../helpers/dom/dom-info.i18n'
+import { elementChipI18n as copy } from './elementChip.i18n'
 import buildDomChipInfo from '../../../helpers/dom/buildDomChipInfo'
 
 // 与 plugin-ai 的 createChatChipId 保持一致。
@@ -193,7 +195,7 @@ export function indentText(text: string, indent: string): string {
 }
 
 export function extractDomSummary(el: Element, options?: { singleTextMax?: number; totalMax?: number }): string {
-  if (shouldSkipDomSummaryNode(el)) return '无页面代码摘要'
+  if (shouldSkipDomSummaryNode(el)) return domCopy.noSummary()
 
   const singleTextMax = options?.singleTextMax ?? DOM_SUMMARY_SINGLE_TEXT_MAX
   const totalMax = options?.totalMax ?? DOM_SUMMARY_TOTAL_MAX
@@ -213,8 +215,8 @@ export function extractDomSummary(el: Element, options?: { singleTextMax?: numbe
     const comName = node.getAttribute('data-com-name') || ''
     const parts: string[] = [tag]
     if (cls) parts.push(` class: ${cls}`)
-    if (comName) parts.push(` 组件: ${comName}`)
-    if (text) parts.push(`文本: "${text}"`)
+    if (comName) parts.push(domCopy.component(comName))
+    if (text) parts.push(domCopy.text(text))
     lines.push('  '.repeat(indent) + parts.join(''))
 
     if (indent < 3 && !shouldSkipDomSummaryChildren(node)) {
@@ -230,28 +232,28 @@ export function extractDomSummary(el: Element, options?: { singleTextMax?: numbe
   let result = lines.join('\n')
   if (result.length <= totalMax) return result
   const half = Math.floor((totalMax - 30) / 2)
-  result = result.slice(0, half) + '\n... [中间内容已省略] ...\n' + result.slice(result.length - half)
+  result = result.slice(0, half) + `\n... [${domCopy.omitted()}] ...\n` + result.slice(result.length - half)
   return result
 }
 
 export function getElementCodeLocation(el?: Element): string {
-  if (!el) return '未知'
+  if (!el) return domCopy.unknown()
 
   const loc = getClosestDomLoc<DomLoc>(el)
-  if (!loc) return '未知'
+  if (!loc) return domCopy.unknown()
 
   const jsxFile = loc.files?.jsx
   const startLine = loc.codeLine?.start
   const endLine = loc.codeLine?.end
 
-  if (!jsxFile && !startLine) return '未知'
+  if (!jsxFile && !startLine) return domCopy.unknown()
 
   const lineDesc =
     startLine && endLine && endLine !== startLine
       ? `L${startLine}-L${endLine}`
       : startLine
       ? `L${startLine}`
-      : '未知行'
+      : domCopy.unknownLine()
 
   return jsxFile ? `${jsxFile} ${lineDesc}` : lineDesc
 }
@@ -280,7 +282,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (locText) {
     const signature = {
       key: `loc:${locText}`,
-      reason: `兄弟节点拥有相同 JSX 位置 ${locText}`,
+      reason: domCopy.sameLocation(locText),
     }
     cache.set(el, signature)
     return signature
@@ -292,7 +294,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (comName && zoneSelector) {
     const signature = {
       key: `com+selector:${comName}:${zoneSelector}`,
-      reason: `兄弟节点拥有相同组件名「${comName}」和选择器「${zoneSelector}」`,
+      reason: domCopy.sameComponentSelector(comName, zoneSelector),
     }
     cache.set(el, signature)
     return signature
@@ -301,7 +303,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (zoneSelector) {
     const signature = {
       key: `selector:${zoneSelector}`,
-      reason: `兄弟节点拥有相同选择器「${zoneSelector}」`,
+      reason: domCopy.sameSelector(zoneSelector),
     }
     cache.set(el, signature)
     return signature
@@ -310,7 +312,7 @@ function getRepeatSignature(el: Element, cache: WeakMap<Element, RepeatSignature
   if (comName) {
     const signature = {
       key: `com:${comName}`,
-      reason: `兄弟节点拥有相同组件名「${comName}」`,
+      reason: domCopy.sameComponent(comName),
     }
     cache.set(el, signature)
     return signature
@@ -426,23 +428,23 @@ function formatRepeatContexts(contexts: RepeatAncestorContext[], indent = '- '):
   const lines: string[] = []
 
   contexts.forEach((context, index) => {
-    const loopLabel = contexts.length === 1 ? '循环 JSX' : `第 ${index + 1} 层循环 JSX`
+    const loopLabel = domCopy.loop(index + 1, contexts.length)
     const signature = context.signature
-    const reason = signature ? `，依据：${signature.reason}` : ''
+    const reason = signature ? domCopy.reason(signature.reason) : ''
 
     if (context.skipped) {
-      lines.push(`${indent}节点疑似位于${loopLabel}中，父级兄弟节点共 ${context.total} 个，超过扫描上限 ${REPEAT_CONTEXT_MAX_SIBLINGS}，已跳过逐项重复推断${reason}。`)
+      lines.push(`${indent}${domCopy.skipped(loopLabel, context.total, REPEAT_CONTEXT_MAX_SIBLINGS, reason)}`)
       return
     }
 
     if (context.index) {
-      lines.push(`${indent}节点疑似位于${loopLabel}中，当前是 JSX 中的第 ${context.index} 项 / 共 ${context.total} 项${reason}。`)
+      lines.push(`${indent}${domCopy.item(loopLabel, context.index, context.total, reason)}`)
     } else {
-      lines.push(`${indent}节点疑似位于${loopLabel}中${reason}。`)
+      lines.push(`${indent}${domCopy.possibleLoop(loopLabel, reason)}`)
     }
   })
 
-  lines.push(`${indent}注意：需要结合用户需求判断是仅修改当前项，还是修改循环 JSX 中的全部同类项；必要时向用户咨询确认。`)
+  lines.push(`${indent}${domCopy.loopCaution()}`)
   return lines
 }
 
@@ -450,8 +452,8 @@ export function buildElementRepeatContextInfo(el?: Element) {
   const lines = el ? formatRepeatContexts(collectRepeatAncestorContexts(el), '- ') : []
   const hasRepeatContext = lines.length > 0
   const block = hasRepeatContext
-    ? ['- 循环/重复上下文：', ...lines.map((line) => `  ${line}`)].join('\n')
-    : '- 循环/重复上下文：未发现疑似循环 JSX / map 重复项'
+    ? [`- ${domCopy.repeatTitle()}`, ...lines.map((line) => `  ${line}`)].join('\n')
+    : `- ${domCopy.noRepeat()}`
 
   return { lines, hasRepeatContext, block }
 }
@@ -481,7 +483,7 @@ function pickDistinguishingClassName(ele?: Element): string {
 
 function getIdentifyingInlineStyle(ele: Element, excludeProperties: string[]): string {
   const style = (ele as HTMLElement).style
-  if (!style?.length) return '无'
+  if (!style?.length) return domCopy.none()
   const exclude = new Set(excludeProperties)
   const parts: string[] = []
   for (let i = 0; i < style.length; i++) {
@@ -490,7 +492,7 @@ function getIdentifyingInlineStyle(ele: Element, excludeProperties: string[]): s
     const value = style.getPropertyValue(prop)
     if (value) parts.push(`${prop}: ${value}`)
   }
-  return parts.length ? parts.join('; ') : '无（除本次目标样式外）'
+  return parts.length ? parts.join('; ') : copy.noOtherStyles()
 }
 
 export function getElementLabel(ele: Element | Node | undefined, fallback: string): string {
@@ -511,7 +513,7 @@ export function getElementLabel(ele: Element | Node | undefined, fallback: strin
 
 function getCurrentText(ele?: Element): string {
   const text = ele?.textContent?.trim().replace(/\s+/g, ' ') ?? ''
-  return text || '无可识别文本'
+  return text || copy.noText()
 }
 
 export function parseElementInfo(ele: Element | undefined, label: string, options?: { includeCurrentText?: boolean }): ParsedElementInfo {
@@ -519,7 +521,7 @@ export function parseElementInfo(ele: Element | undefined, label: string, option
   return {
     name: label,
     codeLocation: getElementCodeLocation(ele),
-    domSummary: ele ? extractDomSummary(ele) : '无',
+    domSummary: ele ? extractDomSummary(ele) : domCopy.none(),
     currentText: options?.includeCurrentText ? getCurrentText(ele) : undefined,
     repeatContextBlock: repeatContext.block,
     hasRepeatContext: repeatContext.hasRepeatContext,
@@ -530,7 +532,7 @@ function getElementLabeForAiRequest(ele: Element | Node) {
   if (ele.nodeType !== Node.ELEMENT_NODE) {
     // const text = ele.textContent?.trim().replace(/\s+/g, ' ').slice(0, 30)
     const parent = ele.parentElement
-    const parentLabel = parent ? getElementLabeForAiRequest(parent) : '文本节点'
+    const parentLabel = parent ? getElementLabeForAiRequest(parent) : copy.textNodeLabel()
     return parentLabel
     // return text ? `${parentLabel} 中的文本「${text}」` : `${parentLabel} 中的文本节点`
   }
@@ -559,7 +561,7 @@ export function buildElementDeleteAiRequest({ ele }: { ele: Element }) {
 
   return {
     type: 'element-delete',
-    message: `删除 [[chip:${chip.id}]].`,
+    message: copy.delete(`[[chip:${chip.id}]]`),
     chips: [chip]
   }
 }
@@ -577,7 +579,7 @@ export function buildElementTextUpdateAiRequest({ ele, content }: { ele: Element
 
   return {
     type: 'element-text-update',
-    message: `将 [[chip:${chip.id}]] 文本修改为「${content}」.`,
+    message: copy.text(`[[chip:${chip.id}]]`, content),
     chips: [chip]
   }
 }
@@ -595,7 +597,7 @@ export function buildElementImageUpdateAiRequest({ ele, src }: { ele: Element; s
 
   return {
     type: 'element-image-update',
-    message: `将 [[chip:${chip.id}]] 图片地址修改为「${src}」.`,
+    message: copy.image(`[[chip:${chip.id}]]`, src),
     chips: [chip]
   }
 }
@@ -614,7 +616,7 @@ export function buildElementSvgUpdateAiRequest({ ele, svg }: { ele: Element; svg
   return {
     type: 'element-svg-update',
     message: [
-      `将 [[chip:${chip.id}]] JSX 替换为：`,
+      copy.svg(`[[chip:${chip.id}]]`),
       `\`\`\``,
       svg,
       `\`\`\``
@@ -640,23 +642,17 @@ export function buildElementStyleUpdateAiRequest({ ele, styles }: { ele: Element
 
   return {
     type: 'element-style-update',
-    message: [`调整 [[chip:${chip.id}]] 样式：`].concat(normalizedStyles.map(({ property, value }) => {
-      return value === null || value === undefined || value === '' ? `  - 删除 ${property}` : `  - 更新 ${property} ${typeof value === 'number' ? `${value}px` : value}`
+    message: [copy.style(`[[chip:${chip.id}]]`)].concat(normalizedStyles.map(({ property, value }) => {
+      return value === null || value === undefined || value === '' ? copy.removeStyle(property) : copy.updateStyle(property, typeof value === 'number' ? `${value}px` : value)
     })).join('\n'),
     chips: [chip]
   }
 }
 
-const ELEMENT_MOVE_PLACEMENT_LABEL = {
-  before: '前',
-  after: '后',
-  child: '内'
-}
-
 function textNodeDesc(ele: Element | Node) {
   if (ele.nodeType !== Node.ELEMENT_NODE) {
     const text = ele.textContent?.trim().replace(/\s+/g, ' ').slice(0, 30)
-    return text ? ` 内的文本节点「${text}」` : ` 内的文本节点`
+    return copy.textNode(text)
   }
 
   return ''
@@ -684,7 +680,7 @@ export function buildElementMoveAiRequest({ fromEle, toEle, placement }: { fromE
 
   return {
     type: 'element-move',
-    message: `将 [[chip:${chipFrom.id}]]${textNodeDesc(fromEle)} 移动到 [[chip:${chipTo.id}]]${textNodeDesc(toEle)} ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]}.`,
+    message: copy.move(`[[chip:${chipFrom.id}]]${textNodeDesc(fromEle)}`, `[[chip:${chipTo.id}]]${textNodeDesc(toEle)}`, placement),
     chips: [chipFrom, chipTo]
   }
 }
@@ -702,7 +698,7 @@ export function buildElementDuplicateAiRequest({ ele }: { ele: Element }) {
 
   return {
     type: 'element-duplicate',
-    message: `复制 [[chip:${chip.id}]]，将复制出的完整节点插入到原节点之后，并与原节点保持同级.`,
+    message: copy.duplicate(`[[chip:${chip.id}]]`),
     chips: [chip]
   }
 }
@@ -721,7 +717,7 @@ export function buildElementInsertAiRequest({ ele, jsx, placement, importCode = 
   return {
     type: 'element-insert',
     message: [
-      `在 [[chip:${chip.id}]]${textNodeDesc(ele)} ${ELEMENT_MOVE_PLACEMENT_LABEL[placement]} 插入 JSX 片段：`,
+      copy.insert(`[[chip:${chip.id}]]${textNodeDesc(ele)}`, placement),
       `\`\`\``,
       importCode,
       jsx,

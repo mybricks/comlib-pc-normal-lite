@@ -17,6 +17,7 @@ interface Window {
   eslint: typeof import('eslint');
   __lang_type__?: string;
   __LINGCHUANG_CONFIG__: {
+    launchMode?: 'desktop' | 'cli';
     router?: {
       basename?: string;
     }

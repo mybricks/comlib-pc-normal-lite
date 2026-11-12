@@ -1,3 +1,4 @@
+import { isCliLaunch } from '../../context/launch-mode'
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { message } from 'antd'
 import context from '../../../../mix/context'
@@ -259,6 +260,7 @@ function RuntimePanel() {
 }
 
 function LowcodeViewShell() {
+  const showTerminal = !isCliLaunch()
   const pluginNames: string[] = (window as any)._sandbox_?.config?.pluginNames ?? []
   const taskPanelEnabled = pluginNames.includes('task-first') || pluginNames.includes('task-overview')
   const [activeTab, setActiveTab] = useState<TabKey>('task')
@@ -330,7 +332,7 @@ function LowcodeViewShell() {
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div className={css['lowcode-view-toolbar-left']}>
             {(['task', 'version', 'review', 'terminal'] as TabKey[])
-              .filter(tab => tab !== 'task' || hasTaskPanel)
+              .filter(tab => (tab !== 'task' || hasTaskPanel) && (tab !== 'terminal' || showTerminal))
               .map((tab) => (
                 <div
                   key={tab}
@@ -347,7 +349,7 @@ function LowcodeViewShell() {
         {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} overviewContent={overviewContent} allowDelete />}
         {activeTab === 'version' && <VersionPanel />}
         {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
-        {activeTab === 'terminal' && <RuntimePanel />}
+        {showTerminal && activeTab === 'terminal' && <RuntimePanel />}
       </div>
     </div>
   )

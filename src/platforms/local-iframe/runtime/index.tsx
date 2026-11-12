@@ -1,3 +1,4 @@
+import { isCliLaunch } from '../context/launch-mode'
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { localFileEvents, registerSandbox } from '../sandbox'
 import context from '../../../mix/context'
@@ -160,14 +161,22 @@ function buildItemPath(path: string, params: RouteParamDraft[] = []) {
   const filteredParams = params.filter((param) => param.key)
   if (!path) return ''
   if (!filteredParams.length) return path
+  const pathParamKeys = new Set<string>()
+  const resolvedPath = path.replace(/(^|\/):([A-Za-z0-9_]+)/g, (placeholder, prefix, key) => {
+    const param = filteredParams.find((param) => param.key === key)
+    if (!param) return placeholder
+    pathParamKeys.add(key)
+    return `${prefix}${encodeURIComponent(param.value)}`
+  })
   const query = filteredParams
+    .filter((param) => !pathParamKeys.has(param.key))
     .map((param) => {
       const key = encodeURIComponent(param.key)
       const value = encodeURIComponent(param.value)
       return `${key}=${value}`
     })
     .join('&')
-  return `${path}?${query}`
+  return query ? `${resolvedPath}?${query}` : resolvedPath
 }
 
 const buildIframeSrc = (itemSrc: string, runtimeUrl?: string) => {
@@ -189,6 +198,7 @@ type RuntimeRouteEventItem = {
 }
 
 const RuntimeIframe = (props) => {
+	const cliLaunch = isCliLaunch()
 	const [iframes, setIframes] = useState<RuntimeIframeItem[]>([])
 	const [debugSrc, setDebugSrc] = useState('')
 	const [runtimeUrl, setRuntimeUrl] = useState('')
@@ -201,7 +211,7 @@ const RuntimeIframe = (props) => {
 	const currentIframesRef = useRef<RuntimeIframeItem[]>([])
 	const lastLoadedSignatureRef = useRef('')
 	currentIframesRef.current = iframes
-	const [ready, setReady] = useState(false)
+	const [ready, setReady] = useState(cliLaunch)
 
 	const emitLoadedIfReady = useCallback((nextIframes: RuntimeIframeItem[]) => {
 		if (!nextIframes.every((item) => loadedSrcsRef.current.has(item.src))) {
@@ -292,13 +302,13 @@ const RuntimeIframe = (props) => {
 			refreshIframe(refreshSrc)
 		})
 
-		const onRuntimeUrlCancel = myContext.runtime.events.on('runtimeUrl', ({ url }) => {
+		const onRuntimeUrlCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUrl', ({ url }) => {
 			runtimeUrlRef.current = url
 			setRuntimeUrl(url)
 			setReady(true)
 		})
 
-		const onRuntimeUpdateCancel = myContext.runtime.events.on('runtimeUpdate', (update) => {
+		const onRuntimeUpdateCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUpdate', (update) => {
 			// 每次真实项目进程重新进入启动阶段，都先切回同一块 Xterm，持续展示
 			// ProjectRuntime 输出；ready 事件携带 URL 后再切回画布。
 			if (update.status.state === 'starting') {

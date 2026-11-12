@@ -1,3 +1,4 @@
+import { auditPageI18n } from './audit-page.i18n';
 import React from 'react';
 import { buildGuiCardHooks } from './configs/guiCard';
 import { buildHooks as buildPrototypeHooks } from './configs/prototype';
@@ -390,18 +391,17 @@ export function buildHooks(props: Props) {
       type AuditPageOptions = Partial<Record<AuditPageOptionKey, boolean>>;
 
       const auditPageOptionLabels: Array<[AuditPageOptionKey, string]> = [
-        ['events', '事件'],
-        ['services', '接口'],
-        ['crScope', '变更影响'],
-        ['store', '状态'],
+        ['events', auditPageI18n.events()],
+        ['services', auditPageI18n.services()],
+        ['crScope', auditPageI18n.crScope()],
+        ['store', auditPageI18n.store()],
         // ['crComplete', '完成度']
       ];
 
       function getAuditPageMessage(options: AuditPageOptions = {}) {
         return auditPageOptionLabels
           .filter(([key]) => options[key])
-          .map(([, label]) => label)
-          .join('、');
+          .map(([, label]) => label);
       }
       const {
         options = {},
@@ -414,9 +414,8 @@ export function buildHooks(props: Props) {
       };
 
       const message = getAuditPageMessage(options);
-      const detail = message ? `的${message}文档` : '文档';
       const ele = hookContext.focusArea.ele;
-      const agentMessage = `使用 audit-power 来更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
+      const agentMessage = auditPageI18n.message(`${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})`, message);
 
       return new Promise<ReturnType<typeof context.audit.get>>((resolve, reject) => {
 

@@ -1,3 +1,4 @@
+import { isCliLaunch } from './launch-mode'
 import { Events } from '../../../utils/events'
 
 const CHANNEL = 'lingxi:project-runtime'
@@ -80,6 +81,8 @@ export class Runtime {
   }>()
 
   constructor() {
+    // The CLI server is already running; it has no desktop process lifecycle.
+    if (isCliLaunch()) return
     window.addEventListener('message', this.#onMessage)
     const app = (window as any).__APP__
     const directRuntime = app?.projectRuntime as DirectPlaygroundRuntime | undefined
@@ -134,7 +137,7 @@ export class Runtime {
   }
 
   #request(type: 'start' | 'stop' | 'restart', options?: { timeoutMs?: number }): Promise<ProjectRuntimeStatus> {
-    if (window.parent === window) return Promise.reject(new Error('ProjectRuntime Playground 桥接不可用。'))
+    if (isCliLaunch() || window.parent === window) return Promise.reject(new Error('ProjectRuntime Playground 桥接不可用。'))
     const requestId = `${Date.now()}-${++this.#nextRequestId}`
     return new Promise<ProjectRuntimeStatus>((resolve, reject) => {
       this.#pending.set(requestId, { resolve, reject })
