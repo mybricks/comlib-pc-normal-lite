@@ -23,7 +23,7 @@ const value = {
   services: [{ title: 'save', location }],
   state,
   store: state,
-  docs: [{ title: 'Page', refSelector: '.widget' }],
+  docs: [{ title: 'Page', refSelector: '[data-widget-name="Page"]:not([data-wrap-container])' }],
 }
 const query = { tsx: 'Page.tsx', type: 'dom', loc: JSON.stringify(loc) }
 
@@ -37,8 +37,8 @@ function setup() {
 test('canvas returns only requested categories for the selected TSX', () => {
   const { audit } = setup()
   assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['events', 'store'] }),
-    { events: value.events, store: state })
-  assert.deepEqual(audit.get({ tsx: 'missing', type: 'canvas', valueKeys: ['events'] }), { events: [] })
+    { events: value.events, store: state, jsDocs: value.docs })
+  assert.deepEqual(audit.get({ tsx: 'missing', type: 'canvas', valueKeys: ['events'] }), { events: [], jsDocs: [] })
   assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['jsDocs'] }),
     { jsDocs: value.docs })
 })
@@ -46,60 +46,46 @@ test('canvas returns only requested categories for the selected TSX', () => {
 test('DOM matches both file and exact line range, with state/store aliases', () => {
   const { audit } = setup()
   assert.deepEqual(audit.get({ ...query, valueKeys: ['events', 'services', 'state', 'store', 'unknown'] }), {
-    events: [event], services: value.services, state, store: state,
+    events: [event], services: value.services, state, store: state, jsDocs: [],
   })
-  assert.deepEqual(audit.get({ ...query, loc, valueKeys: ['events'] }), { events: [event] })
+  assert.deepEqual(audit.get({ ...query, loc, valueKeys: ['events'] }), { events: [event], jsDocs: [] })
   for (const invalid of ['{', 'null', '{}', undefined]) {
-    assert.deepEqual(audit.get({ ...query, loc: invalid, valueKeys: ['events'] }), { events: [] })
+    assert.deepEqual(audit.get({ ...query, loc: invalid, valueKeys: ['events'] }), { events: [], jsDocs: [] })
   }
 })
 
-test('selector-only bindings match elements found by parsed data-loc', () => {
+test('DOM matches either loc or parentLoc and ignores missing or invalid parentLoc', () => {
   const { audit } = setup()
-  const binding = { title: 'onClick', refSelector: '.widget' }
-  audit.set({ tsx: query.tsx, value: { ...value, events: [binding] } })
-  const previous = globalThis.document
-  globalThis.document = { querySelector: () => ({ shadowRoot: { querySelectorAll: () => [
-    { getAttribute: () => '{' },
-    { getAttribute: () => JSON.stringify(loc), matches: selector => selector === '.widget' },
-    { getAttribute: () => JSON.stringify({ ...loc, files: { jsx: 'Other.tsx' } }), matches: () => true },
-  ] } }) }
-  try {
-    assert.deepEqual(audit.get({ ...query, valueKeys: ['events'] }), { events: [binding] })
-  } finally {
-    if (previous === undefined) delete globalThis.document
-    else globalThis.document = previous
+  const parentLoc = { files: { jsx: 'Parent.tsx' }, codeLine: { start: 20, end: 24 } }
+  const parentLocation = { fileName: 'Parent.tsx', startLine: 20, endLine: 24 }
+  const parentEvent = { title: 'parent click', location: parentLocation }
+  audit.set({ tsx: query.tsx, value: { ...value, events: [
+    event, parentEvent,
+    { location: { ...parentLocation, endLine: 25 } },
+    { location: { ...parentLocation, fileName: 'Other.tsx' } },
+  ] } })
+  for (const input of [parentLoc, JSON.stringify(parentLoc)]) {
+    assert.deepEqual(audit.get({ ...query, parentLoc: input, valueKeys: ['events'] }),
+      { events: [event, parentEvent], jsDocs: [] })
+    assert.deepEqual(audit.get({ ...query, loc: undefined, parentLoc: input, valueKeys: ['events'] }),
+      { events: [parentEvent], jsDocs: [] })
+  }
+  for (const input of [undefined, null, '', '{', 'null', '{}']) {
+    assert.deepEqual(audit.get({ ...query, parentLoc: input, valueKeys: ['events'] }),
+      { events: [event], jsDocs: [] })
   }
 })
 
-test('DOM jsDocs reads legacy docs for the nearest component only', () => {
+test('DOM jsDocs matches widgetName without DOM lookup or location', () => {
   const { audit } = setup()
-  const parentDoc = { title: 'Parent', refSelector: '.parent' }
-  audit.set({ tsx: query.tsx, value: { ...value, docs: [parentDoc, ...value.docs] } })
-  const previous = globalThis.document
-  let component = { matches: selector => selector === '.widget' }
-  globalThis.document = { querySelector: () => ({ shadowRoot: { querySelectorAll: () => [
-    {
-      getAttribute: () => JSON.stringify(loc),
-      closest: selector => {
-        assert.equal(selector, '[data-widget-name]:not([data-wrap-container])')
-        return component
-      },
-    },
-  ] } }) }
-  try {
-    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: value.docs })
-    component = { matches: () => false }
-    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: [] })
-    component = null
-    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: [] })
-    assert.deepEqual(audit.get({ ...query, loc: '{', valueKeys: ['jsDocs'] }), { jsDocs: [] })
-    audit.set({ tsx: query.tsx, value: { ...value, docs: [{ refSelector: '[' }] } })
-    component = { matches: () => { throw new SyntaxError('Invalid selector') } }
-    assert.deepEqual(audit.get({ ...query, valueKeys: ['jsDocs'] }), { jsDocs: [] })
-  } finally {
-    if (previous === undefined) delete globalThis.document
-    else globalThis.document = previous
+  const parentDoc = { title: 'Parent', refSelector: '[data-widget-name="Parent"]' }
+  const similarlyNamedDoc = { title: 'PageExtra', refSelector: '[data-widget-name="PageExtra"]' }
+  audit.set({ tsx: query.tsx, value: { ...value, docs: [parentDoc, similarlyNamedDoc, ...value.docs] } })
+  assert.deepEqual(audit.get({ ...query, widgetName: 'Page', valueKeys: [] }), { jsDocs: value.docs })
+  assert.deepEqual(audit.get({ ...query, loc: undefined, widgetName: 'Page', valueKeys: ['jsDocs'] }),
+    { jsDocs: value.docs })
+  for (const widgetName of [undefined, null, '', 'Missing']) {
+    assert.deepEqual(audit.get({ ...query, widgetName, valueKeys: ['jsDocs'] }), { jsDocs: [] })
   }
 })
 
@@ -115,7 +101,7 @@ test('aiDoc reads the same escaped key as @getDoc and migrates legacy strings', 
   assert.equal(audit.get({ ...query, valueKeys: ['aiDoc'] }).aiDoc, aiDoc)
   // AI documents remain available even before graph data has been registered.
   assert.equal(audit.get({ ...query, tsx: 'missing', valueKeys: ['aiDoc'] }).aiDoc, aiDoc)
-  assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['aiDoc'] }), {})
+  assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['aiDoc'] }), { jsDocs: value.docs })
 })
 
 test('missing AI documents return the @getDoc empty document shape', () => {

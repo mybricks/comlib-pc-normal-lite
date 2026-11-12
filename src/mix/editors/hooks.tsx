@@ -499,6 +499,8 @@ export function buildHooks(props: Props) {
       if (!tag) {
         auditParams = {
           loc: loc,
+          parentLoc: ele.getAttribute('data-parent-loc'),
+          widgetName: ele.closest('[data-widget-name]')?.getAttribute('data-widget-name'),
           tsx: loc?.files.jsx,
           type: 'dom',
           valueKeys

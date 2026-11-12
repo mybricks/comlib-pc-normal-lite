@@ -24,72 +24,45 @@ export default class Audit {
   get(params: {
     tsx: string,
     loc?: string | DomLoc,
+    parentLoc?: string | DomLoc | null,
+    widgetName?: string | null,
     type: 'canvas' | 'dom',
     valueKeys: string[] // events services state store jsDocs aiDoc
   }): AuditResult {
     const value = this.tsxToValueMap.get(params.tsx)
     const result: AuditResult = {}
-    let loc: DomLoc | undefined
-    if (params.type === 'dom') {
+    const parseLoc = (input?: string | DomLoc | null): DomLoc | undefined => {
+      if (params.type !== 'dom') return undefined
       try {
-        loc = typeof params.loc === 'string' ? JSON.parse(params.loc) : params.loc
+        const parsed = typeof input === 'string' ? JSON.parse(input) : input
+        return parsed?.files?.jsx && Number.isInteger(parsed?.codeLine?.start)
+          && Number.isInteger(parsed?.codeLine?.end) ? parsed : undefined
       } catch {
-        // 无效的 data-loc 不应导致整个审计查询失败。
+        // 无效的定位信息不应导致整个审计查询失败。
+        return undefined
       }
     }
-    const hasLocation = !!loc?.files?.jsx && Number.isInteger(loc?.codeLine?.start)
-      && Number.isInteger(loc?.codeLine?.end)
-    let elements: Element[] | undefined
-
-    const getElements = () => {
-      if (!elements) {
-        const root = typeof document === 'undefined'
-          ? undefined
-          : document.querySelector('#_mybricks-geo-webview_')?.shadowRoot
-        elements = Array.from(root?.querySelectorAll('[data-loc]') ?? []).filter(element => {
-          try {
-            const elementLoc = JSON.parse(element.getAttribute('data-loc') || '') as DomLoc
-            return elementLoc.files?.jsx === loc!.files.jsx
-              && elementLoc.codeLine?.start === loc!.codeLine.start
-              && elementLoc.codeLine?.end === loc!.codeLine.end
-          } catch {
-            return false
-          }
-        })
-      }
-      return elements
-    }
-
+    const loc = parseLoc(params.loc)
+    const parentLoc = parseLoc(params.parentLoc)
+    const locations = [loc, parentLoc].filter((item): item is DomLoc => !!item)
+    const hasLocation = !!loc
     const matches = (item: { location?: { fileName: string; startLine: number; endLine: number }; refSelector?: string }) => {
-      if (!hasLocation) return false
+      if (!locations.length) return false
       if (item.location) {
-        return item.location.fileName === loc!.files.jsx
-          && item.location.startLine === loc!.codeLine.start
-          && item.location.endLine === loc!.codeLine.end
+        return locations.some(location => item.location!.fileName === location.files.jsx
+          && item.location!.startLine === location.codeLine.start
+          && item.location!.endLine === location.codeLine.end)
       }
-      if (!item.refSelector) return false
-
-      // 兼容只有 selector 的绑定；从设计器中找到 loc 对应的元素再匹配。
-      try {
-        return getElements().some(element => element.matches(item.refSelector!))
-      } catch {
-        return false
-      }
+      return false
     }
 
-    for (const key of params.valueKeys) {
+    for (const key of params.valueKeys.concat('jsDocs')) {
       if (key === 'jsDocs') {
         const docs = value?.docs ?? []
         result.jsDocs = params.type === 'dom'
-          ? hasLocation ? docs.filter(doc => {
-            try {
-              return getElements().some(element => element
-                .closest('[data-widget-name]:not([data-wrap-container])')
-                ?.matches(doc.refSelector))
-            } catch {
-              return false
-            }
-          }) : []
+          ? params.widgetName
+            ? docs.filter(doc => doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
+            : []
           : docs
         continue
       }
