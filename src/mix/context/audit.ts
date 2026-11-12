@@ -1,4 +1,5 @@
-import type { transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
+import { transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
+import type { NewSummaryData } from "../../utils/ai-code/md/transformForNotifyChanged"
 import { escapeCssAttributeValue } from "../../helpers/dom"
 import type { DomLoc } from "../../helpers/dom"
 
@@ -8,7 +9,7 @@ type AuditResult = Partial<Omit<AuditValue, 'docs'> & { jsDoc: AuditValue['docs'
 
 export default class Audit {
 
-  tsxToValueMap = new Map<string, AuditValue>()
+  tsxToValueMap = new Map<string, AuditValue & { jsDocMap?: NewSummaryData; jsDocs: AuditValue['docs'] }>()
 
   constructor(private context) {
     
@@ -17,8 +18,13 @@ export default class Audit {
   set(params: {
     tsx: string
     value: ReturnType<typeof transformNewFormatForNotifyChanged>
+    jsDocMap?: NewSummaryData
   }) {
-    this.tsxToValueMap.set(params.tsx, params.value)
+    this.tsxToValueMap.set(params.tsx, {
+      ...params.value,
+      jsDocMap: params.jsDocMap,
+      jsDocs: params.jsDocMap ? transformNewFormatForNotifyChanged(params.jsDocMap, params.tsx).docs : [],
+    })
   }
 
   get(params: {
@@ -56,14 +62,18 @@ export default class Audit {
       return false
     }
 
-    for (const key of params.valueKeys) {
+    for (const key of params.valueKeys.concat('jsDoc')) {
       if (key === 'jsDoc') {
         const docs = value?.docs ?? []
-        result.jsDoc = params.type === 'dom'
+        const findDoc = (docs: AuditValue['docs']) => params.type === 'dom'
           ? params.widgetName
             ? docs.find(doc => doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
             : undefined
           : docs[0]
+        result.jsDoc = findDoc(docs)
+        if (!result.jsDoc && value) {
+          result.jsDoc = findDoc(value.jsDocs)
+        }
         continue
       }
       if (key === 'aiDoc') {

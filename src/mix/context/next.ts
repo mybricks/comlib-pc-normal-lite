@@ -222,6 +222,7 @@ class Context {
         })
         this.audit.set({
           tsx: notifyFileName,
+          jsDocMap,
           value: notifyChangedValue
         })
         this.notifyChanged(notifyFileName, 'update', notifyChangedValue)
@@ -357,6 +358,7 @@ class Context {
           const value = transformNewFormatForNotifyChanged(jsDocMap, targetFile)
           this.audit.set({
             tsx: targetFile,
+            jsDocMap,
             value
           })
           this.notifyChanged(targetFile, 'update', value)
@@ -383,6 +385,7 @@ class Context {
             const notifyChangedValue = transformNewFormatForNotifyChanged(notifyData, fileName)
             this.audit.set({
               tsx: fileName,
+              jsDocMap: transformJsDoc,
               value: notifyChangedValue
             })
             // if (notifyChangedValue.docs?.length) {
@@ -554,6 +557,7 @@ class Context {
               const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
               this.audit.set({
                 tsx: notifyFileName,
+                jsDocMap,
                 value: notifyChangedValue
               })
 
