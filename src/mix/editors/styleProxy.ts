@@ -11,6 +11,8 @@ import { resolveLessFilePath } from './style/helpers/resolveLessFilePath'
 import { createResolvedLessRulePatcher } from './style/helpers/createResolvedLessRulePatcher'
 import { createFreedomPlanWithInline } from './style/helpers/createFreedomPlanWithInline'
 import type { FreedomPlan } from './style/helpers/createFreedomPlanWithInline'
+import { createAnimationStylePlan } from './style/helpers/createAnimationStylePlan'
+import type { AnimationStylePlan } from './style/helpers/createAnimationStylePlan'
 import { createInlineStyleHistory } from './style/helpers/createInlineStyleHistory'
 import { isAncestorStateStyleSelector, isStateStyleSelector } from './style/helpers/stateStyleSelector'
 import { getInitialInlineStyleSnapshot, applyInlineStyleSnapshots, patchSingleElementInlineStyle } from './style/helpers/createSetStyleHandler'
@@ -1767,6 +1769,24 @@ export function genStyleValue(props) {
     splitTopLevelCommaKeys, splitCommaMergedTopLevelRuleForWrite,
   });
 
+  const applyAnimationStylePlan = createAnimationStylePlan({
+    updateStyleFileInBranch,
+    patchLessChange(cssObj, { target, selector, style }) {
+      const fullSelector = selector;
+      const eleClassList = Array.from(target.classList);
+      const nestedCandidate = resolveNestedRuleTarget(cssObj, fullSelector, eleClassList);
+      const entries = Object.entries(style);
+      const writes = Object.fromEntries(entries.filter(([, value]) => value !== null));
+      const deletions = entries.filter(([, value]) => value === null).map(([key]) => key);
+      const rule = patchResolvedLessRule(cssObj, {
+        rawSelector: selector, fullSelector, eleClassList, nestedCandidate,
+        lessValue: writes, explicitClearPatch: getExplicitClearPatch(selector, style),
+      })!;
+      deleteLessProperties(rule.targetStyle, deletions);
+      removeEmptyLessRule(rule);
+    },
+  });
+
   const applyFreedomPlan = (plan: FreedomPlan) => {
     const files = context.component!.params.data.files;
     const drafts = new Map<string, { previous: string; cssObj: Record<string, any> }>();
@@ -1795,12 +1815,13 @@ export function genStyleValue(props) {
       removeEmptyLessRule(rule);
     }
 
-    for (const [path, { previous, cssObj }] of drafts) {
+    // 构建目标为 ES5；使用 Map.forEach，避免 for...of 被降级成空循环。
+    drafts.forEach(({ previous, cssObj }, path) => {
       const current = stringifyLess(cssObj);
       updateStyleFileInBranch({
         path, previous, current, ele: plan.changes[0].target,
       });
-    }
+    });
   };
 
   const applyFreedomPlanWithInline = createFreedomPlanWithInline({
@@ -1822,6 +1843,9 @@ export function genStyleValue(props) {
 
   const proxy = {
     set(params: any, value: any) {
+      if (params.animationStylePlan) {
+        return applyAnimationStylePlan(params.animationStylePlan);
+      }
       if (params.freedomPlan) {
         if (params.freedomPlan.changes.some((change: { selector: string }) => change.selector === 'inline')) {
           return applyFreedomPlanWithInline(params.freedomPlan);
@@ -2549,8 +2573,21 @@ export function genStyleValue(props) {
     },
   };
 
-  (window as any).__mybricks_applyStylePlan = (plan: FreedomPlan) =>
-    proxy.set({ freedomPlan: plan }, undefined);
+  // 返回目标文件的最新源码声明树；修改内容由编辑器规划，组件库只负责读写。
+  (window as any).__mybricks_readStyleSheet = ({ target }: { target: HTMLElement; selector: string }) => {
+    const files = context.component!.params.data.files;
+    const loc = pickLocFromDomChain(target);
+    const file = resolveLessFilePath(loc.files?.less, files, config.getEntryFile());
+    const source = files.find((entry: { fileName: string }) => entry.fileName === file)!;
+    return { file, rules: parseLess(decodeURIComponent(source.source)) };
+  };
+
+  (window as any).__mybricks_applyStylePlan = (plan: FreedomPlan | AnimationStylePlan) => {
+    if ('type' in plan && plan.type === 'animation-styles') {
+      return proxy.set({ animationStylePlan: plan }, undefined);
+    }
+    return proxy.set({ freedomPlan: plan }, undefined);
+  };
 
   return proxy;
 }

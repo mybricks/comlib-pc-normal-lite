@@ -8,6 +8,7 @@ import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 import createMyBricksReactNative from '../mybricks/react-native'
 import { setWindowProxyDesignMode, useWindowProxy } from './windowProxyStore'
+import { syncCssPropertyRegistrations, removeCssPropertyRegistrations } from '../../css'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -122,9 +123,11 @@ const useDependencies = (params: Params) => {
             .replaceAll(`.${STYLE_REPLACE_ID}`, `:where(.${id})`)
             .replace(/:where\(\.[^)]+\)\s*(:root\b)/g, ':host') // 引擎shadowdom内oot替换为:host
           // 组件id + 文件路径，保证唯一性
+          syncCssPropertyRegistrations(id, `${id}_${filename}`, myContent)
           env.canvas.css.set(`${id}_${filename}`.replace(/\./g, '__').replace(/\//g, '_'), myContent)
         },
         remove() {
+          removeCssPropertyRegistrations(id)
           env.canvas.css.remove(id)
         }
       }
