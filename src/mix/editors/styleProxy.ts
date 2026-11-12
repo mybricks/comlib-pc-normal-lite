@@ -57,6 +57,17 @@ Object.entries(CSS_SHORTHAND_GROUPS).forEach(([shorthand, longhands]) => {
   longhands.forEach(longhand => { LONGHAND_TO_SHORTHAND[longhand] = shorthand; });
 });
 
+// 清除单个属性时，也查一下它是否来自某条简写的预览。
+function getPreviewSourceProperties(property: string) {
+  const properties = [property, LONGHAND_TO_SHORTHAND[property]];
+  const borderDetail = property.match(/^border-(top|right|bottom|left)-(width|style|color)$/);
+  if (borderDetail) {
+    // 只有边框的宽度、线型、颜色需要多查：例如 border-top-width 还可能来自 border-top 或 border。
+    properties.push(`border-${borderDetail[1]}`, 'border');
+  }
+  return properties.filter(Boolean);
+}
+
 function camelToKebab(str: string) {
   return str.replace(/([A-Z])/g, '-$1').toLowerCase();
 }
@@ -1703,8 +1714,8 @@ export function genStyleValue(props) {
     endStyleFileBranch: () => { pendingStyleFileBranch = null; },
   });
 
-  /** 三方内部 DOM 没有可安全落盘的 CSS 入口时，按 setSegment 的 chip 分支请求 AI。 */
-  const updateAIStyleInBranch = (ele: HTMLElement, value: Record<string, any>, deletions: string[]) => {
+  /** 先在元素上显示样式预览，再通过原有流程请求 AI 修改；selector 留给下次编辑和清除使用。 */
+  const updateAIStyleInBranch = (ele: HTMLElement, value: Record<string, any>, deletions: string[], selector: string) => {
     const styleChanges = [
       ...Object.entries(value).map(([key, value]) => ({ key, value })),
       ...deletions
@@ -1723,15 +1734,31 @@ export function genStyleValue(props) {
         priority: ele.style.getPropertyPriority(property),
       };
     });
+    const previousPreviewSources = ele.dataset.mybricksStylePreviewSources;
+    const previewSources: Record<string, string> = JSON.parse(previousPreviewSources || '{}');
+    // 记住每个预览属性的选择器；null、undefined、空字符串表示删除，0 和 unset 仍要保留记录。
+    styleChanges.forEach(({ key, value }) => {
+      const property = convertCamelToHyphen(key);
+      if (value === null || value === undefined || value === '') {
+        delete previewSources[property];
+      } else {
+        previewSources[property] = selector;
+      }
+    });
     // const label = getElementLabel(ele, '节点1');
     const actionId = randomUUID();
     const applyPreview = () => {
+      // 先删旧属性再写新值，否则先写 margin、再删 marginTop，会把刚写的上边距也清掉。
       styleChanges.forEach(({ key, value }) => {
-        const property = convertCamelToHyphen(key);
         if (value === null || value === undefined || value === '') {
-          ele.style.removeProperty(property);
-        } else {
-          ele.style.setProperty(property, String(value), 'important');
+          ele.style.removeProperty(convertCamelToHyphen(key));
+        }
+      });
+      styleChanges.forEach(({ key, value }) => {
+        if (value !== null && value !== undefined && value !== '') {
+          // 传来的值可能带 !important；设置元素样式时，要把它从值里去掉，放到第三个参数里。
+          const previewValue = String(value).replace(/\s*!important\s*$/i, '');
+          ele.style.setProperty(convertCamelToHyphen(key), previewValue, 'important');
         }
       });
     };
@@ -1743,6 +1770,8 @@ export function genStyleValue(props) {
       }),
       execute() {
         applyPreview();
+        // 预览生效后，记下这些属性分别对应哪个选择器。
+        ele.dataset.mybricksStylePreviewSources = JSON.stringify(previewSources);
         context.component?.actions.addUserAction({
           id: actionId,
           type: 'update-style',
@@ -1758,6 +1787,12 @@ export function genStyleValue(props) {
             ele.style.removeProperty(property);
           }
         });
+        // 撤销时也把预览记录还原；原来没有记录就删掉，避免下次编辑用错选择器。
+        if (previousPreviewSources === undefined) {
+          delete ele.dataset.mybricksStylePreviewSources;
+        } else {
+          ele.dataset.mybricksStylePreviewSources = previousPreviewSources;
+        }
         context.component?.actions.removeUserAction(actionId);
       },
     });
@@ -1830,7 +1865,8 @@ export function genStyleValue(props) {
       }
       // AI 样式请求复用原有预览、操作记录和撤销；普通样式继续走下方源码写入。
       if (value?.type === 'ai-style-update') {
-        updateAIStyleInBranch(params.focusArea.ele, value.styles, []);
+        // 从这里修改 AI 样式时，也传入选择器，方便下次继续编辑。
+        updateAIStyleInBranch(params.focusArea.ele, value.styles, [], params.selector);
         return;
       }
       const locRaw = params.focusArea?.dataset?.loc;
@@ -1864,6 +1900,7 @@ export function genStyleValue(props) {
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const hasDragInsert = !!(ele as HTMLElement | null)?.hasAttribute('data-drag-insert');
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
+      // 沿用原来的 AI 节点判断：元素既没有编辑区域标记，也不是拖入节点；或是拖入节点但没有源码位置。
       const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
 
       const useInlineStyleHistory = !isAncestorStateWrite && !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
@@ -2042,13 +2079,35 @@ export function genStyleValue(props) {
         return;
       }
 
-      if (explicitClearPatch) {
-        // selector 定向清空只把 unset 作为普通 Less 写入；null 只进入 deletions。
+      // 读取前一次预览的记录，用来判断这次清除是否也要处理元素上的预览值。
+      const previewSources: Record<string, string> = JSON.parse(
+        (ele as HTMLElement | null)?.dataset?.mybricksStylePreviewSources || '{}',
+      );
+      // 判断这次清除是否要交给 AI 预览处理，避免只改源码、却留下元素上的预览值。
+      // 1. 这个节点是按 AI 方式处理的 -> isAIOnlyNode
+      // 2. 这次操作被识别为“清除” -> !!explicitClearPatch
+      // 3. 要处理的属性里，至少一个有当前选择器的预览记录
+      const clearsAIPreview = isAIOnlyNode && !!explicitClearPatch &&
+        [...Object.keys(value), ...(legacyDeletions || [])].some(key => {
+          // 记录里用的是 border-top-width 这样的名字，先把 borderTopWidth 转成同样的写法。
+          const property = convertCamelToHyphen(key);
+          // 属性自己或对应的简写，必须记录了当前选择器，才能按预览清除。
+          return getPreviewSourceProperties(property).some(sourceProperty =>
+            previewSources[sourceProperty] === rawSelector
+          );
+        });
+      // 本次是清除、但不属于上面的 AI 预览清除时，保留原来的源码处理：写入值与删除项分开传。
+      if (explicitClearPatch && !clearsAIPreview) {
+        // unset 留在写入项里，null 对应的属性交给 deletions 删除。
         value = explicitClearPatch.writes;
       }
 
-      if (isAIOnlyNode && !explicitClearPatch) {
-        updateAIStyleInBranch(ele as HTMLElement, value || {}, (deletions || []).slice());
+      // AI 节点的普通修改仍按原来的方式预览；本次补上已确认属于预览的清除操作。
+      if (isAIOnlyNode && (!explicitClearPatch || clearsAIPreview)) {
+        // 清除 AI 预览时，下面的方法会处理 value 里的 null，还要带上编辑器单独传来的 legacyDeletions。
+        // 此时 deletions 只收集了 value 里的 null，用它会漏掉单独传来的删除项；其他情况沿用 deletions。
+        const previewDeletions = clearsAIPreview ? legacyDeletions : deletions;
+        updateAIStyleInBranch(ele as HTMLElement, value || {}, (previewDeletions || []).slice(), rawSelector);
         return;
       }
 
