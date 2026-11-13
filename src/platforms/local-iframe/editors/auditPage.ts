@@ -1,5 +1,7 @@
 import { auditPageI18n } from '../../../mix/editors/audit-page.i18n'
 import { agentTurnLifecycle } from '../../../mix/sandbox/agent-turn-lifecycle'
+import context from '../context'
+import { refreshLocalGraph } from '../sandbox'
 
 export default function (hookContext, params) {
   type AuditPageOptionKey = 'events' | 'services' | 'crScope' | 'store' | 'crComplete';
@@ -35,14 +37,29 @@ export default function (hookContext, params) {
   const iframePath = ele.dataset.iframePath
   const agentMessage = auditPageI18n.pageMessage(iframePath, message);
 
-  agentTurnLifecycle.register(hookContext.id, (turn) => {
-    if (turn?.status === 'success') {
-      return onComplete()
-    }
-    return onError()
-  })
-  ;(window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
-    message: agentMessage,
-    aiRole: 'fast',
+  return new Promise<Awaited<ReturnType<typeof context.audit.get>>>((resolve, reject) => {
+    agentTurnLifecycle.register(hookContext.id, async (turn) => {
+      try {
+        if (turn?.status !== 'success') {
+          throw new Error('Page audit failed')
+        }
+        // Agent 可能通过 shell 更新 YAML，完成后必须主动读取最新 graph。
+        await refreshLocalGraph()
+        const result = await context.audit.get({
+          path: iframePath,
+          type: 'canvas',
+          valueKeys: ['events', 'services', 'state', 'store', 'jsDoc'],
+        })
+        onComplete()
+        resolve(result)
+      } catch (error) {
+        reject(error)
+        onError()
+      }
+    })
+    ;(window as any)._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
+      message: agentMessage,
+      aiRole: 'fast',
+    })
   })
 }

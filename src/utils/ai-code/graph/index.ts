@@ -1,6 +1,6 @@
 import YAML from 'yaml'
 import { parse as parseCssSelector } from 'css-tree'
-import type { NewSummaryBind, NewSummaryData, NewSummaryItem } from '../md/transformForNotifyChanged'
+import type { NewSummaryBind, NewSummaryData, NewSummaryItem } from '../../../helpers/ai-code/transformForNotifyChanged'
 
 const DEFAULT_CONFIG_DIR_NAME = '.agent'
 

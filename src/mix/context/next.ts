@@ -1,7 +1,7 @@
 import { Events } from "../../utils/events";
 import { FileSystem } from "../../utils/ai-code/render/next-runtime/utils";
 import { transformTsx, transformLess } from "../../utils/ai-code/transform-umd";
-import { transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
+import { transformNewFormatForNotifyChanged } from "./notifyChanged"
 import {
   findGraphForSourceFile,
   findSourceFile,

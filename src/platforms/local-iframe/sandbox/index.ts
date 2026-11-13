@@ -6,7 +6,7 @@ import { parseTasksForNotify } from '../../../mix/tasks/notify'
 import { registerTaskReferResolver } from '../../../mix/tasks/refer'
 import { createTasksManager } from '../../../mix/tasks/verify-block'
 import { completeActiveAuditTransaction, failActiveAuditTransaction, hasActiveAuditTransaction, type AuditResult, type AuditSection, type AuditState } from './auditTransaction'
-import { transformLocalIframeFormatForNotifyChanged } from '../../../utils/ai-code/md/transformForNotifyChanged'
+import { transformLocalIframeFormatForNotifyChanged } from './notifyChanged'
 import {
   hasMybricksGraphDirectory,
   hasMybricksGraphFile,
@@ -23,8 +23,6 @@ import { createDesignerLoading } from '../../../mix/sandbox'
 import { createHttpPageAnalysis } from './page-analysis'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import { Events } from '../../../utils/events'
-
-(window as any)._local_iframe_notify_map_ = {} as any;
 
 function formatParsedElementChipMessage({ message, chips }: { message: string; chips: Array<{ id: string; data?: any }> }): string {
   let resolved = message;
@@ -417,6 +415,8 @@ export async function captureVersionGitDiff(resetBaseline = false): Promise<stri
 }
 
 async function compileLocalGraphFiles(localFiles: LocalFile[], configDirName: string): Promise<void> {
+  // 每次扫描都是完整快照，移除已删除文档或旧路由的缓存。
+  myContext.audit.clear()
   // local iframe 链路只编译 YAML graph；不启用 JSDoc/Babel 编译。
   const files: FileLike[] = localFiles.map(file => ({
     fileName: file.path,
@@ -439,7 +439,9 @@ async function compileLocalGraphFiles(localFiles: LocalFile[], configDirName: st
         value: notifyChangedValue
       });
 
-      (window as any)._local_iframe_notify_map_[graph.route!] = notifyChangedValue
+      if (graph.route) {
+        myContext.audit.set({ path: graph.route, value: notifyChangedValue })
+      }
 
       // console.log('[mybricks-graph][local-iframe] compiled data', {
       //   graphFileName: graphFile.path,

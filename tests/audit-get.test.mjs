@@ -2,17 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { stripTypeScriptTypes } from 'node:module'
+import { mainTransformUrl } from './helpers/notify-transform.mjs'
 
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
 const domSource = await readFile(new URL('../src/helpers/dom/index.ts', import.meta.url), 'utf8')
 // These tests only call escapeCssAttributeValue; the other DOM helpers are unused.
 const domUrl = moduleUrl(stripTypeScriptTypes(domSource.replace("import { safeParseJson } from '../normal'", '')))
-const transformSource = await readFile(new URL('../src/utils/ai-code/md/transformForNotifyChanged.ts', import.meta.url), 'utf8')
-const transformUrl = moduleUrl(stripTypeScriptTypes(transformSource.replace('import { parsemd, SummaryBlock } from "./index";', '')))
 const auditSource = await readFile(new URL('../src/mix/context/audit.ts', import.meta.url), 'utf8')
 const auditUrl = moduleUrl(stripTypeScriptTypes(auditSource, { mode: 'transform' })
   .replace('"../../helpers/dom"', JSON.stringify(domUrl))
-  .replace('"../../utils/ai-code/md/transformForNotifyChanged"', JSON.stringify(transformUrl)))
+  .replace('"./notifyChanged"', JSON.stringify(mainTransformUrl)))
 const { default: Audit } = await import(auditUrl)
 const { escapeCssAttributeValue } = await import(domUrl)
 
@@ -37,11 +36,11 @@ function setup() {
   return { audit, data }
 }
 
-test('canvas returns requested categories and the default jsDoc for the selected TSX', () => {
+test('canvas returns only requested categories, including jsDoc when explicitly requested', () => {
   const { audit } = setup()
   assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['events', 'store'] }),
-    { events: value.events, store: state, jsDoc: value.docs[0] })
-  assert.deepEqual(audit.get({ tsx: 'missing', type: 'canvas', valueKeys: ['events'] }), { events: [], jsDoc: undefined })
+    { events: value.events, store: state })
+  assert.deepEqual(audit.get({ tsx: 'missing', type: 'canvas', valueKeys: ['events'] }), { events: [] })
   assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['jsDoc'] }),
     { jsDoc: value.docs[0] })
 })
@@ -49,11 +48,11 @@ test('canvas returns requested categories and the default jsDoc for the selected
 test('DOM matches both file and exact line range, with state/store aliases', () => {
   const { audit } = setup()
   assert.deepEqual(audit.get({ ...query, valueKeys: ['events', 'services', 'state', 'store', 'unknown'] }), {
-    events: [event], services: value.services, state, store: state, jsDoc: undefined,
+    events: [event], services: value.services, state, store: state,
   })
-  assert.deepEqual(audit.get({ ...query, loc, valueKeys: ['events'] }), { events: [event], jsDoc: undefined })
+  assert.deepEqual(audit.get({ ...query, loc, valueKeys: ['events'] }), { events: [event] })
   for (const invalid of ['{', 'null', '{}', undefined]) {
-    assert.deepEqual(audit.get({ ...query, loc: invalid, valueKeys: ['events'] }), { events: [], jsDoc: undefined })
+    assert.deepEqual(audit.get({ ...query, loc: invalid, valueKeys: ['events'] }), { events: [] })
   }
 })
 
@@ -69,13 +68,13 @@ test('DOM matches either loc or parentLoc and ignores missing or invalid parentL
   ] } })
   for (const input of [parentLoc, JSON.stringify(parentLoc)]) {
     assert.deepEqual(audit.get({ ...query, parentLoc: input, valueKeys: ['events'] }),
-      { events: [event, parentEvent], jsDoc: undefined })
+      { events: [event, parentEvent] })
     assert.deepEqual(audit.get({ ...query, loc: undefined, parentLoc: input, valueKeys: ['events'] }),
-      { events: [parentEvent], jsDoc: undefined })
+      { events: [parentEvent] })
   }
   for (const input of [undefined, null, '', '{', 'null', '{}']) {
     assert.deepEqual(audit.get({ ...query, parentLoc: input, valueKeys: ['events'] }),
-      { events: [event], jsDoc: undefined })
+      { events: [event] })
   }
 })
 
@@ -104,7 +103,7 @@ test('aiDoc reads the same escaped key as @getDoc and migrates legacy strings', 
   assert.equal(audit.get({ ...query, valueKeys: ['aiDoc'] }).aiDoc, aiDoc)
   // AI documents remain available even before graph data has been registered.
   assert.equal(audit.get({ ...query, tsx: 'missing', valueKeys: ['aiDoc'] }).aiDoc, aiDoc)
-  assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['aiDoc'] }), { jsDoc: value.docs[0] })
+  assert.deepEqual(audit.get({ tsx: query.tsx, type: 'canvas', valueKeys: ['aiDoc'] }), {})
 })
 
 test('missing AI documents return the @getDoc empty document shape', () => {

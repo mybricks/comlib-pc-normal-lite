@@ -5,14 +5,19 @@ import { executeLocalShellCommand, readLocalFiles } from '../sandbox'
 
 export default function () {
   return {
-    '@getDoc'(params) {
-      const loc = getClosestDomLoc(params.focusArea.ele)
-      if (!loc) {
-        return myContext.doc.get('')
-      }
-      const { files, codeLine } = loc
-      const key = myContext.doc.buildKey(files, codeLine)
-      return myContext.doc.get(key)
+    '@getDoc'(params, valueKeys) {
+      const ele = params.focusArea.ele as Element
+      const isCanvas = ele.getAttribute('data-zone-type') === 'page' || !!ele.getAttribute('data-canvas-tag')
+      // DOM 位于 iframe 内，页面路由来自宿主中的 iframe 容器。
+      const page = isCanvas ? ele : ele.ownerDocument.defaultView?.frameElement?.closest('[data-iframe-path]')
+      const res = myContext.audit.get({
+        path: page?.getAttribute('data-iframe-path') ?? undefined,
+        type: isCanvas ? 'canvas' : 'dom',
+        loc: isCanvas ? undefined : getClosestDomLoc(ele),
+        parentLoc: isCanvas ? undefined : ele.getAttribute('data-parent-loc'),
+        valueKeys,
+      })
+      return res
     },
     '@updateDoc'(params, { onComplete }) {
       const loc = getClosestDomLoc(params.focusArea.ele)

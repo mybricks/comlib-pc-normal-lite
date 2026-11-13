@@ -1,5 +1,5 @@
-import { transformNewFormatForNotifyChanged } from "../../utils/ai-code/md/transformForNotifyChanged"
-import type { NewSummaryData } from "../../utils/ai-code/md/transformForNotifyChanged"
+import { transformNewFormatForNotifyChanged } from "./notifyChanged"
+import type { NewSummaryData } from "../../helpers/ai-code/transformForNotifyChanged"
 import { escapeCssAttributeValue } from "../../helpers/dom"
 import type { DomLoc } from "../../helpers/dom"
 

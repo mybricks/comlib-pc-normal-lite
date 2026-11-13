@@ -9,6 +9,7 @@ import runTest from './runTest'
 import setStyle from './setStyle'
 import { undoRedoManager } from '../../../mix/editors/undoRedo'
 import noteRender from './noteRender'
+import getComments from './getComments'
 import auditPage from './auditPage'
 import viewCode from './viewCode'
 import resizePage from './resizePage'
@@ -22,7 +23,10 @@ export default function (props) {
     '@lowcode': lowcode,
     '@debug': debug,
     '@refresh': refresh,
-    '[data-zone-noselector]': {
+    '[data-loc]': {
+      items: [
+        noteRender,
+      ]
       // style: [{ items: [] }],
     },
     '[class]': {
@@ -52,6 +56,7 @@ export default function (props) {
     },
     '@auditPage': auditPage,
     '@viewCode': viewCode,
+    '@getComments': getComments,
     ...doc(),
     ...zoneStatus(props),
     '[data-zone-type=page]': buildPagePanel(props),

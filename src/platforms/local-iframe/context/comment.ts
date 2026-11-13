@@ -111,9 +111,6 @@ export class Comment {
             type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
           }
         }),
-      events: [],
-      services: [],
-      store: []
     }
   }
 
