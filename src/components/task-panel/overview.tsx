@@ -16,7 +16,6 @@ type OverviewComponent = OverviewEntry & { parent?: string | string[] }
 type OverviewDocument = { root: OverviewNode; pages: OverviewNode[]; components: OverviewNode[] }
 type Task = { id: string; title: string; status: TaskStatus }
 type RelatedTask = { id: string; title: string; status?: TaskStatus }
-type Direction = 'LR' | 'TB'
 export type OverviewSelection = { kind: 'task'; id: string } | null
 
 const NODE_WIDTH = 220
@@ -106,7 +105,6 @@ function TaskLink({ task, active, onSelect }: { task: RelatedTask; active: boole
 
 type GraphNodeData = {
   node: OverviewNode
-  direction: Direction
   tasks: RelatedTask[]
   highlighted?: boolean
   ancestorHighlighted?: boolean
@@ -116,12 +114,12 @@ type GraphNodeData = {
 }
 
 function GraphNode({ data }: NodeProps<GraphNodeData>) {
-  const { node, direction, tasks, activeTask } = data
+  const { node, tasks, activeTask } = data
   return (
     <div className={`${css['overview-node']} nopan`} data-kind={node.type} data-highlighted={data.highlighted || undefined}
       data-ancestor-highlighted={data.ancestorHighlighted || undefined} data-muted={data.muted || undefined}>
-      <Handle type="target" position={direction === 'LR' ? Position.Left : Position.Top} />
-      <div className={css['overview-node-heading']} data-mybricks-tip={node.title}>
+      <Handle type="target" position={Position.Left} />
+      <div className={css['overview-node-heading']}>
         <span className={css['overview-node-icon']}><NodeIcon kind={node.type} /></span>
         <span className={css['overview-node-label']}>
           <span>{getNodeKind(node.type)}</span>
@@ -133,7 +131,7 @@ function GraphNode({ data }: NodeProps<GraphNodeData>) {
           {tasks.map(task => <TaskLink key={task.id} task={task} active={task.id === activeTask} onSelect={data.onTask} />)}
         </div>
       )}
-      <Handle type="source" position={direction === 'LR' ? Position.Right : Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }
@@ -153,17 +151,17 @@ function getNodeHeight(taskCount: number) {
   return NODE_HEADER_HEIGHT + (taskCount ? TASK_LIST_PADDING + taskCount * TASK_ROW_HEIGHT : 0)
 }
 
-function buildGraph(doc: OverviewDocument, tasks: Map<string, Task>, direction: Direction) {
+function buildGraph(doc: OverviewDocument, tasks: Map<string, Task>) {
   const nodes: Node<GraphNodeData>[] = []
   const edges: Edge[] = []
   const components = new Map(doc.components.map(component => [component.id, component]))
-  const graph = new dagre.graphlib.Graph().setGraph({ rankdir: direction, nodesep: 20, ranksep: 52 }).setDefaultEdgeLabel(() => ({}))
+  const graph = new dagre.graphlib.Graph().setGraph({ rankdir: 'LR', nodesep: 20, ranksep: 52 }).setDefaultEdgeLabel(() => ({}))
   const addNode = (id: string, node: OverviewNode, parent?: string) => {
     const related = getRelatedTasks(node, tasks)
     graph.setNode(id, { width: NODE_WIDTH, height: getNodeHeight(related.length) })
     // React Flow disables pointer events on non-selectable, non-draggable nodes by default.
     // Keep the node itself non-selectable while allowing its task buttons to receive input.
-    nodes.push({ id, type: 'overview', position: { x: 0, y: 0 }, style: { pointerEvents: 'all' }, data: { node, tasks: related, direction } })
+    nodes.push({ id, type: 'overview', position: { x: 0, y: 0 }, style: { pointerEvents: 'all' }, data: { node, tasks: related } })
     if (parent) {
       graph.setEdge(parent, id, {})
       edges.push({ id: `${parent}-to-${id}`, source: parent, target: id, type: 'smoothstep' })
@@ -174,17 +172,16 @@ function buildGraph(doc: OverviewDocument, tasks: Map<string, Task>, direction: 
       const component = components.get(id)
       if (!component || ancestors.has(id)) continue
       const graphId = `${parent}/component/${encodeURIComponent(id)}`
-      addNode(graphId, component, parent)
+      addNode(graphId, component, parent === 'root' ? undefined : parent)
       ancestors.add(id)
       addComponents(graphId, component.children, ancestors)
       ancestors.delete(id)
     }
   }
-  addNode('root', doc.root)
   addComponents('root', doc.root.children)
   for (const page of doc.pages) {
     const id = `page/${encodeURIComponent(page.id)}`
-    addNode(id, page, 'root')
+    addNode(id, page)
     addComponents(id, page.children)
   }
   dagre.layout(graph)
@@ -204,9 +201,12 @@ function FitOverview({ graph, taskFocus, focusIds }: {
   const { getViewport, setViewport, viewportInitialized } = useReactFlow()
   const width = useStore(state => state.width)
   const height = useStore(state => state.height)
+  const fittedGraphRef = useRef<typeof graph | null>(null)
+  const focusedRef = useRef<{ graph: typeof graph; selection: OverviewSelection } | null>(null)
   useEffect(() => {
-    if (!viewportInitialized || !width || !height) return
+    if (!viewportInitialized || !width || !height || fittedGraphRef.current === graph) return
     const frame = requestAnimationFrame(() => {
+      fittedGraphRef.current = graph
       const bounds = getNodesBounds(graph.nodes.map(node => ({
         ...node,
         width: NODE_WIDTH,
@@ -218,8 +218,15 @@ function FitOverview({ graph, taskFocus, focusIds }: {
   }, [viewportInitialized, graph, width, height, setViewport])
 
   useEffect(() => {
-    if (!viewportInitialized || !width || !height || !taskFocus || !focusIds.size) return
+    if (!taskFocus) {
+      focusedRef.current = null
+      return
+    }
+    if (!viewportInitialized || !width || !height || !focusIds.size) return
+    // Size changes update the scroll bounds without repeating an existing task focus.
+    if (focusedRef.current?.graph === graph && focusedRef.current.selection === taskFocus) return
     const frame = requestAnimationFrame(() => {
+      focusedRef.current = { graph, selection: taskFocus }
       const bounds = getNodesBounds(graph.nodes.filter(node => focusIds.has(node.id)).map(node => ({
         ...node,
         width: NODE_WIDTH,
@@ -283,39 +290,30 @@ export default function TaskOverview({ overview, tasks, selection, onSelect, onT
   onTaskClick: (id: string) => void
 }) {
   const canvasRef = useRef<HTMLDivElement>(null)
-  const [direction, setDirection] = useState<Direction>('TB')
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(1)
   const taskMap = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks])
   const { doc } = overview
-  const graphs = useMemo(() => doc ? {
-    LR: buildGraph(doc, taskMap, 'LR'),
-    TB: buildGraph(doc, taskMap, 'TB'),
-  } : null, [doc, taskMap])
+  const graph = useMemo(() => {
+    if (!doc) return null
+    const result = buildGraph(doc, taskMap)
+    return result.nodes.length ? result : null
+  }, [doc, taskMap])
 
   useLayoutEffect(() => attachShadowStyles(document), [])
   useLayoutEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !graphs) return
+    if (!canvas || !graph) return
     const update = () => {
       const { clientWidth: width, clientHeight: height } = canvas
       if (!width || !height) return
       setCanvasSize(current => current.width === width && current.height === height ? current : { width, height })
-      const scale = (graph: typeof graphs.LR) => Math.min(width / graph.width, height / graph.height)
-      const horizontal = scale(graphs.LR)
-      const vertical = scale(graphs.TB)
-      // Prefer vertical and keep a gap between thresholds to avoid flicker.
-      setDirection(current => current === 'LR'
-        ? (horizontal < vertical * 1.18 ? 'TB' : 'LR')
-        : (horizontal > vertical * 1.3 ? 'LR' : 'TB'))
     }
     update()
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : undefined
     observer?.observe(canvas)
     return () => observer?.disconnect()
-  }, [graphs])
-
-  const graph = graphs?.[direction]
+  }, [graph])
   const translateExtent = useMemo<[[number, number], [number, number]] | undefined>(() => {
     if (!graph) return undefined
     const bounds = getNodesBounds(graph.nodes.map(node => ({
@@ -372,7 +370,7 @@ export default function TaskOverview({ overview, tasks, selection, onSelect, onT
     <section className={css['overview-body']} aria-label={i18n.overviewView()}>
       {graph ? (
         <div ref={canvasRef} className={css['overview-canvas']}>
-          <ReactFlow key={direction} nodes={nodes} edges={edges} nodeTypes={nodeTypes}
+          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes}
             nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
             panOnDrag={false} panOnScroll zoomOnScroll={false}
             translateExtent={translateExtent}
