@@ -373,6 +373,12 @@ class FileSystem {
 
     try {
       function extractDeps(compiled: string, currentFile: string): string[] {
+        // LESS 编译产物是 JSON，依赖保存在 imports 中，不能按 JS import 提取。
+        // 将它们纳入拓扑排序，避免加载时缓存尚未注册的临时模块。
+        if (isCssModule(currentFile)) {
+          const { imports = [] } = JSON.parse(compiled)
+          return imports.filter((path: string) => path.startsWith('.'))
+        }
         const deps: string[] = []
         // 匹配以下几种形式：
         // require("./xxx")
