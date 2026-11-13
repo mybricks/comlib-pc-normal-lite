@@ -385,7 +385,7 @@ export function buildHooks(props: Props) {
         })
       }
     },
-    '@auditPage'(hookContext, params) {
+    async '@auditPage'(hookContext, params) {
       type AuditPageOptionKey = 'events' | 'services' | 'crScope' | 'store' | 'crComplete';
 
       type AuditPageOptions = Partial<Record<AuditPageOptionKey, boolean>>;
@@ -417,51 +417,138 @@ export function buildHooks(props: Props) {
       const ele = hookContext.focusArea.ele;
       const agentMessage = auditPageI18n.message(`${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})`, message);
 
-      agentTurnLifecycle.register(hookContext.id, (turn) => {
-        if (turn?.status === 'success') {
-          return onComplete()
-        }
-        return onError()
+      return new Promise<ReturnType<typeof context.audit.get>>((resolve, reject) => {
+
+        agentTurnLifecycle.register(hookContext.id, (turn) => {
+          try {
+            if (turn?.status === 'success') {
+              resolve(context.audit.get({
+                type: 'canvas',
+                tsx: ele.dataset.zoneFilename,
+                valueKeys: ['events', 'services', 'state', 'store', 'docs']
+              }))
+              onComplete()
+              return
+            }
+            onError()
+          } catch (error) {
+            console.error('@auditPage', error)
+            reject(error)
+            onError()
+          }
+        })
+        window._sandbox_.helpers.sendToAgent(hookContext.id, {
+          message: agentMessage,
+          aiRole: 'fast',
+        });
       })
-      window._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
-        message: agentMessage,
-        aiRole: 'fast',
-      });
+
+      // type AuditPageOptionKey = 'events' | 'services' | 'crScope' | 'store' | 'crComplete';
+
+      // type AuditPageOptions = Partial<Record<AuditPageOptionKey, boolean>>;
+
+      // const auditPageOptionLabels: Array<[AuditPageOptionKey, string]> = [
+      //   ['events', '事件'],
+      //   ['services', '接口'],
+      //   ['crScope', '变更影响'],
+      //   ['store', '状态'],
+      //   // ['crComplete', '完成度']
+      // ];
+
+      // function getAuditPageMessage(options: AuditPageOptions = {}) {
+      //   return auditPageOptionLabels
+      //     .filter(([key]) => options[key])
+      //     .map(([, label]) => label)
+      //     .join('、');
+      // }
+      // const {
+      //   options = {},
+      //   onComplete,
+      //   onError,
+      // } = params as {
+      //   options?: AuditPageOptions;
+      //   onComplete: () => void;
+      //   onError: () => void;
+      // };
+
+      // const message = getAuditPageMessage(options);
+      // const detail = message ? `的${message}文档` : '文档';
+      // const ele = hookContext.focusArea.ele;
+      // const agentMessage = `使用 audit-power 来更新${ele.dataset.zoneTitle}(${ele.dataset.zoneFilename})${detail}`;
+
+      // agentTurnLifecycle.register(hookContext.id, (turn) => {
+      //   if (turn?.status === 'success') {
+      //     return onComplete()
+      //   }
+      //   return onError()
+      // })
+      // window._sandbox_?.helpers?.sendToAgent?.(hookContext.id, {
+      //   message: agentMessage,
+      //   aiRole: 'fast',
+      // });
     },
-    '@getDoc'(params) {
-      const loc = getClosestDomLoc(params.focusArea.ele)
-      if (!loc) {
-        return Promise.resolve({
-          createTime: new Date().getTime(),
-          content: ''
-        })
-      }
-      const data = context.component!.params!.data;
-      if (!data._docs) {
-        data._docs = {}
-      }
-      const { files, codeLine } = loc;
-      const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
+    async '@getDoc'(params, valueKeys) {
+      console.log('@getDoc:hookContext', params, valueKeys)
+      const ele = params.focusArea.ele
+      const tag = ele.getAttribute('data-canvas-tag')
+      const loc = tag ? null : getClosestDomLoc(ele)
 
-      if (!data._docs[key]) {
-        return Promise.resolve({
-          createTime: new Date().getTime(),
-          content: ''
-        })
-      }
-      
-      const doc = data._docs[key]
-      if (typeof doc === 'string') {
-        const createTime = new Date().getTime()
-        data._docs[key] = {
-          createTime,
-          content: doc
+      let auditParams: any = {}
+
+      if (!tag) {
+        auditParams = {
+          loc: loc,
+          parentLoc: ele.getAttribute('data-parent-loc'),
+          widgetName: ele.closest('[data-widget-name]')?.getAttribute('data-widget-name'),
+          tsx: loc?.files.jsx,
+          type: 'dom',
+          valueKeys
         }
-
-        return Promise.resolve(data._docs[key])
+      } else {
+        auditParams = {
+          tsx: tag.split(':')[1],
+          type: 'canvas',
+          valueKeys
+        }
       }
 
-      return Promise.resolve(doc)
+      const result = context.audit.get(auditParams)
+
+      return result
+
+      // const loc = getClosestDomLoc(params.focusArea.ele)
+      // if (!loc) {
+      //   return Promise.resolve({
+      //     createTime: new Date().getTime(),
+      //     content: ''
+      //   })
+      // }
+      // const data = context.component!.params!.data;
+      // if (!data._docs) {
+      //   data._docs = {}
+      // }
+      // const { files, codeLine } = loc;
+      // const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
+
+      // if (!data._docs[key]) {
+      //   return Promise.resolve({
+      //     createTime: new Date().getTime(),
+      //     content: ''
+      //   })
+      // }
+      
+      // const doc = data._docs[key]
+      // if (typeof doc === 'string') {
+      //   const createTime = new Date().getTime()
+      //   data._docs[key] = {
+      //     createTime,
+      //     content: doc
+      //   }
+
+      //   return Promise.resolve(data._docs[key])
+      // }
+
+      // return Promise.resolve(doc)
     },
     '@updateDoc'(params, { onComplete }) {
       const ele = params.focusArea.ele
@@ -520,6 +607,28 @@ export function buildHooks(props: Props) {
         },
         aiRole: "fast",
       })
+    },
+    async '@getComments'(hookContext) {
+      const data = context.component!.params.data;
+      const noteRender = data._noteRender
+
+      if (!noteRender) {
+        return []
+      }
+
+      const tag = hookContext.focusArea.ele.getAttribute('data-canvas-tag')
+
+      return Object.entries(data._noteRender)
+        .filter(([key, value]: any) => {
+          return key.startsWith(`[data-canvas-tag='${tag}']`) && value?.length
+        })
+        .map(([key, value]: any) => {
+          return {
+            refSelector: key,
+            ...value[0],
+            type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
+          }
+        })
     },
     ...(['default', 'prototype'].includes(frontendMode) ? {
       async '@createZoneStatus'(ele) {

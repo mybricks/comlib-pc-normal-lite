@@ -20,6 +20,7 @@ import config from './config'
 import { validateSkillMd } from "../../utils/ai-code/render/mybricks/gui-card-next/validate-skill-md"
 import { undoRedoManager } from '../editors/undoRedo'
 import commonLang from '../../helpers/i18n/common'
+import Audit from './audit'
 
 const updateFileContent = ({ fileName, files, content }) => {
   const replaceFileName = fileName.replace(/^\//, '')
@@ -95,6 +96,7 @@ type UserAction = {
 }
 
 class Context {
+  audit = new Audit(this)
   /** 组件 */
   component: {
     /** 数据源、各类api */
@@ -217,6 +219,11 @@ class Context {
           graphFileName: fileName,
           filename: notifyFileName,
           value: notifyChangedValue,
+        })
+        this.audit.set({
+          tsx: notifyFileName,
+          jsDocMap,
+          value: notifyChangedValue
         })
         this.notifyChanged(notifyFileName, 'update', notifyChangedValue)
       } catch (error) {
@@ -349,6 +356,11 @@ class Context {
         const jsDocMap = getStoredJsDocMap(sourceFile)
         if (targetFile) {
           const value = transformNewFormatForNotifyChanged(jsDocMap, targetFile)
+          this.audit.set({
+            tsx: targetFile,
+            jsDocMap,
+            value
+          })
           this.notifyChanged(targetFile, 'update', value)
         }
       }
@@ -371,6 +383,11 @@ class Context {
               ? graphData
               : transformJsDoc
             const notifyChangedValue = transformNewFormatForNotifyChanged(notifyData, fileName)
+            this.audit.set({
+              tsx: fileName,
+              jsDocMap: transformJsDoc,
+              value: notifyChangedValue
+            })
             // if (notifyChangedValue.docs?.length) {
             //   notifyChangedValue.comments = notifyChangedValue.docs.map(({ refSelector }) => {
             //     return {
@@ -538,6 +555,11 @@ class Context {
               // 没有可用节点时兜底，避免缓存覆盖本次 YAML 编辑。
               const selectedData = Object.keys(graph.data).length > 0 ? graph.data : jsDocMap
               const notifyChangedValue = transformNewFormatForNotifyChanged(selectedData, notifyFileName)
+              this.audit.set({
+                tsx: notifyFileName,
+                jsDocMap,
+                value: notifyChangedValue
+              })
 
               if (hasMybricksGraphDirectory(files, configDirName) && hasMybricksGraphFile(files, configDirName)) {
                 printMybricksGraphCompilation(fileName, graph, notifyFileName, notifyChangedValue)
