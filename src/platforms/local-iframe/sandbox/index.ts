@@ -510,6 +510,7 @@ export function registerSandbox(comId: string) {
     files,
     commands: {
       execute: executeLocalShellCommand,
+      sandboxDesc: '上述命令由文件系统代理运行，其他原始命令如 node、git 等会交给宿主 command transport 在真实命令环境下运行。',
     },
   }
 
