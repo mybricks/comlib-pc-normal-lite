@@ -152,22 +152,19 @@ export default function (props: Props, actions: Actions) {
                 data._noteRender = {}
               }
               data._noteRender[key] = value
-              // context.component?.actions.notifyChanged("_noteRender", 'update', {
-              //   comments: Object.entries(data._noteRender)
-              //     .filter(([key, value]: any) => {
-              //       return value?.length
-              //     })
-              //     .map(([key, value]: any) => {
-              //       return {
-              //         refSelector: key,
-              //         ...value[0],
-              //         type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
-              //       }
-              //     }),
-              //   events: [],
-              //   services: [],
-              //   store: []
-              // })
+              context.component?.actions.notifyChanged("_noteRender", 'update', {
+                comments: Object.entries(data._noteRender)
+                  .filter(([key, value]: any) => {
+                    return value?.length
+                  })
+                  .map(([key, value]: any) => {
+                    return {
+                      refSelector: key,
+                      ...value[0],
+                      type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
+                    }
+                  }),
+              })
             }
           }
         },
