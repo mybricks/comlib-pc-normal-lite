@@ -36,7 +36,7 @@ import domainPanelCss from '../domain-audit/panel/index.lazy.less';
 import * as domainPanelCssNS from '../domain-audit/panel/index.lazy.less';
 import taskPanelCss from '../../components/task-panel/index.lazy.less';
 import * as taskPanelCssNS from '../../components/task-panel/index.lazy.less';
-import { randomUUID } from '../utils/uuid'
+import { updateDoc } from '../../helpers/editors/updateDoc'
 
 import context, { config } from '../context';
 import { agentTurnLifecycle } from '../sandbox/agent-turn-lifecycle';
@@ -425,7 +425,7 @@ export function buildHooks(props: Props) {
               resolve(context.audit.get({
                 type: 'canvas',
                 tsx: ele.dataset.zoneFilename,
-                valueKeys: ['events', 'services', 'state', 'store', 'docs']
+                valueKeys: ['events', 'services', 'state', 'store', 'jsDoc']
               }))
               onComplete()
               return
@@ -551,8 +551,7 @@ export function buildHooks(props: Props) {
       // return Promise.resolve(doc)
     },
     '@updateDoc'(params, { onComplete }) {
-      const ele = params.focusArea.ele
-      const loc = getClosestDomLoc(ele)
+      const loc = getClosestDomLoc( params.focusArea.ele)
       if (!loc) {
         return ''
       }
@@ -562,50 +561,18 @@ export function buildHooks(props: Props) {
       }
       const { files, codeLine } = loc;
       const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(`"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`)}']` + ':not([data-wrap-container])'
-      const chipId = randomUUID()
-      const analyzeFilePath = `.agent/temp/analyse-${randomUUID().slice(0, 5)}.md`
-      console.log('[mybricks] updateDoc: request analysis', { analyzeFilePath, chipId })
-      const chip = {
-        id: chipId,
-        label: ele.tagName.toLowerCase(),
-        type: 'dom',
-        data: {
-          ele,
-        }
-      }
-
-      const agentMessage = `[$mbs-template:analyze-selection] 分析下这个选择区域 [[chip:${chip.id}]]，整理出分析报告markdown 放到 ${analyzeFilePath} 里。\n 注意：这是一次性报告，直接写入即可，写入后会展示在设计器窗口编辑区的右侧，一段时间会被自动清理。`
-      agentTurnLifecycle.register(params.id, async (turn) => {
-        if (turn?.status !== 'success') return
-        const analyzeFile = data.files.find((file) => file.fileName === analyzeFilePath)
-        const result = analyzeFile ? decodeURIComponent(analyzeFile.source) : ''
-        console.log('[mybricks] updateDoc: analysis completed', {
-          analyzeFilePath,
-          hasTemporaryFile: !!analyzeFile,
-          resultLength: result.length,
-        })
-
-        if (analyzeFile) {
-          console.log('[mybricks] updateDoc: remove temporary file', { analyzeFilePath })
-          context.updateFile({ fileName: analyzeFilePath, type: 'delete' })
-        }
-
-        const doc = {
-          createTime: new Date().getTime(),
-          content: result
-        }
-
-        if (result) {
-          data._docs[key] = doc
-        }
-        await onComplete(doc)
-      })
-      window._sandbox_.helpers.sendToAgent(params.id, {
-        message: agentMessage,
-        meta: {
-          chips: [chip],
+      return updateDoc(params, { onComplete }, {
+        tempDirectory: '.agent/temp',
+        async readReport(filePath) {
+          const file = data.files.find((file) => file.fileName === filePath)
+          return file ? decodeURIComponent(file.source) : undefined
         },
-        aiRole: "fast",
+        async removeReport(filePath) {
+          context.updateFile({ fileName: filePath, type: 'delete' })
+        },
+        async saveDoc(doc) {
+          data._docs[key] = doc
+        },
       })
     },
     async '@getComments'(hookContext) {

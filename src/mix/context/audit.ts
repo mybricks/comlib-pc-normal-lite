@@ -62,7 +62,7 @@ export default class Audit {
       return false
     }
 
-    for (const key of params.valueKeys.concat('jsDoc')) {
+    for (const key of params.valueKeys) {
       if (key === 'jsDoc') {
         const docs = value?.docs ?? []
         const findDoc = (docs: AuditValue['docs']) => params.type === 'dom'
