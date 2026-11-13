@@ -26,85 +26,14 @@ import getEditors from '../../platforms/react-native/editors'
 import getLocalIframeEditors from '../../platforms/local-iframe/editors'
 import { getClosestDomLoc, escapeCssAttributeValue } from '../../helpers/dom'
 
-function getElementRefSelectorCandidates(ele: Element | null | undefined) {
-  const escapeSelectorValue = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  const splitZoneClassnames = (value: string) => value.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean)
-
-  const getNearestAttribute = (attribute: string) => {
-    if (!ele) {
-      return null
-    }
-
-    const target = ele.hasAttribute(attribute)
-      ? ele
-      : ele.closest(`[${attribute}]`)
-
-    return target?.getAttribute(attribute) ?? null
+function scopeNoteRenderSelector(ele: Element, selector: string) {
+  const canvasTag = ele.closest('[data-canvas-tag]')?.getAttribute('data-canvas-tag')
+  if (canvasTag == null) {
+    return selector
   }
 
-  const filename = getNearestAttribute('data-zone-filename')
-  const widgetName = getNearestAttribute('data-widget-name')
-  const classnames = getNearestAttribute('data-zone-classnames')
-
-  const fileSelector = filename ? `[data-zone-filename="${filename}"]` : ''
-  const widgetSelector = widgetName ? `[data-widget-name="${widgetName}"]` : ''
-  const classTokens = classnames && classnames !== 'root'
-    ? splitZoneClassnames(classnames)
-    : []
-  const normalizedClassnames = classTokens.join(' ')
-  const exactClassSelector = normalizedClassnames
-    ? `[data-zone-classnames="${escapeSelectorValue(normalizedClassnames)}"]`
-    : ''
-  const legacyClassSelector = classTokens.length
-    ? `[data-zone-classnames*="${escapeSelectorValue(classTokens.join(','))}"]`
-    : ''
-
-  const buildSelectors = (classSelector: string) => {
-    if (classSelector) {
-      return [
-        `${fileSelector}${widgetSelector}${classSelector}`,
-        `${fileSelector}${widgetSelector} ${classSelector}`,
-        `${fileSelector} ${widgetSelector}${classSelector}`,
-        `${fileSelector} ${widgetSelector} ${classSelector}`,
-      ]
-    }
-
-    return [
-      `${fileSelector}${widgetSelector}`,
-      `${fileSelector} ${widgetSelector}`,
-    ]
-  }
-
-  return {
-    exactSelectors: buildSelectors(exactClassSelector)
-      .map((selector) => `${selector.trim()}:not([data-wrap-container])`),
-    legacySelectors: buildSelectors(legacyClassSelector)
-      .map((selector) => `${selector.trim()}:not([data-wrap-container])`),
-  }
-}
-
-function getElementRefSelector(ele: Element | null | undefined, noteRender?: Record<string, any>) {
-  const { exactSelectors, legacySelectors } = getElementRefSelectorCandidates(ele)
-  if (noteRender) {
-    const legacyKey = legacySelectors.find((key) => Object.prototype.hasOwnProperty.call(noteRender, key))
-    if (legacyKey) {
-      const value = noteRender[legacyKey]
-      const exactKey = exactSelectors[0] ?? legacyKey
-
-      if (exactKey !== legacyKey) {
-        noteRender[exactKey] = value
-        delete noteRender[legacyKey]
-      }
-
-      return exactKey
-    }
-
-    const exactKey = exactSelectors.find((key) => Object.prototype.hasOwnProperty.call(noteRender, key))
-    if (exactKey) {
-      return exactKey
-    }
-  }
-  return exactSelectors[0] ?? legacySelectors[0] ?? ''
+  const canvasSelector = `[data-canvas-tag='${escapeCssAttributeValue(canvasTag)}']`
+  return `${canvasSelector} ${selector}`
 }
 
 export default function (props: Props, actions: Actions) {
@@ -196,51 +125,49 @@ export default function (props: Props, actions: Actions) {
               if (!data._noteRender) {
                 data._noteRender = {}
               }
-              const key = getElementRefSelector(params.focusArea?.ele, data._noteRender)
-              const loc = getClosestDomLoc(params.focusArea.ele)
+              const ele = params.focusArea.ele
+              const loc = getClosestDomLoc(ele)
               if (!loc) {
                 return []
               }
               const { files, codeLine } = loc;
               const codeLineValue = `"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`
-              const nextKey = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(codeLineValue)}']` + ':not([data-wrap-container])'
+              const locKey = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(codeLineValue)}']` + ':not([data-wrap-container])'
+              const key = scopeNoteRenderSelector(ele, locKey)
 
-              if (key in data._noteRender) {
-                const value = data._noteRender[key]
-                Reflect.deleteProperty(data._noteRender, key)
-                data._noteRender[nextKey] = value
-              }
-
-              return data._noteRender[nextKey] || []
+              return data._noteRender[key] || []
             },
             set(params, value) {
               const data = context.component!.params.data;
-              // const key = getElementRefSelector(params.focusArea?.ele)
               const loc = getClosestDomLoc(params.focusArea.ele)
               if (!loc) {
                 return []
               }
               const { files, codeLine } = loc;
               const codeLineValue = `"codeLine":{"start":${codeLine.start},"end":${codeLine.end}}`
-              const key = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(codeLineValue)}']` + ':not([data-wrap-container])'
+              const locKey = `[data-loc*='${escapeCssAttributeValue(files.jsx)}']` + `[data-loc*='${escapeCssAttributeValue(codeLineValue)}']` + ':not([data-wrap-container])'
+              const key = scopeNoteRenderSelector(params.focusArea.ele, locKey)
 
+              if (!data._noteRender) {
+                data._noteRender = {}
+              }
               data._noteRender[key] = value
-              context.component?.actions.notifyChanged("_noteRender", 'update', {
-                comments: Object.entries(data._noteRender)
-                  .filter(([key, value]: any) => {
-                    return value?.length
-                  })
-                  .map(([key, value]: any) => {
-                    return {
-                      refSelector: key,
-                      ...value[0],
-                      type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
-                    }
-                  }),
-                events: [],
-                services: [],
-                store: []
-              })
+              // context.component?.actions.notifyChanged("_noteRender", 'update', {
+              //   comments: Object.entries(data._noteRender)
+              //     .filter(([key, value]: any) => {
+              //       return value?.length
+              //     })
+              //     .map(([key, value]: any) => {
+              //       return {
+              //         refSelector: key,
+              //         ...value[0],
+              //         type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
+              //       }
+              //     }),
+              //   events: [],
+              //   services: [],
+              //   store: []
+              // })
             }
           }
         },

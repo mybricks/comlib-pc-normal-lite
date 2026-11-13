@@ -608,6 +608,28 @@ export function buildHooks(props: Props) {
         aiRole: "fast",
       })
     },
+    async '@getComments'(hookContext) {
+      const data = context.component!.params.data;
+      const noteRender = data._noteRender
+
+      if (!noteRender) {
+        return []
+      }
+
+      const tag = hookContext.focusArea.ele.getAttribute('data-canvas-tag')
+
+      return Object.entries(data._noteRender)
+        .filter(([key, value]: any) => {
+          return key.startsWith(`[data-canvas-tag='${tag}']`) && value?.length
+        })
+        .map(([key, value]: any) => {
+          return {
+            refSelector: key,
+            ...value[0],
+            type: value.find(({ type }) => type === 'todo') ? 'todo' : 'default'
+          }
+        })
+    },
     ...(['default', 'prototype'].includes(frontendMode) ? {
       async '@createZoneStatus'(ele) {
         console.log('@createZoneStatus:ele', ele)
