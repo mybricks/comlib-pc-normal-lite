@@ -905,6 +905,9 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
   const [filter, setFilter] = useState<string | null>(null)
   const [overviewSelection, setOverviewSelection] = useState<OverviewSelection>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const splitRef = useRef<HTMLDivElement>(null)
+  const resizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
+  const [listWidth, setListWidth] = useState(39)
   const [hintHovering, setHintHovering] = useState(false)
   const [batchMode, setBatchMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -941,6 +944,14 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
   }, [overviewSelection])
 
   if (!tasks.length && !hasOverview) return null
+
+  const resizeList = (width: number) => {
+    const containerWidth = splitRef.current?.getBoundingClientRect().width ?? 0
+    if (!containerWidth) return
+    const min = 260 / containerWidth * 100
+    const max = (containerWidth - 200 - 12) / containerWidth * 100
+    setListWidth(Math.max(min, Math.min(max, width)))
+  }
 
   const selectedTasks = tasks.filter(t => selected.has(t.id ?? t.title))
   const selectedStatus = selectedTasks[0]?.status ?? null
@@ -1033,7 +1044,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
         {!hasOverview && batchControls}
       </FlowFilterBar>
       {!hasOverview && batchHint}
-      <div className={`${css['task-panel-body']}${hasOverview ? ` ${css['task-panel-split']}` : ''}`}>
+      <div ref={splitRef} className={`${css['task-panel-body']}${hasOverview ? ` ${css['task-panel-split']}` : ''}`} style={hasOverview ? { '--task-list-width': `${listWidth}%` } as React.CSSProperties : undefined}>
         <section className={css['task-list-pane']} aria-label={taskPanelI18n.listView()}>
           {hasOverview && (
             <div className={css['task-list-toolbar']}>
@@ -1087,6 +1098,42 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
             }
           </div>
         </section>
+        {hasOverview && (
+          <div
+            className={css['task-panel-resize']}
+            role="separator"
+            aria-label={taskPanelI18n.resizePanes()}
+            aria-orientation="vertical"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(listWidth)}
+            tabIndex={0}
+            onPointerDown={event => {
+              if (event.button !== 0) return
+              event.preventDefault()
+              const list = splitRef.current?.querySelector<HTMLElement>('section')
+              const width = splitRef.current?.getBoundingClientRect().width
+              if (!list || !width) return
+              resizeRef.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: list.getBoundingClientRect().width / width * 100 }
+              event.currentTarget.setPointerCapture(event.pointerId)
+            }}
+            onPointerMove={event => {
+              const drag = resizeRef.current
+              const width = splitRef.current?.getBoundingClientRect().width
+              if (drag && drag.pointerId === event.pointerId && width) {
+                resizeList(drag.startWidth + (event.clientX - drag.startX) / width * 100)
+              }
+            }}
+            onPointerUp={event => { if (resizeRef.current?.pointerId === event.pointerId) resizeRef.current = null }}
+            onPointerCancel={() => { resizeRef.current = null }}
+            onLostPointerCapture={() => { resizeRef.current = null }}
+            onKeyDown={event => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+              event.preventDefault()
+              resizeList(listWidth + (event.key === 'ArrowLeft' ? -2 : 2))
+            }}
+          />
+        )}
         {hasOverview && (
           <TaskOverview overview={overview} tasks={overviewTasks} selection={overviewSelection} onSelect={next => {
             if (next) setFilter(null)

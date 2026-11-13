@@ -3,6 +3,7 @@ import getI18n from '../../helpers/i18n'
 export type TaskStatus = '处理中' | '待验证' | '待交接' | '已完成'
 
 export const i18n = {
+  resizePanes: () => getI18n({ zh: '调整任务列表和画布宽度', en: 'Resize task list and canvas' }),
   listView: () => getI18n({ zh: '任务列表', en: 'Task list' }),
   overviewView: () => getI18n({ zh: '模块总览', en: 'Module overview' }),
   overviewEmpty: () => getI18n({ zh: '暂无模块总览，生成任务时会逐步建立关联', en: 'No module overview yet. It will be built as tasks are created.' }),
