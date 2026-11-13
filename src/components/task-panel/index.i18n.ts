@@ -12,6 +12,7 @@ export const i18n = {
   overviewGlobal: () => getI18n({ zh: '全局入口', en: 'Global entry' }),
   overviewComponent: () => getI18n({ zh: '组件', en: 'Component' }),
   overviewNoImpact: () => getI18n({ zh: '图中暂无关联节点', en: 'No linked nodes in this diagram' }),
+  overviewLocate: () => getI18n({ zh: '定位到关系图', en: 'Locate diagram' }),
   overviewClear: () => getI18n({ zh: '清除关联高亮', en: 'Clear highlights' }),
   closeHint: () => getI18n({ zh: '关闭提示', en: 'Dismiss hint' }),
   all: () => getI18n({ zh: '全部', en: 'All' }),

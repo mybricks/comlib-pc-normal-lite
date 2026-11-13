@@ -744,6 +744,7 @@ function TaskRow({
         onOverviewSelect ? css['task-card-linkable'] : '',
       ].filter(Boolean).join(' ')}
       data-overview-linked={linked || undefined}
+      data-task-id={task.id}
       onClick={() => {
         if (batchMode) {
           if (selectable) onToggleSelect?.()
@@ -858,7 +859,7 @@ function TaskRow({
             return (
               <div
                 key={item.label}
-                className={`${css['task-meta-item']} ${hl ? css['task-meta-item-highlight'] : ''}`}
+                className={`${css['task-meta-item']} ${item.label === '风险与决策' ? css['task-meta-item-stacked'] : ''} ${hl ? css['task-meta-item-highlight'] : ''}`}
               >
                 <span className={css['task-meta-label']}>{taskPanelI18n.metadataLabel(item.label)}</span>
                 <span className={css['task-meta-value']}>{item.value}</span>
@@ -904,6 +905,8 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
 }) {
   const [filter, setFilter] = useState<string | null>(null)
   const [overviewSelection, setOverviewSelection] = useState<OverviewSelection>(null)
+  const [listFocusedTaskId, setListFocusedTaskId] = useState<string | null>(null)
+  const [revealTask, setRevealTask] = useState<{ id: string } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const splitRef = useRef<HTMLDivElement>(null)
   const resizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
@@ -924,24 +927,30 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
   const overview = useMemo(() => readOverview(overviewContent), [overviewContent])
   const hasGraph = overview.doc !== null
   const overviewTasks = useMemo(() => tasks.flatMap(task => task.id ? [{ id: task.id, title: getTaskDisplayTitle(task), status: task.status }] : []), [tasks])
-  const linkedTaskIds = overviewSelection?.kind === 'task' ? [overviewSelection.id] :
-    overviewSelection?.kind === 'node' ? overview.nodes.get(overviewSelection.id)?.tasks ?? [] : []
-
   useEffect(() => {
     setOverviewSelection(null)
+    setListFocusedTaskId(null)
   }, [hasGraph])
 
   useEffect(() => {
-    if (!overviewSelection?.revealTask) return
+    if (!revealTask) return
     const list = listRef.current
-    const row = list?.querySelector('[data-overview-linked]')
+    const row = Array.from(list?.querySelectorAll<HTMLElement>('[data-task-id]') ?? [])
+      .find(element => element.dataset.taskId === revealTask.id)
     if (!list || !row) return
     const rowBounds = row.getBoundingClientRect()
     const listBounds = list.getBoundingClientRect()
     if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom) {
       list.scrollTop += rowBounds.top - listBounds.top
     }
-  }, [overviewSelection])
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      row.animate([
+        { backgroundColor: 'transparent' },
+        { backgroundColor: 'var(--mybricks-bg-color-active, #eff2f6)', offset: 0.3 },
+        { backgroundColor: 'transparent' },
+      ], { duration: 1100, easing: 'ease-out' })
+    }
+  }, [revealTask])
 
   if (!tasks.length && !hasOverview) return null
 
@@ -949,7 +958,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
     const containerWidth = splitRef.current?.getBoundingClientRect().width ?? 0
     if (!containerWidth) return
     const min = 260 / containerWidth * 100
-    const max = (containerWidth - 200 - 12) / containerWidth * 100
+    const max = (containerWidth - 200 - 5) / containerWidth * 100
     setListWidth(Math.max(min, Math.min(max, width)))
   }
 
@@ -1087,10 +1096,12 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
                       onRevert={onRevert}
                       canRevert={canRevert}
                       onToggleSelect={() => toggleSelect(task)}
-                      linked={Boolean(task.id && linkedTaskIds.includes(task.id))}
+                      linked={Boolean(task.id && listFocusedTaskId === task.id)}
                       onOverviewSelect={hasGraph && !batchMode && task.id ? () => {
                         const id = task.id!
-                        setOverviewSelection({ kind: 'task', id })
+                        const nextId = listFocusedTaskId === id ? null : id
+                        setListFocusedTaskId(nextId)
+                        setOverviewSelection(nextId ? { kind: 'task', id: nextId } : null)
                       } : undefined}
                     />
                   ))
@@ -1136,8 +1147,11 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
         )}
         {hasOverview && (
           <TaskOverview overview={overview} tasks={overviewTasks} selection={overviewSelection} onSelect={next => {
-            if (next) setFilter(null)
-            setOverviewSelection(next ? { ...next, revealTask: true } : null)
+            setListFocusedTaskId(null)
+            setOverviewSelection(next)
+          }} onTaskClick={id => {
+            setFilter(null)
+            setRevealTask({ id })
           }} />
         )}
       </div>

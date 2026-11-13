@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import dagre from 'dagre'
 import YAML from 'yaml'
-import { Controls, Handle, Position, ReactFlow, getNodesBounds, getViewportForBounds, useReactFlow, useStore, type Edge, type Node, type NodeProps } from 'reactflow'
+import { Handle, Position, ReactFlow, getNodesBounds, getViewportForBounds, useReactFlow, useStore, type Edge, type Node, type NodeProps } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { attachShadowStyles } from '../../mix/understand-any/shadow-styles'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
@@ -17,7 +17,7 @@ type OverviewDocument = { root: OverviewNode; pages: OverviewNode[]; components:
 type Task = { id: string; title: string; status: TaskStatus }
 type RelatedTask = { id: string; title: string; status?: TaskStatus }
 type Direction = 'LR' | 'TB'
-export type OverviewSelection = { kind: 'node' | 'task'; id: string; revealTask?: boolean } | null
+export type OverviewSelection = { kind: 'task'; id: string } | null
 
 const NODE_WIDTH = 220
 const NODE_HEADER_HEIGHT = 56
@@ -26,7 +26,8 @@ const TASK_LIST_PADDING = 8
 const MIN_ZOOM = 0.08
 const FIT_PADDING = 0.18
 const OVERVIEW_MAX_ZOOM = 1
-const TASK_FOCUS_MAX_ZOOM = 1.5
+const CANVAS_PADDING = 80
+const FOCUS_PADDING = 24
 const STATUS_ORDER: TaskStatus[] = ['待验证', '处理中', '待交接', '已完成']
 
 function parseOverview(content: string): OverviewDocument {
@@ -96,7 +97,7 @@ function NodeIcon({ kind }: { kind: OverviewNode['type'] }) {
 function TaskLink({ task, active, onSelect }: { task: RelatedTask; active: boolean; onSelect?: (id: string) => void }) {
   return (
     <button type="button" className={`${css['overview-task-link']} nodrag nopan`} data-active={active || undefined}
-      title={task.title} disabled={!task.status} onClick={event => { event.stopPropagation(); onSelect?.(task.id) }}>
+      data-mybricks-tip={task.title} disabled={!task.status} onClick={event => { event.stopPropagation(); onSelect?.(task.id) }}>
       <span className={css['overview-task-title']}>{task.title}</span>
       {task.status && <TaskStatusBadge status={task.status} />}
     </button>
@@ -112,26 +113,21 @@ type GraphNodeData = {
   muted?: boolean
   activeTask?: string
   onTask?: (id: string) => void
-  onNode?: (id: string) => void
 }
 
 function GraphNode({ data }: NodeProps<GraphNodeData>) {
   const { node, direction, tasks, activeTask } = data
-  const handleNodeButton = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation()
-    data.onNode?.(node.id)
-  }
   return (
     <div className={`${css['overview-node']} nopan`} data-kind={node.type} data-highlighted={data.highlighted || undefined}
       data-ancestor-highlighted={data.ancestorHighlighted || undefined} data-muted={data.muted || undefined}>
       <Handle type="target" position={direction === 'LR' ? Position.Left : Position.Top} />
-      <button type="button" className={`${css['overview-node-heading']} nodrag`} title={node.title} onClick={handleNodeButton}>
+      <div className={css['overview-node-heading']} data-mybricks-tip={node.title}>
         <span className={css['overview-node-icon']}><NodeIcon kind={node.type} /></span>
         <span className={css['overview-node-label']}>
           <span>{getNodeKind(node.type)}</span>
           <strong>{node.title}</strong>
         </span>
-      </button>
+      </div>
       {tasks.length > 0 && (
         <div className={css['overview-node-tasks']}>
           {tasks.map(task => <TaskLink key={task.id} task={task} active={task.id === activeTask} onSelect={data.onTask} />)}
@@ -165,7 +161,9 @@ function buildGraph(doc: OverviewDocument, tasks: Map<string, Task>, direction: 
   const addNode = (id: string, node: OverviewNode, parent?: string) => {
     const related = getRelatedTasks(node, tasks)
     graph.setNode(id, { width: NODE_WIDTH, height: getNodeHeight(related.length) })
-    nodes.push({ id, type: 'overview', position: { x: 0, y: 0 }, data: { node, tasks: related, direction } })
+    // React Flow disables pointer events on non-selectable, non-draggable nodes by default.
+    // Keep the node itself non-selectable while allowing its task buttons to receive input.
+    nodes.push({ id, type: 'overview', position: { x: 0, y: 0 }, style: { pointerEvents: 'all' }, data: { node, tasks: related, direction } })
     if (parent) {
       graph.setEdge(parent, id, {})
       edges.push({ id: `${parent}-to-${id}`, source: parent, target: id, type: 'smoothstep' })
@@ -203,37 +201,91 @@ function FitOverview({ graph, taskFocus, focusIds }: {
   taskFocus: OverviewSelection
   focusIds: ReadonlySet<string>
 }) {
-  const { setViewport, viewportInitialized } = useReactFlow()
+  const { getViewport, setViewport, viewportInitialized } = useReactFlow()
   const width = useStore(state => state.width)
   const height = useStore(state => state.height)
   useEffect(() => {
     if (!viewportInitialized || !width || !height) return
     const frame = requestAnimationFrame(() => {
-      const isFocused = Boolean(taskFocus && focusIds.size)
-      const visibleNodes = isFocused ? graph.nodes.filter(node => focusIds.has(node.id)) : graph.nodes
-      const bounds = getNodesBounds(visibleNodes.map(node => ({
+      const bounds = getNodesBounds(graph.nodes.map(node => ({
         ...node,
         width: NODE_WIDTH,
         height: getNodeHeight(node.data.tasks.length),
       })))
-      const maxZoom = isFocused ? TASK_FOCUS_MAX_ZOOM : OVERVIEW_MAX_ZOOM
-      const viewport = getViewportForBounds(bounds, width, height, MIN_ZOOM, maxZoom, FIT_PADDING)
-      const duration = isFocused && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 0
+      void setViewport(getViewportForBounds(bounds, width, height, MIN_ZOOM, OVERVIEW_MAX_ZOOM, FIT_PADDING))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [viewportInitialized, graph, width, height, setViewport])
+
+  useEffect(() => {
+    if (!viewportInitialized || !width || !height || !taskFocus || !focusIds.size) return
+    const frame = requestAnimationFrame(() => {
+      const bounds = getNodesBounds(graph.nodes.filter(node => focusIds.has(node.id)).map(node => ({
+        ...node,
+        width: NODE_WIDTH,
+        height: getNodeHeight(node.data.tasks.length),
+      })))
+      const current = getViewport()
+      const padding = Math.min(FOCUS_PADDING, width / 4, height / 4)
+      const left = bounds.x * current.zoom + current.x
+      const top = bounds.y * current.zoom + current.y
+      const right = left + bounds.width * current.zoom
+      const bottom = top + bounds.height * current.zoom
+      // Padding is useful when revealing off-screen nodes, but should not move
+      // nodes that are already fully visible near the edge of the viewport.
+      if (left >= 0 && top >= 0 && right <= width && bottom <= height) return
+
+      const fits = bounds.width * current.zoom <= width - padding * 2 && bounds.height * current.zoom <= height - padding * 2
+      const viewport = fits ? {
+        ...current,
+        x: current.x + (left < padding ? padding - left : right > width - padding ? width - padding - right : 0),
+        y: current.y + (top < padding ? padding - top : bottom > height - padding ? height - padding - bottom : 0),
+      } : getViewportForBounds(bounds, width, height, MIN_ZOOM, current.zoom, FIT_PADDING)
+      const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180
       void setViewport(viewport, { duration })
     })
     return () => cancelAnimationFrame(frame)
-  }, [viewportInitialized, graph, taskFocus, focusIds, width, height, setViewport])
+  }, [viewportInitialized, graph, taskFocus, focusIds, width, height, getViewport, setViewport])
   return null
 }
 
-export default function TaskOverview({ overview, tasks, selection, onSelect }: {
+function LocateOverview({ graph }: { graph: ReturnType<typeof buildGraph> }) {
+  const { setViewport } = useReactFlow()
+  const width = useStore(state => state.width)
+  const height = useStore(state => state.height)
+  const locate = () => {
+    if (!width || !height) return
+    const bounds = getNodesBounds(graph.nodes.map(node => ({
+      ...node,
+      width: NODE_WIDTH,
+      height: getNodeHeight(node.data.tasks.length),
+    })))
+    const viewport = getViewportForBounds(bounds, width, height, MIN_ZOOM, OVERVIEW_MAX_ZOOM, FIT_PADDING)
+    const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180
+    void setViewport(viewport, { duration })
+  }
+  return (
+    <button type="button" className={css['overview-locate']} onClick={locate}
+      title={i18n.overviewLocate()} aria-label={i18n.overviewLocate()}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" />
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+      </svg>
+    </button>
+  )
+}
+
+export default function TaskOverview({ overview, tasks, selection, onSelect, onTaskClick }: {
   overview: ReturnType<typeof readOverview>
   tasks: Task[]
   selection: OverviewSelection
   onSelect: (selection: OverviewSelection) => void
+  onTaskClick: (id: string) => void
 }) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [direction, setDirection] = useState<Direction>('TB')
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
+  const [zoom, setZoom] = useState(1)
   const taskMap = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks])
   const { doc } = overview
   const graphs = useMemo(() => doc ? {
@@ -248,6 +300,7 @@ export default function TaskOverview({ overview, tasks, selection, onSelect }: {
     const update = () => {
       const { clientWidth: width, clientHeight: height } = canvas
       if (!width || !height) return
+      setCanvasSize(current => current.width === width && current.height === height ? current : { width, height })
       const scale = (graph: typeof graphs.LR) => Math.min(width / graph.width, height / graph.height)
       const horizontal = scale(graphs.LR)
       const vertical = scale(graphs.TB)
@@ -263,9 +316,25 @@ export default function TaskOverview({ overview, tasks, selection, onSelect }: {
   }, [graphs])
 
   const graph = graphs?.[direction]
+  const translateExtent = useMemo<[[number, number], [number, number]] | undefined>(() => {
+    if (!graph) return undefined
+    const bounds = getNodesBounds(graph.nodes.map(node => ({
+      ...node,
+      width: NODE_WIDTH,
+      height: getNodeHeight(node.data.tasks.length),
+    })))
+    // Keep some travel in each direction even when the entire graph fits in the viewport.
+    const extentWidth = Math.max(bounds.width + CANVAS_PADDING * 2, (canvasSize.width + CANVAS_PADDING * 2) / zoom)
+    const extentHeight = Math.max(bounds.height + CANVAS_PADDING * 2, (canvasSize.height + CANVAS_PADDING * 2) / zoom)
+    const centerX = bounds.x + bounds.width / 2
+    const centerY = bounds.y + bounds.height / 2
+    return [
+      [centerX - extentWidth / 2, centerY - extentHeight / 2],
+      [centerX + extentWidth / 2, centerY + extentHeight / 2],
+    ]
+  }, [graph, canvasSize, zoom])
   const taskFocus = selection?.kind === 'task' ? selection : null
   const activeTask = taskFocus?.id
-  const activeNode = selection?.kind === 'node' ? overview.nodes.get(selection.id) : undefined
   const { directIds, ancestorIds, focusIds } = useMemo(() => {
     const directIds = new Set<string>()
     const ancestorIds = new Set<string>()
@@ -285,15 +354,13 @@ export default function TaskOverview({ overview, tasks, selection, onSelect }: {
     return { directIds, ancestorIds, focusIds: new Set([...directIds, ...ancestorIds]) }
   }, [graph, activeTask])
   const hasMatches = directIds.size > 0
-  const source = activeNode?.file && [activeNode.file, activeNode.symbol].filter(Boolean).join(' · ')
-  const footerText = source || (activeTask && !hasMatches ? i18n.overviewNoImpact() : null)
-  const selectTask = (id: string) => onSelect({ kind: 'task', id })
-  const selectNode = (id: string) => onSelect(activeNode?.id === id ? null : { kind: 'node', id })
+  const footerText = activeTask && !hasMatches ? i18n.overviewNoImpact() : null
+  const selectTask = (id: string) => onTaskClick(id)
   const nodes = graph?.nodes.map(node => {
-    const highlighted = activeTask ? directIds.has(node.id) : activeNode?.id === node.data.node.id
+    const highlighted = Boolean(activeTask && directIds.has(node.id))
     const ancestorHighlighted = !highlighted && ancestorIds.has(node.id)
     const muted = hasMatches && !highlighted && !ancestorHighlighted
-    return { ...node, data: { ...node.data, activeTask, highlighted, ancestorHighlighted, muted, onTask: selectTask, onNode: selectNode } }
+    return { ...node, data: { ...node.data, activeTask, highlighted, ancestorHighlighted, muted, onTask: selectTask } }
   })
   const edges = hasMatches ? graph?.edges.map(edge => (
     focusIds.has(edge.source) && focusIds.has(edge.target)
@@ -307,16 +374,14 @@ export default function TaskOverview({ overview, tasks, selection, onSelect }: {
         <div ref={canvasRef} className={css['overview-canvas']}>
           <ReactFlow key={direction} nodes={nodes} edges={edges} nodeTypes={nodeTypes}
             nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
-            onNodeClick={(_, clickedNode) => selectNode(clickedNode.data.node.id)} onPaneClick={() => onSelect(null)}
+            panOnDrag={false} panOnScroll zoomOnScroll={false}
+            translateExtent={translateExtent}
+            onMove={(_, viewport) => setZoom(current => current === viewport.zoom ? current : viewport.zoom)}
+            onPaneClick={() => onSelect(null)}
             minZoom={MIN_ZOOM} maxZoom={2} proOptions={{ hideAttribution: true }}>
-            <Controls showZoom={false} showInteractive={false} />
             <FitOverview graph={graph} taskFocus={taskFocus} focusIds={focusIds} />
+            <LocateOverview graph={graph} />
           </ReactFlow>
-          {selection && (
-            <button type="button" className={css['clear-overview-btn']} onClick={() => onSelect(null)}>
-              {i18n.overviewClear()}
-            </button>
-          )}
         </div>
       ) : <div className={css['overview-empty']} role="status">{overview.invalid ? i18n.overviewInvalid() : i18n.overviewEmpty()}</div>}
       {graph && footerText && (
