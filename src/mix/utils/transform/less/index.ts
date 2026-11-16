@@ -387,8 +387,8 @@ class Parse {
     }
 
     return {
-      // Less 变量定义（@xxx: value）不做驼峰转换，保留原始名称
-      key: key.startsWith('@') ? key : convertHyphenToCamel(key),
+      // Less 变量沿用原逻辑；仅本次填充动画的内部变量额外保留原名。
+      key: key.startsWith('@') || key.startsWith('--mybricks-motion-fill-') ? key : convertHyphenToCamel(key),
       value: rawValue + (declaration.important || ""),
     }
   }
@@ -521,8 +521,8 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
         `${formatCSSString(value, indent + "  ")}` +
         `\n${indent}}`;
     } else {
-      // Less 变量定义（@xxx: value）不做 kebab 转换，保留原始名称
-      const outputKey = key.startsWith('@') ? key : convertCamelToHyphen(key);
+      // 仅保护填充动画内部变量，其他属性沿用原有序列化逻辑。
+      const outputKey = key.startsWith('@') || key.startsWith('--mybricks-motion-fill-') ? key : convertCamelToHyphen(key);
       code += `${indent}${outputKey}: ${value};${index === lastIndex ? "" : "\n"}`;
     }
   });
