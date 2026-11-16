@@ -50,6 +50,7 @@ const Render = ((props) => {
   const [error, setError] = useState<Error | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [vibingEnded, setVibingEnded] = useState(false)
+  const [filesRevision, setFilesRevision] = useState(0)
 
 	// useImperativeHandle(ref, () => {
   //   return {
@@ -73,6 +74,8 @@ const Render = ((props) => {
       if (IS_STRANGE_ENV()) {
         setError(null)
       }
+      // 子文件更新也可能修复或引入缺失引用，需要重新校验外层错误状态。
+      setFilesRevision(revision => revision + 1)
       props.onFileChange({ filename, type })
     })
     // 注册错误监听
@@ -142,7 +145,7 @@ const Render = ((props) => {
     } else {
       // setError(null)
     }
-  }, [vibingEnded, isInitialized])
+  }, [vibingEnded, isInitialized, filesRevision])
 
   const Entry = useMemo(() => {
     // if (!isInitialized) {
