@@ -283,6 +283,10 @@ export function buildHooks(props: Props) {
         });
       }
 
+      if (['lingstyle-extension'].includes(frontendMode)) {
+        return
+      }
+
       const data = context.component!.params?.data;
       const debugEnvOptions = getDebugEnvOptions(data);
       // 默认使用第一个可用环境

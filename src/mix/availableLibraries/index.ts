@@ -117,7 +117,7 @@ function getLibraryUsage(library: { name: string; version: string; usage: string
  */
 export function getEffectiveLibraries(): EffectiveLibrary[] {
   const effectiveLibraries = config.getEffectiveLibraries()
-  const addonLibs = effectiveLibraries.length > 0
+  const addonLibs = effectiveLibraries.length > 0 || config.hasConfiguredDependencies()
     ? effectiveLibraries.map((lib) => toLibraryMeta(lib))
     : PRESET_ADDON_LIBS
 

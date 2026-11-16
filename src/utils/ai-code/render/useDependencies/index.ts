@@ -8,6 +8,7 @@ import context, { config } from '../../../../mix/context'
 import { DYNAMIC_MODULE } from '../../../../mix/context/config'
 import createMyBricksReactNative from '../mybricks/react-native'
 import { setWindowProxyDesignMode, useWindowProxy } from './windowProxyStore'
+import createMyBricksLingstyleExtension from '../mybricks/lingstyle-extension'
 
 class EmptyDataSource {
   constructor(params) {}
@@ -73,6 +74,8 @@ const useDependencies = (params: Params) => {
       mybricks = createMyBricksForGuiCardNext(createMyBricksProps)
     } else if (frontendMode === 'react-native') {
       mybricks = createMyBricksReactNative(createMyBricksProps)
+    } else if (frontendMode === 'lingstyle-extension') {
+      mybricks = createMyBricksLingstyleExtension(createMyBricksProps)
     } else {
       mybricks = createMyBricks(createMyBricksProps);
     }
