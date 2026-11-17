@@ -16,8 +16,12 @@ function isInternalOrLocalSource(source: string) {
     source.startsWith(".") ||
     source.startsWith("/") ||
     source.startsWith("@mybricks/") ||
-    source === '@es/pro-components' || 
-    source === '@m-ui/react'
+    source === '@es/pro-components' ||
+    source === '@m-ui/react' ||
+    source === 'antd' ||
+    source.startsWith('antd/') ||
+    source === '@ant-design/icons' ||
+    source.startsWith('@ant-design/icons/')
   );
 }
 
