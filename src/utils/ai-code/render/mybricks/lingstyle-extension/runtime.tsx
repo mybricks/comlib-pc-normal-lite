@@ -1,6 +1,7 @@
-import React, { useLayoutEffect, useRef, useState, createContext, useContext } from 'react'
+import React, { createContext, useContext } from 'react'
 import type { CreateMyBricksProps } from '../type'
 import context from '../../../../../mix/context'
+import { CanvasZone, ExtensionEditor, useCanvasContainer } from './shared'
 
 const runtime = (props: CreateMyBricksProps) => {
   const { env } = props
@@ -11,22 +12,15 @@ const runtime = (props: CreateMyBricksProps) => {
   });
 
   const Page = ({ style, children }) => {
-    const containerRef = useRef(null)
-    const [container, setContainer] = useState<HTMLDivElement>()
-
-    useLayoutEffect(() => {
-      setContainer(containerRef.current!)
-    }, [])
+    const { containerRef, container } = useCanvasContainer()
 
     context.component!.actions.loaded()
 
     return (
-      <div
+      <CanvasZone
         ref={containerRef}
-        data-zone-type='page'
-        data-zone-kind='page'
-        data-desn-page={debugTarget.pageIndex}
-        data-zone-filename={debugTarget.pageIndex}
+        id={debugTarget.pageIndex}
+        filename={debugTarget.pageIndex}
         style={{
           ...style
         }}
@@ -36,7 +30,7 @@ const runtime = (props: CreateMyBricksProps) => {
             {children}
           </PageContext.Provider>
         )}
-      </div>
+      </CanvasZone>
     )
   }
 
@@ -56,15 +50,7 @@ const runtime = (props: CreateMyBricksProps) => {
               ...debugTarget.style
             }}
           >
-            <Render
-              context={{
-                prd: {
-                  async get() {
-                    return null
-                  }
-                }
-              }}
-            />
+            <ExtensionEditor render={Render} />
           </Page>
         </div>
       )
@@ -78,17 +64,10 @@ const runtime = (props: CreateMyBricksProps) => {
     }
   }
 
-  const popupRef = (Component) => {
-    return (props) => {
-      const pageContext = useContext(PageContext)
-      return <Component {...props} popupNode={pageContext.container}/>
-    }
-  }
-
   return {
     appRef,
     comRef,
-    popupRef
+    popupRef: comRef
   }
 }
 

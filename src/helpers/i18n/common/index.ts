@@ -5,6 +5,14 @@ import console from './console'
 export default {
   ...version,
   ...console,
+  page: i18n({
+    zh: '页面',
+    en: 'Page'
+  }),
+  popup: i18n({
+    zh: '弹窗',
+    en: 'Popup'
+  }),
   sourceCode: i18n({
     zh: '源代码',
     en: 'Source Code'

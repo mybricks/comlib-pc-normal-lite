@@ -1,3 +1,4 @@
+import commonLang from '../../../../../helpers/i18n/common'
 import React, {
   useRef,
   useState,
@@ -33,8 +34,8 @@ const runtime = (props: CreateMyBricksProps) => {
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={page.file.filename}
-        data-zone-title='页面'
-        data-widge-name='页面'
+        data-zone-title={commonLang.page}
+        data-widge-name={commonLang.page}
         style={{
           ...DEFAULT_STYLE,
           ...style

@@ -1,3 +1,4 @@
+import commonLang from '../../../../../helpers/i18n/common'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../../../../../mix/context'
 import { PAGE_ENTRY_PATTERN, DEFAULT_STYLE } from './constants'
@@ -17,8 +18,8 @@ const design = (props: CreateMyBricksProps) => {
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={page.file.filename}
-        data-zone-title='页面'
-        data-widge-name='页面'
+        data-zone-title={commonLang.page}
+        data-widge-name={commonLang.page}
         style={DEFAULT_STYLE}
       >
         <Render />
@@ -40,8 +41,8 @@ const design = (props: CreateMyBricksProps) => {
         data-zone-type='page'
         data-zone-kind='popup'
         data-desn-page=''
-        data-zone-title='弹窗'
-        data-widge-name='弹窗'
+        data-zone-title={commonLang.popup}
+        data-widge-name={commonLang.popup}
         style={{
           ...DEFAULT_STYLE,
           height: 896

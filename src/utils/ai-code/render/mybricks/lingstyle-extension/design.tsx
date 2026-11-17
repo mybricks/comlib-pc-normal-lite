@@ -1,6 +1,8 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import commonLang from '../../../../../helpers/i18n/common'
+import React, { useEffect, useLayoutEffect, useState } from 'react'
 import context from '../../../../../mix/context'
 import type { CreateMyBricksProps } from '../type'
+import { CanvasZone, ExtensionEditor, useCanvasContainer } from './shared'
 
 const getCanvasPath = (params: { filename?: string, widgetName?: string, type: 'popup' | 'page'}) => {
   const { filename, widgetName, type } = params
@@ -10,11 +12,9 @@ const getCanvasPath = (params: { filename?: string, widgetName?: string, type: '
 const design = (props: CreateMyBricksProps) => {
 
   const Popup = ({ id, props, Component, params }) => {
-    const containerRef = useRef<HTMLDivElement>(null)
-    const [container, setContainer] = useState<HTMLDivElement>()
+    const { containerRef, container } = useCanvasContainer()
 
     useLayoutEffect(() => {
-      setContainer(containerRef.current!)
       const { filename, widgetName } = params
       const fileSystem = context.fileSystem
       const jsDocMap = fileSystem?.filesMap?.[filename]?.file?.jsDocMap
@@ -28,12 +28,11 @@ const design = (props: CreateMyBricksProps) => {
     }, [])
 
     return (
-      <div
+      <CanvasZone
         ref={containerRef}
-        data-zone-type='page'
-        data-zone-kind='popup'
-        data-desn-page={id}
-        data-zone-title='弹窗'
+        kind='popup'
+        id={id}
+        title={commonLang.popup}
         style={{
           width: 900,
           height: 900,
@@ -42,7 +41,7 @@ const design = (props: CreateMyBricksProps) => {
         }}
       >
         {container && <Component {...props} popupNode={container}/>}
-      </div>
+      </CanvasZone>
     )
   }
   
@@ -68,30 +67,20 @@ const design = (props: CreateMyBricksProps) => {
       if (Array.isArray(editors) && editors.length) {
         return (
           <>
-            {editors.map(({ id, title, description, render }) => {
-              const Render = render
+            {editors.map(({ id, title, render }) => {
               return (
-                <div
-                  data-zone-type='page'
-                  data-zone-kind='page'
-                  data-desn-page={id}
-                  data-zone-title={title}
-                  data-zone-filename={id}
+                <CanvasZone
+                  key={id}
+                  id={id}
+                  title={title}
+                  filename={id}
                   style={{
                     width: 239,
                     height: 'fit-content'
                   }}
                 >
-                  <Render 
-                    context={{
-                      prd: {
-                        async get() {
-                          return null
-                        }
-                      }
-                    }}
-                  />
-                </div>
+                  <ExtensionEditor render={render} />
+                </CanvasZone>
               )
             })}
             {popupsCollection.map(({ id, Component, props, params }) => {

@@ -1,3 +1,4 @@
+import commonLang from '../../../../../helpers/i18n/common'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../../../../../mix/context'
 import {
@@ -93,8 +94,8 @@ const design = (props: CreateMyBricksProps) => {
           data-zone-type='page'
           data-zone-kind="agent-popup"
           data-desn-page=''
-          data-zone-title='弹窗'
-          data-widge-name='弹窗'
+          data-zone-title={commonLang.popup}
+          data-widge-name={commonLang.popup}
           data-zone-filename={params.filename}
           style={MOBILE_CONTAINER_STYLE}
         >
