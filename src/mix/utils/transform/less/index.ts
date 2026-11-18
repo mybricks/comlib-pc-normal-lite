@@ -5,8 +5,8 @@ interface Rule {
   selectors?: {
     toCSS: () => string;
   }[];
-  type: "Ruleset" | "Declaration" | "Media" | "Container" | "AtRule";
-  rules: (RuleSet | Declaration | Media | AtRule)[];
+  type: "Ruleset" | "Declaration" | "Media" | "Container" | "AtRule" | "Import";
+  rules: (RuleSet | Declaration | Media | AtRule | Import)[];
 }
 
 interface RuleSet extends Rule {
@@ -70,6 +70,13 @@ interface AtRule extends Rule {
   type: "AtRule";
   name: string;
   value: Keyword;
+}
+
+interface Import extends Rule {
+  type: "Import";
+  path: { toCSS: (context: object) => string };
+  features?: { toCSS: (context: object) => string };
+  options: Record<string, boolean>;
 }
 
 type CSSObj = Record<string, any>;
@@ -322,6 +329,18 @@ class Parse {
       } else if (rule.type === "AtRule") {
         const res = this.handleAtRule(rule);
         cssObjs.push(res);
+      } else if (rule.type === "Import") {
+        // 例如：@import (reference) "./base.less";
+        // 写回时保留这条导入，不展开 base.less 的内容。
+        const options = Object.entries(rule.options).map(([key, value]) =>
+          key === 'less' ? (value ? 'less' : 'css') :
+          key === 'multiple' ? (value ? 'multiple' : 'once') : key
+        );
+        const features = rule.features ? ` ${rule.features.toCSS({})}` : '';
+        cssObjs.push({
+          key: `@import ${options.length ? `(${options.join(', ')}) ` : ''}${rule.path.toCSS({})}${features};`,
+          value: {},
+        });
       } else {
         // @ts-ignore
         // console.log("其它 => ", rule.type);
@@ -467,7 +486,7 @@ class Parse {
   }
 }
 
-const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj | null => {
+export const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj | null => {
   const less = window.less;
   // null 明确表示解析/转换失败；合法空文件的结果仍然是 {}。
   let cssObj: CSSObj | null = null;
@@ -475,8 +494,8 @@ const tryParseLess = (code: string, onError?: (error: unknown) => void): CSSObj 
   const { sanitized, globalMap } = extractGlobals(code);
 
   try {
-    // 直接 parse Less 源码（不经过 render 编译），保留嵌套结构
-    (less as any).parse(sanitized, (error: any, output: any) => {
+    // 写入只解析当前源码；禁止异步加载 @import，否则同步返回时结果仍为 null。
+    (less as any).parse(sanitized, { processImports: false }, (error: any, output: any) => {
       if (error) {
         onError?.(error);
       } else {
@@ -517,6 +536,10 @@ const formatCSSString = (cssObj: CSSObj, indent = "") => {
     if (typeof value === "object") {
       // 顶层规则之间空一行，嵌套规则之间只换行
       const prefix = !index ? "" : (indent === "" ? "\n\n" : "\n");
+      if (key.startsWith('@import ')) {
+        code += `${prefix}${indent}${key}`;
+        return;
+      }
       code += `${prefix}${indent}${key} {\n` +
         `${formatCSSString(value, indent + "  ")}` +
         `\n${indent}}`;
