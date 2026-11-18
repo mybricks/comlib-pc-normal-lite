@@ -16,7 +16,7 @@ import type {
   OnRuntimeError
 } from '../../types'
 import { DYNAMIC_MODULE } from '../../../../../../mix/context/config'
-import { getCompiledCssContent } from '../../../../css'
+import { composeLessImports, getCompiledCssContent } from '../../../../css'
 
 interface LoadModuleParams {
   filename: string
@@ -148,26 +148,26 @@ interface LoadCssParams {
   css: Css
   dependencies: Dependencies
 }
+const sameClassMap = (previous: Record<string, string> = {}, next: Record<string, string> = {}) => {
+  const keys = Object.keys(previous)
+  return keys.length === Object.keys(next).length && keys.every(key =>
+    Object.prototype.hasOwnProperty.call(next, key) && previous[key] === next[key])
+}
+
 const loadCssModule = (params: LoadCssParams) => {
   const { file, css, dependencies } = params;
   const compiled = decodeURIComponent(file.compiled)
   const cssModule = JSON.parse(compiled);
-  const { classMap, imports } = cssModule;
-  const cssContent = getCompiledCssContent(cssModule)
-  const importModules: any = []
-  if (imports) {
-    imports.forEach((path) => {
-      importModules.unshift(dependencies[path])
-    })
-  }
+  const { classMap, cssContent } = composeLessImports(file.filename, {
+    classMap: cssModule.classMap || {},
+    cssContent: getCompiledCssContent(cssModule),
+  }, (cssModule.imports || []).map((path: string) => dependencies[path]))
   const proxy = new Proxy({}, {
     get(_, key) {
       if (key === 'default') {
         return proxy
       }
-      return importModules.reduce((pre, cur) => {
-        return cur?.classMap?.[key] || pre
-      }, classMap[key] || key)
+      return classMap[key] || key
     }
   })
 
@@ -754,18 +754,9 @@ class FileSystem {
 
       this.refreshDependents(filename)
     } else if (isCssModule(filename)) {
-      // 如果是less文件，解析后再次调用css即可
-      // [TODO] 目前不存在引用关系
-      let refresh = false
-
+      const previousClassMap = entry?.module.classMap
       if (entry) {
         const { module } = loadCssModule({ file, css: this.params.css, dependencies: this.proxyDependencies(filename), })
-        if (!entry.module.classMap || (Object.keys(entry.module.classMap).join('') !== Object.keys(module.classMap).join(''))) {
-          refresh = true
-        }
-        // if (!entry.module.classMap) {
-        //   refresh = true
-        // }
         entry.file = file
         entry.module = module
       } else {
@@ -795,12 +786,11 @@ class FileSystem {
         }
         const { module } = loadCssModule({ file, css: this.params.css, dependencies: this.proxyDependencies(filename), })
         this.filesMap[filename].module = module
-        refresh = true
       }
 
-      if (refresh) {
-        this.refreshDependents(filename)
-      }
+      // 属性变化只传播到 Less；导出映射变化才需要重新执行 JS/JSX。
+      const refreshScripts = !entry || !sameClassMap(previousClassMap, this.filesMap[filename].module.classMap)
+      this.refreshDependents(filename, new Set(), refreshScripts)
     } else if (isMdModule(filename)) {
       if (entry) {
         entry.file = file
@@ -957,7 +947,9 @@ class FileSystem {
    * 刷新依赖
    * [TODO] 循环依赖处理
    */
-  private refreshDependents(filename: string) {
+  private refreshDependents(filename: string, ancestors = new Set<string>(), refreshScripts = true) {
+    if (ancestors.has(filename)) return
+    const nextAncestors = new Set(ancestors).add(filename)
     const entry = this.filesMap[filename]
     if (!entry) return
 
@@ -965,6 +957,7 @@ class FileSystem {
     entry.dependedBy.forEach((dependentFilename) => {
       const dependentEntry = this.filesMap[dependentFilename]
       if (!dependentEntry) return
+      if (!refreshScripts && !isCssModule(dependentFilename)) return
 
       // 清除错误信息，重新加载
       dependentEntry.errors = {
@@ -992,6 +985,15 @@ class FileSystem {
         // 同步命名导出到 dependentEntry.module（如 export const Test = ...）
         this.syncNamedExports(dependentEntry, reloadedModule, dependentFilename)
         dependentEntry.forceUpdateSet.forEach(fn => fn())
+      } else if (isCssModule(dependentFilename)) {
+        const previousClassMap = dependentEntry.module.classMap
+        const { module } = loadCssModule({
+          file: dependentEntry.file,
+          css: this.params.css,
+          dependencies: this.proxyDependencies(dependentFilename),
+        })
+        dependentEntry.module = module
+        this.refreshDependents(dependentFilename, nextAncestors, !sameClassMap(previousClassMap, module.classMap))
       } else if (isJsModule(dependentFilename)) {
         // 被 JS 依赖，递归刷新依赖链
         // 重新加载 JS 模块
@@ -1007,7 +1009,7 @@ class FileSystem {
         
         dependentEntry.module = reloadedModule
 
-        this.refreshDependents(dependentFilename)
+        this.refreshDependents(dependentFilename, nextAncestors)
       }
     })
   }
