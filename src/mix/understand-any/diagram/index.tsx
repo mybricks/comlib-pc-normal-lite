@@ -188,7 +188,7 @@ function DiagramContent({ content, interactive = false }: { content: string; int
   if (!graphs) return <MermaidFallback key={content} content={content} />
   const graph = direction === 'TB' && graphs.vertical ? graphs.vertical : graphs.primary
   return <div ref={container} className={css['bizai-flow']} data-interactive={interactive}>
-    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={interactive} panOnScroll={false} zoomOnScroll={interactive} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
+    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
       <Background />
       {!interactive && <FitOnResize container={container} />}
       {interactive && <Controls showInteractive={false} aria-label={copy.diagramControls()} />}
