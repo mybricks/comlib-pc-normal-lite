@@ -1,5 +1,5 @@
 import context, { config } from '../context';
-import { parseLess, stringifyLess } from '../utils/transform/less';
+import { parseLess, stringifyLess, tryParseLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
@@ -2133,7 +2133,12 @@ export function genStyleValue(props) {
       const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
       // 固定本次 set 入口的源码；一次 set 可能同时写 JSX 和 Less，不能依赖跨文件回调维护的共享快照。
       let previousLessSource = rawLess ? decodeURIComponent(rawLess) : '';
-      let cssObj = rawLess ? parseLess(previousLessSource) : {};
+      let cssObj = rawLess ? tryParseLess(previousLessSource) : {};
+      // 解析失败不是空文件，不能用当前 selector 覆盖原有源码。
+      if (cssObj === null) {
+        console.warn('[style-proxy] Less 解析失败，已跳过样式写入', lessPath);
+        return;
+      }
 
       // 样式面板可能传来 CSS Modules 运行时类名，先还原成源码类名再定位写入位置
       const fullSelector = typeof rawSelector === 'string'
