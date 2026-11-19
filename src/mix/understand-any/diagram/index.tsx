@@ -10,6 +10,7 @@ import { parseDiagram, type ParsedDiagram } from './parse'
 
 const css = getLazyCss(lazyCss)
 const RESIZE_THROTTLE_MS = 30
+const PREVIEW_PADDING = 0.05
 
 type BusinessNodeData = { label: string; shape: string; depth: number; direction: ParsedDiagram['direction'] }
 type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number } }
@@ -88,7 +89,7 @@ function FitOnResize({ container }: { container: React.RefObject<HTMLDivElement>
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         if (element.clientWidth > 0 && element.clientHeight > 0) {
-          void fitView({ padding: 0.15, maxZoom: 1 })
+          void fitView({ padding: PREVIEW_PADDING, maxZoom: 1 })
         }
       })
     }
@@ -187,8 +188,8 @@ function DiagramContent({ content, interactive = false }: { content: string; int
 
   if (!graphs) return <MermaidFallback key={content} content={content} />
   const graph = direction === 'TB' && graphs.vertical ? graphs.vertical : graphs.primary
-  return <div ref={container} className={css['bizai-flow']} data-interactive={interactive}>
-    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.15, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
+  return <div ref={container} className={css['bizai-flow']} data-interactive={interactive} style={!interactive ? { aspectRatio: `${graph.width} / ${graph.height}` } : undefined}>
+    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: interactive ? 0.15 : PREVIEW_PADDING, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
       <Background />
       {!interactive && <FitOnResize container={container} />}
       {interactive && <Controls showInteractive={false} aria-label={copy.diagramControls()} />}

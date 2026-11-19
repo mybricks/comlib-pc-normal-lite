@@ -6,8 +6,8 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  min-height: 300px;
-  min-width: 230px;
+  min-height: 0;
+  min-width: 0;
   box-sizing: border-box;
   background: var(--mybricks-bg-color-main, #fff);
   font-size: 12px;
@@ -18,6 +18,7 @@
 .bizai-root[data-empty="true"] {
   height: 100%;
   min-height: 300px;
+  min-width: 230px;
 }
 
 .bizai-root[data-compact="true"],
@@ -160,8 +161,8 @@
 
 .bizai-card {
   position: relative !important;
-  flex: 1 1 168px;
-  min-height: 168px;
+  flex: 1 1 auto;
+  min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -171,6 +172,11 @@
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.bizai-flow[data-interactive="false"] {
+  position: relative;
+  inset: auto;
 }
 
 .bizai-flow :global(.react-flow__pane),
@@ -404,6 +410,18 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--mybricks-text-color-main, #273044);
+}
+
+.bizai-root:not([data-empty="true"]) .bizai-card > .bizai-diagram,
+.bizai-root:not([data-empty="true"]) .bizai-card > .bizai-document {
+  position: relative;
+  inset: auto;
+}
+
+.bizai-root:not([data-empty="true"]) .bizai-card > .bizai-diagram svg {
+  width: 100%;
+  height: auto;
+  max-height: none;
 }
 
 .bizai-diagram {
