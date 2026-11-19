@@ -1,4 +1,5 @@
 import { auditPageI18n } from './audit-page.i18n';
+import getI18n from '../../helpers/i18n';
 import React from 'react';
 import { buildGuiCardHooks } from './configs/guiCard';
 import { buildHooks as buildPrototypeHooks } from './configs/prototype';
@@ -57,11 +58,11 @@ function getDebugEnvOptions(data: any) {
   const debugEnvOptions: { label: string; value: string }[] = [];
 
   if (!disallowedDebugEnvs.has('prod')) {
-    debugEnvOptions.push({label: '正式环境', value: 'prod'});
+    debugEnvOptions.push({label: getI18n({ zh: '正式环境', en: 'Production' }), value: 'prod'});
   }
 
   if (envNames.includes('mock') && !disallowedDebugEnvs.has('mock')) {
-    debugEnvOptions.unshift({label: '测试环境', value: 'mock'});
+    debugEnvOptions.unshift({label: getI18n({ zh: '测试环境', en: 'Test' }), value: 'mock'});
   }
 
   envNames.forEach(name => {
