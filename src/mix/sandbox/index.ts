@@ -38,6 +38,7 @@ import buildDomChipInfo, { DOM_CHIP_TYPE, registerDomChipInfoExtension } from '.
 import { createDesignerSandbox } from './create-designer-sandbox';
 import { formatDomCanvasInfo } from './dom-chip-info';
 import { getTaskFileContent } from './task'
+import { sandboxLogger } from './logger';
 
 const ASK_QUESTIONS_TOOL_NAME = 'ask_questions'
 
@@ -730,129 +731,6 @@ const TURNID_TO_RECORD = {}
 /** 视觉分支中只有本地代码变更的 turn 不应使用 AI summary 覆盖手动版本。 */
 const TURNS_WITH_MANUAL_VISUAL_VERSION = new Set<string>()
 
-// ─── AI 执行过程日志 ─────────────────────────────────────────────────────────
-// 通过 window.__MYBRICKS_AI_SANDBOX_LOGS__ 暴露，按 turn.id 分组记录全部 AI hooks
-// 与关键内部流程（锁、版本、任务），便于排查 AI 执行过程中的问题。
-
-export interface SandboxLogEntry {
-  /** 日志归属类别，如 hooks.beforeTurn / lock / version。 */
-  hook: string;
-  message: string;
-  /** 记录时刻（ms 时间戳）。 */
-  ts: number;
-  /** 耗时（ms），仅计时类日志存在。 */
-  duration?: number;
-  data?: Record<string, any>;
-}
-
-/** 将任意参数收敛为轻量摘要，避免将大对象整体写入日志。 */
-function summarize(value: unknown): Record<string, any> {
-  if (value === undefined) return { kind: 'undefined' };
-  if (value === null) return { kind: 'null' };
-  if (Array.isArray(value)) return { kind: 'array', length: value.length };
-  if (typeof value === 'string') {
-    return { kind: 'string', length: value.length, preview: value.slice(0, 80) };
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') return { kind: typeof value, value };
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as object);
-    return { kind: 'object', keyCount: keys.length, keys: keys.slice(0, 10) };
-  }
-  return { kind: typeof value };
-}
-
-class SandboxTurnLogs {
-  private logs: Record<string, SandboxLogEntry[]> = {};
-  private active: { key: string; pending: boolean } | null = null;
-  private seq = 0;
-
-  constructor() {
-    (window as any)['__MYBRICKS_AI_SANDBOX_LOGS__'] = {
-      snapshot: () => this.snapshot(),
-      clear: () => this.clear(),
-      activeKey: () => this.active?.key,
-    };
-  }
-
-  /** 当前日志上下文 key（pending 桶或正式 turnId）。 */
-  private currentKey(): string | undefined {
-    return this.active?.key;
-  }
-
-  /**
-   * 开启一段日志上下文。
-   * 未传 key（beforeTurn 阶段尚无 turn.id）时使用临时 pending 桶，
-   * 等 afterTurn 拿到 turn.id 后由 bind() 归组。
-   */
-  begin(key?: string): void {
-    const k = key || `pending:${this.seq++}`;
-    if (this.active?.key === k) return;
-    this.active = { key: k, pending: !key };
-    if (!this.logs[k]) this.logs[k] = [];
-  }
-
-  /** 关闭当前日志上下文（清空游标，防止残留混入下一轮）。 */
-  end(): void {
-    this.active = null;
-  }
-
-  /** 将 pending 上下文归入正式 turnId 桶并切换过去。 */
-  bind(turnId: string): void {
-    if (!turnId) return;
-    const prev = this.active;
-    this.active = null;
-    if (prev && prev.pending && this.logs[prev.key]?.length) {
-      const entries = this.logs[prev.key];
-      delete this.logs[prev.key];
-      this.logs[turnId] = [...(this.logs[turnId] ?? []), ...entries];
-    }
-    this.begin(turnId);
-  }
-
-  /** 记录到当前上下文。 */
-  log(hook: string, message: string, data?: Record<string, any>): void {
-    this.logFor(this.currentKey(), hook, message, data);
-  }
-
-  /** 记录到指定 key（turnId 或 pending 桶），不依赖当前上下文，适配异步回调。 */
-  logFor(key: string | undefined, hook: string, message: string, data?: Record<string, any>): void {
-    if (!key) return;
-    if (!this.logs[key]) this.logs[key] = [];
-    this.logs[key].push({ hook, message, data, ts: Date.now() });
-  }
-
-  /** 计时执行任务并记录耗时/失败（支持同步或异步任务）。 */
-  async timed<T>(hook: string, message: string, fn: () => Promise<T> | T, data?: Record<string, any>): Promise<T> {
-    const key = this.currentKey();
-    const start = Date.now();
-    try {
-      const result = await fn();
-      this.logFor(key, hook, `${message} — 耗时 ${Date.now() - start}ms`, { ...data, duration: Date.now() - start });
-      return result;
-    } catch (e) {
-      const duration = Date.now() - start;
-      this.logFor(key, hook, `${message} — 失败（耗时 ${duration}ms）: ${e instanceof Error ? e.message : String(e)}`, { ...data, duration });
-      throw e;
-    }
-  }
-
-  snapshot(): Record<string, SandboxLogEntry[]> {
-    return Object.fromEntries(
-      Object.entries(this.logs).map(([key, entries]) => [
-        key,
-        entries.map((entry) => ({ ...entry, data: entry.data ? { ...entry.data } : undefined })),
-      ]),
-    );
-  }
-
-  clear(): void {
-    this.logs = {};
-    this.active = null;
-  }
-}
-
-const turnLogs = new SandboxTurnLogs()
-
 /**
  * turn 结束后：若源码相对 beforeTurn 快照有变化，则追加一条 AI 版本（含幂等）。
  * 内部可提前 return，不影响调用方后续逻辑。
@@ -872,7 +750,6 @@ async function persistAiVersionAfterTurn(
     ? new Map(options.visualBranchBeforeFiles.map((file) => [file.path, encodeURIComponent(file.content)]))
     : requestSnapshot;
   if (!hasSourceChanged(data.files ?? [], previousSnapshot)) {
-    turnLogs.logFor(turn?.id, 'version', '[版本/跳过] 源码无变更 — 不记录版本')
     return false
   };
 
@@ -918,12 +795,8 @@ async function persistAiVersionAfterTurn(
     createdAt: Date.now(),
   };
 
-  turnLogs.logFor(turn?.id, 'version', '[版本/检测] 源码有变更 — 准备写入版本记录', { versionId: record.id })
-
   version.addPromiseTask(async () => {
-    turnLogs.logFor(turn?.id, 'version', '[版本/写入] 开始写入版本至历史存储', { versionId: record.id })
     await history.addVersion(record, files);
-    turnLogs.logFor(turn?.id, 'version', '[版本/写入] 版本已成功持久化至历史存储', { versionId: record.id })
   })
 
   TURNID_TO_RECORD[record.turnId] = record;
@@ -980,6 +853,7 @@ export function createDesignerLoading(
   options?: DesignerLoadingOptions
 ) {
   const lockId = uuid();
+  sandboxLogger.log(comId, 'createDesignerLoading', { lockId, comId, focusArea, options });
   let compileError: any = null;
   let runtimeError: any = null;
   // [TODO] 临时加一个字段，只要报错过就只能 progress 模式，目前报错后focusArea已经丢失
@@ -1014,65 +888,99 @@ export function createDesignerLoading(
    */
   let degraded = false;
   let disposed = false;
-  let releaseLock: (() => void) | null = () => {
-    turnLogs.log('lock', '[锁/释放] 空操作释放 — 锁从未被申请');
+  let releaseLock: (() => void) | null = () => {};
+
+  const logState = (method: string, details: Record<string, unknown> = {}) => {
+    sandboxLogger.log(comId, `createDesignerLoading.${method}`, {
+      lockId, currentMode, lockRequested, degraded, disposed, ...details,
+    });
+  };
+
+  // success 表示同步调用正常返回，不代表 UI 已完成渲染。
+  const callAPI = <T,>(api: string, args: unknown[], invoke: () => T): T => {
+    logState('api.begin', { api, args });
+    try {
+      const result = invoke();
+      logState('api.success', { api, resultType: typeof result });
+      return result;
+    } catch (error) {
+      logState('api.error', {
+        api,
+        error: error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : String(error),
+      });
+      throw error;
+    }
+  };
+
+  const notifyProgress = (status: DesignerLoadingProgressStatus) => {
+    if (!options?.onProgress) {
+      logState('api.skipped', { api: 'onProgress', args: [status], reason: 'missing-callback' });
+      return;
+    }
+    callAPI('onProgress', [status], () => options.onProgress!(status));
   };
 
   const resolveMode = (): 'progress' | 'component' => {
-    if (degraded) return 'progress';
+    if (degraded) {
+      logState('resolveMode', { nextMode: 'progress', reason: 'already-degraded' });
+      return 'progress';
+    }
     // 无 runtime 文件时画布无可锁定区域，降级为整页 loading（而不是结束 loading）
-    if (options?.canLock?.() === false) {
+    if (options?.canLock && callAPI('canLock', [], () => options.canLock!()) === false) {
       degraded = true;
+      logState('resolveMode', { nextMode: 'progress', reason: 'cannot-lock' });
       return 'progress';
     }
     if (!focusArea || compileError || runtimeError || hasErrorOccurred || (extra.from === '@commitUserActions')) {
       degraded = true;
+      logState('resolveMode', {
+        nextMode: 'progress', hasFocusArea: !!focusArea,
+        hasCompileError: !!compileError, hasRuntimeError: !!runtimeError,
+        hasErrorOccurred, from: extra.from,
+      });
       return 'progress';
     }
+    logState('resolveMode', { nextMode: 'component' });
     return 'component';
   };
 
   const applyLock = (mode: 'progress' | 'component') => {
+    sandboxLogger.log(comId, 'createDesignerLoading.applyLock', { lockId, comId, focusArea, mode });
     if (mode === 'progress') {
-      options?.onProgress?.('start');
+      notifyProgress('start');
       releaseLock = () => {
-        options?.onProgress?.('complete');
-        turnLogs.log('lock', '[锁/释放] 进度模式锁已释放 — 已调用 onProgress(complete)', {
-          onProgress: typeof options?.onProgress
-        });
+        notifyProgress('complete');
       };
     } else {
-      const lockResult = actions.lock(lockId, focusArea);
+      const lockResult = callAPI('actions.lock', [lockId, focusArea], () => actions.lock(lockId, focusArea));
       releaseLock = () => {
-        turnLogs.log('lock', '[锁/释放] 组件模式锁释放中 — 检查 lockResult 类型', {
-          lockResult: typeof lockResult
-        });
         if (typeof lockResult === 'function') {
-          turnLogs.log('lock', '[锁/释放] 组件模式锁已释放 — 通过 lockResult 回调解锁');
-          lockResult()
+          callAPI('lockResult.release', [], () => lockResult());
         } else {
-          turnLogs.log('lock', '[锁/释放] 组件模式锁已释放 — 通过 actions.unlock() 解锁');
-          actions.unlock(lockId, focusArea);
+          callAPI('actions.unlock', [lockId, focusArea], () => actions.unlock(lockId, focusArea));
         }
       }
     }
     currentMode = mode;
+    logState('applyLock.success');
   };
 
   const releaseCurrent = () => {
-    turnLogs.log('lock', '[锁/releaseCurrent] 调用当前锁的释放处理器', {
-      releaseLock: typeof releaseLock
-    });
+    sandboxLogger.log(comId, 'createDesignerLoading.releaseCurrent', { lockId, comId, focusArea, currentMode });
     if (releaseLock) {
       releaseLock();
       releaseLock = null;
     }
     currentMode = null;
+    logState('releaseCurrent.success');
   };
 
   // 注：canLock() 不再直接解锁 loading，只参与 resolveMode 的单向降级，
   // 确保 loading 的 start/complete 只由 AI 执行状态（setLock / dispose）驱动。
-  const syncLock = () => {
+  const syncLock = (reason: string) => {
+    logState('syncLock', { reason });
     if (!lockRequested) {
       if (currentMode !== null) releaseCurrent();
       return;
@@ -1082,6 +990,7 @@ export function createDesignerLoading(
 
     // 模式未变，跳过解锁+重新上锁
     if (currentMode === nextMode) {
+      logState('syncLock.skipped', { reason: 'mode-unchanged', nextMode });
       return;
     }
 
@@ -1089,23 +998,32 @@ export function createDesignerLoading(
     applyLock(nextMode);
   };
 
-  const offFileChange = options?.canLock ? events.on('fileChange', syncLock, false) : undefined;
+  const offFileChange = options?.canLock ? events.on('fileChange', () => syncLock('fileChange'), false) : undefined;
 
   const setLock = (type: 'lock' | 'unlock') => {
-    if (disposed) return;
+    sandboxLogger.log(comId, 'createDesignerLoading.setLock', { lockId, comId, type, currentMode, disposed });
+    if (disposed) {
+      logState('setLock.skipped', { type, reason: 'disposed' });
+      return;
+    }
     lockRequested = type === 'lock';
-    syncLock();
+    syncLock(`setLock:${type}`);
+    logState('setLock.success', { type });
   };
 
   const dispose = () => {
-    if (disposed) return;
+    sandboxLogger.log(comId, 'createDesignerLoading.dispose', { lockId, comId, currentMode, disposed });
+    if (disposed) {
+      logState('dispose.skipped', { reason: 'disposed' });
+      return;
+    }
     disposed = true;
-    turnLogs.log('loading', '[加载/销毁] 设计器 loading 实例已销毁 — 释放锁并移除错误监听器');
-    offFileChange?.();
+    if (offFileChange) callAPI('offFileChange', [], () => offFileChange());
     lockRequested = false;
-    syncLock();
-    offCompileError();
-    offRuntimeError();
+    syncLock('dispose');
+    callAPI('offCompileError', [], () => offCompileError());
+    callAPI('offRuntimeError', [], () => offRuntimeError());
+    logState('dispose.success');
   };
 
   const setExtra = (_extra) => {
@@ -1306,11 +1224,8 @@ async function registerSandboxInternal(comId: string): Promise<void> {
       }))
     ),
     hooks: {
-      async beforeRequest({ meta, extra }) {
-        turnLogs.log('hooks.beforeRequest', '[hooks/beforeRequest] 请求开始 — 申请画布锁', {
-          meta: summarize(meta),
-          extra: summarize(extra),
-        });
+      async beforeRequest({ extra }) {
+        sandboxLogger.log(comId, 'hooks.beforeRequest', ...arguments);
         (window as any).__vibeCodingCallbacks__?.onStart?.();
 
         loadingRef.current?.setExtra(extra);
@@ -1319,12 +1234,8 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         context.component?.events.emit('vibing', true);
       },
       async beforeTurn() {
-        // beforeTurn 尚无 turn.id，日志先进 pending 桶，afterTurn 拿到 turn.id 后归组
-        turnLogs.begin();
+        sandboxLogger.log(comId, 'hooks.beforeTurn', ...arguments);
         taskIdsBeforeTurn = new Set(parseTasksForNotify(getTaskFileContent() ?? '').map(task => task.id));
-        turnLogs.log('hooks.beforeTurn', '[hooks/beforeTurn] 轮次开始', {
-          taskIdsBeforeTurn: taskIdsBeforeTurn.size,
-        });
         agentTurnLifecycle.onStart(comId);
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
@@ -1338,24 +1249,16 @@ async function registerSandboxInternal(comId: string): Promise<void> {
             return Array.isArray(files) && files.some(isRuntimeFile);
           },
         });
-        turnLogs.log('hooks.beforeTurn', '[hooks/beforeTurn] 画布 loading 实例已重建', {
-          focusArea: summarize(focusArea),
-        });
-        await turnLogs.timed('hooks.beforeTurn', '[hooks/beforeTurn] refreshProjectBaseline 完成', () => refreshProjectBaseline(comId, projectRef));
+        await refreshProjectBaseline(comId, projectRef);
         latestVersionIdBeforeTurn = undefined;
         if (history) {
           const { list } = await history.listVersions({ pageSize: 1, pageNum: 1 });
           latestVersionIdBeforeTurn = list[0]?.id;
-          turnLogs.log('hooks.beforeTurn', '[hooks/beforeTurn] 已缓存本轮开始前的最新版本', {
-            latestVersionIdBeforeTurn,
-          });
         }
       },
       async afterTurn(turn: { id?: string }) {
+        sandboxLogger.log(comId, 'hooks.afterTurn', ...arguments);
         (window as any)._sendToAgent_source_ = null
-        // 将 beforeTurn 阶段产生的 pending 日志归入本轮，后续日志进入 turn.id 桶
-        turnLogs.bind(turn.id)
-        turnLogs.log('hooks.afterTurn', '[hooks/afterTurn] 本轮结束 — 开始执行轮后处理')
 
         // AI 已结束，立即销毁 loading：
         // 1) 提前到所有 await 之前，避免版本持久化/任务刷新期间的文件写入触发 fileChange，
@@ -1363,11 +1266,6 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         // 2) 引用守卫：若并发 turn 的 beforeTurn 已抢先覆盖 loadingRef.current，只释放本 turn 实例，
         //    不误伤新实例（AI 未结束 loading 提前结束）
         const loading = loadingRef.current
-        turnLogs.log('hooks.afterTurn', isRemoteAgent
-          ? '[hooks/afterTurn] remote Agent 版本由服务端持久化 — 通知 UI 并销毁设计器 loading'
-          : '[hooks/afterTurn] 版本已持久化 — 通知 UI 并销毁设计器 loading', {
-          dispose: typeof loading?.dispose
-        });
         loading?.dispose();
         if (loadingRef.current === loading) {
           loadingRef.current = null;
@@ -1410,24 +1308,16 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         await agentTurnLifecycle.onComplete(comId, turn);
 
         context.component?.events.emit('vibing', false);
-
-        turnLogs.log('hooks.afterTurn', '[hooks/afterTurn] 轮后处理完成（版本/任务/通知均已落定）');
-        // 关闭日志上下文，避免残留混入下一轮
-        turnLogs.end();
       },
       async afterTurnSummary(
         turn: { id?: string },
         summary: string,
         result?: { status: 'success'; versionId?: string } | { status: 'error'; error: unknown },
       ) {
-        const turnId = turn?.id
-        turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 收到 summary 回调 — 开始更新版本摘要', {
-          summary: summarize(summary),
-        });
+        sandboxLogger.log(comId, 'hooks.afterTurnSummary', ...arguments);
         if (isRemoteAgent) {
           const versionId = result?.status === 'success' ? result.versionId : undefined
           if (!versionId) {
-            turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 服务端没有关联版本，跳过版本列表更新');
             return
           }
           const record: VersionRecord = {
@@ -1444,33 +1334,23 @@ async function registerSandboxInternal(comId: string): Promise<void> {
           } else {
             context.notifyVersionsChange(record)
           }
-          turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 收到服务端 turn:summary 通知；更新版本列表展示', {
-            versionId: record.id,
-          });
           return
         }
         if (!history || !turn?.id) {
-          turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 已中止 — history 存储或 turn.id 不可用');
           return
         };
 
         if (TURNS_WITH_MANUAL_VISUAL_VERSION.delete(turn.id)) {
-          turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 视觉分支未检测到 AI 源码修改，跳过 AI 摘要覆盖');
           return
         }
 
         const target = TURNID_TO_RECORD[turn.id]
 
         if (!target) {
-          turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 已中止 — 未找到 turn.id 对应的版本记录');
           return
         };
 
-        turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 正在更新历史存储中的版本摘要');
-
         await history.updateVersion(target.id, { summary });
-
-        turnLogs.logFor(turnId, 'hooks.afterTurnSummary', '[hooks/afterTurnSummary] 版本摘要更新成功 — 通知 UI');
 
         target.summary = summary
 
@@ -1478,26 +1358,16 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         context.notifyVersionsChange(target);
       },
       async beforeToolCall({ tool }) {
+        sandboxLogger.log(comId, 'hooks.beforeToolCall', ...arguments);
         const isAskQuestions = tool.name === ASK_QUESTIONS_TOOL_NAME;
-        turnLogs.log('hooks.beforeToolCall', `[hooks/beforeToolCall] ${isAskQuestions ? '问答工具调用 — 解锁画布' : '工具调用'}`, { tool: tool.name });
         if (!isAskQuestions) return;
         loadingRef.current?.setLock('unlock')
       },
       async afterToolCall({ tool }) {
+        sandboxLogger.log(comId, 'hooks.afterToolCall', ...arguments);
         const isAskQuestions = tool.name === ASK_QUESTIONS_TOOL_NAME;
-        turnLogs.log('hooks.afterToolCall', `[hooks/afterToolCall] ${isAskQuestions ? '问答工具调用结束 — 重新锁定画布' : '工具调用结束'}`, { tool: tool.name });
         if (!isAskQuestions) return;
         loadingRef.current?.setLock('lock')
-      },
-      async beforeTurnStop({ turn, step, finishReason }) {
-        // 仅记录，不干预模型正常停止
-        turnLogs.logFor(turn?.id, 'hooks.beforeTurnStop', '[hooks/beforeTurnStop] 模型准备结束本轮（未干预）', {
-          step,
-          finishReason,
-        });
-      },
-      async afterTurnSettled(turn) {
-        turnLogs.logFor(turn?.id, 'hooks.afterTurnSettled', '[hooks/afterTurnSettled] 后台后处理全部完成（summary/compact 均已落定）');
       },
     },
     chips: CHIPS
