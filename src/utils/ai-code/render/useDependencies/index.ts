@@ -44,20 +44,29 @@ const useDependencies = (params: Params) => {
     class DataSourceWithProxy extends BaseDataSource {
       constructor(params) {
         super({...params, pushLog: (method, data) => context.pushLog(method, data)});
+        // 保持方法引用稳定，避免作为 React effect 依赖时反复触发。
+        const methodCache = new Map<PropertyKey, { original: Function; wrapped: Function }>();
         return new Proxy(this, {
-          get(target, key: string) {
+          get(target, key) {
             if (key === 'axios') {
               return target[key]
             }
             const val = (target as any)[key]
             if (typeof val === 'function' && key !== 'constructor') {
-              return (...args: any[]) => {
+              const cached = methodCache.get(key);
+              if (cached?.original === val) {
+                return cached.wrapped;
+              }
+              const wrapped = (...args: any[]) => {
                 const result = val.apply(target, args);
                 // [TODO] 日志收集
                 // collectDebugLogs({ type: 'dataSource', method: key, args, result });
                 return result
               }
+              methodCache.set(key, { original: val, wrapped });
+              return wrapped;
             }
+            methodCache.delete(key);
             return val
           }
         })
