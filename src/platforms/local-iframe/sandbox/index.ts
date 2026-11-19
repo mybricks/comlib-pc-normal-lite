@@ -576,6 +576,9 @@ export function registerSandbox(comId: string) {
         console.log(11, 'hooks:beforeTurn', params)
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
+        // 先销毁上一实例，避免泄漏实例的事件监听残留
+        loadingRef.current?.dispose();
+        loadingRef.current = null;
         loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
         // refreshProjectBaseline(comId, projectRef);
 
@@ -588,6 +591,9 @@ export function registerSandbox(comId: string) {
         }
       },
       async afterTurn(turn: any) {
+        // AI 已结束，先销毁 loading（幂等），再执行异步轮后处理
+        loadingRef.current?.dispose();
+        loadingRef.current = null;
         const gitDiff = await captureVersionGitDiff()
         const versionList = myContext.version.getList()
 
