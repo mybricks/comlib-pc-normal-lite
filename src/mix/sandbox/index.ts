@@ -21,6 +21,7 @@ import { uuid } from '../../utils';
 import { verify as eslintVerify, RULE_IDS } from '../eslint';
 import { randomUUID } from '../utils/uuid'
 import { checkVisibility } from '../../utils/ai-code/render/mybricks/checkVisibility-polyfill';
+import { isRuntimeFile } from '../../utils/ai-code/runtime-files';
 import { undoRedoManager } from '../editors/undoRedo';
 import type { FileSnapshot } from '../editors/undoRedo';
 import {
@@ -878,6 +879,8 @@ export type DesignerLoadingProgressStatus = 'start' | 'complete' | 'error';
 export interface DesignerLoadingOptions {
   /** 与 plugin-ai request params.onProgress 对齐 */
   onProgress?: (status: DesignerLoadingProgressStatus) => void;
+  /** 文件变更时重新判断是否需要锁定画布。 */
+  canLock?: () => boolean;
 }
 
 /**
@@ -916,6 +919,7 @@ export function createDesignerLoading(
 
   // 当前生效的锁模式：progress = onProgress 整页；component = actions.lock 组件锁；null = 未上锁
   let currentMode: 'progress' | 'component' | null = null;
+  let lockRequested = false;
   let releaseLock: (() => void) | null = () => {
     turnLogs.setLog({
       message: '[锁/释放] 空操作释放 — 锁从未被申请',
@@ -972,9 +976,9 @@ export function createDesignerLoading(
     currentMode = null;
   };
 
-  const setLock = (type: 'lock' | 'unlock') => {
-    if (type === 'unlock') {
-      releaseCurrent();
+  const syncLock = () => {
+    if (!lockRequested || options?.canLock?.() === false) {
+      if (currentMode !== null) releaseCurrent();
       return;
     }
 
@@ -989,11 +993,19 @@ export function createDesignerLoading(
     applyLock(nextMode);
   };
 
+  const offFileChange = options?.canLock ? events.on('fileChange', syncLock, false) : undefined;
+
+  const setLock = (type: 'lock' | 'unlock') => {
+    lockRequested = type === 'lock';
+    syncLock();
+  };
+
   const dispose = () => {
     turnLogs.setLog({
       message: '[加载/销毁] 设计器 loading 实例已销毁 — 释放锁并移除错误监听器',
     });
-    releaseCurrent();
+    offFileChange?.();
+    setLock('unlock');
     offCompileError();
     offRuntimeError();
   };
@@ -1208,7 +1220,13 @@ async function registerSandboxInternal(comId: string): Promise<void> {
         agentTurnLifecycle.onStart(comId);
         const focusArea = (window as any)?._ai_focus_params_?.focusArea;
         const onProgress = (window as any)?._ai_focus_params_?.onProgress;
-        loadingRef.current = createDesignerLoading(comId, focusArea, { onProgress });
+        loadingRef.current = createDesignerLoading(comId, focusArea, {
+          onProgress,
+          canLock: () => {
+            const files = context.component?.params?.data?.files;
+            return Array.isArray(files) && files.some(isRuntimeFile);
+          },
+        });
         refreshProjectBaseline(comId, projectRef);
         latestVersionIdBeforeTurn = undefined;
         if (history) {

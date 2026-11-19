@@ -15,6 +15,7 @@ import { DataSource } from './mybricks/data-source'
 import { replaceToUnderline } from './mybricks/utils'
 import { useDependencies } from './useDependencies'
 import { createRuntimeMode } from '../runtimeMode'
+import { isAgentFile, isRuntimeFile } from '../runtime-files'
 import commonLang from '../../../helpers/i18n/common'
 
 /** 运行时错误面板（ErrorBoundary 内部使用） */
@@ -119,8 +120,6 @@ const GenerateLoadingView = ({
   );
 };
 
-const isAgentFile = (fileName = '') => fileName.replace(/^\//, '').startsWith('.agent/');
-
 const IdlePlaceholder = ({title = 'AI 图表', orgName = 'MyBricks', examples = []}: any) => {
   const copy = useCallback((text) => {
     copyToClipboard(text).then((res) => {
@@ -189,10 +188,21 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
 
     const containerRef = useRef<HTMLDivElement>(null);
     const files = Array.isArray(data.files) ? data.files : [];
-    const runtimeFiles = files.filter((file: any) => !isAgentFile(file.fileName));
+    const runtimeFiles = files.filter(isRuntimeFile);
+    const hadRuntimeFiles = useRef(runtimeFiles.length > 0);
+    const openedForGeneration = useRef(false);
     const activeEnv = env.edit ? 'mock' : (data._activeDebugEnv ?? 'prod');
     const [reload, setReload] = useState(0)
     const [vibing, setVibing] = useState(false);
+
+    useEffect(() => {
+      const firstRuntimeFile = !hadRuntimeFiles.current && runtimeFiles.length > 0;
+      if (!openedForGeneration.current && firstRuntimeFile) {
+        openedForGeneration.current = true;
+        void (window as any)._sandbox_?.helpers?.ensureAIPanelOpen?.(id);
+      }
+      hadRuntimeFiles.current = runtimeFiles.length > 0;
+    }, [id, runtimeFiles.length]);
 
     useLayoutEffect(() => {
       const events = context.component!.events;
@@ -240,7 +250,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
         setTimeout(() => {
           const helpers = (window as any)._sandbox_?.helpers;
           helpers?.setSenderOptions?.(id, pendingMessage);
-          helpers?.sendToAgent?.(id, pendingMessage);
+          helpers?.sendToAgent?.(id, pendingMessage, { openPanel: false });
         }, 500);
       }
     }, []);
@@ -300,7 +310,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const renderSender = useMemo(() => {
       if ((window as any)._sandbox_?.helpers?.renders?.renderStartView) {
         return (
-          <div className={css.tip} data-zone-type='ai-fixed'>
+          <div data-zone-type='ai-fixed'>
             {(window as any)._sandbox_.helpers.renders.renderStartView({ comId: id })}
           </div>
         )
@@ -338,7 +348,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     // 4. runtime：编译成功，渲染组件
     // 5. placeholder：等待中，展示提示词
     const innerContent = (() => {
-      if (data.generate) {
+      if (data.generate && runtimeFiles.length > 0) {
         return (
           <GenerateLoadingView
             fileName={data.generateFileName ?? ''}
@@ -349,11 +359,13 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
           />
         );
       }
-      if ((data.document && !files.length) || data.loading) {
+      if (data.generate && !runtimeFiles.length) return renderSender;
+      const showLoadingMask = runtimeFiles.length > 0 && data.loading;
+      if ((data.document && !files.length) || showLoadingMask) {
         return (
           <div className={css.documentCard}>
             <div className={css.documentContent}>{data.document}</div>
-            {data.loading && (
+            {showLoadingMask && (
               <div className={css.loadingMask}>
                 <antd.Spin />
               </div>
