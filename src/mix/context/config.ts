@@ -168,6 +168,23 @@ class Config {
     return {}
   }
 
+  /** 是否显式配置依赖；返回空值也表示不使用内置依赖。 */
+  hasConfiguredDependencies(fileName?: string) {
+    const componentRuntime = window._sandbox_.config.componentRuntime
+    if (!componentRuntime) {
+      return false
+    }
+
+    if (typeof componentRuntime.getDependencies === 'function') {
+      return true
+    }
+
+    return Object.entries(componentRuntime.modules || {}).some(([key, module]: any) => {
+      return typeof module.getDependencies === 'function'
+        && (fileName === undefined || fileName.startsWith(key) || (module.pattern && module.pattern.test(fileName)))
+    })
+  }
+
   getAllDependencies() {
     const base = {};
 
@@ -199,7 +216,7 @@ class Config {
     if (componentRuntime) {
       const { getDependencies, modules } = componentRuntime
       const transformDependencies = (dependencies) => {
-        Object.entries(dependencies).forEach(([key, value]: any) => {
+        Object.entries(dependencies ?? {}).forEach(([key, value]: any) => {
           if (value.dynamic) {
             function getDynamicModule(params) {
               return value.module(params)
@@ -240,7 +257,7 @@ class Config {
       }
     }
 
-    if (!Object.keys(base).length) {
+    if (!Object.keys(base).length && !this.hasConfiguredDependencies()) {
       [
         ['antd', antd],
         ['dayjs', dayjs],
@@ -268,7 +285,7 @@ class Config {
     if (componentRuntime) {
       const { getDependencies, modules } = componentRuntime
       const transformDependencies = (dependencies) => {
-        names.push(...Object.keys(dependencies))
+        names.push(...Object.keys(dependencies ?? {}))
       }
 
       if (typeof getDependencies === 'function') {
@@ -308,6 +325,10 @@ class Config {
     }
 
     if (!names.length) {
+      if (this.hasConfiguredDependencies(fileName)) {
+        return ['react', 'react-dom']
+      }
+
       return [
         'react',
         'react-dom',
@@ -322,7 +343,7 @@ class Config {
   }
 
   getAddonValidators({ fileName }: { fileName: string}) {
-    let hasLibraries = false
+    let hasLibraries = this.hasConfiguredDependencies(fileName)
     const validators: any = []
     const availableLibraries = this.getCompatibleAvailableLibraries()
     if (availableLibraries.length) {
@@ -339,7 +360,7 @@ class Config {
     if (componentRuntime) {
       const { getDependencies, modules } = componentRuntime
       const transformDependencies = (dependencies) => {
-        const entryDependencies = Object.entries(dependencies)
+        const entryDependencies = Object.entries(dependencies ?? {})
         if (entryDependencies.length) {
           hasLibraries = true
         }
@@ -383,7 +404,7 @@ class Config {
     if (componentRuntime) {
       const { getDependencies, modules } = componentRuntime
       const transformDependencies = (dependencies) => {
-        Object.entries(dependencies).forEach(([key, value]: any) => {
+        Object.entries(dependencies ?? {}).forEach(([key, value]: any) => {
           effectiveLibraries.push({
             name: key,
             ...value

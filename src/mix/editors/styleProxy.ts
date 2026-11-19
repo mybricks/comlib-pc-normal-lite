@@ -1,5 +1,5 @@
 import context, { config } from '../context';
-import { parseLess, stringifyLess } from '../utils/transform/less';
+import { parseLess, stringifyLess, tryParseLess } from '../utils/transform/less';
 import { debounce } from '../../utils/debounce'
 import { undoRedoManager } from './undoRedo'
 import { convertCamelToHyphen } from '../../utils/string'
@@ -74,6 +74,12 @@ function camelToKebab(str: string) {
 
 function isExplicitUnsetValue(value: unknown): boolean {
   return typeof value === 'string' && /^unset(?:\s*!important)?$/i.test(value.trim());
+}
+
+// 判断元素是不是浏览器原生 HTML 标签；SVG 里的 path、circle 等节点不算这里的 HTML 标签。
+function isNativeHtmlElement(ele: Element | null): boolean {
+  if (!ele || ele.namespaceURI !== 'http://www.w3.org/1999/xhtml') return false;
+  return !(document.createElement(ele.tagName.toLowerCase()) instanceof HTMLUnknownElement);
 }
 
 function getExplicitClearPatch(
@@ -1900,8 +1906,18 @@ export function genStyleValue(props) {
       const eleClassList = ele ? Array.from(ele.classList) as string[] : [];
       const hasDragInsert = !!(ele as HTMLElement | null)?.hasAttribute('data-drag-insert');
       const hasDataZoneSelector = !!(ele as HTMLElement | null)?.dataset?.zoneSelector;
-      // 沿用原来的 AI 节点判断：元素既没有编辑区域标记，也不是拖入节点；或是拖入节点但没有源码位置。
-      const isAIOnlyNode = (!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw);
+      // data-zone-noselector 表示这个元素没有可用的 CSS selector；例如 <div>123</div>，样式要直接写回 JSX 的 style。
+      // data-library-source 用来排除第三方组件。
+      const isNativeHtmlInlineNode = !!ele &&
+        !hasDragInsert &&
+        eleClassList.length === 0 &&
+        ele.hasAttribute('data-zone-noselector') &&
+        !ele.hasAttribute('data-library-source') &&
+        isNativeHtmlElement(ele);
+      // 只有普通的 AI 节点才走 updateAIStyleInBranch；上面的原生 HTML 节点要继续走下面已有的 JSX inline 写入逻辑。
+      const isAIOnlyNode =
+        ((!!ele && !hasDataZoneSelector && !hasDragInsert) || (hasDragInsert && !locRaw)) &&
+        !isNativeHtmlInlineNode;
 
       const useInlineStyleHistory = !isAncestorStateWrite && !isAIOnlyNode && !isStateStyleSelector(rawSelector) &&
         (eleClassList.length === 0 || hasDragInsert);
@@ -2117,7 +2133,12 @@ export function genStyleValue(props) {
       const rawLess = lessFile?.source ?? aiComParams.data.styleSource ?? '';
       // 固定本次 set 入口的源码；一次 set 可能同时写 JSX 和 Less，不能依赖跨文件回调维护的共享快照。
       let previousLessSource = rawLess ? decodeURIComponent(rawLess) : '';
-      let cssObj = rawLess ? parseLess(previousLessSource) : {};
+      let cssObj = rawLess ? tryParseLess(previousLessSource) : {};
+      // 解析失败不是空文件，不能用当前 selector 覆盖原有源码。
+      if (cssObj === null) {
+        console.warn('[style-proxy] Less 解析失败，已跳过样式写入', lessPath);
+        return;
+      }
 
       // 样式面板可能传来 CSS Modules 运行时类名，先还原成源码类名再定位写入位置
       const fullSelector = typeof rawSelector === 'string'
@@ -2249,8 +2270,9 @@ export function genStyleValue(props) {
       // 不写 Less（避免全局标签规则或污染共享 class），改为向 JSX 源码注入/追加/删除内联 style。
       if (!isAncestorStateWrite && (eleClassList.length === 0 || hasDragInsert)) {
         // 仅处理选择器末尾是纯 HTML 标签名（如 ".parent span"）的情况
+        // 额外放行 <div>123</div> 这种 selector 是 [data-zone-noselector] 的原生标签。
         const selectorEndsWithTag = fullSelector && /\s[a-z][a-zA-Z0-9]*$/.test(fullSelector);
-        if (!hasDragInsert && !selectorEndsWithTag) return;
+        if (!hasDragInsert && !selectorEndsWithTag && !isNativeHtmlInlineNode) return;
 
         // 需要删除的内联属性：deletions 中在 styleInfo 有静态偏移记录的 key
         const inlineDeletions = (deletions || []).filter(

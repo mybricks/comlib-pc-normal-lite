@@ -29,6 +29,7 @@ export default class Audit {
 
   get(params: {
     tsx: string,
+    pageTsx?: string,
     loc?: string | DomLoc,
     parentLoc?: string | DomLoc | null,
     widgetName?: string | null,
@@ -36,6 +37,12 @@ export default class Audit {
     valueKeys: string[] // events services state store jsDoc aiDoc
   }): AuditResult {
     const value = this.tsxToValueMap.get(params.tsx)
+    // Graph 按页面缓存，DOM 的源码文件可能只是页面引用的子组件。
+    const values = params.type === 'dom'
+      ? params.pageTsx
+        ? [this.tsxToValueMap.get(params.pageTsx)].filter((item): item is NonNullable<typeof item> => !!item)
+        : Array.from(this.tsxToValueMap.values())
+      : value ? [value] : []
     const result: AuditResult = {}
     const parseLoc = (input?: string | DomLoc | null): DomLoc | undefined => {
       if (params.type !== 'dom') return undefined
@@ -52,27 +59,29 @@ export default class Audit {
     const parentLoc = parseLoc(params.parentLoc)
     const locations = [loc, parentLoc].filter((item): item is DomLoc => !!item)
     const hasLocation = !!loc
-    const matches = (item: { location?: { fileName: string; startLine: number; endLine: number }; refSelector?: string }) => {
-      if (!locations.length) return false
-      if (item.location) {
-        return locations.some(location => item.location!.fileName === location.files.jsx
-          && item.location!.startLine === location.codeLine.start
-          && item.location!.endLine === location.codeLine.end)
-      }
-      return false
-    }
+    const matches = (item: { location?: { fileName: string; startLine: number; endLine: number } }, location: DomLoc) =>
+      item.location?.fileName === location.files.jsx
+      && item.location.startLine === location.codeLine.start
+      && item.location.endLine === location.codeLine.end
 
     for (const key of params.valueKeys) {
       if (key === 'jsDoc') {
-        const docs = value?.docs ?? []
-        const findDoc = (docs: AuditValue['docs']) => params.type === 'dom'
-          ? params.widgetName
-            ? docs.find(doc => doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
+        if (params.type === 'canvas') {
+          result.jsDoc = value?.docs[0] ?? value?.jsDocs[0]
+          continue
+        }
+        // 组件文档只有文件和组件标记，没有元素行号；文件必须来自有效 loc。
+        for (const location of locations) {
+          const sourceValue = this.tsxToValueMap.get(location.files.jsx)
+          const findDoc = (docs: AuditValue['docs']) => params.widgetName
+            ? docs.find(doc => doc.refSelector.includes(`[data-zone-filename="${location.files.jsx}"]`)
+              && doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
             : undefined
-          : docs[0]
-        result.jsDoc = findDoc(docs)
-        if (!result.jsDoc && value) {
-          result.jsDoc = findDoc(value.jsDocs)
+          result.jsDoc = findDoc(values.flatMap(item => item.docs))
+            ?? findDoc(sourceValue?.docs ?? [])
+            ?? findDoc(sourceValue?.jsDocs ?? [])
+            ?? findDoc(values.flatMap(item => item.jsDocs))
+          if (result.jsDoc) break
         }
         continue
       }
@@ -98,9 +107,16 @@ export default class Audit {
         continue
       }
       if (key !== 'events' && key !== 'services' && key !== 'state' && key !== 'store') continue
-      const items = value?.[key] ?? []
-      Object.assign(result, { [key]: params.type === 'dom' ? items.filter(matches) : items })
+      // 同一 loc 出现在多个页面时，只取首个命中的页面，保留该元素的全部绑定。
+      const items = params.type === 'dom'
+        ? Array.from(new Set(locations.flatMap(location => {
+          const matchedValue = values.find(value => value[key].some(item => matches(item, location)))
+          return matchedValue?.[key].filter(item => matches(item, location)) ?? []
+        })))
+        : value?.[key] ?? []
+      Object.assign(result, { [key]: items })
     }
+    console.log('result', result)
     return result
   }
 }

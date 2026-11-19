@@ -283,6 +283,10 @@ export function buildHooks(props: Props) {
         });
       }
 
+      if (['lingstyle-extension'].includes(frontendMode)) {
+        return
+      }
+
       const data = context.component!.params?.data;
       const debugEnvOptions = getDebugEnvOptions(data);
       // 默认使用第一个可用环境
@@ -488,7 +492,7 @@ export function buildHooks(props: Props) {
       // });
     },
     async '@getDoc'(params, valueKeys) {
-      console.log('@getDoc:hookContext', params, valueKeys)
+      // console.log('@getDoc:hookContext', params, valueKeys)
       const ele = params.focusArea.ele
       const tag = ele.getAttribute('data-canvas-tag')
       const loc = tag ? null : getClosestDomLoc(ele)
@@ -501,6 +505,7 @@ export function buildHooks(props: Props) {
           parentLoc: ele.getAttribute('data-parent-loc'),
           widgetName: ele.closest('[data-widget-name]')?.getAttribute('data-widget-name'),
           tsx: loc?.files.jsx,
+          pageTsx: ele.closest('[data-canvas-tag]')?.getAttribute('data-canvas-tag')?.split(':')[1],
           type: 'dom',
           valueKeys
         }

@@ -1,3 +1,4 @@
+import commonLang from '../../../../helpers/i18n/common'
 import React, {
   createContext,
   useContext,
@@ -772,7 +773,7 @@ if (frontendMode === 'prototype') {
         data-zone-type='page'
         data-zone-kind='page'
         data-desn-page={path}
-        data-zone-title='页面'
+        data-zone-title={commonLang.page}
         {...(breakpoint ? {
           ['data-zone-show-type']: breakpoint.id,
         } : {})}
@@ -1365,7 +1366,7 @@ if (frontendMode === 'prototype') {
             data-zone-type="page"
             data-zone-kind="popup"
             data-desn-page={popupCanvasPath}
-            data-zone-title='弹窗'
+            data-zone-title={commonLang.popup}
             data-widget-name={params.widgetName}
             className={css.popupContainer}
             {...(breakpoint ? {
