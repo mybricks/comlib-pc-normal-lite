@@ -3,6 +3,7 @@ import { undoRedoManager } from '../undoRedo'
 import { randomUUID } from '../../utils/uuid'
 import { getElementLabel, buildElementTextUpdateAiRequest } from './elementChip'
 import { getShadowRoot } from '../../../helpers/designer'
+import { createTextPreview } from './textPreview'
 import {
   createDOMSourceLocationSnapshot,
   restoreDOMSourceLocationSnapshot,
@@ -24,14 +25,13 @@ const runUpdateTextByAI = (fromEle, content: string) => {
   const fromLabel = getElementLabel(fromEle, '节点1')
   const actionId = randomUUID()
 
-  const previousInnerHTML = fromEle.innerHTML
-  const nextValue = toSafeJSXText(content)
+  const textPreview = createTextPreview(fromEle, content)
 
   undoRedoManager.executeBranch({
     aiRequest: buildElementTextUpdateAiRequest({ ele: fromEle, content }),
     execute() {
       // AI 尚未改写源码，先在画布上显示用户输入的预期结果。
-      fromEle.innerHTML = nextValue
+      textPreview.execute()
       context.component!.actions.addUserAction({
         id: actionId,
         type: 'update-text',
@@ -40,7 +40,7 @@ const runUpdateTextByAI = (fromEle, content: string) => {
       })
     },
     undo() {
-      fromEle.innerHTML = previousInnerHTML
+      textPreview.undo()
       context.component!.actions.removeUserAction(actionId)
     },
   })
@@ -49,7 +49,8 @@ const runUpdateTextByAI = (fromEle, content: string) => {
 }
 
 const updateText = (options) => {
-  const { fromEle, content } = options
+  const { fromEle } = options
+  const content = String(options.content ?? '').replace(/\r\n?/g, '\n')
 
   const zoneTextEditable = fromEle.dataset['zoneTextEditable']
 
@@ -85,7 +86,7 @@ const updateText = (options) => {
 
     const nextValue = toSafeJSXText(content)
     const newSource = source.slice(0, start) + nextValue + source.slice(end)
-    const previousInnerHTML = fromEle.innerHTML
+    const textPreview = createTextPreview(fromEle, content)
     // noUpdateFileSystem 保留当前 DOM；后续节点仍会引用原始绝对偏移，先保留快照以支持撤销。
     const sourceLocationSnapshot = createDOMSourceLocationSnapshot(shadowRoot, fileName)
     const fromLabel = getElementLabel(fromEle, '节点1')
@@ -100,7 +101,7 @@ const updateText = (options) => {
           newLength: nextValue.length,
         })
         // noUpdateFileSystem 不会触发重新渲染，画布内容需要立即同步。
-        fromEle.innerHTML = nextValue
+        textPreview.execute()
         context.component!.actions.addUserAction({
           id: actionId,
           type: 'update-text',
@@ -111,7 +112,7 @@ const updateText = (options) => {
       undo() {
         context.updateFile({ fileName, content: source, type: undefined, noUpdateFileSystem: true, updateSource: 'undo' })
         restoreDOMSourceLocationSnapshot(sourceLocationSnapshot)
-        fromEle.innerHTML = previousInnerHTML
+        textPreview.undo()
         context.component!.actions.removeUserAction(actionId)
       },
     })

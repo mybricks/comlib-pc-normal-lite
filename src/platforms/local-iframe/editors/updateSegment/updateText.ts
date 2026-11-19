@@ -3,6 +3,7 @@ import { undoRedoManager } from '../../../../mix/editors/undoRedo'
 import { randomUUID } from '../../../../mix/utils/uuid'
 import { buildElementTextUpdateAiRequest } from '../../../../mix/editors/setSegment/elementChip'
 import { formatDisplayClassName } from '../style'
+import { createTextPreview } from '../../../../mix/editors/setSegment/textPreview'
 
 function buildLabel(ele: HTMLElement) {
   const rawClassNames = Array.from(ele.classList).filter(Boolean)
@@ -18,14 +19,9 @@ export default function ({ fromEle: ele, content }) {
     }
   }
 
-  const nextHTML = typeof content === 'string' ? content : String(content ?? '')
-  const previousHTML = ele.innerHTML
-
-  if (previousHTML === nextHTML) {
-    return {
-      type: 'success',
-    }
-  }
+  const nextText = String(content ?? '').replace(/\r\n?/g, '\n')
+  const textPreview = createTextPreview(ele, nextText)
+  if (!textPreview.hasChanges) return { type: 'success' }
 
   const actionId = randomUUID()
   const label = buildLabel(ele)
@@ -33,10 +29,10 @@ export default function ({ fromEle: ele, content }) {
   undoRedoManager.executeBranch({
     aiRequest: buildElementTextUpdateAiRequest({
       ele,
-      content: nextHTML,
+      content: nextText,
     }),
     execute() {
-      ele.innerHTML = nextHTML
+      textPreview.execute()
       context.component?.actions.addUserAction({
         id: actionId,
         type: 'update-text',
@@ -45,7 +41,7 @@ export default function ({ fromEle: ele, content }) {
       })
     },
     undo() {
-      ele.innerHTML = previousHTML
+      textPreview.undo()
       context.component?.actions.removeUserAction(actionId)
     },
   })
