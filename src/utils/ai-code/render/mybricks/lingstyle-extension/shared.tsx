@@ -1,4 +1,5 @@
 import React, { forwardRef, useLayoutEffect, useRef, useState } from 'react'
+import getI18n from '../../../../../helpers/i18n'
 
 interface CanvasZoneProps {
   id: string
@@ -40,6 +41,30 @@ export const useCanvasContainer = () => {
 export const ExtensionEditor = ({ render: Render }: { render: React.ComponentType<any> }) => (
   <Render
     context={{
+      ai: {
+        request(_options: { message: string }): void {}
+      },
+      command: {
+        async run(options: {
+          command: string
+          timeoutMs?: number
+          signal?: AbortSignal
+          onOutput?: (output: { type: 'stdout' | 'stderr'; chunk: string }) => void
+        }): Promise<{
+          stdout: string
+          stderr: string
+          exitCode: number
+          timedOut: boolean
+          aborted: boolean
+          outputTruncated: boolean
+        }> {
+          options.signal?.throwIfAborted()
+          throw new Error(getI18n({
+            zh: '预览模式下无法执行命令。',
+            en: 'Command execution is unavailable in preview.'
+          }))
+        }
+      },
       prd: {
         async get() {
           return null
