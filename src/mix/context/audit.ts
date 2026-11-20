@@ -116,7 +116,6 @@ export default class Audit {
         : value?.[key] ?? []
       Object.assign(result, { [key]: items })
     }
-    console.log('result', result)
     return result
   }
 }
