@@ -35,7 +35,7 @@ export default class Audit {
     widgetName?: string | null,
     type: 'canvas' | 'dom',
     valueKeys: string[] // events services state store jsDoc aiDoc
-  }): AuditResult {
+  }): AuditResult | null {
     const value = this.tsxToValueMap.get(params.tsx)
     // Graph 按页面缓存，DOM 的源码文件可能只是页面引用的子组件。
     const values = params.type === 'dom'
@@ -67,7 +67,8 @@ export default class Audit {
     for (const key of params.valueKeys) {
       if (key === 'jsDoc') {
         if (params.type === 'canvas') {
-          result.jsDoc = value?.docs[0] ?? value?.jsDocs[0]
+          const doc = value?.docs[0] ?? value?.jsDocs[0]
+          if (doc) result.jsDoc = doc
           continue
         }
         // 组件文档只有文件和组件标记，没有元素行号；文件必须来自有效 loc。
@@ -77,20 +78,21 @@ export default class Audit {
             ? docs.find(doc => doc.refSelector.includes(`[data-zone-filename="${location.files.jsx}"]`)
               && doc.refSelector.includes(`[data-widget-name="${params.widgetName}"]`))
             : undefined
-          result.jsDoc = findDoc(values.flatMap(item => item.docs))
+          const doc = findDoc(values.flatMap(item => item.docs))
             ?? findDoc(sourceValue?.docs ?? [])
             ?? findDoc(sourceValue?.jsDocs ?? [])
             ?? findDoc(values.flatMap(item => item.jsDocs))
-          if (result.jsDoc) break
+          if (doc) {
+            result.jsDoc = doc
+            break
+          }
         }
         continue
       }
       if (key === 'aiDoc') {
         if (params.type === 'dom') {
-          const emptyDoc = () => ({ createTime: Date.now(), content: '' })
           const data = this.context.component?.params?.data
           if (!hasLocation || !data) {
-            result.aiDoc = emptyDoc()
             continue
           }
           const { files, codeLine } = loc!
@@ -102,7 +104,7 @@ export default class Audit {
           if (typeof doc === 'string' && doc) {
             docs[docKey] = { createTime: Date.now(), content: doc }
           }
-          result.aiDoc = docs[docKey] || emptyDoc()
+          if (docs[docKey]?.content) result.aiDoc = docs[docKey]
         }
         continue
       }
@@ -114,8 +116,8 @@ export default class Audit {
           return matchedValue?.[key].filter(item => matches(item, location)) ?? []
         })))
         : value?.[key] ?? []
-      Object.assign(result, { [key]: items })
+      if (items.length) Object.assign(result, { [key]: items })
     }
-    return result
+    return Object.keys(result).length ? result : null
   }
 }
