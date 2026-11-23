@@ -618,7 +618,14 @@ export function buildHooks(props: Props) {
         const tag = ele.getAttribute('data-canvas-tag')
         const componentId = context.component!.params.id
         window._sandbox_.helpers.sendToAgent(componentId, {
-          message: `参考 mybricks 使用指南「画布展示状态覆盖与交互脚本」，分析当前画布（画布标识：${tag}）内的组件，接入有意义的展示状态覆盖，并为当前画布编写交互脚本。处理范围仅限当前画布，不扩展到其他页面或独立渲染的浮层画布。`,
+          message: `对于画布（画布标识：${tag}）\n\n` + 
+          `1. 清空当前画布已有的状态覆盖代码和对应的 .yaml 文件内容\n` + 
+          `2. 根据原始代码进行分析编写状态覆盖代码和交互脚本\n` + 
+          `注意：处理范围仅限当前画布，不扩展到其他页面或独立渲染的浮层画布。`,
+          // message2: `基于 mybricks 使用指南「画布展示状态覆盖与交互脚本」，分析当前画布（画布标识：${tag}）内的组件，编写状态覆盖与交互脚本，执行步骤如下：\n\n` + 
+          // `1. 清空当前画布已有的状态覆盖代码和对应的 .yaml 文件内容\n` + 
+          // `2. 根据原始代码进行分析编写状态覆盖代码和交互脚本\n` + 
+          // `注意：处理范围仅限当前画布，不扩展到其他页面或独立渲染的浮层画布。`
         })
       },
     } : {}),
