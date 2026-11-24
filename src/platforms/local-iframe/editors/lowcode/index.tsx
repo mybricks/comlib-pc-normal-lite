@@ -331,7 +331,7 @@ function LowcodeViewShell() {
       <div className={css['lowcode-view-toolbar']}>
         <div className={css['lowcode-view-toolbar-tabs']}>
           <div className={css['lowcode-view-toolbar-left']}>
-            {(['task', 'version', 'review', 'terminal'] as TabKey[])
+            {(['task', 'version', /* 'review', */ 'terminal'] as TabKey[])
               .filter(tab => (tab !== 'task' || hasTaskPanel) && (tab !== 'terminal' || showTerminal))
               .map((tab) => (
                 <div
@@ -348,7 +348,7 @@ function LowcodeViewShell() {
       <div className={css['lowcode-view']}>
         {activeTab === 'task' && hasTaskPanel && <TaskPanel content={tasksContent} overviewContent={overviewContent} allowDelete />}
         {activeTab === 'version' && <VersionPanel />}
-        {activeTab === 'review' && <ReviewPanel content={reviewContent} />}
+        {/* {activeTab === 'review' && <ReviewPanel content={reviewContent} />} */}
         {showTerminal && activeTab === 'terminal' && <RuntimePanel />}
       </div>
     </div>

@@ -7,7 +7,7 @@ import { findTaskDocumentFile } from '../../mix/tasks/notify'
 import { applyTaskTransition } from '../../mix/tasks/transition'
 import { Popconfirm } from '../version-list'
 import * as lazyCss from './index.lazy.less'
-import TaskOverview, { readOverview, type OverviewSelection } from './overview'
+import TaskOverview, { TaskReviewMeta, collectTaskReviewCounts, getTaskReviewState, readOverview, type TaskReviewCounts, type OverviewSelection } from './overview'
 import { TaskStatusBadge, TaskStatusDot } from './status-badge'
 
 const css = getLazyCss(lazyCss)
@@ -253,6 +253,13 @@ function FlowFilterBar({
   total,
   activeFilter,
   onFilter,
+  reviewMode,
+  failedReviewCount,
+  showReviewTasks,
+  reviewFilter,
+  onReviewFilter,
+  onReviewTasks,
+  isVibing,
   updatedAt,
   children,
 }: {
@@ -260,6 +267,13 @@ function FlowFilterBar({
   total: number
   activeFilter: string | null
   onFilter: (s: string | null) => void
+  reviewMode: 'hidden' | 'unreviewed' | 'available'
+  failedReviewCount: number
+  showReviewTasks: boolean
+  reviewFilter: boolean
+  onReviewFilter: (filter: boolean) => void
+  onReviewTasks: () => void
+  isVibing: boolean
   updatedAt: string | null
   children?: React.ReactNode
 }) {
@@ -294,6 +308,14 @@ function FlowFilterBar({
             </React.Fragment>
           )
         })}
+        {reviewMode !== 'hidden' && <div className={css['review-filter-group']}>
+          {showReviewTasks && <button type="button" className={css['review-filter-empty']} disabled={isVibing} onClick={onReviewTasks}>{taskPanelI18n.reviewTasks()}</button>}
+          {reviewMode === 'available' && <button type="button" className={`${css['flow-node']} ${css['review-filter-button']} ${reviewFilter ? css['flow-node-active'] : ''}`}
+            aria-pressed={reviewFilter} onClick={() => onReviewFilter(!reviewFilter)}>
+            <span className={css['flow-node-label']}>{taskPanelI18n.filterReviewFailed()}</span>
+            <span className={css['flow-node-count']}>{failedReviewCount}</span>
+          </button>}
+        </div>}
       </div>
       {updatedAt && (
         <span className={css['summary-updated-at']}>{updatedAt}</span>
@@ -438,13 +460,7 @@ function DetailContent({ detail }: { detail: string }) {
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
-    <svg
-      className={`${css['chevron']} ${expanded ? css['chevron-expanded'] : ''}`}
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      fill="none"
-    >
+    <svg className={`${css['chevron']} ${expanded ? css['chevron-expanded'] : ''}`} width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
       <path d="M3 2L7 5L3 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
@@ -637,6 +653,8 @@ function TaskRow({
   onToggleSelect,
   linked,
   onOverviewSelect,
+  reviewCounts,
+  reviewAvailable,
 }: {
   task: TaskItem
   highlightProgress?: boolean
@@ -651,13 +669,23 @@ function TaskRow({
   onToggleSelect?: () => void
   linked?: boolean
   onOverviewSelect?: () => void
+  reviewCounts?: TaskReviewCounts
+  reviewAvailable: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [revertConfirmVisible, setRevertConfirmVisible] = useState(false)
   const [actionHint, setActionHint] = useState<string | null>(null)
   const displayTitle = getTaskDisplayTitle(task)
-  const hasDetail = !!task.detail
+  const hasDetail = !!task.detail || !!task.verificationCondition
   const transitions = getTaskTransitions(task)
+  const detailToggle = hasDetail && (
+    <button type="button" className={css['task-detail-toggle']} aria-expanded={expanded}
+      aria-label={expanded ? taskPanelI18n.collapseDetails() : taskPanelI18n.expandDetails()}
+      onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+      {expanded ? taskPanelI18n.collapseDetails() : taskPanelI18n.expandDetails()}
+      <ChevronIcon expanded={expanded} />
+    </button>
+  )
 
   const handleAddToChat = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -755,7 +783,7 @@ function TaskRow({
     >
       <div className={css['task-card-header']}>
         <div className={css['task-card-header-main']}>
-          {batchMode && (
+          {/* {batchMode && (
             <span
               className={`${css['task-checkbox']} ${!selectable ? css['task-checkbox-disabled'] : ''}`}
               onClick={(e) => { e.stopPropagation(); if (selectable) onToggleSelect?.() }}
@@ -763,8 +791,15 @@ function TaskRow({
             >
               <CheckboxIcon checked={!!selected} />
             </span>
-          )}
-          <TaskStatusBadge status={task.status} />
+          )} */}
+          <span className={css['task-status-capsule']}>
+            <TaskStatusBadge status={task.status} />
+            {reviewAvailable && (
+              <span className={css['task-review-badge']} data-state={getTaskReviewState(reviewCounts)}>
+                <TaskReviewMeta counts={reviewCounts} />
+              </span>
+            )}
+          </span>
           {onOverviewSelect ? (
             <button type="button" className={`${css['task-title']} ${css['task-link-title']}`} title={displayTitle}
               onClick={(event) => { event.stopPropagation(); onOverviewSelect() }}>
@@ -808,7 +843,7 @@ function TaskRow({
               </span>
             </Popconfirm>
           )}
-          {transitions.length > 0 && (
+          {/* {transitions.length > 0 && (
             <div className={`${css['task-status-selector']} ${isVibing ? css['task-action-disabled'] : ''}`}>
               <span className={css['task-status-selector-text']}>{taskPanelI18n.adjust()}</span>
               <DownChevronIcon />
@@ -829,7 +864,7 @@ function TaskRow({
                 ))}
               </select>
             </div>
-          )}
+          )} */}
         </div>
       </div>
 
@@ -845,14 +880,8 @@ function TaskRow({
         <div className={css['task-summary']}>{task.summary}</div>
       )}
 
-      {(task.verificationCondition || task.metadata.length > 0) && (
+      {task.metadata.length > 0 && (
         <div className={css['task-meta-list']}>
-          {task.verificationCondition && (
-            <div className={`${css['task-meta-item']} ${css['task-verification']} ${highlightProgress ? css['task-meta-item-highlight'] : ''}`}>
-              <span className={css['task-meta-label']}>{taskPanelI18n.verification()}</span>
-              <span className={css['task-meta-value']}>{task.verificationCondition}</span>
-            </div>
-          )}
           {task.metadata.map((item) => {
             const isProgress = item.label === '验证进展'
             const hl = isProgress && highlightProgress
@@ -863,22 +892,23 @@ function TaskRow({
               >
                 <span className={css['task-meta-label']}>{taskPanelI18n.metadataLabel(item.label)}</span>
                 <span className={css['task-meta-value']}>{item.value}</span>
+                {item.label === '更新时间' && detailToggle}
               </div>
             )
           })}
         </div>
       )}
-
-      {hasDetail && (
-        <div className={css['task-detail-toggle']} onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
-          <ChevronIcon expanded={expanded} />
-          <span>{expanded ? taskPanelI18n.collapseDetails() : taskPanelI18n.expandDetails()}</span>
-        </div>
-      )}
+      {!task.updatedAt && detailToggle}
 
       {hasDetail && expanded && (
         <div className={css['task-detail-wrapper']}>
-          <DetailContent detail={task.detail!} />
+          {task.verificationCondition && (
+            <div className={`${css['task-meta-item']} ${css['task-verification']} ${highlightProgress ? css['task-meta-item-highlight'] : ''}`}>
+              <span className={css['task-meta-label']}>{taskPanelI18n.verification()}</span>
+              <span className={css['task-meta-value']}>{task.verificationCondition}</span>
+            </div>
+          )}
+          {task.detail && <DetailContent detail={task.detail} />}
         </div>
       )}
     </div>
@@ -904,10 +934,9 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
   canRevert?: CanRevert
 }) {
   const [filter, setFilter] = useState<string | null>(null)
+  const [reviewFilter, setReviewFilter] = useState(false)
   const [overviewSelection, setOverviewSelection] = useState<OverviewSelection>(null)
   const [listFocusedTaskId, setListFocusedTaskId] = useState<string | null>(null)
-  const [revealTask, setRevealTask] = useState<{ id: string } | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
   const splitRef = useRef<HTMLDivElement>(null)
   const resizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
   const [listWidth, setListWidth] = useState(39)
@@ -918,47 +947,39 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
 
   useEffect(() => {
     setFilter(null)
+    setReviewFilter(false)
     setBatchMode(false)
     setSelected(new Set())
   }, [content])
 
   const tasks = useMemo(() => content ? parseTasks(content) : [], [content])
-  const hasOverview = overviewContent !== null
+  const selectedTask = tasks.find(task => task.id === overviewSelection?.id)
   const overview = useMemo(() => readOverview(overviewContent), [overviewContent])
-  const hasGraph = overview.doc !== null
-  const overviewTasks = useMemo(() => tasks.flatMap(task => task.id ? [{ id: task.id, title: getTaskDisplayTitle(task), status: task.status }] : []), [tasks])
+  const hasOverview = tasks.length > 0 || Boolean(overviewContent?.trim())
+  const overviews = useMemo(() => [{ key: '', overview }], [overview])
+  const taskReviewCounts = useMemo(() => collectTaskReviewCounts(overviews), [overviews])
+  const selectedReviewCounts = selectedTask?.id ? taskReviewCounts.get(selectedTask.id) : undefined
+  const selectedTaskCanReview = !!selectedTask && (selectedTask.status === '已完成' || selectedTask.status === '待交接') && (selectedReviewCounts?.total ?? 0) > 0 && !selectedReviewCounts?.reviewed
+  const selectedTaskSummary = selectedTask && !overview.invalid && taskPanelI18n.taskOverviewSummary(
+    selectedReviewCounts?.total ?? 0,
+    selectedReviewCounts?.reviewed ?? 0,
+    (selectedReviewCounts?.block ?? 0) + (selectedReviewCounts?.critical ?? 0),
+    selectedTask.status === '处理中' || selectedTask.status === '待验证',
+  )
+  const hasReviewedTasks = tasks.some(task => task.id && (taskReviewCounts.get(task.id)?.reviewed ?? 0) > 0)
+  const failedReviewCount = tasks.filter(task => getTaskReviewState(task.id ? taskReviewCounts.get(task.id) : undefined) !== 'passed').length
+  const reviewMode = overview.invalid || !tasks.length ? 'hidden' : failedReviewCount > 0 ? 'available' : hasReviewedTasks ? 'hidden' : 'unreviewed'
   useEffect(() => {
-    setOverviewSelection(null)
-    setListFocusedTaskId(null)
-  }, [hasGraph])
-
-  useEffect(() => {
-    if (!revealTask) return
-    const list = listRef.current
-    const row = Array.from(list?.querySelectorAll<HTMLElement>('[data-task-id]') ?? [])
-      .find(element => element.dataset.taskId === revealTask.id)
-    if (!list || !row) return
-    const rowBounds = row.getBoundingClientRect()
-    const listBounds = list.getBoundingClientRect()
-    if (rowBounds.top < listBounds.top || rowBounds.bottom > listBounds.bottom) {
-      list.scrollTop += rowBounds.top - listBounds.top
-    }
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      row.animate([
-        { backgroundColor: 'transparent' },
-        { backgroundColor: 'var(--mybricks-bg-color-active, #eff2f6)', offset: 0.3 },
-        { backgroundColor: 'transparent' },
-      ], { duration: 1100, easing: 'ease-out' })
-    }
-  }, [revealTask])
-
+    if (reviewMode !== 'available') setReviewFilter(false)
+  }, [reviewMode])
   if (!tasks.length && !hasOverview) return null
 
   const resizeList = (width: number) => {
     const containerWidth = splitRef.current?.getBoundingClientRect().width ?? 0
     if (!containerWidth) return
-    const min = 260 / containerWidth * 100
-    const max = (containerWidth - 200 - 5) / containerWidth * 100
+    const availableWidth = Math.max(0, containerWidth - 5)
+    const min = (containerWidth <= 465 ? availableWidth * 0.25 : 260) / containerWidth * 100
+    const max = (containerWidth <= 465 ? availableWidth * 0.75 : containerWidth - 205) / containerWidth * 100
     setListWidth(Math.max(min, Math.min(max, width)))
   }
 
@@ -1014,7 +1035,8 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
     disabled: !countByStatus[status],
   }))
 
-  const filtered = filter ? tasks.filter(task => task.status === filter) : tasks
+  const statusFiltered = filter ? tasks.filter(task => task.status === filter) : tasks
+  const filtered = reviewMode === 'available' && reviewFilter ? statusFiltered.filter(task => getTaskReviewState(task.id ? taskReviewCounts.get(task.id) : undefined) !== 'passed') : statusFiltered
   const statusOrder: Record<string, number> = {
     '处理中': 1,
     '待验证': 2,
@@ -1048,16 +1070,23 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
         total={tasks.length}
         activeFilter={filter}
         onFilter={setFilter}
+        reviewMode={reviewMode}
+        failedReviewCount={failedReviewCount}
+        showReviewTasks={!hasReviewedTasks}
+        reviewFilter={reviewFilter}
+        onReviewFilter={setReviewFilter}
+        onReviewTasks={() => sendTaskMessage(taskPanelI18n.reviewTasksMessage())}
+        isVibing={isVibing}
         updatedAt={null}
       >
-        {!hasOverview && batchControls}
+        {/* {!hasOverview && batchControls} */}
       </FlowFilterBar>
       {!hasOverview && batchHint}
       <div ref={splitRef} className={`${css['task-panel-body']}${hasOverview ? ` ${css['task-panel-split']}` : ''}`} style={hasOverview ? { '--task-list-width': `${listWidth}%` } as React.CSSProperties : undefined}>
         <section className={css['task-list-pane']} aria-label={taskPanelI18n.listView()}>
           {hasOverview && (
             <div className={css['task-list-toolbar']}>
-              {batchControls}
+              {/* {batchControls} */}
               {batchHint}
             </div>
           )}
@@ -1066,7 +1095,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
             onClick={() => setFilter(ATTENTION_STATUS)}
             onHoverChange={setHintHovering}
           /> */}
-          <div ref={listRef} className={css['panel-list']}>
+          <div className={css['panel-list']}>
             {filtered.length > 0
               ? filtered
                   .map((task, index) => ({ task, index }))
@@ -1097,7 +1126,9 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
                       canRevert={canRevert}
                       onToggleSelect={() => toggleSelect(task)}
                       linked={Boolean(task.id && listFocusedTaskId === task.id)}
-                      onOverviewSelect={hasGraph && !batchMode && task.id ? () => {
+                      reviewCounts={task.id ? taskReviewCounts.get(task.id) : undefined}
+                      reviewAvailable={!overview.invalid}
+                      onOverviewSelect={!batchMode && task.id ? () => {
                         const id = task.id!
                         const nextId = listFocusedTaskId === id ? null : id
                         setListFocusedTaskId(nextId)
@@ -1146,13 +1177,20 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
           />
         )}
         {hasOverview && (
-          <TaskOverview overview={overview} tasks={overviewTasks} selection={overviewSelection} onSelect={next => {
-            setListFocusedTaskId(null)
-            setOverviewSelection(next)
-          }} onTaskClick={id => {
-            setFilter(null)
-            setRevealTask({ id })
-          }} />
+          <div className={`${css['task-overview-pane']} ${selectedTask ? css['task-overview-pane-linked'] : ''}`}>
+            {selectedTask && (
+              <div className={css['task-overview-context']}>
+                <span className={css['task-overview-context-title']} title={getTaskDisplayTitle(selectedTask)}>{getTaskDisplayTitle(selectedTask)}</span>
+                {selectedTaskSummary && <span className={css['task-overview-context-description']}>
+                  {selectedTaskSummary}
+                  {selectedTaskCanReview && <button type="button" className={css['task-overview-review-link']} disabled={isVibing} onClick={() => sendTaskMessage(taskPanelI18n.reviewTasksMessage())}>{taskPanelI18n.reviewTasksHere()}</button>}
+                </span>}
+              </div>
+            )}
+            <div className={css['task-overview-instance']}>
+              <TaskOverview key={overviewSelection?.id ?? 'empty'} overviews={overviews} selection={overviewSelection} onFixReview={sendTaskMessage} isVibing={isVibing} />
+            </div>
+          </div>
         )}
       </div>
     </div>
