@@ -340,7 +340,7 @@ const createMyBricks = (props: CreateMyBricksProps) => {
 if (frontendMode === 'prototype') {
     prototype.events.offAll()
 
-    update((appConfig) => {
+    update?.((appConfig) => {
       prototype.events.emit('appConfig', appConfig)
       mixContext.component?.actions.updatePages?.([], {
         breakpoints: appConfig.viewports
