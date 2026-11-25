@@ -309,12 +309,12 @@ function FlowFilterBar({
           )
         })}
         {reviewMode !== 'hidden' && <div className={css['review-filter-group']}>
-          {showReviewTasks && <button type="button" className={css['review-filter-empty']} disabled={isVibing} onClick={onReviewTasks}>{taskPanelI18n.reviewTasks()}</button>}
           {reviewMode === 'available' && <button type="button" className={`${css['flow-node']} ${css['review-filter-button']} ${reviewFilter ? css['flow-node-active'] : ''}`}
             aria-pressed={reviewFilter} onClick={() => onReviewFilter(!reviewFilter)}>
             <span className={css['flow-node-label']}>{taskPanelI18n.filterReviewFailed()}</span>
             <span className={css['flow-node-count']}>{failedReviewCount}</span>
           </button>}
+          {showReviewTasks && <button type="button" className={css['review-filter-empty']} disabled={isVibing} onClick={onReviewTasks}>{taskPanelI18n.reviewTasks()}</button>}
         </div>}
       </div>
       {updatedAt && (
