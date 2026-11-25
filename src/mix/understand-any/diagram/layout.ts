@@ -11,6 +11,7 @@ export type LayoutNode = DiagramNode & { position: Point; width: number; height:
 export type LayoutEdge = DiagramEdge & {
   points: Point[];
   labelPosition?: Point;
+  junction?: Point;
 };
 
 /** Convert Dagre's routing waypoints into right-angled segments. */
@@ -142,37 +143,100 @@ export function roundedPath(points: Point[], radius = 8): string {
   return `${path} L ${last.x} ${last.y}`;
 }
 
-function edgeLabelPosition(
-  points: Point[],
-  vertical: boolean,
-): Point | undefined {
-  const segments = points
-    .slice(1)
-    .map((end, index) => ({ start: points[index], end }));
-  const preferred = segments.find(({ start, end }) =>
-    vertical
-      ? Math.abs(end.x - start.x) >= 18
-      : Math.abs(end.y - start.y) >= 18,
-  );
-  const segment =
-    preferred ??
-    segments.reduce<(typeof segments)[number] | undefined>(
-      (best, current) =>
-        !best ||
-        Math.abs(current.end.x - current.start.x) +
-          Math.abs(current.end.y - current.start.y) >
-          Math.abs(best.end.x - best.start.x) +
-            Math.abs(best.end.y - best.start.y)
-          ? current
-          : best,
-      undefined,
-    );
-  return (
-    segment && {
-      x: (segment.start.x + segment.end.x) / 2,
-      y: (segment.start.y + segment.end.y) / 2,
+type Box = { x: number; y: number; width: number; height: number };
+
+/** Conservative dimensions for the 12px SVG label and its background. */
+export function edgeLabelSize(label: string) {
+  return { width: Math.max(28, Array.from(label).length * 12 + 12), height: 24 };
+}
+
+function overlaps(a: Box, b: Box) {
+  return a.x < b.x + b.width && a.x + a.width > b.x &&
+    a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function placeEdgeLabels(edges: LayoutEdge[], nodes: LayoutNode[], vertical: boolean) {
+  const occupied: Box[] = nodes.map(node => ({
+    x: node.position.x - 4, y: node.position.y - 4,
+    width: node.width + 8, height: node.height + 8,
+  }));
+  for (const edge of edges) {
+    if (!edge.label || edge.points.length < 2) continue;
+    const size = edgeLabelSize(edge.label);
+    const segments = edge.points.slice(1).map((end, index) => ({ start: edge.points[index], end, index }))
+      .sort((a, b) => {
+        const along = (segment: typeof a) => vertical ? Math.abs(segment.end.y - segment.start.y) : Math.abs(segment.end.x - segment.start.x);
+        return Number(along(b) > 0) - Number(along(a) > 0) || b.index - a.index;
+      });
+    const candidates: Point[] = [];
+    // First try positions on the route, then gradually move away from it.
+    for (const offset of [0, 16, -16, 32, -32, 48, -48, 72, -72, 104, -104, 144, -144]) {
+      for (const { start, end } of segments) {
+        const horizontal = start.y === end.y;
+        for (const fraction of [0.5, 0.25, 0.75]) {
+          candidates.push({ x: start.x + (end.x - start.x) * fraction + (horizontal ? 0 : offset),
+            y: start.y + (end.y - start.y) * fraction + (horizontal ? offset : 0) });
+        }
+      }
     }
-  );
+    const boxAt = (point: Point): Box => ({ x: point.x - size.width / 2 - 3, y: point.y - size.height / 2 - 3,
+      width: size.width + 6, height: size.height + 6 });
+    const crossesOtherEdge = (box: Box) => edges.some(other => other !== edge && other.points.slice(1).some((end, index) => {
+      const start = other.points[index];
+      if (start.x === end.x) return start.x > box.x && start.x < box.x + box.width && Math.max(start.y, end.y) > box.y && Math.min(start.y, end.y) < box.y + box.height;
+      if (start.y === end.y) return start.y > box.y && start.y < box.y + box.height && Math.max(start.x, end.x) > box.x && Math.min(start.x, end.x) < box.x + box.width;
+      return false;
+    }));
+    const available = (candidate: Point) => occupied.every(box => !overlaps(boxAt(candidate), box));
+    let point = candidates.find(candidate => available(candidate) && !crossesOtherEdge(boxAt(candidate))) ?? candidates.find(available);
+    // Dense graphs can exhaust positions close to a route; continue searching
+    // outside the occupied area instead of stacking labels on top of each other.
+    if (!point) {
+      const origin = candidates[0];
+      for (let radius = 180; !point; radius += 36) {
+        const ring = [
+          { x: origin.x + radius, y: origin.y }, { x: origin.x - radius, y: origin.y },
+          { x: origin.x, y: origin.y + radius }, { x: origin.x, y: origin.y - radius },
+        ];
+        point = ring.find(candidate => occupied.every(box => !overlaps(boxAt(candidate), box)));
+      }
+    }
+    edge.labelPosition = point;
+    occupied.push(boxAt(point));
+  }
+}
+
+/** Share one output port and a visible junction for branches in the same rank. */
+function routeBranches(edges: LayoutEdge[], nodes: LayoutNode[], direction: ParsedDiagram['direction']) {
+  const vertical = direction === 'TB' || direction === 'BT';
+  const reverse = direction === 'BT' || direction === 'RL';
+  const sign = reverse ? -1 : 1;
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const groups = new Map<string, LayoutEdge[]>();
+  for (const edge of edges) groups.set(edge.source, [...(groups.get(edge.source) ?? []), edge]);
+  for (const [sourceId, group] of groups) {
+    if (group.length < 2) continue;
+    if (group.some(edge => !!edge.dashed !== !!group[0].dashed || !!edge.arrow !== !!group[0].arrow)) continue;
+    const source = byId.get(sourceId);
+    const targets = group.map(edge => byId.get(edge.target));
+    if (!source || targets.some(target => !target) || new Set(group.map(edge => edge.target)).size !== group.length) continue;
+    const port = (node: LayoutNode, outgoing: boolean): Point => vertical
+      ? { x: node.position.x + node.width / 2, y: node.position.y + ((outgoing !== reverse) ? node.height : 0) }
+      : { x: node.position.x + ((outgoing !== reverse) ? node.width : 0), y: node.position.y + node.height / 2 };
+    const start = port(source, true);
+    const ends = (targets as LayoutNode[]).map(target => port(target, false));
+    const axis = (point: Point) => vertical ? point.y : point.x;
+    const distance = Math.min(...ends.map(end => (axis(end) - axis(start)) * sign));
+    // Avoid routing through intermediate ranks or backwards edges.
+    if (distance < 48 || ends.some(end => Math.abs(axis(end) - axis(ends[0])) > 1)) continue;
+    const junction = vertical ? { x: start.x, y: start.y + sign * Math.min(36, distance / 3) }
+      : { x: start.x + sign * Math.min(36, distance / 3), y: start.y };
+    const routes = ends.map(end => [start, junction, vertical ? { x: end.x, y: junction.y } : { x: junction.x, y: end.y }, end]
+      .filter((point, index, all) => index === 0 || point.x !== all[index - 1].x || point.y !== all[index - 1].y));
+    if (routes.some(points => points.slice(1).some((end, index) => nodes.some(node =>
+      node.id !== sourceId && intersectsNode(points[index], end, node))))) continue;
+    group.forEach((edge, index) => { edge.points = routes[index]; edge.junction = junction; });
+  }
 }
 
 export function createFlowLayout(diagram: ParsedDiagram): {
@@ -200,10 +264,8 @@ export function createFlowLayout(diagram: ParsedDiagram): {
       edge.source,
       edge.target,
       {
-        width: edge.label
-          ? Math.min(160, Math.max(28, edge.label.length * 14))
-          : 0,
-        height: edge.label ? 22 : 0,
+        width: edge.label ? edgeLabelSize(edge.label).width : 0,
+        height: edge.label ? edgeLabelSize(edge.label).height : 0,
       },
       String(index),
     ),
@@ -236,12 +298,12 @@ export function createFlowLayout(diagram: ParsedDiagram): {
       : undefined;
     const routePoints = route?.points?.map(point => ({ ...point })) ?? [];
     const reverse = diagram.direction === 'BT' || diagram.direction === 'RL';
-    if (routePoints.length && source?.shape === 'decision') {
+    if (routePoints.length && source) {
       routePoints[0] = vertical
         ? { x: source.position.x + source.width / 2, y: source.position.y + (reverse ? 0 : source.height) }
         : { x: source.position.x + (reverse ? 0 : source.width), y: source.position.y + source.height / 2 };
     }
-    if (routePoints.length && target?.shape === 'decision') {
+    if (routePoints.length && target) {
       routePoints[routePoints.length - 1] = vertical
         ? { x: target.position.x + target.width / 2, y: target.position.y + (reverse ? target.height : 0) }
         : { x: target.position.x + (reverse ? target.width : 0), y: target.position.y + target.height / 2 };
@@ -254,10 +316,9 @@ export function createFlowLayout(diagram: ParsedDiagram): {
     return {
       ...edge,
       points,
-      ...(edge.label
-        ? { labelPosition: edgeLabelPosition(points, vertical) }
-        : {}),
     };
   });
+  if (diagram.kind === 'flowchart') routeBranches(edges, nodes, diagram.direction);
+  placeEdgeLabels(edges, nodes, diagram.direction === 'TB' || diagram.direction === 'BT');
   return { nodes, edges };
 }

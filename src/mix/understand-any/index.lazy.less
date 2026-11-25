@@ -188,7 +188,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   box-sizing: border-box;
   width: 168px;
   height: 56px;
@@ -198,10 +198,16 @@
   background: var(--mybricks-bg-color-main, #fff);
   color: var(--mybricks-text-color-main, #333);
   font-size: 15px;
-  text-align: center;
+  text-align: left;
 }
 
-.bizgraph-node span {
+.bizgraph-content {
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+.bizgraph-label {
   width: 100%;
   line-height: 1.25;
   overflow: hidden;
@@ -209,6 +215,27 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
+}
+
+.bizgraph-content[data-meta="true"] .bizgraph-label { -webkit-line-clamp: 1; }
+
+.bizgraph-meta {
+  display: block;
+  margin-top: 3px;
+  color: var(--mybricks-text-color-secondary, #697386);
+  font-size: 11px;
+  line-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bizgraph-kind-icon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  color: var(--mybricks-text-color-secondary, #697386);
 }
 
 .bizgraph-round,
@@ -219,8 +246,10 @@
 .bizgraph-decision {
   width: 144px;
   height: 88px;
+  justify-content: center;
   border: 0;
   background: transparent;
+  text-align: center;
 }
 
 .bizgraph-decision::before,
@@ -241,7 +270,7 @@
   background: var(--mybricks-bg-color-main, #fff);
 }
 
-.bizgraph-decision span {
+.bizgraph-decision .bizgraph-content {
   position: relative;
   z-index: 1;
   max-width: 65%;
@@ -250,6 +279,19 @@
 .bizgraph-selected {
   border-color: var(--mybricks-color-primary, #fa6400);
 }
+
+.bizgraph-linked {
+  cursor: pointer;
+}
+
+.bizgraph-linked:hover {
+  border-color: var(--mybricks-color-primary, #fa6400);
+  box-shadow: 0 3px 12px rgba(250, 100, 0, .2);
+}
+.bizgraph-linked:hover .bizgraph-kind-icon { color: var(--mybricks-color-primary, #fa6400); }
+.bizgraph-decision.bizgraph-linked { padding: 8px 12px; box-shadow: none; }
+.bizgraph-decision .bizgraph-kind-icon { position: relative; z-index: 1; }
+.bizgraph-decision.bizgraph-linked:hover::before { background: var(--mybricks-color-primary, #fa6400); }
 
 .bizgraph-decision.bizgraph-selected::before {
   background: var(--mybricks-color-primary, #fa6400);

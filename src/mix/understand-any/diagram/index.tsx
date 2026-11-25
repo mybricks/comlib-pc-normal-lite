@@ -5,15 +5,15 @@ import 'reactflow/dist/style.css'
 import { getLazyCss } from '../../lowcodeView/utils/css'
 import * as lazyCss from '../index.lazy.less'
 import { copy } from '../index.i18n'
-import { createFlowLayout, roundedPath } from './layout'
-import { parseDiagram, type ParsedDiagram } from './parse'
+import { createFlowLayout, edgeLabelSize, roundedPath } from './layout'
+import { parseDiagram, type ParsedDiagram, type DiagramNode as ParsedNode } from './parse'
 
 const css = getLazyCss(lazyCss)
 const RESIZE_THROTTLE_MS = 30
 const PREVIEW_PADDING = 0.05
 
-type BusinessNodeData = { label: string; shape: string; depth: number; direction: ParsedDiagram['direction'] }
-type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number } }
+type BusinessNodeData = { label: string; shape: string; depth: number; direction: ParsedDiagram['direction']; ui?: ParsedNode['ui']; source?: ParsedNode['source']; field?: ParsedNode['field'] }
+type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number }; junction?: { x: number; y: number } }
 type BusinessNode = Node<BusinessNodeData, 'business'>
 type RoutedEdge = Edge<RoutedEdgeData>
 
@@ -33,7 +33,7 @@ function DiagramNode({ data, selected }: NodeProps<BusinessNodeData>) {
       if (!width) return
       const nodeStyle = getComputedStyle(node)
       const labelStyle = getComputedStyle(label)
-      const height = node.clientHeight - parseFloat(nodeStyle.paddingTop) - parseFloat(nodeStyle.paddingBottom)
+      const height = node.clientHeight - parseFloat(nodeStyle.paddingTop) - parseFloat(nodeStyle.paddingBottom) - (data.source || data.field ? 16 : 0)
       Object.assign(measure.style, {
         position: 'absolute', visibility: 'hidden', pointerEvents: 'none',
         display: 'block', width: `${width}px`, maxWidth: 'none', height: 'auto',
@@ -46,7 +46,7 @@ function DiagramNode({ data, selected }: NodeProps<BusinessNodeData>) {
       let size = 15
       while (size > 10) {
         measure.style.fontSize = `${size}px`
-        if (measure.scrollHeight <= Math.min(height, size * 1.25 * 2) + 1) break
+        if (measure.scrollHeight <= Math.min(height, size * 1.25 * (data.source || data.field ? 1 : 2)) + 1) break
         size--
       }
       measure.remove()
@@ -56,25 +56,43 @@ function DiagramNode({ data, selected }: NodeProps<BusinessNodeData>) {
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize)
     observer?.observe(node)
     return () => { observer?.disconnect(); measure.remove() }
-  }, [data.label, data.shape])
+  }, [data.label, data.shape, data.source, data.field])
 
   const vertical = data.direction === 'TB' || data.direction === 'BT'
   const reverse = data.direction === 'BT' || data.direction === 'RL'
   const source = vertical ? (reverse ? Position.Top : Position.Bottom) : (reverse ? Position.Left : Position.Right)
   const target = vertical ? (reverse ? Position.Bottom : Position.Top) : (reverse ? Position.Right : Position.Left)
-  return <div ref={nodeRef} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected']].filter(Boolean).join(' ')}>
+  const kind = data.ui?.length ? 'ui' : data.source ? 'source' : data.field ? 'field' : undefined
+  const meta = data.source?.value ?? data.field?.name
+  return <div ref={nodeRef} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected'], data.ui?.length && css['bizgraph-linked']].filter(Boolean).join(' ')}>
     <Handle type="target" position={target} />
-    <span ref={labelRef} style={{ fontSize }} title={data.label}>{data.label}</span>
+    {kind && <svg className={css['bizgraph-kind-icon']} data-kind={kind} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {kind === 'source' ? <><ellipse cx="8" cy="4" rx="5" ry="2" /><path d="M3 4v7c0 1.1 2.24 2 5 2s5-.9 5-2V4M3 7.5c0 1.1 2.24 2 5 2s5-.9 5-2" /></> : kind === 'field' ? <><path d="M5 2.5H4c-.6 0-1 .4-1 1v3c0 .8-.4 1.5-1 1.5.6 0 1 .7 1 1.5v3c0 .6.4 1 1 1h1M11 2.5h1c.6 0 1 .4 1 1v3c0 .8.4 1.5 1 1.5-.6 0-1 .7-1 1.5v3c0 .6-.4 1-1 1h-1M6.3 6.3l3.4 3.4m0-3.4-3.4 3.4" /></> : <><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><rect x="4.5" y="5" width="3" height="3" rx=".5" /><path d="M9.5 5.5h2M9.5 7.5h2M4.5 10.5h7" /></>}
+    </svg>}
+    <div className={css['bizgraph-content']} data-meta={meta ? 'true' : undefined}><span ref={labelRef} className={css['bizgraph-label']} style={{ fontSize }} title={data.label}>{data.label}</span>{meta && <span className={css['bizgraph-meta']} title={meta}>{meta}</span>}</div>
     <Handle type="source" position={source} />
   </div>
 }
 
 function DiagramEdge({ id, data, label, style, markerEnd }: EdgeProps<RoutedEdgeData>) {
   if (!data?.points.length) return null
-  return <BaseEdge id={id} path={roundedPath(data.points)} style={style} markerEnd={markerEnd} label={label} labelX={data.labelPosition?.x} labelY={data.labelPosition?.y} labelStyle={{ fill: 'var(--mybricks-text-color-secondary, #697386)', fontSize: 12 }} labelShowBg labelBgPadding={[4, 2]} />
+  const position = data.labelPosition
+  const nearest = position && data.points.slice(1).reduce<{ x: number; y: number; distance: number } | undefined>((best, end, index) => {
+    const start = data.points[index], dx = end.x - start.x, dy = end.y - start.y
+    const length = dx * dx + dy * dy
+    const t = length ? Math.max(0, Math.min(1, ((position.x - start.x) * dx + (position.y - start.y) * dy) / length)) : 0
+    const x = start.x + t * dx, y = start.y + t * dy, distance = Math.hypot(x - position.x, y - position.y)
+    return !best || distance < best.distance ? { x, y, distance } : best
+  }, undefined)
+  return <>
+    {position && nearest && nearest.distance > 14 && <line x1={nearest.x} y1={nearest.y} x2={position.x} y2={position.y} stroke="var(--mybricks-text-color-secondary, #8a909d)" strokeWidth={1} strokeDasharray="2 3" />}
+    <BaseEdge id={id} path={data.junction ? `M ${data.points[0].x} ${data.points[0].y} L ${data.junction.x} ${data.junction.y} ${roundedPath(data.points.slice(1))}` : roundedPath(data.points)} style={style} markerEnd={markerEnd} label={label} labelX={position?.x} labelY={position?.y} labelStyle={{ fill: 'var(--mybricks-text-color-secondary, #697386)', fontSize: 12 }} labelShowBg labelBgPadding={[4, 2]} />
+    {data.junction && <circle cx={data.junction.x} cy={data.junction.y} r={3} fill="var(--mybricks-text-color-secondary, #8a909d)" />}
+  </>
 }
 
-const nodeTypes = { business: DiagramNode }
+function LabelExtent() { return null }
+const nodeTypes = { business: DiagramNode, labelExtent: LabelExtent }
 const edgeTypes = { routed: DiagramEdge }
 
 function FitOnResize({ container }: { container: React.RefObject<HTMLDivElement> }) {
@@ -146,23 +164,35 @@ function DiagramContent({ content, interactive = false }: { content: string; int
       const diagram = parseDiagram(content)
       const build = (direction: ParsedDiagram['direction']) => {
         const layout = createFlowLayout({ ...diagram, direction })
-        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, direction }, draggable: false }))
+        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, direction, ui: node.ui, source: node.source, field: node.field }, draggable: false, ...(node.ui?.length ? { style: { pointerEvents: 'all' } } : {}) }))
+        const ids = new Set(nodes.map(node => node.id))
+        const labelBounds: Node[] = layout.edges.flatMap((edge, index) => {
+          if (!edge.label || !edge.labelPosition) return []
+          const size = edgeLabelSize(edge.label)
+          let id = `__label_extent_${index}`
+          while (ids.has(id)) id = `_${id}`
+          ids.add(id)
+          return [{ id, type: 'labelExtent', position: { x: edge.labelPosition.x - size.width / 2, y: edge.labelPosition.y - size.height / 2 }, data: {},
+            style: { width: size.width, height: size.height, visibility: 'hidden', pointerEvents: 'none' }, draggable: false, selectable: false, focusable: false }]
+        })
         const edges: RoutedEdge[] = layout.edges.map((edge, index) => ({
           id: `edge-${index}`, source: edge.source, target: edge.target, type: 'routed', label: edge.label,
-          data: { points: edge.points, labelPosition: edge.labelPosition },
+          data: { points: edge.points, labelPosition: edge.labelPosition, junction: edge.junction },
           style: { stroke: 'var(--mybricks-text-color-secondary, #8a909d)', strokeWidth: 1.5, ...(edge.dashed ? { strokeDasharray: '5 4' } : {}) },
           ...(edge.arrow ? { markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--mybricks-text-color-secondary, #8a909d)' } } : {}),
         }))
-        const width = Math.max(...layout.nodes.map(node => node.position.x + node.width)) - Math.min(...layout.nodes.map(node => node.position.x))
-        const height = Math.max(...layout.nodes.map(node => node.position.y + node.height)) - Math.min(...layout.nodes.map(node => node.position.y))
-        return { nodes, edges, width, height }
+        const boxes = [...layout.nodes.map(node => ({ ...node.position, width: node.width, height: node.height })),
+          ...labelBounds.map(node => ({ ...node.position, width: Number(node.style?.width), height: Number(node.style?.height) }))]
+        const width = Math.max(...boxes.map(box => box.x + box.width)) - Math.min(...boxes.map(box => box.x))
+        const height = Math.max(...boxes.map(box => box.y + box.height)) - Math.min(...boxes.map(box => box.y))
+        return { nodes: [...nodes, ...labelBounds], edges, width, height }
       }
       const primary = build(diagram.direction)
       return { primary, vertical: diagram.kind === 'mindmap' ? build('TB') : null }
     } catch {
       return null
     }
-  }, [content])
+  }, [content, interactive])
 
   useLayoutEffect(() => {
     const element = container.current
@@ -189,7 +219,7 @@ function DiagramContent({ content, interactive = false }: { content: string; int
   if (!graphs) return <MermaidFallback key={content} content={content} />
   const graph = direction === 'TB' && graphs.vertical ? graphs.vertical : graphs.primary
   return <div ref={container} className={css['bizai-flow']} data-interactive={interactive} style={!interactive ? { aspectRatio: `${graph.width} / ${graph.height}` } : undefined}>
-    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: interactive ? 0.15 : PREVIEW_PADDING, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={interactive} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
+    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: interactive ? 0.15 : PREVIEW_PADDING, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} nodesFocusable={false} edgesFocusable={false} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
       <Background />
       {!interactive && <FitOnResize container={container} />}
       {interactive && <Controls showInteractive={false} aria-label={copy.diagramControls()} />}
