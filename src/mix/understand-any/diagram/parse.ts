@@ -4,8 +4,8 @@ export type DiagramNode = {
   shape: "default" | "round" | "decision";
   depth?: number;
   ui?: UiAnchor[];
-  source?: { value: string };
-  field?: { name: string };
+  source?: { bind: string };
+  field?: { bind: string };
 };
 export type UiAnchor = { file: string; tag: string; startLine: number; endLine: number };
 export type DiagramEdge = {
@@ -50,10 +50,10 @@ function attachUiAnchors(nodes: DiagramNode[], anchors: Array<{ id: string; anch
 
 type DataAnnotation = { id: string; source?: DiagramNode['source']; field?: DiagramNode['field'] };
 function readDataAnnotation(line: string): DataAnnotation | undefined {
-  const source = line.trim().match(/^%%\s*@source\s+([A-Za-z_][\w.-]*)\s+value="([^"\r\n]+)"\s*$/);
-  if (source) return { id: source[1], source: { value: source[2] } };
-  const item = line.trim().match(/^%%\s*@field\s+([A-Za-z_][\w.-]*)\s+name="([^"\r\n]+)"\s*$/);
-  if (item) return { id: item[1], field: { name: item[2] } };
+  const source = line.trim().match(/^%%\s*@source\s+([A-Za-z_][\w.-]*)\s+bind="([^"\r\n]+)"\s*$/);
+  if (source) return { id: source[1], source: { bind: source[2] } };
+  const item = line.trim().match(/^%%\s*@field\s+([A-Za-z_][\w.-]*)\s+bind="([^"\r\n]+)"\s*$/);
+  if (item) return { id: item[1], field: { bind: item[2] } };
 }
 
 function attachDataAnnotations(nodes: DiagramNode[], annotations: DataAnnotation[]) {
@@ -97,8 +97,6 @@ function parseMindmap(lines: string[]): ParsedDiagram {
     if (!label) throw new Error("Empty mindmap node");
     while (stack.length && indent <= stack[stack.length - 1].indent)
       stack.pop();
-    if (nodes.length && !stack.length)
-      throw new Error("Mindmap must have one root");
     const explicitId = shape?.[1];
     let id = explicitId || `mind-${nodes.length}`;
     if (!explicitId || usedIds.has(id)) {

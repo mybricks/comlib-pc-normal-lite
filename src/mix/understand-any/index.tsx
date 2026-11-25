@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import context from '../context'
 import { getLazyCss } from '../lowcodeView/utils/css'
 import * as lazyCss from './index.lazy.less'
@@ -8,6 +8,8 @@ import { createUnderstandChip } from './chip'
 import { PlaceholderDiagram, SHOW_EMPTY_DIAGRAM } from './placeholder'
 import { fileLabel, parseMeta, readDocuments, reconcileDocuments, selectDocuments, type DiagramFile } from './document'
 import { Diagram } from './diagram'
+import { findUiMatches, getUiDocuments, type ZoneHint } from './diagram/ui-selector'
+import { randomUUID } from '../utils/uuid'
 
 const css = getLazyCss(lazyCss)
 const SHOW_SUMMARY = false
@@ -20,13 +22,47 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     return selectDocuments(await readDocuments(sandbox, dir), bindingTo)
   }
 
-  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle, hintAtZones }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void; hintAtZones?: (selector: string) => void }) {
+  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle, hintAtZones, cancelZones }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void; hintAtZones?: (hint: ZoneHint) => void; cancelZones?: () => void }) {
     useLayoutEffect(() => attachShadowStyles(document), [])
     const [documents, setDocuments] = useState<{ bindingTo?: string; files: DiagramFile[] } | null>(null)
     const [selected, setSelected] = useState('')
     const [expanded, setExpanded] = useState(false)
     const [waiting, setWaiting] = useState(false)
     const [error, setError] = useState('')
+    const [selectedNode, setSelectedNode] = useState<string | null>(null)
+    const selectedNodeRef = useRef<string | null>(null)
+    const cancelZonesRef = useRef(cancelZones)
+    cancelZonesRef.current = cancelZones
+    const [selectionScope] = useState(() => randomUUID())
+    const clearSelection = useCallback(() => {
+      if (selectedNodeRef.current === null) return
+      selectedNodeRef.current = null
+      setSelectedNode(null)
+      cancelZonesRef.current?.()
+    }, [])
+    const selectNode = useCallback((id: string, hint: ZoneHint, doc: Document) => {
+      selectedNodeRef.current = id
+      setSelectedNode(id)
+      const query = Array.isArray(hint.selector) ? hint.selector.join(', ') : hint.selector
+      let matches: Element[] = []
+      try { if (query) matches = findUiMatches(doc, query) }
+      catch (error) { console.warn('[understand-any] selector query failed:', error) }
+      console.log('[understand-any] hintAtZones:', hintAtZones, 'params:', hint, 'matches:', matches)
+      hintAtZones?.(hint)
+    }, [hintAtZones])
+    useEffect(() => {
+      if (selectedNode === null) return
+      const onPointerDown = (event: Event) => {
+        const onSelectableNode = event.composedPath().some(target =>
+          (target as Element).getAttribute?.('data-understand-selectable') === selectionScope,
+        )
+        if (!onSelectableNode) clearSelection()
+      }
+      const documents = getUiDocuments(document)
+      documents.forEach(doc => doc.addEventListener('pointerdown', onPointerDown, true))
+      return () => documents.forEach(doc => doc.removeEventListener('pointerdown', onPointerDown, true))
+    }, [selectedNode, selectionScope, clearSelection])
+    useEffect(() => () => { if (selectedNodeRef.current !== null) cancelZonesRef.current?.() }, [])
     useEffect(() => {
       let active = true, loading = false, queued = false
       const refresh = async () => {
@@ -59,6 +95,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     const documentsReady = documents !== null && documents.bindingTo === bindingTo
     const files = documentsReady ? documents.files : []
     const file = files.find(item => item.path === selected) ?? files[0]
+    useEffect(() => { clearSelection() }, [bindingTo, file?.path, file?.content, clearSelection])
     const meta = file ? parseMeta(file.content) : {}
     const title = file ? fileLabel(file) : copy.document()
     const displayTitle = !file && waiting ? copy.creating() : title
@@ -83,12 +120,12 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
         event.preventDefault()
         setExpanded(true)
       }}>
-        {file ? <><Diagram content={file.content} hintAtZones={hintAtZones} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
+        {file ? <><Diagram content={file.content} selectedNode={selectedNode} selectionScope={selectionScope} onSelect={selectNode} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
         {error && <div className={css['bizai-error']} role="alert">{error}</div>}
       </div>
       {file && Modal && <Modal open={expanded} onClose={() => setExpanded(false)} title={!bindingTo && files.length > 1 ? <select className={css['bizai-switch']} aria-label={copy.choose()} value={file.path} onChange={event => setSelected(event.target.value)}>{files.map(item => <option key={item.path} value={item.path}>{fileLabel(item)}</option>)}</select> : <span style={{ fontSize: 12 }}>{fileLabel(file)}</span>} width="90vw">
         {(summary || description) && <div className={`${css['bizai-description']} ${css['bizai-modal-description']}`}>{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details className={css['bizai-details']}><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
-        <div className={css['bizai-modal-diagram']}><Diagram content={file.content} interactive hintAtZones={hintAtZones ? selector => { setExpanded(false); hintAtZones(selector) } : undefined} /></div>
+        <div className={css['bizai-modal-diagram']}><Diagram content={file.content} interactive selectedNode={selectedNode} selectionScope={selectionScope} onSelect={selectNode} /></div>
       </Modal>}
     </div>
   }

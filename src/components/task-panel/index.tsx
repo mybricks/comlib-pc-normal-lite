@@ -61,6 +61,7 @@ interface TaskMetadata {
 }
 interface TaskItem {
   id?: string
+  selectionKey: string
   title: string
   status: TaskStatus
   updatedAt?: string
@@ -205,10 +206,13 @@ function parseTaskUpdatedAt(raw: string | undefined): number | undefined {
 
 function parseTasks(content: string): TaskItem[] {
   const tasks: TaskItem[] = []
+  const titleCounts = new Map<string, number>()
   const sections = splitSections(content)
   for (const section of sections) {
     const title = section.split('\n')[0].replace(/^#+\s*/, '').trim()
     if (!title) continue
+    const occurrence = titleCounts.get(title) ?? 0
+    titleCounts.set(title, occurrence + 1)
     const id = title.match(/^(T-\d+)\b/)?.[1]
     const metadata = extractMetadata(section)
     const updatedAt = metadata.find(item => item.label === '更新时间')?.value
@@ -217,6 +221,7 @@ function parseTasks(content: string): TaskItem[] {
     const verificationCondition = extractVerificationCondition(section)
     tasks.push({
       id,
+      selectionKey: JSON.stringify([title, occurrence]),
       title,
       status: normalizeTaskStatus(extractMetaField(section, '状态')),
       updatedAt,
@@ -935,8 +940,7 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
 }) {
   const [filter, setFilter] = useState<string | null>(null)
   const [reviewFilter, setReviewFilter] = useState(false)
-  const [overviewSelection, setOverviewSelection] = useState<OverviewSelection>(null)
-  const [listFocusedTaskId, setListFocusedTaskId] = useState<string | null>(null)
+  const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(null)
   const splitRef = useRef<HTMLDivElement>(null)
   const resizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
   const [listWidth, setListWidth] = useState(39)
@@ -953,7 +957,11 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
   }, [content])
 
   const tasks = useMemo(() => content ? parseTasks(content) : [], [content])
-  const selectedTask = tasks.find(task => task.id === overviewSelection?.id)
+  const selectedTask = selectedTaskKey === null ? undefined : tasks.find(task => task.selectionKey === selectedTaskKey)
+  const overviewSelection: OverviewSelection = selectedTask?.id ? { kind: 'task', id: selectedTask.id } : null
+  useEffect(() => {
+    if (selectedTaskKey !== null && !selectedTask) setSelectedTaskKey(null)
+  }, [selectedTaskKey, selectedTask])
   const overview = useMemo(() => readOverview(overviewContent), [overviewContent])
   const hasOverview = tasks.length > 0 || Boolean(overviewContent?.trim())
   const overviews = useMemo(() => [{ key: '', overview }], [overview])
@@ -1111,9 +1119,9 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
                     const statusDiff = (statusOrder[a.task.status] ?? 99) - (statusOrder[b.task.status] ?? 99)
                     return statusDiff || a.index - b.index
                   })
-                  .map(({ task, index }) => (
+                  .map(({ task }) => (
                     <TaskRow
-                      key={task.id ?? index}
+                      key={task.selectionKey}
                       task={task}
                       highlightProgress={hintHovering && task.status === ATTENTION_STATUS}
                       batchMode={batchMode}
@@ -1125,14 +1133,11 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
                       onRevert={onRevert}
                       canRevert={canRevert}
                       onToggleSelect={() => toggleSelect(task)}
-                      linked={Boolean(task.id && listFocusedTaskId === task.id)}
+                      linked={selectedTaskKey === task.selectionKey}
                       reviewCounts={task.id ? taskReviewCounts.get(task.id) : undefined}
                       reviewAvailable={!overview.invalid}
-                      onOverviewSelect={!batchMode && task.id ? () => {
-                        const id = task.id!
-                        const nextId = listFocusedTaskId === id ? null : id
-                        setListFocusedTaskId(nextId)
-                        setOverviewSelection(nextId ? { kind: 'task', id: nextId } : null)
+                      onOverviewSelect={!batchMode ? () => {
+                        setSelectedTaskKey(current => current === task.selectionKey ? null : task.selectionKey)
                       } : undefined}
                     />
                   ))
@@ -1188,7 +1193,9 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
               </div>
             )}
             <div className={css['task-overview-instance']}>
-              <TaskOverview key={overviewSelection?.id ?? 'empty'} overviews={overviews} selection={overviewSelection} onFixReview={sendTaskMessage} isVibing={isVibing} />
+              {selectedTask && !selectedTask.id
+                ? <div className={css['overview-empty']} role="status">{taskPanelI18n.noTaskChanges()}</div>
+                : <TaskOverview key={overviewSelection?.id ?? 'empty'} overviews={overviews} selection={overviewSelection} onFixReview={sendTaskMessage} isVibing={isVibing} />}
             </div>
           </div>
         )}

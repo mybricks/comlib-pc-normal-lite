@@ -267,7 +267,6 @@
 }
 
 .bizgraph-node[data-kind="ui"]:not(.bizgraph-decision) {
-  padding-right: 26px;
   border-color: rgba(126, 82, 194, .55);
   border-radius: 8px;
   background: linear-gradient(rgba(126, 82, 194, .1), rgba(126, 82, 194, .1)), var(--mybricks-bg-color-main, #fff);
@@ -321,48 +320,23 @@
   max-width: 65%;
 }
 
-.bizgraph-selected {
-  border-color: var(--mybricks-color-primary, #fa6400);
+.bizgraph-linked { cursor: pointer; }
+
+.bizgraph-linked[data-kind="field"]:hover,
+.bizgraph-linked[data-kind="field"]:focus-visible,
+.bizgraph-node.bizgraph-selected[data-kind="field"] {
+  outline: 2px solid #35896f;
+  outline-offset: 2px;
 }
 
-
-.bizgraph-linked {
-  cursor: pointer;
-  padding-right: 26px;
+.bizgraph-linked[data-kind="ui"]:hover,
+.bizgraph-linked[data-kind="ui"]:focus-visible,
+.bizgraph-node.bizgraph-selected[data-kind="ui"] {
+  outline: 2px solid #7650b0;
+  outline-offset: 2px;
 }
 
-.bizgraph-action {
-  position: absolute;
-  right: 7px;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  transform: translateY(-50%);
-  color: #7650b0;
-  opacity: 0;
-}
-
-.bizgraph-linked:hover,
-.bizgraph-linked:focus-visible {
-  outline: none;
-  border-color: #7650b0;
-  box-shadow: 0 3px 12px rgba(126, 82, 194, .25);
-}
-.bizgraph-linked:hover .bizgraph-kind-icon,
-.bizgraph-linked:focus-visible .bizgraph-kind-icon { color: #624095; }
-.bizgraph-linked:hover .bizgraph-action,
-.bizgraph-linked:focus-visible .bizgraph-action { opacity: 1; }
-.bizgraph-decision.bizgraph-linked { padding: 8px 12px; box-shadow: none; }
-.bizgraph-decision .bizgraph-kind-icon,
-.bizgraph-decision .bizgraph-action { z-index: 1; }
-.bizgraph-decision .bizgraph-kind-icon { position: relative; }
-.bizgraph-decision .bizgraph-action { right: 25px; z-index: 1; }
-.bizgraph-decision.bizgraph-linked:hover::before,
-.bizgraph-decision.bizgraph-linked:focus-visible::before { background: #7650b0; }
-
-.bizgraph-decision.bizgraph-selected::before {
-  background: var(--mybricks-color-primary, #fa6400);
-}
+.bizgraph-decision .bizgraph-kind-icon { position: relative; z-index: 1; }
 
 .bizgraph-node :global(.react-flow__handle) {
   opacity: 0;

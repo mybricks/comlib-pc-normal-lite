@@ -119,20 +119,43 @@ mindmap
     LOCAL[订单状态数据]
       STATUS[订单状态]
         BADGE[状态标签内容]
-  %% @source API value="GET /api/orders/:id"
-  %% @source LOCAL value="getOrderStatus"
-  %% @field TOTAL name="total"
-  %% @field STATUS name="status"
+  %% @source API bind="GET /api/orders/:id"
+  %% @source LOCAL bind="getOrderStatus"
+  %% @field TOTAL bind="total"
+  %% @field STATUS bind="status"
   %% @ui PRICE file="src/OrderCard.tsx" loc="span:42"
 \`\`\``)
   const get = id => diagram.nodes.find(node => node.id === id)
-  assert.deepEqual(get('API').source, { value: 'GET /api/orders/:id' })
-  assert.deepEqual(get('LOCAL').source, { value: 'getOrderStatus' })
-  assert.deepEqual(get('TOTAL').field, { name: 'total' })
-  assert.deepEqual(get('STATUS').field, { name: 'status' })
+  assert.deepEqual(get('API').source, { bind: 'GET /api/orders/:id' })
+  assert.deepEqual(get('LOCAL').source, { bind: 'getOrderStatus' })
+  assert.deepEqual(get('TOTAL').field, { bind: 'total' })
+  assert.deepEqual(get('STATUS').field, { bind: 'status' })
   assert.equal(get('PRICE').ui[0].startLine, 42)
-  const flow = parseDiagram('```mermaid\nflowchart LR\n  API[接口] --> TOTAL[金额]\n  %% @source API value="GET /orders"\n  %% @field TOTAL name="total"\n```')
-  assert.equal(flow.nodes.find(node => node.id === 'API').source.value, 'GET /orders')
-  assert.equal(flow.nodes.find(node => node.id === 'TOTAL').field.name, 'total')
+  const flow = parseDiagram('```mermaid\nflowchart LR\n  API[接口] --> TOTAL[金额]\n  %% @source API bind="GET /orders"\n  %% @field TOTAL bind="total"\n```')
+  assert.equal(flow.nodes.find(node => node.id === 'API').source.bind, 'GET /orders')
+  assert.equal(flow.nodes.find(node => node.id === 'TOTAL').field.bind, 'total')
 })
 
+
+test('mindmap supports multiple data sources as independent top-level nodes', () => {
+  const diagram = parseDiagram(`\`\`\`mermaid
+mindmap
+  API[订单详情接口]
+    TOTAL[订单金额]
+      PRICE[金额文本]
+  LOCAL[订单状态数据]
+    STATUS[订单状态]
+      BADGE[状态标签]
+  %% @source API bind="GET /orders"
+  %% @source LOCAL bind="getOrderStatus"
+  %% @field TOTAL bind="total"
+  %% @field STATUS bind="status"
+  %% @ui PRICE file="src/Order.tsx" loc="span:42"
+  %% @ui BADGE file="src/Order.tsx" loc="span:50"
+\`\`\``)
+  assert.deepEqual(diagram.nodes.filter(node => node.depth === 0).map(node => node.id), ['API', 'LOCAL'])
+  assert.equal(diagram.nodes.length, 6)
+  assert.equal(diagram.edges.length, 4)
+  assert.equal(diagram.nodes.find(node => node.id === 'API').source.bind, 'GET /orders')
+  assert.equal(diagram.nodes.find(node => node.id === 'BADGE').ui[0].startLine, 50)
+})

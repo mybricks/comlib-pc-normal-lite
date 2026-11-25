@@ -15,7 +15,7 @@ function nodeSize(node: DiagramNode, measureText: (text: string) => number) {
   const width = decision ? DECISION_WIDTH : NODE_WIDTH;
   const hasIcon = !!(node.ui?.length || node.source || node.field);
   const hasMeta = !!(node.source || node.field);
-  const contentWidth = (decision ? width * 0.65 : width - 26) - (hasIcon ? 30 : 0) - (node.ui?.length ? 14 : 0);
+  const contentWidth = (decision ? width * 0.65 : width - 26) - (hasIcon ? 30 : 0);
   let lineCount = 1, lineWidth = 0;
   for (const char of Array.from(node.label)) {
     if (char === "\n") { lineCount++; lineWidth = 0; continue; }

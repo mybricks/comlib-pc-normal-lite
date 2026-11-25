@@ -12,12 +12,12 @@ const { parseDiagram } = await import(`data:text/javascript;base64,${Buffer.from
 const intersect = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 
 test('mindmap layout preserves UI bindings in both directions', () => {
-  const diagram = parseDiagram('```mermaid\nmindmap\n  root((订单接口))\n    TOTAL[订单金额]\n      PRICE[金额文本]\n  %% @source root value="GET /orders"\n  %% @field TOTAL name="total"\n  %% @ui PRICE file="src/OrderCard.tsx" loc="span:42"\n```')
+  const diagram = parseDiagram('```mermaid\nmindmap\n  root((订单接口))\n    TOTAL[订单金额]\n      PRICE[金额文本]\n  %% @source root bind="GET /orders"\n  %% @field TOTAL bind="total"\n  %% @ui PRICE file="src/OrderCard.tsx" loc="span:42"\n```')
   for (const direction of ['LR', 'TB']) {
     const layout = createFlowLayout({ ...diagram, direction })
     assert.deepEqual(layout.nodes.find(node => node.id === 'PRICE').ui, [{ file: 'src/OrderCard.tsx', tag: 'span', startLine: 42, endLine: 42 }])
-    assert.equal(layout.nodes.find(node => node.id === 'root').source.value, 'GET /orders')
-    assert.equal(layout.nodes.find(node => node.id === 'TOTAL').field.name, 'total')
+    assert.equal(layout.nodes.find(node => node.id === 'root').source.bind, 'GET /orders')
+    assert.equal(layout.nodes.find(node => node.id === 'TOTAL').field.bind, 'total')
   }
 })
 
@@ -70,7 +70,7 @@ test('workbench branches share a junction and labels stay clear', () => {
 
 test('long node titles grow within a fixed width for both diagram types', () => {
   const short = { id: 'short', label: '订单金额', shape: 'default' }
-  const long = { id: 'long', label: '这是一个很长的节点标题需要换行显示但不改变字号', shape: 'default', field: { name: 'total' } }
+  const long = { id: 'long', label: '这是一个很长的节点标题需要换行显示但不改变字号', shape: 'default', field: { bind: 'total' } }
   const decision = { id: 'decision', label: '这是一个需要换行才能说明清楚的较长判断条件', shape: 'decision' }
   for (const kind of ['mindmap', 'flowchart']) {
     const layout = createFlowLayout({ kind, direction: 'TB', nodes: [short, long, decision], edges: [
@@ -83,5 +83,18 @@ test('long node titles grow within a fixed width for both diagram types', () => 
     assert.ok(nodes.decision.height >= 88)
     assert.ok(nodes.long.position.y >= nodes.short.position.y + nodes.short.height)
     assert.ok(nodes.decision.position.y >= nodes.long.position.y + nodes.long.height)
+  }
+})
+
+test('independent mindmap roots are laid out without overlapping', () => {
+  const diagram = parseDiagram('```mermaid\nmindmap\n  API[订单接口]\n    TOTAL[金额]\n      PRICE[金额文本]\n  LOCAL[本地数据]\n    STATUS[状态]\n      BADGE[状态标签]\n```')
+  for (const direction of ['LR', 'TB']) {
+    const layout = createFlowLayout({ ...diagram, direction })
+    for (const [index, node] of layout.nodes.entries()) {
+      const box = { ...node.position, width: node.width, height: node.height }
+      for (const other of layout.nodes.slice(index + 1)) {
+        assert.equal(intersect(box, { ...other.position, width: other.width, height: other.height }), false)
+      }
+    }
   }
 })

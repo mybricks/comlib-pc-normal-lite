@@ -7,39 +7,32 @@ import * as lazyCss from '../index.lazy.less'
 import { copy } from '../index.i18n'
 import { createFlowLayout, edgeLabelSize, roundedPath } from './layout'
 import { parseDiagram, type ParsedDiagram, type DiagramNode as ParsedNode } from './parse'
-import { findUiMatches, uiAnchorsToSelector } from './ui-selector'
+import { buildNodeHints, type ZoneHint } from './ui-selector'
 
 const css = getLazyCss(lazyCss)
 const RESIZE_THROTTLE_MS = 30
 const PREVIEW_PADDING = 0.05
 
-type BusinessNodeData = { label: string; shape: string; depth: number; width: number; height: number; direction: ParsedDiagram['direction']; ui?: ParsedNode['ui']; source?: ParsedNode['source']; field?: ParsedNode['field']; hintAtZones?: (selector: string) => void }
+type BusinessNodeData = { label: string; shape: string; depth: number; width: number; height: number; direction: ParsedDiagram['direction']; ui?: ParsedNode['ui']; source?: ParsedNode['source']; field?: ParsedNode['field']; hint?: ZoneHint; selectionScope: string; onSelect: (id: string, hint: ZoneHint, doc: Document) => void }
 type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number }; junction?: { x: number; y: number } }
 type BusinessNode = Node<BusinessNodeData, 'business'>
 type RoutedEdge = Edge<RoutedEdgeData>
 
-function DiagramNode({ data, selected }: NodeProps<BusinessNodeData>) {
+function DiagramNode({ id, data, selected }: NodeProps<BusinessNodeData>) {
   const vertical = data.direction === 'TB' || data.direction === 'BT'
   const reverse = data.direction === 'BT' || data.direction === 'RL'
   const source = vertical ? (reverse ? Position.Top : Position.Bottom) : (reverse ? Position.Left : Position.Right)
   const target = vertical ? (reverse ? Position.Bottom : Position.Top) : (reverse ? Position.Right : Position.Left)
   const kind = data.ui?.length ? 'ui' : data.source ? 'source' : data.field ? 'field' : undefined
-  const meta = data.source?.value ?? data.field?.name
-  const selector = data.ui?.length ? uiAnchorsToSelector(data.ui) : ''
-  const focus = (doc: Document) => {
-    let matches: Element[] = []
-    try { if (selector) matches = findUiMatches(doc, selector) }
-    catch (error) { console.warn('[understand-any] selector query failed:', error) }
-    console.log('[understand-any] hintAtZones:', data.hintAtZones, 'selector:', selector, 'matches:', matches)
-    if (selector) data.hintAtZones?.(selector)
-  }
-  return <div style={{ width: data.width, height: data.height }} data-kind={kind} role={selector ? 'button' : undefined} tabIndex={selector ? 0 : undefined} onClick={selector ? event => { event.stopPropagation(); focus(event.currentTarget.ownerDocument) } : undefined} onKeyDown={selector ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); focus(event.currentTarget.ownerDocument) } } : undefined} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected'], selector && css['bizgraph-linked']].filter(Boolean).join(' ')}>
+  const meta = data.source?.bind ?? data.field?.bind
+  const selectable = !!data.hint
+  const select = (doc: Document) => { if (data.hint) data.onSelect(id, data.hint, doc) }
+  return <div style={{ width: data.width, height: data.height }} data-kind={kind} data-understand-selectable={selectable ? data.selectionScope : undefined} role={selectable ? 'button' : undefined} aria-pressed={selectable ? selected : undefined} tabIndex={selectable ? 0 : undefined} onClick={selectable ? event => { event.stopPropagation(); select(event.currentTarget.ownerDocument) } : undefined} onKeyDown={selectable ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); select(event.currentTarget.ownerDocument) } } : undefined} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected'], selectable && css['bizgraph-linked']].filter(Boolean).join(' ')}>
     <Handle type="target" position={target} />
     {kind && <svg className={css['bizgraph-kind-icon']} data-kind={kind} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {kind === 'source' ? <><ellipse cx="8" cy="4" rx="5" ry="2" /><path d="M3 4v7c0 1.1 2.24 2 5 2s5-.9 5-2V4M3 7.5c0 1.1 2.24 2 5 2s5-.9 5-2" /></> : kind === 'field' ? <><path d="M5 2.5H4c-.6 0-1 .4-1 1v3c0 .8-.4 1.5-1 1.5.6 0 1 .7 1 1.5v3c0 .6.4 1 1 1h1M11 2.5h1c.6 0 1 .4 1 1v3c0 .8.4 1.5 1 1.5-.6 0-1 .7-1 1.5v3c0 .6-.4 1-1 1h-1M6.3 6.3l3.4 3.4m0-3.4-3.4 3.4" /></> : <path d="M8 1.75 13.25 4.8v6.4L8 14.25 2.75 11.2V4.8L8 1.75ZM2.95 4.9 8 7.85l5.05-2.95M8 7.85v6.1" />}
     </svg>}
     <div className={css['bizgraph-content']} data-meta={meta ? 'true' : undefined}><span className={css['bizgraph-label']} title={data.label}>{data.label}</span>{meta && <span className={css['bizgraph-meta']} title={meta}>{meta}</span>}</div>
-    {selector && <svg className={css['bizgraph-action']} viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8h8M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>}
     <Handle type="source" position={source} />
   </div>
 }
@@ -126,15 +119,16 @@ class DiagramErrorBoundary extends React.Component<{ content: string; children: 
   }
 }
 
-function DiagramContent({ content, interactive = false, hintAtZones }: { content: string; interactive?: boolean; hintAtZones?: (selector: string) => void }) {
+function DiagramContent({ content, interactive = false, selectedNode, selectionScope, onSelect }: { content: string; interactive?: boolean; selectedNode: string | null; selectionScope: string; onSelect: (id: string, hint: ZoneHint, doc: Document) => void }) {
   const container = useRef<HTMLDivElement>(null)
   const [direction, setDirection] = useState<'LR' | 'TB'>('TB')
   const graphs = useMemo(() => {
     try {
       const diagram = parseDiagram(content)
+      const hints = buildNodeHints(diagram)
       const build = (direction: ParsedDiagram['direction']) => {
         const layout = createFlowLayout({ ...diagram, direction })
-        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, width: node.width, height: node.height, direction, ui: node.ui, source: node.source, field: node.field, hintAtZones }, draggable: false, ...(node.ui?.length ? { style: { pointerEvents: 'all' } } : {}) }))
+        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, width: node.width, height: node.height, direction, ui: node.ui, source: node.source, field: node.field, hint: hints.get(node.id), selectionScope, onSelect }, draggable: false, ...(hints.has(node.id) ? { style: { pointerEvents: 'all' } } : {}) }))
         const ids = new Set(nodes.map(node => node.id))
         const labelBounds: Node[] = layout.edges.flatMap((edge, index) => {
           if (!edge.label || !edge.labelPosition) return []
@@ -162,7 +156,7 @@ function DiagramContent({ content, interactive = false, hintAtZones }: { content
     } catch {
       return null
     }
-  }, [content, interactive, hintAtZones])
+  }, [content, interactive, selectionScope, onSelect])
 
   useLayoutEffect(() => {
     const element = container.current
@@ -189,7 +183,7 @@ function DiagramContent({ content, interactive = false, hintAtZones }: { content
   if (!graphs) return <MermaidFallback key={content} content={content} />
   const graph = direction === 'TB' && graphs.vertical ? graphs.vertical : graphs.primary
   return <div ref={container} className={css['bizai-flow']} data-interactive={interactive} style={!interactive ? { aspectRatio: `${graph.width} / ${graph.height}` } : undefined}>
-    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: interactive ? 0.15 : PREVIEW_PADDING, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} nodesFocusable={false} edgesFocusable={false} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
+    <ReactFlow key={`${content}-${graphs.vertical ? direction : ''}`} nodes={graph.nodes.map(node => node.type === 'business' ? { ...node, selected: node.id === selectedNode } : node)} edges={graph.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: interactive ? 0.15 : PREVIEW_PADDING, maxZoom: 1 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} nodesFocusable={false} edgesFocusable={false} panOnDrag={false} panOnScroll={interactive} zoomOnScroll={false} zoomOnPinch={interactive} zoomOnDoubleClick={interactive} preventScrolling={interactive} disableKeyboardA11y={!interactive} minZoom={0.1} maxZoom={2} proOptions={{ hideAttribution: true }}>
       <Background />
       {!interactive && <FitOnResize container={container} />}
       {interactive && <Controls showInteractive={false} aria-label={copy.diagramControls()} />}
@@ -197,6 +191,6 @@ function DiagramContent({ content, interactive = false, hintAtZones }: { content
   </div>
 }
 
-export function Diagram({ content, interactive = false, hintAtZones }: { content: string; interactive?: boolean; hintAtZones?: (selector: string) => void }) {
-  return <DiagramErrorBoundary key={content} content={content}><DiagramContent content={content} interactive={interactive} hintAtZones={hintAtZones} /></DiagramErrorBoundary>
+export function Diagram({ content, interactive = false, selectedNode, selectionScope, onSelect }: { content: string; interactive?: boolean; selectedNode: string | null; selectionScope: string; onSelect: (id: string, hint: ZoneHint, doc: Document) => void }) {
+  return <DiagramErrorBoundary key={content} content={content}><DiagramContent content={content} interactive={interactive} selectedNode={selectedNode} selectionScope={selectionScope} onSelect={onSelect} /></DiagramErrorBoundary>
 }
