@@ -20,7 +20,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     return selectDocuments(await readDocuments(sandbox, dir), bindingTo)
   }
 
-  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void }) {
+  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle, hintAtZones }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void; hintAtZones?: (selector: string) => void }) {
     useLayoutEffect(() => attachShadowStyles(document), [])
     const [documents, setDocuments] = useState<{ bindingTo?: string; files: DiagramFile[] } | null>(null)
     const [selected, setSelected] = useState('')
@@ -83,12 +83,12 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
         event.preventDefault()
         setExpanded(true)
       }}>
-        {file ? <><Diagram content={file.content} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
+        {file ? <><Diagram content={file.content} hintAtZones={hintAtZones} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
         {error && <div className={css['bizai-error']} role="alert">{error}</div>}
       </div>
       {file && Modal && <Modal open={expanded} onClose={() => setExpanded(false)} title={!bindingTo && files.length > 1 ? <select className={css['bizai-switch']} aria-label={copy.choose()} value={file.path} onChange={event => setSelected(event.target.value)}>{files.map(item => <option key={item.path} value={item.path}>{fileLabel(item)}</option>)}</select> : <span style={{ fontSize: 12 }}>{fileLabel(file)}</span>} width="90vw">
         {(summary || description) && <div className={`${css['bizai-description']} ${css['bizai-modal-description']}`}>{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details className={css['bizai-details']}><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
-        <div className={css['bizai-modal-diagram']}><Diagram content={file.content} interactive /></div>
+        <div className={css['bizai-modal-diagram']}><Diagram content={file.content} interactive hintAtZones={hintAtZones ? selector => { setExpanded(false); hintAtZones(selector) } : undefined} /></div>
       </Modal>}
     </div>
   }

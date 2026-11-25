@@ -67,3 +67,21 @@ test('workbench branches share a junction and labels stay clear', () => {
     for (const node of layout.nodes) assert.equal(intersect(box, { ...node.position, width: node.width, height: node.height }), false)
   }
 })
+
+test('long node titles grow within a fixed width for both diagram types', () => {
+  const short = { id: 'short', label: '订单金额', shape: 'default' }
+  const long = { id: 'long', label: '这是一个很长的节点标题需要换行显示但不改变字号', shape: 'default', field: { name: 'total' } }
+  const decision = { id: 'decision', label: '这是一个需要换行才能说明清楚的较长判断条件', shape: 'decision' }
+  for (const kind of ['mindmap', 'flowchart']) {
+    const layout = createFlowLayout({ kind, direction: 'TB', nodes: [short, long, decision], edges: [
+      { source: 'short', target: 'long' }, { source: 'long', target: 'decision' },
+    ] })
+    const nodes = Object.fromEntries(layout.nodes.map(node => [node.id, node]))
+    assert.equal(nodes.short.width, nodes.long.width)
+    assert.ok(nodes.long.height > nodes.short.height)
+    assert.ok(nodes.long.height <= 80)
+    assert.ok(nodes.decision.height >= 88)
+    assert.ok(nodes.long.position.y >= nodes.short.position.y + nodes.short.height)
+    assert.ok(nodes.decision.position.y >= nodes.long.position.y + nodes.long.height)
+  }
+})

@@ -5,6 +5,45 @@ export const NODE_WIDTH = 168;
 export const NODE_HEIGHT = 56;
 export const DECISION_WIDTH = 144;
 export const DECISION_HEIGHT = 88;
+const LABEL_FONT_SIZE = 12;
+const LABEL_LINE_HEIGHT = 15;
+const LABEL_MAX_LINES = 3;
+
+/** Estimate wrapped text before layout; use the canvas font when available. */
+function nodeSize(node: DiagramNode, measureText: (text: string) => number) {
+  const decision = node.shape === "decision";
+  const width = decision ? DECISION_WIDTH : NODE_WIDTH;
+  const hasIcon = !!(node.ui?.length || node.source || node.field);
+  const hasMeta = !!(node.source || node.field);
+  const contentWidth = (decision ? width * 0.65 : width - 26) - (hasIcon ? 30 : 0) - (node.ui?.length ? 14 : 0);
+  let lineCount = 1, lineWidth = 0;
+  for (const char of Array.from(node.label)) {
+    if (char === "\n") { lineCount++; lineWidth = 0; continue; }
+    const charWidth = measureText(char);
+    if (lineWidth && lineWidth + charWidth > contentWidth) { lineCount++; lineWidth = 0; }
+    lineWidth += charWidth;
+  }
+  // Word wrapping can break earlier than the per-character estimate.
+  if (lineCount > 1 && /\s/.test(node.label)) lineCount++;
+  const labelHeight = Math.min(LABEL_MAX_LINES, lineCount) * LABEL_LINE_HEIGHT;
+  const contentHeight = labelHeight + (hasMeta ? 17 : 0);
+  return { width, height: decision ? Math.max(DECISION_HEIGHT, contentHeight * 2 + 12) : Math.max(NODE_HEIGHT, contentHeight + 18) };
+}
+
+function textMeasurer(): (text: string) => number {
+  if (typeof document !== "undefined") {
+    try {
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (context) {
+        const font = document.body && document.defaultView?.getComputedStyle(document.body).fontFamily;
+        context.font = `${LABEL_FONT_SIZE}px ${font || "sans-serif"}`;
+        return text => context.measureText(text).width;
+      }
+    } catch { /* Canvas is unavailable in some hosts. */ }
+  }
+  return () => LABEL_FONT_SIZE;
+}
 
 type Point = { x: number; y: number };
 export type LayoutNode = DiagramNode & { position: Point; width: number; height: number };
@@ -253,12 +292,8 @@ export function createFlowLayout(diagram: ParsedDiagram): {
     marginy: diagram.kind === "mindmap" ? 24 : 32,
   });
   graph.setDefaultEdgeLabel(() => ({}));
-  diagram.nodes.forEach((node) =>
-    graph.setNode(node.id, {
-      width: node.shape === 'decision' ? DECISION_WIDTH : NODE_WIDTH,
-      height: node.shape === 'decision' ? DECISION_HEIGHT : NODE_HEIGHT,
-    }),
-  );
+  const measureText = textMeasurer();
+  diagram.nodes.forEach((node) => graph.setNode(node.id, nodeSize(node, measureText)));
   diagram.edges.forEach((edge, index) =>
     graph.setEdge(
       edge.source,

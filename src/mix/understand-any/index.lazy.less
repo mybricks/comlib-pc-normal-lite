@@ -197,7 +197,7 @@
   border-radius: 8px;
   background: var(--mybricks-bg-color-main, #fff);
   color: var(--mybricks-text-color-main, #333);
-  font-size: 15px;
+  font-size: 12px;
   text-align: left;
 }
 
@@ -213,11 +213,10 @@
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   overflow-wrap: anywhere;
 }
 
-.bizgraph-content[data-meta="true"] .bizgraph-label { -webkit-line-clamp: 1; }
 
 .bizgraph-meta {
   display: block;
@@ -230,12 +229,53 @@
   white-space: nowrap;
 }
 
+/* Each node type keeps its own silhouette and accent, independent of selection. */
 .bizgraph-kind-icon {
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
-  margin-right: 5px;
+  box-sizing: border-box;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  margin-right: 6px;
+  border-radius: 6px;
   color: var(--mybricks-text-color-secondary, #697386);
+  background: rgba(105, 115, 134, .1);
+}
+
+.bizgraph-node[data-kind="source"]:not(.bizgraph-decision) {
+  border-color: rgba(63, 105, 199, .5);
+  border-radius: 28px;
+  background: linear-gradient(rgba(63, 105, 199, .09), rgba(63, 105, 199, .09)), var(--mybricks-bg-color-main, #fff);
+}
+
+.bizgraph-kind-icon[data-kind="source"] {
+  border-radius: 50%;
+  color: #3863bd;
+  background: rgba(63, 105, 199, .17);
+}
+
+.bizgraph-node[data-kind="field"]:not(.bizgraph-decision) {
+  border-color: rgba(40, 130, 101, .5);
+  border-radius: 4px;
+  background: linear-gradient(rgba(40, 130, 101, .08), rgba(40, 130, 101, .08)), var(--mybricks-bg-color-main, #fff);
+}
+
+.bizgraph-kind-icon[data-kind="field"] {
+  border-radius: 3px;
+  color: #257b61;
+  background: rgba(40, 130, 101, .16);
+}
+
+.bizgraph-node[data-kind="ui"]:not(.bizgraph-decision) {
+  padding-right: 26px;
+  border-color: rgba(126, 82, 194, .55);
+  border-radius: 8px;
+  background: linear-gradient(rgba(126, 82, 194, .1), rgba(126, 82, 194, .1)), var(--mybricks-bg-color-main, #fff);
+}
+
+.bizgraph-kind-icon[data-kind="ui"] {
+  color: #7650b0;
+  background: rgba(126, 82, 194, .17);
 }
 
 .bizgraph-round,
@@ -285,18 +325,40 @@
   border-color: var(--mybricks-color-primary, #fa6400);
 }
 
+
 .bizgraph-linked {
   cursor: pointer;
+  padding-right: 26px;
 }
 
-.bizgraph-linked:hover {
-  border-color: var(--mybricks-color-primary, #fa6400);
-  box-shadow: 0 3px 12px rgba(250, 100, 0, .2);
+.bizgraph-action {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: #7650b0;
+  opacity: 0;
 }
-.bizgraph-linked:hover .bizgraph-kind-icon { color: var(--mybricks-color-primary, #fa6400); }
+
+.bizgraph-linked:hover,
+.bizgraph-linked:focus-visible {
+  outline: none;
+  border-color: #7650b0;
+  box-shadow: 0 3px 12px rgba(126, 82, 194, .25);
+}
+.bizgraph-linked:hover .bizgraph-kind-icon,
+.bizgraph-linked:focus-visible .bizgraph-kind-icon { color: #624095; }
+.bizgraph-linked:hover .bizgraph-action,
+.bizgraph-linked:focus-visible .bizgraph-action { opacity: 1; }
 .bizgraph-decision.bizgraph-linked { padding: 8px 12px; box-shadow: none; }
-.bizgraph-decision .bizgraph-kind-icon { position: relative; z-index: 1; }
-.bizgraph-decision.bizgraph-linked:hover::before { background: var(--mybricks-color-primary, #fa6400); }
+.bizgraph-decision .bizgraph-kind-icon,
+.bizgraph-decision .bizgraph-action { z-index: 1; }
+.bizgraph-decision .bizgraph-kind-icon { position: relative; }
+.bizgraph-decision .bizgraph-action { right: 25px; z-index: 1; }
+.bizgraph-decision.bizgraph-linked:hover::before,
+.bizgraph-decision.bizgraph-linked:focus-visible::before { background: #7650b0; }
 
 .bizgraph-decision.bizgraph-selected::before {
   background: var(--mybricks-color-primary, #fa6400);
