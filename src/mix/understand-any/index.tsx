@@ -59,7 +59,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       if (!sendToAgent) { setError(copy.unavailable()); return }
       const understandChip = bindingTo ? createUnderstandChip(bindingTo, title, !file) : undefined
       const requestChips = [...(understandChip ? [understandChip] : []), ...(chips ?? [])]
-      sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } })
+      sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } }, { openPanel: false })
       setWaiting(true)
     }
     return <div data-zone-type="ai-request" className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-loading={!file && waiting ? 'true' : undefined} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
