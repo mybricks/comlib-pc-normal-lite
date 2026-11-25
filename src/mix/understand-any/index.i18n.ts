@@ -22,6 +22,7 @@ export const copy = {
       en: "Visualize code structure, flows, or relationships",
     }),
   generating: () => i18n({ zh: "正在生成中...", en: "Generating..." }),
+  creating: () => i18n({ zh: "创建中...", en: "Creating..." }),
   unavailable: () =>
     i18n({
       zh: "请先打开项目并连接 AI",

@@ -22,7 +22,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
 
   function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void }) {
     useLayoutEffect(() => attachShadowStyles(document), [])
-    const [files, setFiles] = useState<DiagramFile[]>([])
+    const [documents, setDocuments] = useState<{ bindingTo?: string; files: DiagramFile[] } | null>(null)
     const [selected, setSelected] = useState('')
     const [expanded, setExpanded] = useState(false)
     const [waiting, setWaiting] = useState(false)
@@ -34,10 +34,19 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
         loading = true
         try {
           const next = await loadDocuments(bindingTo)
-          if (active) { setFiles(previous => reconcileDocuments(previous, next)); setError('') }
+          if (active) {
+            setDocuments(previous => {
+              const files = reconcileDocuments(previous && previous.bindingTo === bindingTo ? previous.files : [], next)
+              return previous && previous.bindingTo === bindingTo && files === previous.files ? previous : { bindingTo, files }
+            })
+            setError('')
+          }
         } catch (err: any) {
-          if (active && (err?.code === 'ENOENT' || err?.code === 'NOT_FOUND')) { setFiles([]); setError('') }
-          else if (active) setError(copy.readError())
+          if (active) {
+            const notFound = err?.code === 'ENOENT' || err?.code === 'NOT_FOUND'
+            setDocuments(previous => !notFound && previous && previous.bindingTo === bindingTo ? previous : { bindingTo, files: [] })
+            setError(notFound ? '' : copy.readError())
+          }
         } finally { loading = false; if (active && queued) { queued = false; void refresh() } }
       }
       const events = context.component?.events
@@ -47,10 +56,13 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       void refresh()
       return () => { active = false; offFile?.(); offLocalFile?.(); offTurn?.() }
     }, [bindingTo])
+    const documentsReady = documents !== null && documents.bindingTo === bindingTo
+    const files = documentsReady ? documents.files : []
     const file = files.find(item => item.path === selected) ?? files[0]
     const meta = file ? parseMeta(file.content) : {}
     const title = file ? fileLabel(file) : copy.document()
-    useEffect(() => { setTitle?.(title) }, [setTitle, title])
+    const displayTitle = !file && waiting ? copy.creating() : title
+    useEffect(() => { if (documentsReady) setTitle?.(displayTitle) }, [setTitle, displayTitle, documentsReady])
     const summary = SHOW_SUMMARY ? meta.summary : undefined
     const description = file?.content.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '').replace(/```mermaid[^\n]*\n[\s\S]*?```/gi, '').trim()
     const send = ({ message, attachments, chips }: { message: string; attachments?: any; chips?: any[] }) => {
@@ -62,6 +74,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } }, { openPanel: false })
       setWaiting(true)
     }
+    if (!documentsReady) return <div className={css['bizai-root']} aria-busy="true" />
     return <div className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-loading={!file && waiting ? 'true' : undefined} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
       {(summary || description) && <div className={css['bizai-description']}>{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
       <div className={css['bizai-card']} onDoubleClickCapture={event => {
