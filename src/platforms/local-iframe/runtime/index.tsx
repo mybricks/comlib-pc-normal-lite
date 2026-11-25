@@ -81,11 +81,8 @@ function ProjectRuntimeTerminal({ componentId }: { componentId?: string }) {
 		sendToAgent(componentId, { message: '项目启动失败了，请处理下。' })
 	}, [componentId])
 
-	// data-zone-type=ai-request：与 plugin-ai Sender 相同，告诉画布不要代理指针事件，
-	// 否则 xterm 滚动/选中会被设计器当成选区。
 	return (
 		<div
-			data-zone-type="ai-request"
 			style={{
 				width: '100%',
 				height: '100%',

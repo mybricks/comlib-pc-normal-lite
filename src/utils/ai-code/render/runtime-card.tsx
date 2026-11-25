@@ -310,7 +310,7 @@ export const genAIRuntime = ({title, orgName, examples, getDependencies, wrapper
     const renderSender = useMemo(() => {
       if ((window as any)._sandbox_?.helpers?.renders?.renderStartView) {
         return (
-          <div data-zone-type='ai-fixed'>
+          <div>
             {(window as any)._sandbox_.helpers.renders.renderStartView({ comId: id })}
           </div>
         )
