@@ -610,6 +610,9 @@ class FileSystem {
     // 清理该文件的临时依赖记录
     this.tempDependencies.delete(filename)
 
+    // Deleted modules will not be loaded again, so clear their canvas popups here.
+    this.params.dependencies['mybricks']?._refreshPopups?.(filename)
+
     this.events.emit('fileChange', { filename, type: 'delete' })
 
     this.fileWatcher.emit(filename, 'delete')
