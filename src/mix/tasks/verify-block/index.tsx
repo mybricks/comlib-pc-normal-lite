@@ -49,8 +49,6 @@ const copy = {
   noReason: () => i18n({ zh: '未填写原因', en: 'No reason given' }),
   passedHint: () => i18n({ zh: '已通过验证', en: 'Verified' }),
   submittedHint: () => i18n({ zh: '已提交给 AI', en: 'Sent to AI' }),
-  barText: (count: number) => i18n({ zh: `${count} 个任务待提交`, en: `${count} task${count === 1 ? '' : 's'} ready to submit` }),
-  submit: () => i18n({ zh: '提交给 AI 修改', en: 'Send to AI for revision' }),
   prev: () => i18n({ zh: '上一个', en: 'Previous' }),
   next: () => i18n({ zh: '下一个', en: 'Next' }),
   goTo: (index: number) => i18n({ zh: `查看第 ${index} 个任务`, en: `Go to task ${index}` }),
@@ -268,13 +266,16 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
     transition: { target: TaskStatus; from?: TaskStatus },
     onApplied: () => void,
   ) => {
-    if (busy) return
+    if (busy) return false
     setBusy(true)
     setPendingPass(task)
     try {
       const applied = await commitTransitions(sandbox, taskPath, [{ id: task.id, title: task.title, ...transition }])
-      if (applied.length) onApplied()
-      else setNotice(copy.outdated())
+      if (applied.length) {
+        onApplied()
+        return true
+      }
+      setNotice(copy.outdated())
     } catch (error) {
       console.error('[mybricks][task-verify] transition failed', error)
       setNotice(copy.failed())
@@ -282,13 +283,17 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
       setPendingPass(null)
       setBusy(false)
     }
+    return false
   }
 
-  const handlePass = (task: UserTaskInfo) => {
+  const handlePass = async (task: UserTaskInfo) => {
     const status: TaskStatus = task.handoverTo ? '待交接' : '已完成'
-    void runTransition(task, { target: status }, () => {
+    const applied = await runTransition(task, { target: status }, () => {
       setOutcomes((current) => ({ ...current, [task.id]: { task, status, submitted: true } }))
     })
+    if (applied && remaining === 1 && unsubmitted.length) {
+      void submitFeedback(unsubmitted.map(({ task: pendingTask, outcome }) => ({ task: pendingTask, reason: outcome?.reason ?? '' })))
+    }
   }
 
   // 不符合预期：暂存任务与反馈，批量提交时再修改任务状态。
@@ -336,11 +341,6 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
     } finally {
       setBusy(false)
     }
-  }
-
-  const handleSubmit = () => {
-    if (!allHandled) return
-    void submitFeedback(unsubmitted.map(({ task, outcome }) => ({ task, reason: outcome?.reason ?? '' })))
   }
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -476,13 +476,6 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
               onClick={() => go(i)}
             />
           ))}
-        </div>
-      ) : null}
-
-      {unsubmitted.length ? (
-        <div className={css['mb-tv-bar']}>
-          <span>{copy.barText(unsubmitted.length)}</span>
-          <button type="button" className={[css['mb-tv-btn'], css['is-primary']].join(' ')} disabled={busy || !allHandled} onClick={handleSubmit}>{copy.submit()}</button>
         </div>
       ) : null}
     </div>
