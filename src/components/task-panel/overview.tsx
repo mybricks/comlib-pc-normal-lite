@@ -3,6 +3,7 @@ import { ReactFlow, Handle, Position, PanOnScrollMode, type Edge, type Node, typ
 import 'reactflow/dist/style.css'
 import { attachShadowStyles } from '../../mix/understand-any/shadow-styles'
 import YAML from 'yaml'
+import { parseOverviewYaml } from './overview-yaml'
 import { i18n } from './index.i18n'
 import { getLazyCss } from '../../mix/lowcodeView/utils/css'
 import * as lazyCss from './index.lazy.less'
@@ -25,7 +26,7 @@ class OverviewFormatError extends Error {}
 function parseOverview(content: string): OverviewDocument {
   let doc: unknown
   try {
-    doc = YAML.parse(content)
+    doc = parseOverviewYaml(content, YAML.parse)
   } catch (error) {
     const details = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
     throw new OverviewFormatError(i18n.overviewErrorYaml(details))
