@@ -22,6 +22,22 @@ export type ParsedDiagram = {
   edges: DiagramEdge[];
 };
 
+/** Hide the shared topic only when its direct children are data sources. */
+export function hideRelationRoot(diagram: ParsedDiagram): ParsedDiagram {
+  if (diagram.kind !== "mindmap") return diagram;
+  const roots = diagram.nodes.filter(node => node.depth === 0);
+  if (roots.length !== 1) return diagram;
+  const root = roots[0];
+  if (root.source || root.field || root.ui?.length) return diagram;
+  const children = diagram.edges.filter(edge => edge.source === root.id);
+  if (!children.length || !children.every(edge => diagram.nodes.find(node => node.id === edge.target)?.source)) return diagram;
+  return {
+    ...diagram,
+    nodes: diagram.nodes.filter(node => node.id !== root.id).map(node => ({ ...node, depth: Math.max(0, (node.depth ?? 0) - 1) })),
+    edges: diagram.edges.filter(edge => edge.source !== root.id),
+  };
+}
+
 function cleanLabel(value: string): string {
   return value
     .trim()

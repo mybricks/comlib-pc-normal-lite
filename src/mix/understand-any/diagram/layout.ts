@@ -15,7 +15,8 @@ function nodeSize(node: DiagramNode, measureText: (text: string) => number) {
   const width = decision ? DECISION_WIDTH : NODE_WIDTH;
   const hasIcon = !!(node.ui?.length || node.source || node.field);
   const hasMeta = !!(node.source || node.field);
-  const contentWidth = (decision ? width * 0.65 : width - 26) - (hasIcon ? 30 : 0);
+  const special = hasIcon && !decision;
+  const contentWidth = (decision ? width * 0.65 : width - 26) - (hasIcon && !special ? 20 : 0);
   let lineCount = 1, lineWidth = 0;
   for (const char of Array.from(node.label)) {
     if (char === "\n") { lineCount++; lineWidth = 0; continue; }
@@ -26,8 +27,8 @@ function nodeSize(node: DiagramNode, measureText: (text: string) => number) {
   // Word wrapping can break earlier than the per-character estimate.
   if (lineCount > 1 && /\s/.test(node.label)) lineCount++;
   const labelHeight = Math.min(LABEL_MAX_LINES, lineCount) * LABEL_LINE_HEIGHT;
-  const contentHeight = labelHeight + (hasMeta ? 17 : 0);
-  return { width, height: decision ? Math.max(DECISION_HEIGHT, contentHeight * 2 + 12) : Math.max(NODE_HEIGHT, contentHeight + 18) };
+  const contentHeight = labelHeight + (hasMeta ? (special && node.field ? 19 : 17) : 0);
+  return { width, height: decision ? Math.max(DECISION_HEIGHT, contentHeight * 2 + 12) : special ? 30 + contentHeight + 20 : Math.max(NODE_HEIGHT, contentHeight + 18) };
 }
 
 function textMeasurer(): (text: string) => number {

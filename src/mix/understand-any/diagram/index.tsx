@@ -6,7 +6,7 @@ import { getLazyCss } from '../../lowcodeView/utils/css'
 import * as lazyCss from '../index.lazy.less'
 import { copy } from '../index.i18n'
 import { createFlowLayout, edgeLabelSize, roundedPath } from './layout'
-import { parseDiagram, type ParsedDiagram, type DiagramNode as ParsedNode } from './parse'
+import { hideRelationRoot, parseDiagram, type ParsedDiagram, type DiagramNode as ParsedNode } from './parse'
 import { buildNodeHints, type ZoneHint } from './ui-selector'
 
 const css = getLazyCss(lazyCss)
@@ -26,12 +26,17 @@ function DiagramNode({ id, data, selected }: NodeProps<BusinessNodeData>) {
   const kind = data.ui?.length ? 'ui' : data.source ? 'source' : data.field ? 'field' : undefined
   const meta = data.source?.bind ?? data.field?.bind
   const selectable = !!data.hint
+  const special = !!kind && data.shape !== 'decision'
+  const kindLabel = kind === 'source' ? copy.nodeSource() : kind === 'field' ? copy.nodeField() : copy.nodeUi()
   const select = (doc: Document) => { if (data.hint) data.onSelect(id, data.hint, doc) }
   return <div style={{ width: data.width, height: data.height }} data-kind={kind} data-understand-selectable={selectable ? data.selectionScope : undefined} role={selectable ? 'button' : undefined} aria-pressed={selectable ? selected : undefined} tabIndex={selectable ? 0 : undefined} onClick={selectable ? event => { event.stopPropagation(); select(event.currentTarget.ownerDocument) } : undefined} onKeyDown={selectable ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); select(event.currentTarget.ownerDocument) } } : undefined} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected'], selectable && css['bizgraph-linked']].filter(Boolean).join(' ')}>
     <Handle type="target" position={target} />
-    {kind && <svg className={css['bizgraph-kind-icon']} data-kind={kind} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {kind === 'source' ? <><ellipse cx="8" cy="4" rx="5" ry="2" /><path d="M3 4v7c0 1.1 2.24 2 5 2s5-.9 5-2V4M3 7.5c0 1.1 2.24 2 5 2s5-.9 5-2" /></> : kind === 'field' ? <><path d="M5 2.5H4c-.6 0-1 .4-1 1v3c0 .8-.4 1.5-1 1.5.6 0 1 .7 1 1.5v3c0 .6.4 1 1 1h1M11 2.5h1c.6 0 1 .4 1 1v3c0 .8.4 1.5 1 1.5-.6 0-1 .7-1 1.5v3c0 .6-.4 1-1 1h-1M6.3 6.3l3.4 3.4m0-3.4-3.4 3.4" /></> : <path d="M8 1.75 13.25 4.8v6.4L8 14.25 2.75 11.2V4.8L8 1.75ZM2.95 4.9 8 7.85l5.05-2.95M8 7.85v6.1" />}
-    </svg>}
+    {kind && <div className={css['bizgraph-kind']} data-kind={kind}>
+      <svg className={css['bizgraph-kind-icon']} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {kind === 'source' ? <><ellipse cx="8" cy="4" rx="5" ry="2" /><path d="M3 4v7c0 1.1 2.24 2 5 2s5-.9 5-2V4M3 7.5c0 1.1 2.24 2 5 2s5-.9 5-2" /></> : kind === 'field' ? <><path d="M5 2.5H4c-.6 0-1 .4-1 1v3c0 .8-.4 1.5-1 1.5.6 0 1 .7 1 1.5v3c0 .6.4 1 1 1h1M11 2.5h1c.6 0 1 .4 1 1v3c0 .8.4 1.5 1 1.5-.6 0-1 .7-1 1.5v3c0 .6-.4 1-1 1h-1M6.3 6.3l3.4 3.4m0-3.4-3.4 3.4" /></> : <path d="M8 1.75 13.25 4.8v6.4L8 14.25 2.75 11.2V4.8L8 1.75ZM2.95 4.9 8 7.85l5.05-2.95M8 7.85v6.1" />}
+      </svg>
+      {special && <span>{kindLabel}</span>}
+    </div>}
     <div className={css['bizgraph-content']} data-meta={meta ? 'true' : undefined}><span className={css['bizgraph-label']} title={data.label}>{data.label}</span>{meta && <span className={css['bizgraph-meta']} title={meta}>{meta}</span>}</div>
     <Handle type="source" position={source} />
   </div>
@@ -124,7 +129,7 @@ function DiagramContent({ content, interactive = false, selectedNode, selectionS
   const [direction, setDirection] = useState<'LR' | 'TB'>('TB')
   const graphs = useMemo(() => {
     try {
-      const diagram = parseDiagram(content)
+      const diagram = hideRelationRoot(parseDiagram(content))
       const hints = buildNodeHints(diagram)
       const build = (direction: ParsedDiagram['direction']) => {
         const layout = createFlowLayout({ ...diagram, direction })

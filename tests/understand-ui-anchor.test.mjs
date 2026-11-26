@@ -7,7 +7,7 @@ async function load(path) {
   const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8')
   return import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`)
 }
-const { parseDiagram } = await load('src/mix/understand-any/diagram/parse.ts')
+const { parseDiagram, hideRelationRoot } = await load('src/mix/understand-any/diagram/parse.ts')
 
 test('flowchart retains multiple valid anchors and ignores invalid or orphan annotations', () => {
   const diagram = parseDiagram('```mermaid\nflowchart LR\n  A[金额] --> B[文本]\n  %% @ui B file="src/Card.tsx" loc="span:42"\n  %% @ui B file="src/Card.tsx" loc="Button:51-55"\n  %% @ui B file="../outside.tsx" loc="span:3"\n  %% @ui B file="src/Card.tsx" loc="span:55-51"\n  %% @ui C file="src/Card.tsx" loc="span:1"\n```')
@@ -158,4 +158,36 @@ mindmap
   assert.equal(diagram.edges.length, 4)
   assert.equal(diagram.nodes.find(node => node.id === 'API').source.bind, 'GET /orders')
   assert.equal(diagram.nodes.find(node => node.id === 'BADGE').ui[0].startLine, 50)
+})
+
+
+test('relation view hides a shared root while preserving source bindings and branches', () => {
+  const diagram = parseDiagram(`\`\`\`mermaid
+mindmap
+  root((订单关系))
+    API[订单接口]
+      TOTAL[订单金额]
+        PRICE[金额文本]
+    LOCAL[订单状态]
+      STATUS[状态]
+  %% @source API bind="GET /orders"
+  %% @source LOCAL bind="getStatus"
+  %% @field TOTAL bind="total"
+  %% @ui PRICE file="src/Order.tsx" loc="span:42"
+\`\`\``)
+  const view = hideRelationRoot(diagram)
+  assert.equal(diagram.nodes.length, 6)
+  assert.deepEqual(view.nodes.filter(node => node.depth === 0).map(node => node.id), ['API', 'LOCAL'])
+  assert.equal(view.nodes.find(node => node.id === 'TOTAL').depth, 1)
+  assert.equal(view.nodes.find(node => node.id === 'PRICE').ui[0].startLine, 42)
+  assert.deepEqual(view.edges.map(edge => [edge.source, edge.target]), [['API', 'TOTAL'], ['TOTAL', 'PRICE'], ['LOCAL', 'STATUS']])
+})
+
+test('relation view keeps normal mindmap roots and roots that are data sources', () => {
+  const ordinary = parseDiagram('```mermaid\nmindmap\n  root((页面功能))\n    首页\n      搜索\n```')
+  assert.equal(hideRelationRoot(ordinary), ordinary)
+  const source = parseDiagram('```mermaid\nmindmap\n  API[订单接口]\n    TOTAL[金额]\n  %% @source API bind="GET /orders"\n  %% @field TOTAL bind="total"\n```')
+  assert.equal(hideRelationRoot(source), source)
+  const mixed = parseDiagram('```mermaid\nmindmap\n  root((页面))\n    API[订单接口]\n    其他功能\n  %% @source API bind="GET /orders"\n```')
+  assert.equal(hideRelationRoot(mixed), mixed)
 })

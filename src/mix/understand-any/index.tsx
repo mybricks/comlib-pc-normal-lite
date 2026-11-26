@@ -41,6 +41,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       cancelZonesRef.current?.()
     }, [])
     const selectNode = useCallback((id: string, hint: ZoneHint, doc: Document) => {
+      if (selectedNodeRef.current === id) { clearSelection(); return }
       selectedNodeRef.current = id
       setSelectedNode(id)
       const query = Array.isArray(hint.selector) ? hint.selector.join(', ') : hint.selector
@@ -49,7 +50,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       catch (error) { console.warn('[understand-any] selector query failed:', error) }
       console.log('[understand-any] hintAtZones:', hintAtZones, 'params:', hint, 'matches:', matches)
       hintAtZones?.(hint)
-    }, [hintAtZones])
+    }, [hintAtZones, clearSelection])
     useEffect(() => {
       if (selectedNode === null) return
       const onPointerDown = (event: Event) => {
@@ -108,19 +109,29 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       if (!sendToAgent) { setError(copy.unavailable()); return }
       const understandChip = bindingTo ? createUnderstandChip(bindingTo, title, !file) : undefined
       const requestChips = [...(understandChip ? [understandChip] : []), ...(chips ?? [])]
+      setError('')
       sendToAgent(comId, { message: `[$mbs-template:understand-any] ${understandChip ? `[[chip:${understandChip.id}]] ` : ''}${message}`, attachments, aiRole: 'flash', meta: { understandAny: bindingTo ? { bindingTo } : {}, ...(requestChips.length ? { chips: requestChips } : {}) } }, { openPanel: false })
       setWaiting(true)
     }
     if (!documentsReady) return <div className={css['bizai-root']} aria-busy="true" />
     return <div className={css['bizai-root']} data-empty={file ? undefined : 'true'} data-loading={!file && waiting ? 'true' : undefined} data-compact={!file && !waiting && !SHOW_EMPTY_DIAGRAM ? 'true' : undefined}>
       {(summary || description) && <div className={css['bizai-description']}>{summary && <p className={css['bizai-summary']}>{summary}</p>}{description && <details><summary>{copy.details()}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{description}</p></details>}</div>}
-      <div className={css['bizai-card']} onDoubleClickCapture={event => {
+      <div className={css['bizai-card']} aria-busy={!!file && waiting} onDoubleClickCapture={event => {
         const target = event.target as Element
-        if (!file || !Modal || target.closest?.(`.${css['bizai-tools']}, .${css['bizai-error']}`)) return
+        if (!file || !Modal || waiting || target.closest?.(`.${css['bizai-tools']}, .${css['bizai-error']}`)) return
         event.preventDefault()
         setExpanded(true)
       }}>
-        {file ? <><Diagram content={file.content} selectedNode={selectedNode} selectionScope={selectionScope} onSelect={selectNode} /><div className={css['bizai-tools']}><button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button></div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
+        {file ? <><Diagram content={file.content} selectedNode={selectedNode} selectionScope={selectionScope} onSelect={selectNode} /><div className={css['bizai-tools']}>
+          <button type="button" className={css['bizai-tool']} title={waiting ? copy.reviewing() : copy.review()} aria-label={waiting ? copy.reviewing() : copy.review()} disabled={disabled || waiting} onClick={() => send({ message: copy.reviewRequest(file.path) })}>
+            <svg className={waiting ? css['bizai-tool-spinning'] : undefined} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14 5l2-2" /><path d="M20 20v-4h-4" /></svg>
+          </button>
+          <button type="button" className={css['bizai-tool']} title={copy.expand()} aria-label={copy.expand()} onClick={() => setExpanded(true)}>⛶</button>
+        </div></> : <div className={css['bizai-empty']}><PlaceholderDiagram loading={waiting} />{Sender && !waiting && <div className={css['bizai-sender-inline']}><Sender variant="inline" placeholder={copy.placeholder()} disabled={disabled} onSend={send} /></div>}</div>}
+        {file && waiting && <div className={css['bizai-review-loading']} role="status">
+          <svg className={css['bizai-tool-spinning']} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity=".2" strokeWidth="2.5" /><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+          <span>{copy.reviewing()}</span>
+        </div>}
         {error && <div className={css['bizai-error']} role="alert">{error}</div>}
       </div>
       {file && Modal && <Modal open={expanded} onClose={() => setExpanded(false)} title={!bindingTo && files.length > 1 ? <select className={css['bizai-switch']} aria-label={copy.choose()} value={file.path} onChange={event => setSelected(event.target.value)}>{files.map(item => <option key={item.path} value={item.path}>{fileLabel(item)}</option>)}</select> : <span style={{ fontSize: 12 }}>{fileLabel(file)}</span>} width="90vw">

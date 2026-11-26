@@ -229,52 +229,62 @@
   white-space: nowrap;
 }
 
-/* Each node type keeps its own silhouette and accent, independent of selection. */
-.bizgraph-kind-icon {
-  box-sizing: border-box;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  padding: 4px;
-  margin-right: 6px;
-  border-radius: 6px;
-  color: var(--mybricks-text-color-secondary, #697386);
-  background: rgba(105, 115, 134, .1);
-}
-
-.bizgraph-node[data-kind="source"]:not(.bizgraph-decision) {
-  border-color: rgba(63, 105, 199, .5);
-  border-radius: 28px;
-  background: linear-gradient(rgba(63, 105, 199, .09), rgba(63, 105, 199, .09)), var(--mybricks-bg-color-main, #fff);
-}
-
-.bizgraph-kind-icon[data-kind="source"] {
-  border-radius: 50%;
-  color: #3863bd;
-  background: rgba(63, 105, 199, .17);
-}
-
-.bizgraph-node[data-kind="field"]:not(.bizgraph-decision) {
-  border-color: rgba(40, 130, 101, .5);
-  border-radius: 4px;
-  background: linear-gradient(rgba(40, 130, 101, .08), rgba(40, 130, 101, .08)), var(--mybricks-bg-color-main, #fff);
-}
-
-.bizgraph-kind-icon[data-kind="field"] {
-  border-radius: 3px;
-  color: #257b61;
-  background: rgba(40, 130, 101, .16);
-}
-
-.bizgraph-node[data-kind="ui"]:not(.bizgraph-decision) {
-  border-color: rgba(126, 82, 194, .55);
+/* Special nodes separate their type from the business content. */
+.bizgraph-node[data-kind]:not(.bizgraph-decision) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
   border-radius: 8px;
-  background: linear-gradient(rgba(126, 82, 194, .1), rgba(126, 82, 194, .1)), var(--mybricks-bg-color-main, #fff);
+  background: var(--mybricks-bg-color-main, #fff);
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(30, 41, 59, .06);
+  transition: border-color .16s, box-shadow .16s;
 }
 
-.bizgraph-kind-icon[data-kind="ui"] {
-  color: #7650b0;
-  background: rgba(126, 82, 194, .17);
+.bizgraph-kind {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 29px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border-bottom: 1px solid var(--mybricks-diagram-node-border, #969eaa);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.bizgraph-kind[data-kind="source"] { color: #3863bd; }
+.bizgraph-kind[data-kind="field"] { color: #257b61; }
+.bizgraph-kind[data-kind="ui"] { color: #7650b0; }
+
+.bizgraph-kind-icon {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.bizgraph-node[data-kind]:not(.bizgraph-decision) .bizgraph-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px 11px;
+}
+
+.bizgraph-node[data-kind="field"]:not(.bizgraph-decision) .bizgraph-meta {
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(37, 123, 97, .08);
+  color: #257b61;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.bizgraph-node[data-kind="source"]:not(.bizgraph-decision) .bizgraph-meta {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .bizgraph-round,
@@ -322,21 +332,25 @@
 
 .bizgraph-linked { cursor: pointer; }
 
-.bizgraph-linked[data-kind="field"]:hover,
-.bizgraph-linked[data-kind="field"]:focus-visible,
-.bizgraph-node.bizgraph-selected[data-kind="field"] {
-  outline: 2px solid #35896f;
-  outline-offset: 2px;
+.bizgraph-linked[data-kind]:not(.bizgraph-decision):hover,
+.bizgraph-linked[data-kind]:not(.bizgraph-decision):focus-visible {
+  border-color: var(--mybricks-color-primary, #fa6400);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--mybricks-color-primary, #fa6400) 18%, transparent);
+  outline: none;
 }
 
-.bizgraph-linked[data-kind="ui"]:hover,
-.bizgraph-linked[data-kind="ui"]:focus-visible,
-.bizgraph-node.bizgraph-selected[data-kind="ui"] {
-  outline: 2px solid #7650b0;
-  outline-offset: 2px;
+.bizgraph-node.bizgraph-selected[data-kind]:not(.bizgraph-decision) {
+  border-color: var(--mybricks-color-primary, #fa6400);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--mybricks-color-primary, #fa6400) 25%, transparent);
 }
 
-.bizgraph-decision .bizgraph-kind-icon { position: relative; z-index: 1; }
+.bizgraph-linked.bizgraph-decision:focus-visible,
+.bizgraph-decision.bizgraph-selected {
+  filter: drop-shadow(0 2px 5px var(--mybricks-color-primary, #fa6400));
+  outline: none;
+}
+
+.bizgraph-decision .bizgraph-kind { position: relative; z-index: 1; flex: 0 0 14px; padding: 0; border: 0; }
 
 .bizgraph-node :global(.react-flow__handle) {
   opacity: 0;
@@ -353,6 +367,19 @@
 .bizai-root[data-loading="true"] .bizai-card {
   flex: none;
   min-height: 0;
+}
+
+.bizai-review-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--mybricks-bg-color-main, #fff) 78%, transparent);
+  color: var(--mybricks-color-primary, #fa6400);
+  font-size: 12px;
 }
 
 .bizai-tools {
@@ -397,6 +424,19 @@
 
 .bizai-tool:disabled {
   cursor: default;
+}
+
+.bizai-tool-spinning {
+  display: inline-block;
+  animation: bizai-tool-spin 1s linear infinite;
+}
+
+@keyframes bizai-tool-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bizai-tool-spinning { animation: none; }
 }
 
 .bizai-tool:focus-visible {

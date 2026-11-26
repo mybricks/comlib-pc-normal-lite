@@ -35,8 +35,17 @@ export const copy = {
       zh: "图表暂时无法显示，已展示原文。",
       en: "The diagram could not be displayed. Showing the source.",
     }),
+  nodeSource: () => i18n({ zh: "数据源", en: "Data source" }),
+  nodeField: () => i18n({ zh: "数据字段", en: "Data field" }),
+  nodeUi: () => i18n({ zh: "UI 元素", en: "UI element" }),
   choose: () => i18n({ zh: "选择图表", en: "Choose diagram" }),
   details: () => i18n({ zh: "查看说明", en: "View details" }),
+  review: () => i18n({ zh: "重新校对", en: "Review diagram" }),
+  reviewing: () => i18n({ zh: "校对中...", en: "Reviewing..." }),
+  reviewRequest: (path: string) => i18n({
+    zh: `请重新校对图表文件 ${JSON.stringify(path)}：结合相关代码核实图中的内容和关系，修正与现状不符的部分；保留图表类型和已有区域绑定。如果无需修改，请说明校对结果。`,
+    en: `Review the diagram file ${JSON.stringify(path)} against the relevant code. Correct any outdated content or relationships while preserving the diagram type and existing area bindings. If no changes are needed, report the review result.`,
+  }),
   expand: () => i18n({ zh: "放大查看", en: "Expand diagram" }),
   diagramControls: () => i18n({ zh: "图表缩放工具", en: "Diagram zoom controls" }),
   empty: () =>
