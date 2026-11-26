@@ -13,46 +13,27 @@ export function uiAnchorsToSelector(anchors: UiAnchor[]): string {
 
 export type ZoneHint = { selector: string | string[]; title: string }
 
-/** Associate field nodes with their UI descendants and UI nodes with their nearest field. */
+/** Collect UI locations from each data node and all of its downstream fields. */
 export function buildNodeHints(diagram: ParsedDiagram): Map<string, ZoneHint> {
   const nodes = new Map(diagram.nodes.map(node => [node.id, node]))
   const outgoing = new Map<string, string[]>()
-  const incoming = new Map<string, string[]>()
-  for (const edge of diagram.edges) {
-    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target])
-    incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge.source])
-  }
-  const selectors = (anchors: UiAnchor[]) => [...new Set(anchors.map(anchor => uiAnchorsToSelector([anchor])))]
-  const toHint = (items: string[], title: string, multiple = false): ZoneHint => ({ selector: items.length === 1 && !multiple ? items[0] : items, title })
+  for (const edge of diagram.edges) outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target])
   const hints = new Map<string, ZoneHint>()
   for (const node of diagram.nodes) {
-    if (node.field) {
-      const pending = [...(outgoing.get(node.id) ?? [])], visited = new Set([node.id]), anchors: UiAnchor[] = []
-      let uiCount = 0
-      while (pending.length) {
-        const id = pending.shift()!
-        if (visited.has(id)) continue
-        visited.add(id)
-        const child = nodes.get(id)
-        if (!child || child.field || child.source) continue
-        if (child.ui?.length) { uiCount++; anchors.push(...child.ui) }
-        pending.push(...(outgoing.get(id) ?? []))
-      }
-      hints.set(node.id, toHint(selectors(anchors), node.field.bind, uiCount > 1))
-    } else if (node.ui?.length) {
-      const pending = [...(incoming.get(node.id) ?? [])], visited = new Set([node.id])
-      let title = ''
-      while (pending.length) {
-        const id = pending.shift()!
-        if (visited.has(id)) continue
-        visited.add(id)
-        const parent = nodes.get(id)
-        if (!parent) continue
-        if (parent.field) { title = parent.field.bind; break }
-        if (!parent.source) pending.push(...(incoming.get(id) ?? []))
-      }
-      hints.set(node.id, toHint(selectors(node.ui), title))
+    const title = node.field?.bind ?? node.source?.bind
+    if (!title) continue
+    const pending = [node.id], visited = new Set<string>(), selectors = new Set<string>()
+    while (pending.length) {
+      const id = pending.pop()!
+      if (visited.has(id)) continue
+      visited.add(id)
+      const current = nodes.get(id)
+      if (!current) continue
+      if (current.field) for (const anchor of current.ui ?? []) selectors.add(uiAnchorsToSelector([anchor]))
+      pending.push(...(outgoing.get(id) ?? []))
     }
+    const items = [...selectors]
+    if (items.length) hints.set(node.id, { selector: items.length === 1 ? items[0] : items, title })
   }
   return hints
 }

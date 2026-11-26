@@ -12,7 +12,7 @@ const { parseDiagram } = await import(`data:text/javascript;base64,${Buffer.from
 const intersect = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 
 test('mindmap layout preserves UI bindings in both directions', () => {
-  const diagram = parseDiagram('```mermaid\nmindmap\n  root((订单接口))\n    TOTAL[订单金额]\n      PRICE[金额文本]\n  %% @source root bind="GET /orders"\n  %% @field TOTAL bind="total"\n  %% @ui PRICE file="src/OrderCard.tsx" loc="span:42"\n```')
+  const diagram = parseDiagram('```mermaid\nmindmap\n  root((订单接口))\n    TOTAL[订单金额]\n      PRICE[金额文本]\n  %% @source root bind="GET /orders"\n  %% @field TOTAL bind="total"\n  %% @bind PRICE file="src/OrderCard.tsx" loc="span:42"\n```')
   for (const direction of ['LR', 'TB']) {
     const layout = createFlowLayout({ ...diagram, direction })
     assert.deepEqual(layout.nodes.find(node => node.id === 'PRICE').ui, [{ file: 'src/OrderCard.tsx', tag: 'span', startLine: 42, endLine: 42 }])

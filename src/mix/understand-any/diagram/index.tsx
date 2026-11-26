@@ -6,14 +6,14 @@ import { getLazyCss } from '../../lowcodeView/utils/css'
 import * as lazyCss from '../index.lazy.less'
 import { copy } from '../index.i18n'
 import { createFlowLayout, edgeLabelSize, roundedPath } from './layout'
-import { hideRelationRoot, parseDiagram, type ParsedDiagram, type DiagramNode as ParsedNode } from './parse'
+import { parseDiagram, type ParsedDiagram, type DiagramNode as ParsedNode } from './parse'
 import { buildNodeHints, type ZoneHint } from './ui-selector'
 
 const css = getLazyCss(lazyCss)
 const RESIZE_THROTTLE_MS = 30
 const PREVIEW_PADDING = 0.05
 
-type BusinessNodeData = { label: string; shape: string; depth: number; width: number; height: number; direction: ParsedDiagram['direction']; ui?: ParsedNode['ui']; source?: ParsedNode['source']; field?: ParsedNode['field']; hint?: ZoneHint; selectionScope: string; onSelect: (id: string, hint: ZoneHint, doc: Document) => void }
+type BusinessNodeData = { label: string; shape: string; depth: number; width: number; height: number; direction: ParsedDiagram['direction']; source?: ParsedNode['source']; field?: ParsedNode['field']; hint?: ZoneHint; selectionScope: string; onSelect: (id: string, hint: ZoneHint, doc: Document) => void }
 type RoutedEdgeData = { points: Array<{ x: number; y: number }>; labelPosition?: { x: number; y: number }; junction?: { x: number; y: number } }
 type BusinessNode = Node<BusinessNodeData, 'business'>
 type RoutedEdge = Edge<RoutedEdgeData>
@@ -23,21 +23,22 @@ function DiagramNode({ id, data, selected }: NodeProps<BusinessNodeData>) {
   const reverse = data.direction === 'BT' || data.direction === 'RL'
   const source = vertical ? (reverse ? Position.Top : Position.Bottom) : (reverse ? Position.Left : Position.Right)
   const target = vertical ? (reverse ? Position.Bottom : Position.Top) : (reverse ? Position.Right : Position.Left)
-  const kind = data.ui?.length ? 'ui' : data.source ? 'source' : data.field ? 'field' : undefined
+  const kind = data.field ? 'field' : data.source ? 'source' : undefined
   const meta = data.source?.bind ?? data.field?.bind
   const selectable = !!data.hint
+  const uiCount = data.hint ? (Array.isArray(data.hint.selector) ? data.hint.selector.length : 1) : 0
   const special = !!kind && data.shape !== 'decision'
-  const kindLabel = kind === 'source' ? copy.nodeSource() : kind === 'field' ? copy.nodeField() : copy.nodeUi()
+  const kindLabel = kind === 'source' ? copy.nodeSource() : copy.nodeField()
   const select = (doc: Document) => { if (data.hint) data.onSelect(id, data.hint, doc) }
   return <div style={{ width: data.width, height: data.height }} data-kind={kind} data-understand-selectable={selectable ? data.selectionScope : undefined} role={selectable ? 'button' : undefined} aria-pressed={selectable ? selected : undefined} tabIndex={selectable ? 0 : undefined} onClick={selectable ? event => { event.stopPropagation(); select(event.currentTarget.ownerDocument) } : undefined} onKeyDown={selectable ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); select(event.currentTarget.ownerDocument) } } : undefined} className={[css['bizgraph-node'], data.shape === 'round' && css['bizgraph-round'], data.shape === 'decision' && css['bizgraph-decision'], data.depth === 0 && css['bizgraph-root'], selected && css['bizgraph-selected'], selectable && css['bizgraph-linked']].filter(Boolean).join(' ')}>
     <Handle type="target" position={target} />
     {kind && <div className={css['bizgraph-kind']} data-kind={kind}>
       <svg className={css['bizgraph-kind-icon']} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        {kind === 'source' ? <><ellipse cx="8" cy="4" rx="5" ry="2" /><path d="M3 4v7c0 1.1 2.24 2 5 2s5-.9 5-2V4M3 7.5c0 1.1 2.24 2 5 2s5-.9 5-2" /></> : kind === 'field' ? <><path d="M5 2.5H4c-.6 0-1 .4-1 1v3c0 .8-.4 1.5-1 1.5.6 0 1 .7 1 1.5v3c0 .6.4 1 1 1h1M11 2.5h1c.6 0 1 .4 1 1v3c0 .8.4 1.5 1 1.5-.6 0-1 .7-1 1.5v3c0 .6-.4 1-1 1h-1M6.3 6.3l3.4 3.4m0-3.4-3.4 3.4" /></> : <path d="M8 1.75 13.25 4.8v6.4L8 14.25 2.75 11.2V4.8L8 1.75ZM2.95 4.9 8 7.85l5.05-2.95M8 7.85v6.1" />}
+        {kind === 'source' ? <><ellipse cx="8" cy="4" rx="5" ry="2" /><path d="M3 4v7c0 1.1 2.24 2 5 2s5-.9 5-2V4M3 7.5c0 1.1 2.24 2 5 2s5-.9 5-2" /></> : kind === 'field' ? <><path d="M5 2.5H4c-.6 0-1 .4-1 1v3c0 .8-.4 1.5-1 1.5.6 0 1 .7 1 1.5v3c0 .6.4 1 1 1h1M11 2.5h1c.6 0 1 .4 1 1v3c0 .8.4 1.5 1 1.5-.6 0-1 .7-1 1.5v3c0 .6-.4 1-1 1h-1M6.3 6.3l3.4 3.4m0-3.4-3.4 3.4" /></> : null}
       </svg>
       {special && <span>{kindLabel}</span>}
     </div>}
-    <div className={css['bizgraph-content']} data-meta={meta ? 'true' : undefined}><span className={css['bizgraph-label']} title={data.label}>{data.label}</span>{meta && <span className={css['bizgraph-meta']} title={meta}>{meta}</span>}</div>
+    <div className={css['bizgraph-content']} data-meta={meta ? 'true' : undefined}><span className={css['bizgraph-label']} title={data.label}>{data.label}</span>{meta && <span className={css['bizgraph-meta']} title={meta}>{meta}</span>}{uiCount > 0 && <span className={css['bizgraph-ui-count']}>{copy.nodeUiCount(uiCount)}</span>}</div>
     <Handle type="source" position={source} />
   </div>
 }
@@ -129,11 +130,11 @@ function DiagramContent({ content, interactive = false, selectedNode, selectionS
   const [direction, setDirection] = useState<'LR' | 'TB'>('TB')
   const graphs = useMemo(() => {
     try {
-      const diagram = hideRelationRoot(parseDiagram(content))
+      const diagram = parseDiagram(content)
       const hints = buildNodeHints(diagram)
       const build = (direction: ParsedDiagram['direction']) => {
-        const layout = createFlowLayout({ ...diagram, direction })
-        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, width: node.width, height: node.height, direction, ui: node.ui, source: node.source, field: node.field, hint: hints.get(node.id), selectionScope, onSelect }, draggable: false, ...(hints.has(node.id) ? { style: { pointerEvents: 'all' } } : {}) }))
+        const layout = createFlowLayout({ ...diagram, direction }, new Set(hints.keys()))
+        const nodes: BusinessNode[] = layout.nodes.map(node => ({ id: node.id, type: 'business', position: node.position, data: { label: node.label, shape: node.shape, depth: node.depth ?? -1, width: node.width, height: node.height, direction, source: node.source, field: node.field, hint: hints.get(node.id), selectionScope, onSelect }, draggable: false, ...(hints.has(node.id) ? { style: { pointerEvents: 'all' } } : {}) }))
         const ids = new Set(nodes.map(node => node.id))
         const labelBounds: Node[] = layout.edges.flatMap((edge, index) => {
           if (!edge.label || !edge.labelPosition) return []

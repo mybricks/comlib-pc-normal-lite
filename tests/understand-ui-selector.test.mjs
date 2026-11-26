@@ -39,36 +39,28 @@ test('finds matching nodes in nested open shadows and accessible frames', () => 
   assert.deepEqual(new Set(findUiMatches(doc, '[data-loc]')), new Set([target, frameTarget]))
 })
 
-test('fields collect UI selectors and UI nodes inherit their associated field bind', () => {
+test('data nodes aggregate and deduplicate UI locations across downstream fields', () => {
   const anchor = line => ({ file: 'src/Order.tsx', tag: 'span', startLine: line, endLine: line })
-  const diagram = { kind: 'mindmap', direction: 'LR', nodes: [
-    { id: 'total', label: '金额', shape: 'default', field: { bind: 'total' } },
-    { id: 'price', label: '金额', shape: 'default', ui: [anchor(42)] },
-    { id: 'summary', label: '汇总', shape: 'default', ui: [anchor(55)] },
-    { id: 'other', label: '其他字段', shape: 'default', field: { bind: 'status' } },
-    { id: 'status', label: '状态', shape: 'default', ui: [anchor(80)] },
-  ], edges: [
-    { source: 'total', target: 'price' }, { source: 'total', target: 'summary' },
-    { source: 'total', target: 'other' }, { source: 'other', target: 'status' },
-  ] }
-  const hints = buildNodeHints(diagram)
-  assert.deepEqual(hints.get('total'), { selector: [uiAnchorsToSelector([anchor(42)]), uiAnchorsToSelector([anchor(55)])], title: 'total' })
-  assert.deepEqual(hints.get('price'), { selector: uiAnchorsToSelector([anchor(42)]), title: 'total' })
-  assert.deepEqual(hints.get('status'), { selector: uiAnchorsToSelector([anchor(80)]), title: 'status' })
-  assert.equal(hints.has('missing'), false)
-})
-
-test('field traversal handles cycles, empty UI, and duplicate locations', () => {
-  const ui = { file: 'src/A.tsx', tag: 'div', startLine: 3, endLine: 3 }
   const diagram = { kind: 'flowchart', direction: 'LR', nodes: [
-    { id: 'f', field: { bind: 'value' } }, { id: 'step' },
-    { id: 'a', ui: [ui] }, { id: 'b', ui: [ui] }, { id: 'empty', field: { bind: 'empty' } },
-  ], edges: [{ source: 'f', target: 'step' }, { source: 'step', target: 'f' },
-    { source: 'step', target: 'a' }, { source: 'step', target: 'b' }] }
+    { id: 'api', source: { bind: 'GET /orders' } },
+    { id: 'total', field: { bind: 'total' } },
+    { id: 'discount', field: { bind: 'discount' }, ui: [anchor(30)] },
+    { id: 'payable', field: { bind: 'payableAmount' }, ui: [anchor(42), anchor(55), anchor(55)] },
+    { id: 'open', field: { bind: 'open' }, ui: [anchor(80)] },
+    { id: 'empty', field: { bind: 'empty' } },
+  ], edges: [{ source: 'api', target: 'total' }, { source: 'api', target: 'discount' },
+    { source: 'total', target: 'payable' }, { source: 'discount', target: 'payable' },
+    { source: 'payable', target: 'total' }] }
   const hints = buildNodeHints(diagram)
-  assert.deepEqual(hints.get('f'), { selector: [uiAnchorsToSelector([ui])], title: 'value' })
-  assert.deepEqual(hints.get('a'), { selector: uiAnchorsToSelector([ui]), title: 'value' })
-  assert.deepEqual(hints.get('empty'), { selector: [], title: 'empty' })
+  const selectors = id => new Set([hints.get(id).selector].flat())
+  assert.deepEqual(selectors('total'), new Set([uiAnchorsToSelector([anchor(42)]), uiAnchorsToSelector([anchor(55)])]))
+  assert.deepEqual(selectors('discount'), new Set([uiAnchorsToSelector([anchor(30)]), uiAnchorsToSelector([anchor(42)]), uiAnchorsToSelector([anchor(55)])]))
+  assert.deepEqual(selectors('api'), selectors('discount'))
+  assert.equal(hints.get('api').title, 'GET /orders')
+  assert.equal(hints.get('total').title, 'total')
+  assert.equal(hints.get('payable').title, 'payableAmount')
+  assert.deepEqual(hints.get('open'), { selector: uiAnchorsToSelector([anchor(80)]), title: 'open' })
+  assert.equal(hints.has('empty'), false)
 })
 
 test('outside-click listeners include documents in open shadow roots and same-origin frames', () => {

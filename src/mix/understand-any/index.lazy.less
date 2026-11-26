@@ -258,7 +258,6 @@
 
 .bizgraph-kind[data-kind="source"] { color: #3863bd; }
 .bizgraph-kind[data-kind="field"] { color: #257b61; }
-.bizgraph-kind[data-kind="ui"] { color: #7650b0; }
 
 .bizgraph-kind-icon {
   flex: 0 0 14px;
@@ -281,6 +280,14 @@
   background: rgba(37, 123, 97, .08);
   color: #257b61;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.bizgraph-ui-count {
+  display: block;
+  margin-top: 4px;
+  color: var(--mybricks-text-color-secondary, #697386);
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .bizgraph-node[data-kind="source"]:not(.bizgraph-decision) .bizgraph-meta {

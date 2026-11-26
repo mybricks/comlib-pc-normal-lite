@@ -7,10 +7,10 @@ async function load(path) {
   const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8')
   return import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`)
 }
-const { parseDiagram, hideRelationRoot } = await load('src/mix/understand-any/diagram/parse.ts')
+const { parseDiagram } = await load('src/mix/understand-any/diagram/parse.ts')
 
 test('flowchart retains multiple valid anchors and ignores invalid or orphan annotations', () => {
-  const diagram = parseDiagram('```mermaid\nflowchart LR\n  A[金额] --> B[文本]\n  %% @ui B file="src/Card.tsx" loc="span:42"\n  %% @ui B file="src/Card.tsx" loc="Button:51-55"\n  %% @ui B file="../outside.tsx" loc="span:3"\n  %% @ui B file="src/Card.tsx" loc="span:55-51"\n  %% @ui C file="src/Card.tsx" loc="span:1"\n```')
+  const diagram = parseDiagram('```mermaid\nflowchart LR\n  A[金额] --> B[文本]\n  %% @bind B file="src/Card.tsx" loc="span:42"\n  %% @bind B file="src/Card.tsx" loc="Button:51-55"\n  %% @bind B file="../outside.tsx" loc="span:3"\n  %% @bind B file="src/Card.tsx" loc="span:55-51"\n  %% @bind C file="src/Card.tsx" loc="span:1"\n```')
   assert.deepEqual(diagram.nodes.find(node => node.id === 'B').ui, [
     { file: 'src/Card.tsx', tag: 'span', startLine: 42, endLine: 42 },
     { file: 'src/Card.tsx', tag: 'Button', startLine: 51, endLine: 55 },
@@ -37,9 +37,9 @@ flowchart TD
   LOGIN -->|账号非空且密码不少于 6 位| LOGIN_SUCCESS[返回用户名 张老板]
   LOGIN_SUCCESS --> USER_GREETING[顶部显示用户名问候]
   LOGIN -->|账号为空或密码不足 6 位| LOGIN_FAIL[显示账号或密码错误提示]
-  %% @ui LOADING file="pages/Workbench/index.tsx" loc="div:399-403"
-  %% @ui WELCOME file="pages/Workbench/index.tsx" loc="section:86-102"
-  %% @ui USER_GREETING file="pages/Workbench/index.tsx" loc="div:54-62"
+  %% @bind LOADING file="pages/Workbench/index.tsx" loc="div:399-403"
+  %% @bind WELCOME file="pages/Workbench/index.tsx" loc="section:86-102"
+  %% @bind USER_GREETING file="pages/Workbench/index.tsx" loc="div:54-62"
 \`\`\``)
   assert.equal(diagram.kind, 'flowchart')
   assert.equal(diagram.direction, 'TB')
@@ -64,9 +64,9 @@ mindmap
     订单状态 status
       BADGE[状态标签内容]
       CANCEL[取消按钮：待付款时显示]
-  %% @ui PRICE file="src/OrderCard.tsx" loc="span:42"
-  %% @ui CANCEL file="src/OrderCard.tsx" loc="Button:51-55"
-  %% @ui CANCEL file="src/OrderCard.tsx" loc="Button:60"
+  %% @bind PRICE file="src/OrderCard.tsx" loc="span:42"
+  %% @bind CANCEL file="src/OrderCard.tsx" loc="Button:51-55"
+  %% @bind CANCEL file="src/OrderCard.tsx" loc="Button:60"
 \`\`\``)
   assert.equal(diagram.kind, 'mindmap')
   assert.equal(diagram.nodes.find(node => node.id === 'PRICE').label, '订单金额文本')
@@ -91,9 +91,9 @@ mindmap
         LOGIN_MESSAGE[登录结果提示]
       登录用户名 userName
         USER_GREETING[顶部用户问候]
-  %% @ui WELCOME_NAME file="pages/Workbench/index.tsx" loc="h1:89"
-  %% @ui LOGIN_MESSAGE file="pages/Workbench/index.tsx" loc="div:51"
-  %% @ui USER_GREETING file="pages/Workbench/index.tsx" loc="span:56"
+  %% @bind WELCOME_NAME file="pages/Workbench/index.tsx" loc="h1:89"
+  %% @bind LOGIN_MESSAGE file="pages/Workbench/index.tsx" loc="div:51"
+  %% @bind USER_GREETING file="pages/Workbench/index.tsx" loc="span:56"
 \`\`\``)
   const messages = diagram.nodes.filter(node => node.label === '登录结果提示')
   assert.equal(messages.length, 2)
@@ -104,7 +104,7 @@ mindmap
 })
 
 test('ambiguous repeated IDs do not attach an anchor to different UI labels', () => {
-  const diagram = parseDiagram('```mermaid\nmindmap\n  root((订单))\n    A[金额]\n    A[状态]\n  %% @ui A file="src/Order.tsx" loc="span:3"\n```')
+  const diagram = parseDiagram('```mermaid\nmindmap\n  root((订单))\n    A[金额]\n    A[状态]\n  %% @bind A file="src/Order.tsx" loc="span:3"\n```')
   assert.equal(diagram.nodes.filter(node => node.id.startsWith('A')).length, 2)
   assert.ok(diagram.nodes.every(node => !node.ui))
 })
@@ -123,7 +123,7 @@ mindmap
   %% @source LOCAL bind="getOrderStatus"
   %% @field TOTAL bind="total"
   %% @field STATUS bind="status"
-  %% @ui PRICE file="src/OrderCard.tsx" loc="span:42"
+  %% @bind PRICE file="src/OrderCard.tsx" loc="span:42"
 \`\`\``)
   const get = id => diagram.nodes.find(node => node.id === id)
   assert.deepEqual(get('API').source, { bind: 'GET /api/orders/:id' })
@@ -150,8 +150,8 @@ mindmap
   %% @source LOCAL bind="getOrderStatus"
   %% @field TOTAL bind="total"
   %% @field STATUS bind="status"
-  %% @ui PRICE file="src/Order.tsx" loc="span:42"
-  %% @ui BADGE file="src/Order.tsx" loc="span:50"
+  %% @bind PRICE file="src/Order.tsx" loc="span:42"
+  %% @bind BADGE file="src/Order.tsx" loc="span:50"
 \`\`\``)
   assert.deepEqual(diagram.nodes.filter(node => node.depth === 0).map(node => node.id), ['API', 'LOCAL'])
   assert.equal(diagram.nodes.length, 6)
@@ -161,33 +161,28 @@ mindmap
 })
 
 
-test('relation view hides a shared root while preserving source bindings and branches', () => {
+test('flowchart keeps multi-source data dependencies and binds UI locations directly to fields', () => {
   const diagram = parseDiagram(`\`\`\`mermaid
-mindmap
-  root((订单关系))
-    API[订单接口]
-      TOTAL[订单金额]
-        PRICE[金额文本]
-    LOCAL[订单状态]
-      STATUS[状态]
+flowchart LR
+  API[订单接口] --> TOTAL[订单金额]
+  CONFIG[优惠配置] --> DISCOUNT[优惠金额]
+  TOTAL --> PAYABLE[实付金额]
+  DISCOUNT --> PAYABLE
+  OPEN[弹窗是否打开]
   %% @source API bind="GET /orders"
-  %% @source LOCAL bind="getStatus"
+  %% @source CONFIG bind="getDiscount"
   %% @field TOTAL bind="total"
-  %% @ui PRICE file="src/Order.tsx" loc="span:42"
+  %% @field DISCOUNT bind="discount"
+  %% @field PAYABLE bind="payableAmount"
+  %% @field OPEN bind="open"
+  %% @bind PAYABLE file="src/Order.tsx" loc="span:42"
+  %% @bind PAYABLE file="src/Order.tsx" loc="span:55"
+  %% @bind OPEN file="src/Order.tsx" loc="Modal:70-78"
 \`\`\``)
-  const view = hideRelationRoot(diagram)
-  assert.equal(diagram.nodes.length, 6)
-  assert.deepEqual(view.nodes.filter(node => node.depth === 0).map(node => node.id), ['API', 'LOCAL'])
-  assert.equal(view.nodes.find(node => node.id === 'TOTAL').depth, 1)
-  assert.equal(view.nodes.find(node => node.id === 'PRICE').ui[0].startLine, 42)
-  assert.deepEqual(view.edges.map(edge => [edge.source, edge.target]), [['API', 'TOTAL'], ['TOTAL', 'PRICE'], ['LOCAL', 'STATUS']])
-})
-
-test('relation view keeps normal mindmap roots and roots that are data sources', () => {
-  const ordinary = parseDiagram('```mermaid\nmindmap\n  root((页面功能))\n    首页\n      搜索\n```')
-  assert.equal(hideRelationRoot(ordinary), ordinary)
-  const source = parseDiagram('```mermaid\nmindmap\n  API[订单接口]\n    TOTAL[金额]\n  %% @source API bind="GET /orders"\n  %% @field TOTAL bind="total"\n```')
-  assert.equal(hideRelationRoot(source), source)
-  const mixed = parseDiagram('```mermaid\nmindmap\n  root((页面))\n    API[订单接口]\n    其他功能\n  %% @source API bind="GET /orders"\n```')
-  assert.equal(hideRelationRoot(mixed), mixed)
+  assert.equal(diagram.kind, 'flowchart')
+  assert.equal(diagram.nodes.find(node => node.id === 'PAYABLE').field.bind, 'payableAmount')
+  assert.deepEqual(diagram.nodes.find(node => node.id === 'PAYABLE').ui.map(anchor => anchor.startLine), [42, 55])
+  assert.deepEqual(diagram.edges.filter(edge => edge.target === 'PAYABLE').map(edge => edge.source), ['TOTAL', 'DISCOUNT'])
+  assert.equal(diagram.nodes.find(node => node.id === 'OPEN').ui[0].tag, 'Modal')
+  assert.equal(diagram.edges.some(edge => edge.target === 'OPEN'), false)
 })

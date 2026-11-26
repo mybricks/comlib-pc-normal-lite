@@ -10,10 +10,10 @@ const LABEL_LINE_HEIGHT = 15;
 const LABEL_MAX_LINES = 3;
 
 /** Estimate wrapped text before layout; use the canvas font when available. */
-function nodeSize(node: DiagramNode, measureText: (text: string) => number) {
+function nodeSize(node: DiagramNode, measureText: (text: string) => number, hasUiHint = false) {
   const decision = node.shape === "decision";
   const width = decision ? DECISION_WIDTH : NODE_WIDTH;
-  const hasIcon = !!(node.ui?.length || node.source || node.field);
+  const hasIcon = !!(node.source || node.field);
   const hasMeta = !!(node.source || node.field);
   const special = hasIcon && !decision;
   const contentWidth = (decision ? width * 0.65 : width - 26) - (hasIcon && !special ? 20 : 0);
@@ -27,7 +27,7 @@ function nodeSize(node: DiagramNode, measureText: (text: string) => number) {
   // Word wrapping can break earlier than the per-character estimate.
   if (lineCount > 1 && /\s/.test(node.label)) lineCount++;
   const labelHeight = Math.min(LABEL_MAX_LINES, lineCount) * LABEL_LINE_HEIGHT;
-  const contentHeight = labelHeight + (hasMeta ? (special && node.field ? 19 : 17) : 0);
+  const contentHeight = labelHeight + (hasMeta ? (special && node.field ? 19 : 17) : 0) + (hasUiHint ? 18 : 0);
   return { width, height: decision ? Math.max(DECISION_HEIGHT, contentHeight * 2 + 12) : special ? 30 + contentHeight + 20 : Math.max(NODE_HEIGHT, contentHeight + 18) };
 }
 
@@ -279,7 +279,7 @@ function routeBranches(edges: LayoutEdge[], nodes: LayoutNode[], direction: Pars
   }
 }
 
-export function createFlowLayout(diagram: ParsedDiagram): {
+export function createFlowLayout(diagram: ParsedDiagram, hintNodeIds: ReadonlySet<string> = new Set()): {
   nodes: LayoutNode[];
   edges: LayoutEdge[];
 } {
@@ -294,7 +294,7 @@ export function createFlowLayout(diagram: ParsedDiagram): {
   });
   graph.setDefaultEdgeLabel(() => ({}));
   const measureText = textMeasurer();
-  diagram.nodes.forEach((node) => graph.setNode(node.id, nodeSize(node, measureText)));
+  diagram.nodes.forEach((node) => graph.setNode(node.id, nodeSize(node, measureText, hintNodeIds.has(node.id))));
   diagram.edges.forEach((edge, index) =>
     graph.setEdge(
       edge.source,
