@@ -74,7 +74,7 @@ export const i18n = {
   taskReviewPending: () => getI18n({ zh: '未审查', en: 'Not reviewed' }),
   reviewTasks: () => getI18n({ zh: '点击审查任务', en: 'Review tasks' }),
   reviewTasksHere: () => getI18n({ zh: '点击这里审查', en: 'Review now' }),
-  reviewTasksMessage: () => getI18n({ zh: '[$mbs-template:code-review] 请审查已完成和待交接任务的改动，并更新任务总览中的审查结果。', en: '[$mbs-template:code-review] Review the changes for completed and pending-handover tasks, and update the review results in the task overview.' }),
+  reviewTasksMessage: () => getI18n({ zh: '[$mbs-template:code-review] 请查看任务文档，审查所有已完成和待交接任务的改动', en: '[$mbs-template:code-review] Check the task document and review the changes for all completed and pending-handover tasks.' }),
   filterReviewFailed: () => getI18n({ zh: '存在风险', en: 'Has risks' }),
   taskReviewPendingCount: (count: number) => getI18n({ zh: `${count} 个问题`, en: `${count} ${count === 1 ? 'issue' : 'issues'}` }),
   taskOverviewSummary: (changes: number, reviewed: number, issues: number, taskUnfinished: boolean) => getI18n({
