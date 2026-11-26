@@ -736,6 +736,14 @@ function LowcodeView(params: Params) {
     };
   }, [contextMenu]);
 
+  const saveManualFiles = async (comId: string, files: Array<{ path: string; content: string }>) => {
+    const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
+    if (typeof getSandbox !== 'function') throw new Error('Agent sandbox is unavailable')
+    const sandbox = await getSandbox(comId)
+    await sandbox.files.writeFiles(files)
+    context.saveVisualEditVersion(files.map((file) => file.path), 'manual')
+  }
+
   // 保存所有有未保存修改的文件
   const handleSaveAll = useCallback(async () => {
     if (undoRedoManager.hasBranchHistory()) return;
@@ -768,16 +776,10 @@ function LowcodeView(params: Params) {
       })
     });
 
-    const save = async (next: typeof currentFiles) => {
-      const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
-      if (typeof getSandbox !== 'function') throw new Error('Agent sandbox is unavailable')
-      const sandbox = await getSandbox(comId)
-      await sandbox.files.writeFiles(next.map((file) => ({
-        path: file.fileName,
-        content: file.content,
-      })))
-      context.saveVisualEditVersion(next.map((file) => file.fileName), 'manual')
-    }
+    const save = (next: typeof currentFiles) => saveManualFiles(comId, next.map((file) => ({
+      path: file.fileName,
+      content: file.content,
+    })))
     const onError = (error: unknown) => {
       console.error('[source-view] file operation failed', error)
     }
@@ -1180,18 +1182,17 @@ function LowcodeView(params: Params) {
             updateFiles={async (file, previousFile) => {
               const getSandbox = (window as any)._sandbox_?.helpers?.getAgentSandbox
               if (!componentId || typeof getSandbox !== 'function') return
-              const sandbox = await getSandbox(componentId)
-
+              let pending: Promise<void> | undefined
               undoRedoManager.execute({
                 execute() {
-                  sandbox.files.write(file)
-                  context.saveManualVersion([file.path]);
+                  pending = saveManualFiles(componentId, [file])
+                  void pending.catch((error) => console.error('[task-panel] file operation failed', error))
                 },
                 undo() {
-                  sandbox.files.write(previousFile)
-                  context.saveManualVersion([previousFile.path]);
+                  void saveManualFiles(componentId, [previousFile]).catch((error) => console.error('[task-panel] file operation failed', error))
                 },
               });
+              await pending
             }}
           />
         </div>
