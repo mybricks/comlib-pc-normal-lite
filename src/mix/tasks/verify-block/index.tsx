@@ -46,7 +46,7 @@ const copy = {
   cancel: () => i18n({ zh: '取消', en: 'Cancel' }),
   confirm: () => i18n({ zh: '确认', en: 'Confirm' }),
   reasonPlaceholder: () => i18n({ zh: '哪里不符合预期？', en: 'What needs to change?' }),
-  noReason: () => i18n({ zh: '未填写原因', en: 'No reason given' }),
+  noReason: () => i18n({ zh: '待反馈', en: 'Feedback pending' }),
   passedHint: () => i18n({ zh: '已通过验证', en: 'Verified' }),
   submittedHint: () => i18n({ zh: '已提交给 AI', en: 'Sent to AI' }),
   prev: () => i18n({ zh: '上一个', en: 'Previous' }),
@@ -55,8 +55,8 @@ const copy = {
   failed: () => i18n({ zh: '任务状态更新失败，请重试', en: 'Failed to update task status. Please try again.' }),
   outdated: () => i18n({ zh: '任务状态已变化，已为你刷新', en: 'The task status has changed. The list has been refreshed.' }),
   feedbackHeader: () => i18n({
-    zh: '以下任务验证未通过，已改为待处理，请根据反馈继续修改，修改完成后再次提交验证：',
-    en: 'The following tasks did not pass verification and were marked as to do. Please revise them based on the feedback and resubmit for verification:',
+    zh: '以下任务不符合预期，请根据反馈继续修改：',
+    en: 'The following tasks did not meet expectations. Please revise them based on the feedback:',
   }),
   feedbackReason: () => i18n({ zh: '反馈', en: 'Feedback' }),
 }
@@ -119,7 +119,7 @@ function buildFeedbackMessage(items: Array<{ task: UserTaskInfo; reason: string 
   const lines = items.map(({ task, reason }, index) => {
     const title = task.title.replace(/[[\]]/g, ' ').trim()
     const head = `${index + 1}. [${title}](task://${task.id})`
-    return reason ? `${head}\n   ${copy.feedbackReason()}：${reason}` : head
+    return `${head}\n   ${copy.feedbackReason()}：${reason}`
   })
   return `${copy.feedbackHeader()}\n\n${lines.join('\n')}`
 }
@@ -164,7 +164,7 @@ interface TaskOutcome {
   submitted?: boolean
 }
 
-function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = false }: { comId: string; sandbox: TaskSandbox; taskPath: string; taskIds: string[]; onEmpty: () => void; related?: boolean }) {
+function TaskVerifyDeck({ sandbox, taskPath, taskIds, onEmpty, appendDraft, related = false }: { sandbox: TaskSandbox; taskPath: string; taskIds: string[]; onEmpty: (pendingIds?: string[]) => void; appendDraft?: (message: string, checkOnly?: boolean) => boolean; related?: boolean }) {
   const content = useTasksContent()
   const tasks = useMemo(() => parseTasksForNotify(content ?? ''), [content])
   const relatedTasks = useMemo(() => {
@@ -183,10 +183,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
 
   const [outcomes, setOutcomes] = useState<Record<string, TaskOutcome>>({})
   const [active, setActive] = useState(0)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
-  const [pendingPass, setPendingPass] = useState<UserTaskInfo | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const pointerStartX = useRef<number | null>(null)
   const orderRef = useRef<string[]>([])
@@ -201,25 +198,25 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
     }
     const isPassed = (id: string) => {
       const status = outcomes[id]?.status
-      return !related && (status === '已完成' || status === '待交接')
+      return !related && (status === '已完成' || status === '待交接') && outcomes[id]?.submitted
     }
     const other = new Map(relatedTasks.filter((task) => task.state !== 1).map((task) => [task.id, task]))
-    const kept = orderRef.current.filter((id) => !isPassed(id) && (live.has(id) || other.has(id) || effective(id) || pendingPass?.id === id))
+    const kept = orderRef.current.filter((id) => !isPassed(id) && (live.has(id) || other.has(id) || effective(id)))
     const fresh = (related ? relatedTasks : livePending).map((task) => task.id).filter((id) => !isPassed(id) && !kept.includes(id))
     const order = [...fresh, ...kept]
     orderRef.current = order
     return order.map((id) => {
       const otherTask = other.get(id)
       const status: TaskStatus = otherTask?.state === 2 ? '待交接' : otherTask?.state === 3 ? '已完成' : '处理中'
-      return { task: live.get(id) ?? otherTask ?? outcomes[id]?.task ?? pendingPass!, outcome: effective(id) ?? (otherTask ? { task: otherTask, status, submitted: true } : undefined) }
+      return { task: live.get(id) ?? otherTask ?? outcomes[id]?.task!, outcome: effective(id) ?? (otherTask ? { task: otherTask, status, submitted: true } : undefined) }
     })
-  }, [livePending, outcomes, pendingPass, related, relatedTasks])
+  }, [livePending, outcomes, related, relatedTasks])
 
   // 文档已反映通过结果后清除临时记录，任务重新进入待验证时可再次显示。
   useEffect(() => {
     const acknowledged = Object.entries(outcomes)
       .filter(([id, outcome]) =>
-        (outcome.status === '已完成' || outcome.status === '待交接')
+        outcome.submitted && (outcome.status === '已完成' || outcome.status === '待交接')
         && !tasks.some((task) => task.id === id && task.state === 1),
       )
       .map(([id]) => id)
@@ -232,20 +229,11 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
   }, [outcomes, tasks])
 
   const remaining = items.filter((item) => !item.outcome).length
-  const unsubmitted = items.filter((item) => item.outcome?.status === '待处理' && !item.outcome.submitted)
-  const allHandled = items.length > 0 && remaining === 0
 
   const empty = !items.length && !busy
   useEffect(() => {
     if (empty && !related) onEmpty()
   }, [empty, onEmpty, related])
-
-  // 全部处理完且没有待提交的反馈：停留片刻让用户看到结果，再把插槽还给 Sender。
-  useEffect(() => {
-    if (related || !allHandled || unsubmitted.length) return
-    const timer = setTimeout(onEmpty, 1600)
-    return () => clearTimeout(timer)
-  }, [allHandled, unsubmitted.length, onEmpty, related])
 
   useEffect(() => {
     if (!notice) return
@@ -261,57 +249,41 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
   const nextUnhandled = (fromIndex: number, excludeId: string) =>
     items.findIndex((item, i) => i > fromIndex && !item.outcome && item.task.id !== excludeId)
 
-  const runTransition = async (
-    task: UserTaskInfo,
-    transition: { target: TaskStatus; from?: TaskStatus },
-    onApplied: () => void,
-  ) => {
-    if (busy) return false
+  const finish = async (next: Record<string, TaskOutcome>) => {
+    if (busy) return
+    const feedback = Object.values(next).filter((outcome) => outcome.status === '待处理')
+    if (feedback.length && !appendDraft?.('', true)) { setNotice(copy.failed()); return }
     setBusy(true)
-    setPendingPass(task)
     try {
-      const applied = await commitTransitions(sandbox, taskPath, [{ id: task.id, title: task.title, ...transition }])
-      if (applied.length) {
-        onApplied()
-        return true
+      const passed = Object.values(next).filter((outcome) => !outcome.submitted && (outcome.status === '已完成' || outcome.status === '待交接'))
+      if (passed.length) {
+        const applied = await commitTransitions(sandbox, taskPath, passed.map(({ task, status }) => ({ id: task.id, title: task.title, target: status })))
+        setOutcomes((current) => Object.fromEntries(Object.entries(current).map(([id, outcome]) => [id, applied.includes(id) ? { ...outcome, submitted: true } : outcome])))
+        if (applied.length !== passed.length) {
+          setNotice(copy.outdated())
+          return
+        }
       }
-      setNotice(copy.outdated())
+      if (feedback.length && !appendDraft!(buildFeedbackMessage(feedback.map(({ task }) => ({ task, reason: '' }))))) {
+        throw new Error('Sender is unavailable')
+      }
+      onEmpty(feedback.map(({ task }) => task.id))
     } catch (error) {
-      console.error('[mybricks][task-verify] transition failed', error)
+      console.error('[mybricks][task-verify] finish failed', error)
       setNotice(copy.failed())
     } finally {
-      setPendingPass(null)
       setBusy(false)
     }
-    return false
   }
 
-  const handlePass = async (task: UserTaskInfo) => {
-    const status: TaskStatus = task.handoverTo ? '待交接' : '已完成'
-    const applied = await runTransition(task, { target: status }, () => {
-      setOutcomes((current) => ({ ...current, [task.id]: { task, status, submitted: true } }))
-    })
-    if (applied && remaining === 1 && unsubmitted.length) {
-      void submitFeedback(unsubmitted.map(({ task: pendingTask, outcome }) => ({ task: pendingTask, reason: outcome?.reason ?? '' })))
-    }
-  }
-
-  // 不符合预期：暂存任务与反馈，批量提交时再修改任务状态。
-  const confirmReject = (task: UserTaskInfo) => {
-    const reason = draft.trim()
-    if (!reason || busy) return
-    setOutcomes((current) => ({ ...current, [task.id]: { task, status: '待处理', reason } }))
-    setEditingId(null)
-    setDraft('')
-    if (remaining === 1) {
-      void submitFeedback([
-        ...unsubmitted.map(({ task: pendingTask, outcome }) => ({ task: pendingTask, reason: outcome?.reason ?? '' })),
-        { task, reason },
-      ])
-      return
-    }
-    const next = nextUnhandled(index, task.id)
-    if (next >= 0) setActive(next)
+  const handleChoice = (task: UserTaskInfo, passed: boolean) => {
+    if (busy) return
+    const status: TaskStatus = passed ? (task.handoverTo ? '待交接' : '已完成') : '待处理'
+    const next = { ...outcomes, [task.id]: { task, status } }
+    setOutcomes(next)
+    if (remaining === 1) { void finish(next); return }
+    const nextIndex = nextUnhandled(index, task.id)
+    if (nextIndex >= 0) setActive(nextIndex)
   }
 
   const undoReject = (task: UserTaskInfo) => {
@@ -319,28 +291,6 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
       const { [task.id]: _removed, ...rest } = current
       return rest
     })
-  }
-
-  const submitFeedback = async (feedback: Array<{ task: UserTaskInfo; reason: string }>) => {
-    if (busy || !feedback.length) return
-    setBusy(true)
-    try {
-      const send = (window as any)._sandbox_?.helpers?.sendToAgent
-      if (typeof send !== 'function') throw new Error('sendToAgent is unavailable')
-      const ids = new Set(await commitTransitions(sandbox, taskPath, feedback.map(({ task }) => ({ id: task.id, title: task.title, target: '待处理' as TaskStatus }))))
-      const submitted = feedback.filter(({ task }) => ids.has(task.id))
-      if (submitted.length < feedback.length) setNotice(copy.outdated())
-      if (!submitted.length) return
-      send(comId, { message: buildFeedbackMessage(submitted) })
-      setOutcomes((current) => Object.fromEntries(
-        Object.entries(current).map(([id, outcome]) => [id, ids.has(id) ? { ...outcome, submitted: true } : outcome]),
-      ))
-    } catch (error) {
-      console.error('[mybricks][task-verify] submit failed', error)
-      setNotice(copy.failed())
-    } finally {
-      setBusy(false)
-    }
   }
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -392,8 +342,7 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
         {items.map(({ task, outcome }, i) => {
           const offset = i - index
           const isFront = offset === 0
-          const isEditing = editingId === task.id
-          const isSaving = pendingPass?.id === task.id
+          const isSaving = busy && !outcome?.submitted
           const status: TaskStatus = outcome?.status === '待处理' && !outcome.submitted ? '待验证' : outcome?.status ?? '待验证'
           return (
             <div
@@ -405,23 +354,10 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
             >
               <TaskCardHeading task={task} statusLabel={isSaving ? copy.saving() : copy.status(status)} statusClass={STATUS_CLASS[status]} />
 
-              {isEditing ? (
-                <textarea
-                  className={css['mb-tv-input']}
-                  autoFocus
-                  value={draft}
-                  placeholder={copy.reasonPlaceholder()}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') { event.stopPropagation(); setEditingId(null) }
-                  }}
-                />
-              ) : (
-                <div className={css['mb-tv-verify']}>
-                  <span className={css['mb-tv-verify-label']}>{copy.verification()}</span>
-                  {task.verification || <span className={css['mb-tv-empty']}>{copy.noVerification()}</span>}
-                </div>
-              )}
+              <div className={css['mb-tv-verify']}>
+                <span className={css['mb-tv-verify-label']}>{copy.verification()}</span>
+                {task.verification || <span className={css['mb-tv-empty']}>{copy.noVerification()}</span>}
+              </div>
 
               <div className={css['mb-tv-actions']}>
                 {isSaving ? (
@@ -429,31 +365,24 @@ function TaskVerifyDeck({ comId, sandbox, taskPath, taskIds, onEmpty, related = 
                     <span className={css['mb-tv-spinner']} aria-hidden="true" />
                     {copy.saving()}
                   </button>
-                ) : isEditing ? (
-                  <>
-                    <button type="button" className={css['mb-tv-btn']} disabled={busy} onClick={() => setEditingId(null)}>{copy.cancel()}</button>
-                    <button type="button" className={[css['mb-tv-btn'], css['is-primary']].join(' ')} disabled={busy || !draft.trim()} onClick={() => confirmReject(task)}>{copy.confirm()}</button>
-                  </>
                 ) : outcome?.status === '待处理' ? (
                   <>
-                    <span className={css['mb-tv-reason']} title={outcome.reason}>{outcome.reason || copy.noReason()}</span>
-                    {outcome.submitted
-                      ? <span className={css['mb-tv-hint']}>{copy.submittedHint()}</span>
-                      : <button type="button" className={css['mb-tv-btn']} disabled={busy} onClick={() => undoReject(task)}>{copy.undo()}</button>}
+                    <span className={css['mb-tv-hint']}>{copy.noReason()}</span>
+                    <button type="button" className={css['mb-tv-btn']} disabled={busy} onClick={() => undoReject(task)}>{copy.undo()}</button>
                   </>
                 ) : outcome ? (
-                  outcome.status === '处理中' ? null : <span className={css['mb-tv-hint']}>{copy.passedHint()}</span>
+                  outcome.status === '处理中' ? null : <><span className={css['mb-tv-hint']}>{copy.passedHint()}</span>{!outcome.submitted && <button type="button" className={css['mb-tv-btn']} disabled={busy} onClick={() => undoReject(task)}>{copy.undo()}</button>}</>
                 ) : (
                   <>
                     <button
                       type="button"
                       className={css['mb-tv-btn']}
                       disabled={!isFront || busy}
-                      onClick={() => { setDraft(''); setEditingId(task.id) }}
+                      onClick={() => handleChoice(task, false)}
                     >
                       {copy.reject()}
                     </button>
-                    <button type="button" className={[css['mb-tv-btn'], css['is-primary']].join(' ')} disabled={!isFront || busy} onClick={() => handlePass(task)}>
+                    <button type="button" className={[css['mb-tv-btn'], css['is-primary']].join(' ')} disabled={!isFront || busy} onClick={() => handleChoice(task, true)}>
                       {copy.pass()}
                     </button>
                   </>
@@ -539,23 +468,31 @@ export async function createTaskVerification({ comId, sandbox, taskPath }: { com
     console.warn('[mybricks][task-verify] restore pending area failed', error)
   }
 
-  function TaskVerifyArea({ setActive }: { setActive: (active: boolean) => void }) {
+  function TaskVerifyArea({ setActive, appendDraft }: { setActive: (active: boolean) => void; appendDraft?: (message: string, checkOnly?: boolean) => boolean }) {
     const content = useTasksContent()
     const [visible, setVisible] = useState(() => parseTasksForNotify(context.tasksContent ?? '').some((task) => task.state === 1))
     const [ids, setIds] = useState(taskIds)
+    const suppressedIds = useRef(new Set<string>())
     useEffect(() => {
-      const update = () => setIds(taskIds())
+      const update = () => {
+        suppressedIds.current.clear()
+        setIds(taskIds())
+        if (parseTasksForNotify(context.tasksContent ?? '').some((task) => task.state === 1)) setVisible(true)
+      }
       listeners.add(update)
       update()
       return () => { listeners.delete(update) }
     }, [])
     useEffect(() => {
       if (content === null) setVisible(false)
-      else if (parseTasksForNotify(content).some((task) => task.state === 1)) setVisible(true)
+      else if (parseTasksForNotify(content).some((task) => task.state === 1 && !suppressedIds.current.has(task.id))) setVisible(true)
     }, [content])
     useEffect(() => { setActive(visible) }, [setActive, visible])
-    const close = useCallback(() => setVisible(false), [])
-    return visible ? <TaskVerifyDeck comId={comId} sandbox={sandbox} taskPath={taskPath} taskIds={ids} onEmpty={close} /> : null
+    const close = useCallback((pendingIds: string[] = []) => {
+      suppressedIds.current = new Set(pendingIds)
+      setVisible(false)
+    }, [])
+    return visible ? <TaskVerifyDeck sandbox={sandbox} taskPath={taskPath} taskIds={ids} onEmpty={close} appendDraft={appendDraft} /> : null
   }
 
   return {
