@@ -967,13 +967,55 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
   const overviews = useMemo(() => [{ key: '', overview }], [overview])
   const taskReviewCounts = useMemo(() => collectTaskReviewCounts(overviews), [overviews])
   const selectedReviewCounts = selectedTask?.id ? taskReviewCounts.get(selectedTask.id) : undefined
-  const selectedTaskCanReview = !!selectedTask && (selectedTask.status === '已完成' || selectedTask.status === '待交接') && (selectedReviewCounts?.total ?? 0) > 0 && !selectedReviewCounts?.reviewed
-  const selectedTaskSummary = selectedTask && !overview.invalid && taskPanelI18n.taskOverviewSummary(
-    selectedReviewCounts?.total ?? 0,
-    selectedReviewCounts?.reviewed ?? 0,
-    (selectedReviewCounts?.block ?? 0) + (selectedReviewCounts?.critical ?? 0),
-    selectedTask.status === '处理中' || selectedTask.status === '待验证',
-  )
+  const selectedTaskGuide = useMemo(() => {
+    if (!selectedTask || overview.invalid) return null
+    const total = selectedReviewCounts?.total ?? 0
+    const reviewed = selectedReviewCounts?.reviewed ?? 0
+    const issues = (selectedReviewCounts?.block ?? 0) + (selectedReviewCounts?.critical ?? 0)
+    const suggestions = selectedReviewCounts?.suggest ?? 0
+
+    if (selectedTask.status === '处理中') {
+      return { text: taskPanelI18n.taskGuideInProgress(), action: null }
+    }
+    if (selectedTask.status === '待验证') {
+      const transition = getTaskTransitions(selectedTask).find(t => t.target === '已完成' || t.target === '待交接')
+      return {
+        text: taskPanelI18n.taskGuideVerify(),
+        action: transition ? {
+          label: taskPanelI18n.taskGuideVerifyAction(),
+          async run() {
+            if (!selectedTask.id) return
+            try {
+              if (await commitTaskTransition(selectedTask.id, transition.target, updateFiles)) return
+            } catch {}
+            sendTaskMessage(`${taskPanelI18n.taskMessagePrefix(selectedTask.title)}${transition.instruction}`)
+          },
+        } : null,
+      }
+    }
+    if (!total) return null
+    const parts: string[] = [taskPanelI18n.taskChangeCount(total)]
+    if (!reviewed) {
+      parts.push(taskPanelI18n.taskGuideNotReviewed())
+    } else if (reviewed < total) {
+      parts.push(taskPanelI18n.taskGuidePartial(reviewed))
+    } else if (issues) {
+      parts.push(taskPanelI18n.taskGuideIssues(issues))
+    }
+    if (suggestions) parts.push(taskPanelI18n.taskGuideSuggestions(suggestions))
+    const canReview = (selectedTask.status === '已完成' || selectedTask.status === '待交接') && !reviewed
+    const canReviewRest = reviewed > 0 && reviewed < total
+    return {
+      text: parts.join('，'),
+      action: canReview ? {
+        label: taskPanelI18n.reviewTasksHere(),
+        run: () => sendTaskMessage(taskPanelI18n.reviewTasksMessage()),
+      } : canReviewRest ? {
+        label: taskPanelI18n.reviewRemainingAction(),
+        run: () => sendTaskMessage(taskPanelI18n.reviewTasksMessage()),
+      } : null,
+    }
+  }, [selectedTask, selectedReviewCounts, overview.invalid, updateFiles])
   const hasReviewedTasks = tasks.some(task => task.id && (taskReviewCounts.get(task.id)?.reviewed ?? 0) > 0)
   const failedReviewCount = tasks.filter(task => getTaskReviewState(task.id ? taskReviewCounts.get(task.id) : undefined) !== 'passed').length
   const reviewMode = overview.invalid || !tasks.length ? 'hidden' : failedReviewCount > 0 ? 'available' : hasReviewedTasks ? 'hidden' : 'unreviewed'
@@ -1186,9 +1228,9 @@ function TaskPanel({ content, overviewContent = null, allowDelete = false, updat
             {selectedTask && (
               <div className={css['task-overview-context']}>
                 <span className={css['task-overview-context-title']} title={getTaskDisplayTitle(selectedTask)}>{getTaskDisplayTitle(selectedTask)}</span>
-                {selectedTaskSummary && <span className={css['task-overview-context-description']}>
-                  {selectedTaskSummary}
-                  {selectedTaskCanReview && <button type="button" className={css['task-overview-review-link']} disabled={isVibing} onClick={() => sendTaskMessage(taskPanelI18n.reviewTasksMessage())}>{taskPanelI18n.reviewTasksHere()}</button>}
+                {selectedTaskGuide && <span className={css['task-overview-context-description']}>
+                  {selectedTaskGuide.text}
+                  {selectedTaskGuide.action && <button type="button" className={css['task-overview-review-link']} disabled={isVibing} onClick={() => selectedTaskGuide.action!.run()}>{selectedTaskGuide.action.label}</button>}
                 </span>}
               </div>
             )}
