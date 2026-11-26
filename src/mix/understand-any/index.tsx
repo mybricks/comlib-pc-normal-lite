@@ -22,7 +22,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     return selectDocuments(await readDocuments(sandbox, dir), bindingTo)
   }
 
-  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle, hintAtZones, cancelZones }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void; hintAtZones?: (hint: ZoneHint) => void; cancelZones?: () => void }) {
+  function UnderstandAny({ bindingTo, disabled, Sender, Modal, setTitle, hintAtZones }: { bindingTo?: string; disabled?: boolean; Sender?: React.ComponentType<{ placeholder: string; disabled?: boolean; variant?: 'inline' | 'bubble'; showAttachments?: boolean; onSend: (input: { message: string; attachments?: any; chips?: any[] }) => void }>; Modal?: React.ComponentType<{ open: boolean; onClose: () => void; title?: React.ReactNode; width?: string; children: React.ReactNode }>; setTitle?: (title: string) => void; hintAtZones?: (hint?: ZoneHint) => void }) {
     useLayoutEffect(() => attachShadowStyles(document), [])
     const [documents, setDocuments] = useState<{ bindingTo?: string; files: DiagramFile[] } | null>(null)
     const [selected, setSelected] = useState('')
@@ -31,14 +31,14 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
     const [error, setError] = useState('')
     const [selectedNode, setSelectedNode] = useState<string | null>(null)
     const selectedNodeRef = useRef<string | null>(null)
-    const cancelZonesRef = useRef(cancelZones)
-    cancelZonesRef.current = cancelZones
+    const hintAtZonesRef = useRef(hintAtZones)
+    hintAtZonesRef.current = hintAtZones
     const [selectionScope] = useState(() => randomUUID())
     const clearSelection = useCallback(() => {
       if (selectedNodeRef.current === null) return
       selectedNodeRef.current = null
       setSelectedNode(null)
-      cancelZonesRef.current?.()
+      hintAtZonesRef.current?.()
     }, [])
     const selectNode = useCallback((id: string, hint: ZoneHint, doc: Document) => {
       if (selectedNodeRef.current === id) { clearSelection(); return }
@@ -63,7 +63,7 @@ export function createUnderstandAnyUI(comId: string, sandbox: Files, subscribeFi
       documents.forEach(doc => doc.addEventListener('pointerdown', onPointerDown, true))
       return () => documents.forEach(doc => doc.removeEventListener('pointerdown', onPointerDown, true))
     }, [selectedNode, selectionScope, clearSelection])
-    useEffect(() => () => { if (selectedNodeRef.current !== null) cancelZonesRef.current?.() }, [])
+    useEffect(() => () => { if (selectedNodeRef.current !== null) hintAtZonesRef.current?.() }, [])
     useEffect(() => {
       let active = true, loading = false, queued = false
       const refresh = async () => {
