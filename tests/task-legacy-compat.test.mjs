@@ -22,6 +22,22 @@ const legacyTask = `## BadCase 核查卡片归因操作内联
 > 在 BadCase 核查卡片中内联提交归因操作。
 `
 
+test('任务通知包含状态标题和对应颜色，并兼容旧状态及缺失状态', () => {
+  const statuses = ['待处理', '处理中', '待验证', '待验收', '待交接', '已完成', '未知状态', '']
+  const content = statuses.map((status, index) => `## T-00${index} 任务\n${status ? `- **状态**：${status}\n` : ''}`).join('\n')
+  const tasks = parseTasksForNotify(content)
+  assert.deepEqual(tasks.map(({ state, stateTitle, color }) => ({ state, stateTitle, color })), [
+    { state: 0, stateTitle: '待处理', color: '#dfe1e6' },
+    { state: 0, stateTitle: '处理中', color: '#dfe1e6' },
+    { state: 1, stateTitle: '待验证', color: '#ff4d4f' },
+    { state: 1, stateTitle: '待验收', color: '#ff4d4f' },
+    { state: 2, stateTitle: '待交接', color: '#4f7f80' },
+    { state: 3, stateTitle: '已完成', color: '#52c41a' },
+    { state: 0, stateTitle: '处理中', color: '#dfe1e6' },
+    { state: 0, stateTitle: '处理中', color: '#dfe1e6' },
+  ])
+})
+
 test('无编号待验证任务可验证通过并交接，其他内容保持不变', () => {
   const content = `# 任务列表\n\n${legacyTask}\n## T-001 其他任务\n- **状态**：处理中\n`
   const task = parseTasksForNotify(content)[0]

@@ -945,6 +945,8 @@ export interface UserTaskInfo {
   /** TASKS.md 中的「交接给」；存在时验证通过后流转到待交接而非已完成。 */
   handoverTo?: string;
   state: 0 | 1 | 2 | 3;
+  stateTitle: string;
+  color: string;
 }
 export class Version {
   total: number

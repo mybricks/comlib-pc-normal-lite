@@ -19,6 +19,14 @@ const TASK_NOTIFY_STATE: Record<string, UserTaskInfo['state']> = {
   '已完成': 3,
 }
 
+// 与任务面板状态徽标的背景色保持一致。
+const TASK_STATE_COLOR: Record<UserTaskInfo['state'], string> = {
+  0: '#dfe1e6',
+  1: '#ff4d4f',
+  2: '#4f7f80',
+  3: '#52c41a',
+}
+
 /** 兼容 `**标签**：值`、`**标签：** 值` 与普通 `标签：值` 三种 TASKS.md 写法。 */
 function extractTaskField(section: string, label: string): string | undefined {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -81,6 +89,9 @@ function parseTasks(content: string, usePreviousIds: boolean): UserTaskInfo[] {
     if (!title) continue
     const summaryMatch = section.match(/^>\s*(.+)/m)
     const rawState = extractTaskField(section, '状态') ?? ''
+    const knownState = Object.prototype.hasOwnProperty.call(TASK_NOTIFY_STATE, rawState)
+    const state = knownState ? TASK_NOTIFY_STATE[rawState] : 0
+    const stateTitle = knownState ? rawState : '处理中'
     const baseId = title.match(/^(T-\d+)\b/)?.[1]
       ?? (usePreviousIds
         ? (title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || String(tasks.length))
@@ -96,7 +107,9 @@ function parseTasks(content: string, usePreviousIds: boolean): UserTaskInfo[] {
       desc: summaryMatch?.[1]?.trim() ?? '',
       verification: extractVerification(section),
       handoverTo: extractTaskField(section, '交接给'),
-      state: TASK_NOTIFY_STATE[rawState] ?? 0,
+      state,
+      stateTitle,
+      color: TASK_STATE_COLOR[state],
     })
   }
   return tasks
