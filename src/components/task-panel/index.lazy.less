@@ -21,18 +21,18 @@
 
 .task-panel-split {
   --task-linked-bg: color-mix(in srgb, var(--mybricks-text-color-main, #333) 6%, var(--mybricks-bg-color-main, #fff));
-  display: grid;
-  grid-template-columns: minmax(260px, min(var(--task-list-width, 39%), calc(100% - 205px))) 5px minmax(0, 1fr);
-  gap: 0;
+  display: flex;
+  flex-direction: row;
   padding-bottom: 10px;
 
+  .task-list-pane { flex: 0 0 var(--task-list-width, 39%); max-width: calc(100% - 5px); }
   .task-card-header { flex-wrap: wrap; }
   .task-card-header-main { flex-basis: 170px; }
 }
 
 .task-overview-pane,
 .task-overview-instance { display: flex; min-width: 0; min-height: 0; width: 100%; height: 100%; }
-.task-overview-pane { flex-direction: column; }
+.task-overview-pane { flex: 1; flex-direction: column; }
 .task-overview-pane-linked { border-radius: 3px; background: var(--task-linked-bg); }
 .task-overview-instance { flex: 1; height: auto; }
 .task-overview-instance[hidden] { display: none; }
@@ -47,6 +47,7 @@
 .task-overview-review-link:disabled { opacity: .4; cursor: not-allowed; }
 
 .task-panel-resize {
+  flex: 0 0 5px;
   position: relative;
   z-index: 1;
   cursor: col-resize;
@@ -82,12 +83,6 @@
   .task-action-hint { top: 100%; right: 0; }
 }
 .task-list-toolbar:empty { display: none; }
-
-@container (max-width: 465px) {
-  .task-panel-split {
-    grid-template-columns: minmax(0, min(var(--task-list-width, 39%), calc(100% - 5px))) 5px minmax(0, 1fr);
-  }
-}
 
 .task-card-linkable { cursor: pointer; }
 .task-card.task-card-linked {
