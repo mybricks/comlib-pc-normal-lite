@@ -195,11 +195,11 @@ type RuntimeRouteEventItem = {
 }
 
 const RuntimeIframe = (props) => {
-	const cliLaunch = isCliLaunch()
 	const [iframes, setIframes] = useState<RuntimeIframeItem[]>([])
 	const [debugSrc, setDebugSrc] = useState('')
-	const [runtimeUrl, setRuntimeUrl] = useState('')
-	const runtimeUrlRef = useRef('')
+	const runtimeUrl = props.runtimeUrl
+	const runtimeUrlRef = useRef(runtimeUrl)
+	runtimeUrlRef.current = runtimeUrl
 	const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
 	const pendingRefreshSrcRef = useRef('')
 	const debugSrcRef = useRef('')
@@ -208,7 +208,6 @@ const RuntimeIframe = (props) => {
 	const currentIframesRef = useRef<RuntimeIframeItem[]>([])
 	const lastLoadedSignatureRef = useRef('')
 	currentIframesRef.current = iframes
-	const [ready, setReady] = useState(cliLaunch)
 
 	const emitLoadedIfReady = useCallback((nextIframes: RuntimeIframeItem[]) => {
 		if (!nextIframes.every((item) => loadedSrcsRef.current.has(item.src))) {
@@ -266,7 +265,6 @@ const RuntimeIframe = (props) => {
 	}, [])
 
 	useEffect(() => {
-		registerSandbox(props.id)
 		const cancelInteractiveScriptsUpdated = localFileEvents.on('interactiveScriptsUpdated', () => {
 			void notifyLocalPageStatuses(currentIframesRef.current, true)
 		}, false)
@@ -299,26 +297,6 @@ const RuntimeIframe = (props) => {
 			refreshIframe(refreshSrc)
 		})
 
-		const onRuntimeUrlCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUrl', ({ url }) => {
-			runtimeUrlRef.current = url
-			setRuntimeUrl(url)
-			setReady(true)
-		})
-
-		const onRuntimeUpdateCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUpdate', (update) => {
-			// 每次真实项目进程重新进入启动阶段，都先切回同一块 Xterm，持续展示
-			// ProjectRuntime 输出；ready 事件携带 URL 后再切回画布。
-			if (update.status.state === 'starting') {
-				myContext.iframes.clear()
-				setReady(false)
-			}
-		})
-
-		// 兼容逻辑
-		if (!(window as any).__APP__?.projectRuntime) {
-			// 老项目，直接 ready
-			setReady(true)
-		}
 
 		return () => {
 			cancelInteractiveScriptsUpdated()
@@ -329,8 +307,6 @@ const RuntimeIframe = (props) => {
 			cancelRoutesEventsRoutes()
 			onEventsDebugTargetCancel()
 			onEventsRefreshTargetCancel()
-			onRuntimeUrlCancel()
-			onRuntimeUpdateCancel()
 		}
 	}, [])
 
@@ -363,7 +339,7 @@ const RuntimeIframe = (props) => {
 		}
 	}, [debugSrc])
 
-	return ready ? (
+	return (
 		<div style={{ display: 'contents' }}>
 			{iframes.map((item, index) => {
 				const src = buildIframeSrc(item.src, runtimeUrl)
@@ -414,11 +390,48 @@ const RuntimeIframe = (props) => {
 				)
 			})}
 		</div>
-	) : (
+	)
+}
+
+const ProjectRuntime = (props) => {
+	const cliLaunch = isCliLaunch()
+	const [runtimeUrl, setRuntimeUrl] = useState(() => myContext.runtime.getSnapshot().status?.url || '')
+	const [ready, setReady] = useState(() => cliLaunch || !(window as any).__APP__?.projectRuntime || myContext.runtime.getSnapshot().status?.state === 'ready')
+
+	useEffect(() => {
+		registerSandbox(props.id)
+
+		const onRuntimeUrlCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUrl', ({ url }) => {
+			setRuntimeUrl(url)
+			setReady(true)
+		})
+
+		const onRuntimeUpdateCancel = cliLaunch ? () => {} : myContext.runtime.events.on('runtimeUpdate', (update) => {
+			// 每次真实项目进程重新进入启动阶段，都先切回同一块 Xterm，持续展示
+			// ProjectRuntime 输出；ready 事件携带 URL 后再切回画布。
+			if (update.status.state === 'starting') {
+				myContext.iframes.clear()
+				setReady(false)
+			}
+		})
+
+		// 兼容逻辑
+		if (!(window as any).__APP__?.projectRuntime) {
+			// 老项目，直接 ready
+			setReady(true)
+		}
+
+		return () => {
+			onRuntimeUrlCancel()
+			onRuntimeUpdateCancel()
+		}
+	}, [])
+
+	return ready ? <RuntimeIframe {...props} runtimeUrl={runtimeUrl} /> : (
 		<div data-zone-type="ai-request" style={{ width: 1200, height: 800 }}>
 			<ProjectRuntimeTerminal componentId={props.id} />
 		</div>
 	)
 }
 
-export default RuntimeIframe
+export default ProjectRuntime
